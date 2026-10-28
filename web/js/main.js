@@ -47,6 +47,38 @@ const view = new ChatView($("messages"), $("thread"), {
 
 // ---- boot -----------------------------------------------------------------------
 
+/** First-run help when the OpenCode engine can't start (usually: not installed yet). */
+async function showSetup(message) {
+  if (document.querySelector(".setup-box")) return;
+  let info = {};
+  try { info = await api.get("/api/setup"); } catch {}
+  const missing = !info.opencode;
+  const status = el("div", { style: { color: "var(--text-3)", fontSize: "12.5px", minHeight: "18px" } });
+  const box = el("div.setup-box",
+    el("h3", missing ? "One more thing: install OpenCode" : "OpenCode couldn't start"),
+    el("p", missing
+      ? "AFH runs on the open-source OpenCode engine. It's a one-time install (about a minute)."
+      : (message || "").slice(0, 300)),
+    missing && !info.npm ? el("p", el("b", "Node.js is needed first. "), "Download the LTS version from ", el("a", { href: "https://nodejs.org", target: "_blank", rel: "noopener" }, "nodejs.org"), ", install it, then come back and click Retry.") : null,
+    el("div", { style: { display: "flex", gap: "8px", justifyContent: "center", marginTop: "10px", flexWrap: "wrap" } },
+      missing && info.npm ? el("button.btn.primary", { on: { click: async (e) => {
+        e.currentTarget.disabled = true;
+        status.textContent = "Installing OpenCode… this takes about a minute.";
+        try {
+          await api.post("/api/setup/install-opencode");
+          status.textContent = "Installed. Starting…";
+          setTimeout(() => location.reload(), 3000);
+        } catch (err) {
+          status.textContent = err.message;
+          e.currentTarget.disabled = false;
+        }
+      } } }, ico("arrow-down"), "Install OpenCode") : null,
+      el("button.btn", { on: { click: () => location.reload() } }, ico("refresh"), "Retry")),
+    status,
+    el("details", { style: { marginTop: "8px" } }, el("summary", { style: { cursor: "pointer", color: "var(--text-3)", fontSize: "12px" } }, "Technical details"), el("pre.h-pre", { style: { textAlign: "left", maxWidth: "560px" } }, `${message || ""}\n\nopencode: ${info.opencode || "not found"}\nnode: ${info.node || "not found"}\nnpm: ${info.npm || "not found"}`)));
+  $("boot").append(box);
+}
+
 function showLogin() {
   if (document.querySelector(".login-box")) return;
   $("boot-status").textContent = "";
@@ -83,7 +115,7 @@ async function boot() {
       if (document.querySelector(".login-box")) return; // waiting for the remote password
       $("boot-status").textContent = `Couldn't start OpenCode: ${e.message}`;
       $("boot-status").classList.add("err");
-      if (attempt > 2) return;
+      if (attempt > 1) return showSetup(e.message);
     }
     await new Promise((r) => setTimeout(r, 1500));
   }

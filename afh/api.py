@@ -962,6 +962,42 @@ def zadloop_import(body: dict = Body(...)):
     return transfer.import_session(c(), payload, body["directory"])
 
 
+# ---- first-run setup ------------------------------------------------------------------------
+
+
+@app.get("/api/setup")
+def setup_status():
+    import shutil
+
+    return {
+        "opencode": shutil.which("opencode"),
+        "npm": shutil.which("npm"),
+        "node": shutil.which("node"),
+        "ready": engine.ready.is_set(),
+        "error": engine.error,
+    }
+
+
+@app.post("/api/setup/install-opencode")
+def setup_install_opencode():
+    """Install the OpenCode CLI with npm (the only piece AFH can't bundle)."""
+    import shutil
+    import subprocess
+    import sys
+
+    npm = shutil.which("npm")
+    if not npm:
+        raise ValueError("Node.js is not installed. Install the LTS version from https://nodejs.org, then click Install again.")
+    cmd = ["cmd.exe", "/d", "/c", npm, "install", "-g", "@opencode/cli"] if sys.platform == "win32" else [npm, "install", "-g", "@opencode/cli"]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or result.stdout or "npm failed").strip()[-600:])
+    if not shutil.which("opencode"):
+        raise RuntimeError("npm finished but 'opencode' is still not on PATH — restart AFH and try again.")
+    restart_soon()
+    return {"ok": True, "output": result.stdout.strip()[-300:]}
+
+
 # ---- remote control ------------------------------------------------------------------------
 
 
