@@ -83,13 +83,22 @@ export async function modelsPane(pane, ctx, opts = {}) {
         el("div.provider-tools", q, el("span", { style: { flex: 1 } }),
           el("button.btn.ghost.sm", { on: { click: () => bulk(false) } }, "Show all"), el("button.btn.ghost.sm", { on: { click: () => bulk(true) } }, "Hide all"),
           i.oauth.length || i.methods.includes("key") ? el("button.btn.ghost.sm", { title: "Add another key or sign in again", on: { click: () => showConnect(i) } }, ico("key"), "Reconnect") : null,
-          i.custom ? el("button.btn.ghost.sm.danger", { on: { click: async () => { if (await confirmDialog({ title: `Remove ${i.name}?`, body: "Its models disappear from the picker. OpenCode restarts.", confirm: "Remove", danger: true })) guard(() => api.del(`/api/providers/custom/${i.id}`)); } } }, ico("trash"), "Remove")
-            : i.credentials.length ? el("button.btn.ghost.sm.danger", { on: { click: async () => { if (await confirmDialog({ title: `Disconnect ${i.name}?`, body: "Removes its saved key or sign-in. You can connect again any time.", confirm: "Disconnect", danger: true })) { await guard(() => api.del(`/api/credentials/by-integration/${i.id}`), "Disconnected"); await ctx.reloadCatalog(); redraw(); } } } }, ico("x"), "Disconnect") : null),
+          i.credentials.length ? el("button.btn.ghost.sm.danger", { on: { click: async () => { if (await confirmDialog({ title: `Disconnect ${i.name}?`, body: "Removes its saved key or sign-in. You can connect again any time.", confirm: "Disconnect", danger: true })) { await guard(() => api.del(`/api/credentials/by-integration/${i.id}`), "Disconnected"); await ctx.reloadCatalog(); redraw(); } } } }, ico("x"), "Disconnect") : null,
+          el("button.btn.ghost.sm.danger", { title: i.custom ? "Delete this endpoint" : "Remove this provider from AFH (you can restore it below)", on: { click: async () => {
+            if (!(await confirmDialog({ title: `Remove ${i.name}?`, body: i.custom ? "The endpoint is deleted. OpenCode restarts." : "Its models leave the picker and AFH stops loading it. It stays in your OpenCode config; restore it any time from “Removed providers”. OpenCode restarts.", confirm: "Remove", danger: true }))) return;
+            guard(() => i.custom ? api.del(`/api/providers/custom/${i.id}`) : api.post(`/api/providers/${i.id}/remove`));
+          } } }, ico("trash"), "Remove")),
         body));
     card.replaceWith(); // (details element is created below so <summary> works)
     const details = el("details.provider", { open: opts.open === i.id || connected.length <= 2 });
     details.append(...card.childNodes);
     return details;
+  }
+
+  if (data.hidden?.length) {
+    pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Removed providers"), el("p", "Not loaded. Restore to bring their models back."))),
+      el("div", data.hidden.map((h) => el("div.list-item", ico("x"), el("div.li-main", el("div.li-title", h.name), el("div.li-sub", h.id)),
+        el("button.btn.sm", { on: { click: () => guard(() => api.post(`/api/providers/${h.id}/restore`)) } }, ico("refresh"), "Restore"))))));
   }
 
   // ---- add a provider

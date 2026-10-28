@@ -218,21 +218,26 @@ export function popover(anchor, items, opts = {}) {
     list.replaceChildren();
     const q = query.toLowerCase();
     let lastGroup = null;
-    for (const it of items) {
+    // searchItems: a flat list searched instead of the menu when the user types
+    const source = q && opts.searchItems ? opts.searchItems : items;
+    for (const it of source) {
       if (it.group) { lastGroup = it.group; continue; }
       if (it.sep) { if (!q) list.append(el("div.pop-sep")); continue; }
       if (q && !`${it.title} ${it.sub || ""} ${it.keywords || ""}`.toLowerCase().includes(q)) continue;
       if (lastGroup) { list.append(el("div.pop-group", lastGroup)); lastGroup = null; }
       list.append(
-        el(`button.pop-item${it.danger ? ".danger" : ""}`, { type: "button", on: { click: () => { closePopover(); it.onSelect?.(); } } },
+        el(`button.pop-item${it.danger ? ".danger" : ""}`, { type: "button", on: { click: () => { if (!it.keepOpen) closePopover(); it.onSelect?.(); } } },
           it.icon ? ico(it.icon) : null,
           el("div.pi-main", el("div.pi-title", it.title), it.sub ? el("div.pi-sub", it.sub) : null),
-          it.checked ? el("span.check", { html: icon("check") }) : null)
+          it.count != null ? el("span.pi-count", String(it.count)) : null,
+          it.checked ? el("span.check", { html: icon("check") }) : null,
+          it.arrow ? el("span.chev", { html: icon("chev"), style: { width: "14px", height: "14px", color: "var(--text-3)" } }) : null)
       );
     }
-    if (!list.childElementCount) list.append(el("div.empty-row", "Nothing matches"));
+    if (!list.childElementCount && !opts.header) list.append(el("div.empty-row", "Nothing matches"));
     kb = -1;
   };
+  if (opts.header) pop.append(opts.header);
   if (opts.search) {
     const input = el("input", { placeholder: opts.placeholder || "Search…", on: {
       input: (e) => { query = e.target.value; render(); },
