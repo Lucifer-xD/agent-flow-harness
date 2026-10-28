@@ -3,6 +3,7 @@ import { ChatView, applyEvent, collectEdits, createThread, hooks, loadThread } f
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderWatch, syncChildren, trackEvent } from "./delegate.js";
 import { applyAppearance as applyTheme } from "./appearance.js";
 import { openContextEditor } from "./context.js";
+import { initLive, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
 import { openSettings } from "./settings.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
@@ -36,7 +37,7 @@ const MODES = {
 const view = new ChatView($("messages"), $("thread"), {
   settings: () => S.settings,
   modelName: (ref) => modelName(ref),
-  avatar: (live) => logoNode({ size: 22, working: live }),
+  avatar: (live) => logoNode({ size: 28, working: live }),
   onFork: (id) => forkThread(id),
   onRetry: () => retryLast(),
   onRevert: (id) => revertTo(id),
@@ -134,6 +135,9 @@ async function boot() {
   S.agents = data.agents;
   applyAppearance();
   initDelegate(ctx);
+  initLive(ctx);
+  ctx.openLive = () => { if (S.drawer !== "live") openDrawer("live"); };
+  ctx.renderLive = () => { if (S.drawer === "live") renderLive($("drawer-body"), $("drawer-title")); };
   hooks.delegation = (p, o) => delegationCard(p, { ...o, onWatch: openWatch });
   wire();
   connectEvents(onEvent, (state) => $("conn").className = "conn " + (state === "open" ? "ok" : "bad"));
@@ -475,6 +479,7 @@ function renderTopbar() {
   $("btn-changes").hidden = !t;
   $("btn-harness").hidden = !t;
   $("btn-context").hidden = !t;
+  $("btn-live").hidden = !t;
   if (!t) {
     if (project()) box.append(el("span.tb-path", project()));
     return;
@@ -530,10 +535,11 @@ function openDrawer(kind) {
   if (S.drawer === "watch") closeWatch();
   S.drawer = kind;
   $("drawer").classList.add("open");
-  $("drawer").classList.toggle("watch", kind === "watch");
+  $("drawer").classList.toggle("watch", kind === "watch" || kind === "live");
   $("drawer").setAttribute("aria-hidden", "false");
   $("btn-changes").classList.toggle("on", kind === "changes");
   $("btn-harness").classList.toggle("on", kind === "harness");
+  $("btn-live").classList.toggle("on", kind === "live");
   refreshDrawer();
 }
 
@@ -544,6 +550,7 @@ function closeDrawer() {
   $("drawer").setAttribute("aria-hidden", "true");
   $("btn-changes").classList.remove("on");
   $("btn-harness").classList.remove("on");
+  $("btn-live").classList.remove("on");
 }
 
 function openWatch(childId) {
@@ -559,6 +566,10 @@ async function refreshDrawer() {
   const body = $("drawer-body");
   if (S.drawer === "watch") {
     await renderWatch(body, $("drawer-title"), { onOpenAsThread: (id) => { closeDrawer(); openThread(id); } });
+    return;
+  }
+  if (S.drawer === "live") {
+    renderLive(body, $("drawer-title"));
     return;
   }
   if (S.drawer === "changes") {
@@ -849,6 +860,7 @@ async function submit() {
     thread.error = null;
     thread.busy = true;
     thread.runStart = Date.now(); // the timer starts the moment you send
+    thread.phase = "sending";
     thread.liveTps = 0;
     S.busy.add(thread.id);
     renderComposerState();
@@ -936,6 +948,7 @@ function onEvent(ev) {
   if (!t || !t.loaded) return;
   const result = applyEvent(t, ev);
   if (type === "session.tool.called") registerDelegation(t, ev.data);
+  if (S.current === t && type.startsWith("session.tool.")) onLiveEvent(ev);
   if (!result) return;
   if (S.current === t) {
     view.update(result);
@@ -1008,6 +1021,7 @@ function wire() {
   $("btn-changes").addEventListener("click", () => openDrawer("changes"));
   $("btn-harness").addEventListener("click", () => openDrawer("harness"));
   $("btn-context").addEventListener("click", editContext);
+  $("btn-live").addEventListener("click", () => openDrawer("live"));
   $("btn-drawer-close").addEventListener("click", closeDrawer);
   $("btn-collapse").addEventListener("click", toggleSidebar);
   $("btn-expand").addEventListener("click", toggleSidebar);

@@ -46,6 +46,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "glass": True,
         "customCss": "",
         "sendKey": "enter",  # enter | ctrl-enter
+        "liveFiles": True,  # open the Live pane while the model writes/edits a file
         "sounds": True,
         "notify": True,
         "reopenLast": True,
