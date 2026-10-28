@@ -67,7 +67,7 @@ function tool(m, id, name) {
   return p;
 }
 
-/** Apply one OpenCode event. Returns {msg} for a message re-render, {all} for a full one, or {perm}. */
+/** Apply one engine event. Returns {msg} for a message re-render, {all} for a full one, or {perm}. */
 export function applyEvent(t, ev) {
   const d = ev.data || {};
   switch (ev.type) {

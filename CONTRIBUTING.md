@@ -7,7 +7,6 @@ Thanks for helping make Agent Flow Harness better.
 ```bash
 git clone <this repo> && cd AFH
 python -m venv .venv && .venv\Scripts\pip install -r requirements.txt
-npm install -g @opencode/cli
 .venv\Scripts\python run.py --browser        # backend + UI in the browser (fastest loop)
 cd desktop && npm install && npm run dev     # the Electron window
 ```
@@ -24,13 +23,13 @@ $env:AFH_HOME = "$env:TEMP\afh-dev"; .venv\Scripts\python run.py --browser
 .venv\Scripts\python -m pytest tests -q
 ```
 
-Some tests start a real OpenCode server (they skip when `opencode` isn't on PATH). They never prompt a model.
+The MCP tests start a real MCP server with `npx` (they skip when `npx` is missing). No test prompts a model unless `AFH_LIVE_PROVIDER_JSON` is set.
 
 ## Code style
 
-- Python: plain functions, type hints, short comments that say *why*. Keep the OpenCode overlay approach: never write the user's global `opencode.json`.
+- Python: plain functions, type hints, short comments that say *why*. Never write outside `~/.afh` and the project folder; the OpenCode import is read-only.
 - JavaScript: ES modules, no framework, no build step. Build DOM with the `el()` helper in `web/js/ui.js`. Animations go in `web/app.css` and must respect `.no-anim` and `prefers-reduced-motion`.
-- Every settings change that needs an engine restart returns `{restarting: true}` from the API; the UI shows the restart pill automatically.
+- Settings changes apply to the next message; only MCP changes return `{restarting: true}` (the UI shows the reload pill).
 
 ## Pull requests
 

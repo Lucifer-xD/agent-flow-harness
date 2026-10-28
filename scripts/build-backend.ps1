@@ -56,10 +56,13 @@ $PyArgs = @(
     '--specpath', $WorkPath,
     '--paths', $Root,
     '--add-data', "$WebDir;web",
-    # our own package + the OpenCode SDK (lazily imported resource modules)
+    # our own package + the MCP SDK (2.x: mcp, mcp_types, httpx2 are separate distributions)
     '--collect-submodules', 'afh',
-    '--collect-submodules', 'opencode',
-    '--copy-metadata', 'opencode-python-sdk',
+    '--collect-submodules', 'mcp',
+    '--collect-submodules', 'mcp_types',
+    '--collect-submodules', 'httpx2',
+    '--collect-submodules', 'httpx',
+    '--copy-metadata', 'mcp',
     # uvicorn picks its implementation modules by string at runtime
     '--hidden-import', 'uvicorn.logging',
     '--hidden-import', 'uvicorn.loops.auto',

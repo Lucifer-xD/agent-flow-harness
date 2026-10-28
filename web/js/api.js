@@ -22,7 +22,7 @@ async function request(method, path, body, retries = 6) {
     data = { error: text };
   }
   if (res.status === 503 && retries > 0) {
-    // OpenCode is restarting after a settings change; wait for it.
+    // The engine is reloading after a settings change; wait for it.
     await new Promise((r) => setTimeout(r, 1500));
     return request(method, path, body, retries - 1);
   }

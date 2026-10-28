@@ -1,4 +1,4 @@
-// Live file pane: while the model writes or edits a file, show it happening. OpenCode streams
+// Live file pane: while the model writes or edits a file, show it happening. The engine streams
 // the tool's input as it is generated, so a write can be shown typing out and an edit can be
 // shown in place — the file is loaded, the old text found, and the new text typed over it.
 
@@ -35,7 +35,7 @@ export function onLiveEvent(ev) {
     case "session.tool.input.ended":
       if (d.id === st.tool && d.text) {
         st.raw = d.text;
-        // Most providers don't stream tool arguments through OpenCode: the whole write arrives
+        // Fallback when a provider sends the whole tool call at once: the write arrives
         // here at once. Replay it as a fast typewriter so you still see it happen.
         if (!st.streamed && !st.replayed) {
           try { st.input = JSON.parse(d.text); startReplay(); } catch {}

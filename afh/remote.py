@@ -3,6 +3,7 @@ serves the same UI, protected by a password the user sets. Phones and other comp
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import io
@@ -97,15 +98,18 @@ def start_listener(port: int) -> None:
     stop_listener()
     from .api import app  # late import: api imports this module
 
+    from .engine.core import engine
+
     server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning"))
-    thread = threading.Thread(target=server.run, daemon=True, name="afh-remote")
-    thread.start()
+    if engine.loop is None:
+        raise RuntimeError("The engine is not running yet")
+    future = asyncio.run_coroutine_threadsafe(server.serve(), engine.loop)
     deadline = time.time() + 10
-    while not server.started and thread.is_alive() and time.time() < deadline:
+    while not server.started and not future.done() and time.time() < deadline:
         time.sleep(0.05)
     if not server.started:
         raise RuntimeError(f"Could not listen on port {port} (is it in use?)")
-    state.update(server=server, thread=thread, port=port)
+    state.update(server=server, thread=future, port=port)
     log.info("remote listener on 0.0.0.0:%s", port)
 
 
@@ -113,7 +117,10 @@ def stop_listener() -> None:
     server = state["server"]
     if server:
         server.should_exit = True
-        state["thread"].join(timeout=5)
+        try:
+            state["thread"].result(timeout=5)
+        except Exception:
+            pass
     state.update(server=None, thread=None, port=None)
     state["tokens"].clear()
 

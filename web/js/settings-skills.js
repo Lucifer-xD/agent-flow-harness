@@ -7,7 +7,7 @@ const fmtInstalls = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? 
 
 export async function skillsPane(pane, ctx) {
   const project = ctx.project();
-  pane.append(el("h2", "Skills"), el("p.lead", "Skills are reusable instruction packs the agent loads on demand — from skills.sh, the open skill registry used by Claude Code, Codex, Cursor and OpenCode. One click installs; the agent uses it on the next message."));
+  pane.append(el("h2", "Skills"), el("p.lead", "Skills are reusable instruction packs the agent loads on demand — from skills.sh, the open skill registry used by Claude Code, Codex and Cursor. One click installs; the agent uses it on the next message."));
 
   // ---- installed
   const installedBox = el("div");
@@ -29,7 +29,7 @@ export async function skillsPane(pane, ctx) {
     installedSlugs = new Set(list.map((s) => s.slug));
   };
   let installedSlugs = new Set();
-  pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Installed"), el("p", "Global skills live in ~/.config/opencode/skills; project skills in .opencode/skills")),
+  pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Installed"), el("p", "Global skills live in ~/.afh/skills; project skills in .afh/skills (Claude/Agents/OpenCode skill folders are read too)")),
     el("button.btn.sm", { on: { click: async () => { try { const u = await api.post("/api/skills/check-updates", { directory: project }); toast(u.length ? `${u.length} update${u.length > 1 ? "s" : ""} available` : "Everything is up to date", "ok"); drawInstalled(); } catch (e) { toast(e.message, "err"); } } } }, ico("refresh"), "Check updates")), installedBox));
 
   // ---- store
@@ -68,8 +68,8 @@ export async function skillsPane(pane, ctx) {
     return card;
   };
   const installMenu = (anchor, s, slug) => popover(anchor, [
-    { title: "Install for all projects", sub: "~/.config/opencode/skills", icon: "globe", onSelect: () => install(s, slug, "global") },
-    project ? { title: `Install for ${basename(project)} only`, sub: ".opencode/skills in this project", icon: "folder", onSelect: () => install(s, slug, "project") } : null,
+    { title: "Install for all projects", sub: "~/.afh/skills", icon: "globe", onSelect: () => install(s, slug, "global") },
+    project ? { title: `Install for ${basename(project)} only`, sub: ".afh/skills in this project", icon: "folder", onSelect: () => install(s, slug, "project") } : null,
   ].filter(Boolean), { width: 300 });
   const install = async (s, slug, scope) => {
     toast(`Installing ${s.name || slug}…`, "info", 1500);

@@ -1,9 +1,4 @@
-"""AFH's own files under ~/.afh.
-
-AFH never edits the user's global opencode.json. Everything AFH changes
-(agents, system prompts, MCP servers, plugins, providers) lives in an overlay
-config that is passed to `opencode serve` through OPENCODE_CONFIG_CONTENT.
-"""
+"""AFH's own files under ~/.afh: settings, prompts, personalization, instructions."""
 
 from __future__ import annotations
 
@@ -17,9 +12,9 @@ from typing import Any
 HOME = Path.home()
 AFH_DIR = Path(os.environ.get("AFH_HOME", HOME / ".afh"))
 SETTINGS_PATH = AFH_DIR / "settings.json"
-OVERLAY_PATH = AFH_DIR / "config.json"
 PERSONALIZATION_PATH = AFH_DIR / "personalization.md"
-GLOBAL_AGENTS_MD = HOME / ".config" / "opencode" / "AGENTS.md"
+GLOBAL_AGENTS_MD = AFH_DIR / "AGENTS.md"
+LEGACY_AGENTS_MD = HOME / ".config" / "opencode" / "AGENTS.md"
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "projects": [],
@@ -63,21 +58,23 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     # The harness system prompt (empty = DEFAULT_SYSTEM_PROMPT) and per-mode replacements.
     "prompts": {"system": "", "agents": {}},
-    "hiddenProviders": [],
+    # Custom agents: {id: {name, description, mode, system, model, readonly, color}}
+    "agents": {},
+    # MCP servers: [{name, type: local|remote, command|url, environment|headers, disabled}]
+    "mcp": {"servers": []},
+    "migration": {},
     # Remote control: LAN listener (+ optional Cloudflare quick tunnel) behind a password.
     "remote": {"enabled": False, "port": 0, "passwordHash": "", "tunnel": "none"},
-    # Delegate mode: a leader agent that hands work to these delegates (each an OpenCode subagent).
+    # Delegate mode: a leader agent that hands work to these delegates (child sessions).
     "delegation": {
         "leaderInstructions": "",
         "delegates": [],  # {id, name, model: {providerID, id, variant}, job, system, enabled, readonly, color}
-        "managed": [],  # agent ids Astra wrote into the overlay, so they can be removed cleanly
     },
 }
 
 LEADER_ID = "delegate"
 
-# The one harness system prompt. It goes to every model in every mode (OpenCode's own
-# provider prompts are replaced). Users can edit it in Settings → Prompts.
+# The one harness system prompt. It goes to every model in every mode. Users can edit it in Settings → Prompts.
 DEFAULT_SYSTEM_PROMPT = """You are a coding agent running inside Agent Flow Harness (AFH), a desktop app that gives you tools to read, write and run code in the user's project folder. Help the user get real work done: understand the request, look at the actual code, make the change, verify it, and report plainly.
 
 # How you work
@@ -158,46 +155,6 @@ def leader_prompt(delegates: list[dict], extra: str = "") -> str:
     return (system_prompt().strip() + "\n\n" + rules.strip()).strip()
 
 
-def apply_delegation(settings: dict) -> None:
-    """Rewrite the delegate/leader agents in the overlay from settings['delegation']."""
-    deleg = settings.get("delegation", {})
-    delegates = [d for d in deleg.get("delegates", []) if d.get("id")]
-    enabled = [d for d in delegates if d.get("enabled", True)]
-
-    def apply(cfg: dict) -> None:
-        agents = cfg.setdefault("agents", {})
-        for old in deleg.get("managed", []) + [LEADER_ID]:
-            agents.pop(old, None)
-        for d in enabled:
-            entry: dict = {
-                "mode": "subagent",
-                "description": d.get("job", "").strip() or f"Delegate agent {d.get('name') or d['id']}",
-                "system": DELEGATE_PROMPT.format(name=d.get("name") or d["id"], job=d.get("job", "").strip() or "general tasks", system=("\n" + d["system"].strip()) if d.get("system", "").strip() else ""),
-            }
-            if model := _model_string(d.get("model")):
-                entry["model"] = model
-            if d.get("color"):
-                entry["color"] = d["color"]
-            if d.get("readonly"):
-                entry["permissions"] = [
-                    {"action": "edit", "resource": "*", "effect": "deny"},
-                    {"action": "shell", "resource": "*", "effect": "deny"},
-                ]
-            agents[d["id"]] = entry
-        agents[LEADER_ID] = {
-            "mode": "primary",
-            "description": "Leads the work and delegates tasks to your delegate models.",
-            "system": leader_prompt(enabled, deleg.get("leaderInstructions", "")),
-            "color": "#ff6a2a",
-            "permissions": [{"action": "subagent", "resource": "*", "effect": "deny"}]
-            + [{"action": "subagent", "resource": d["id"], "effect": "allow"} for d in enabled],
-        }
-
-    update_overlay(apply)
-    with _lock:
-        current = load_settings()
-        current["delegation"]["managed"] = [d["id"] for d in delegates]
-        _write_json(SETTINGS_PATH, current)
 
 STYLE_TEXT = {
     "concise": "Keep replies short and direct. Skip preamble and summaries unless asked.",
@@ -250,23 +207,7 @@ def save_settings(patch: dict) -> dict:
         return merged
 
 
-def load_overlay() -> dict:
-    with _lock:
-        return _read_json(OVERLAY_PATH, {})
 
-
-def save_overlay(data: dict) -> None:
-    with _lock:
-        _write_json(OVERLAY_PATH, data)
-
-
-def update_overlay(fn) -> dict:
-    """Apply fn(overlay) under the lock and persist the result."""
-    with _lock:
-        data = load_overlay()
-        fn(data)
-        save_overlay(data)
-        return data
 
 
 def write_personalization(p: dict) -> None:
@@ -291,47 +232,6 @@ def write_personalization(p: dict) -> None:
     PERSONALIZATION_PATH.write_text(body, encoding="utf-8")
 
 
-def apply_base_prompts(settings: dict | None = None) -> None:
-    """Every mode runs on AFH's own system prompt unless the user replaced that mode's prompt."""
-    s = settings or load_settings()
-    base = system_prompt(s)
-    overrides = s.get("prompts", {}).get("agents", {})
-
-    def apply(cfg: dict) -> None:
-        agents = cfg.setdefault("agents", {})
-        agents.setdefault("build", {})["system"] = overrides.get("build") or base
-        agents.setdefault("plan", {})["system"] = overrides.get("plan") or (base + PLAN_RULES)
-        for aid in s.get("customAgents", []):
-            entry = agents.get(aid)
-            if entry is not None:
-                entry["system"] = overrides.get(aid) or entry.get("system") or base
-        # Removed providers: a deny policy keeps them out entirely (OpenCode's own mechanism).
-        policies = [p for p in cfg.get("policies", []) if not p.get("_afh")]
-        policies += [{"action": "provider.use", "resource": pid, "effect": "deny", "_afh": True} for pid in s.get("hiddenProviders", [])]
-        if policies:
-            cfg["policies"] = policies
-        else:
-            cfg.pop("policies", None)
-
-    update_overlay(apply)
-
-
-def server_config() -> dict:
-    """The overlay handed to `opencode serve`, plus AFH's personalization file."""
-    settings = load_settings()
-    apply_base_prompts(settings)
-    apply_delegation(settings)  # keeps Delegate mode present even with zero delegates
-    cfg = copy.deepcopy(load_overlay())
-    for p in cfg.get("policies", []):
-        p.pop("_afh", None)
-    if not PERSONALIZATION_PATH.exists():
-        write_personalization(settings["personalization"])
-    instructions = list(cfg.get("instructions") or [])
-    path = str(PERSONALIZATION_PATH)
-    if path not in instructions:
-        instructions.append(path)
-    cfg["instructions"] = instructions
-    return cfg
 
 
 def read_text(path: Path) -> str:

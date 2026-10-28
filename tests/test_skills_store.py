@@ -141,7 +141,7 @@ def test_install_installed_updates_uninstall_live(tmp_path):
 
 
 def test_project_scope_paths(tmp_path):
-    assert ss.skills_root("project", tmp_path) == tmp_path / ".opencode" / "skills"
+    assert ss.skills_root("project", tmp_path) == tmp_path / ".afh" / "skills"
     assert ss.skills_root("global") == ss.OPENCODE_SKILLS_DIR
     with pytest.raises(ValueError):
         ss.skills_root("project")
@@ -196,8 +196,8 @@ def test_installed_merges_unmanaged_and_external(tmp_path):
     (ext / "ext-skill").mkdir(parents=True)
     (ext / "ext-skill" / "SKILL.md").write_text("---\nname: ext-skill\ndescription: from claude dir\n---\n", encoding="utf-8")
     project = tmp_path / "proj"
-    (project / ".opencode" / "skills" / "proj-skill").mkdir(parents=True)
-    (project / ".opencode" / "skills" / "proj-skill" / "SKILL.md").write_text("---\nname: proj\n---\n")
+    (project / ".afh" / "skills" / "proj-skill").mkdir(parents=True)
+    (project / ".afh" / "skills" / "proj-skill" / "SKILL.md").write_text("---\nname: proj\n---\n")
     (project / ".agents" / "skills" / "agents-skill").mkdir(parents=True)
     (project / ".agents" / "skills" / "agents-skill" / "SKILL.md").write_text("---\nname: ag\n---\n")
 
