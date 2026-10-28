@@ -1,6 +1,10 @@
-import { api, connectEvents, native } from "./api.js";
-import { ChatView, applyEvent, collectEdits, createThread, loadThread } from "./chat.js";
+import { api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
+import { ChatView, applyEvent, collectEdits, createThread, hooks, loadThread } from "./chat.js";
+import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderWatch, syncChildren, trackEvent } from "./delegate.js";
+import { openContextEditor } from "./context.js";
+import { logoNode, setWorking } from "./logo.js";
 import { openSettings } from "./settings.js";
+import { exportThread, openImportDialog } from "./transfer-ui.js";
 import {
   ago, basename, closePopover, confirmDialog, contextRing, dayGroup, diffView, el, escapeHtml, fmtTokens,
   hydrateIcons, ico, icon, popover, promptDialog, toast,
@@ -33,6 +37,7 @@ const view = new ChatView($("messages"), $("thread"), {
   modelName: (ref) => modelName(ref),
   onFork: (id) => forkThread(id),
   onRetry: () => retryLast(),
+  onRevert: (id) => revertTo(id),
   onStatus: () => renderComposerState(),
   onScroll: (stick, top) => {
     $("jump").hidden = stick || !S.current;
@@ -42,8 +47,31 @@ const view = new ChatView($("messages"), $("thread"), {
 
 // ---- boot -----------------------------------------------------------------------
 
+function showLogin() {
+  if (document.querySelector(".login-box")) return;
+  $("boot-status").textContent = "";
+  const pw = el("input.inp", { type: "password", placeholder: "Password", autocomplete: "current-password", style: { maxWidth: "260px" } });
+  const err = el("div", { style: { color: "var(--bad)", fontSize: "12.5px", minHeight: "18px" } });
+  const go = async () => {
+    err.textContent = "";
+    try {
+      await remoteLogin(pw.value);
+      location.reload();
+    } catch (e) {
+      err.textContent = e.message;
+    }
+  };
+  pw.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  $("boot").append(el("div.login-box", el("div", { style: { marginBottom: "8px", color: "var(--text-2)" } }, "Enter the remote-control password set on the host computer."), pw, err, el("button.btn.primary", { on: { click: go } }, "Sign in")));
+  setTimeout(() => pw.focus(), 50);
+}
+
 async function boot() {
   hydrateIcons();
+  $("boot-mark").append(logoNode({ size: 110, working: true }));
+  $("brand").prepend(logoNode({ size: 30 }));
+  $("tb-logo").append(logoNode({ size: 30, working: true }));
+  apiHooks.onUnauthorized = () => showLogin();
   for (const [id, name] of [["btn-collapse", "sidebar"], ["btn-expand", "sidebar"], ["btn-thread-menu", "more"], ["btn-attach", "paperclip"], ["btn-drawer-close", "x"]]) $(id).innerHTML = icon(name);
   let data;
   for (let attempt = 0; ; attempt++) {
@@ -52,6 +80,7 @@ async function boot() {
       if (data.ready) break;
       if (data.error) throw new Error(data.error);
     } catch (e) {
+      if (document.querySelector(".login-box")) return; // waiting for the remote password
       $("boot-status").textContent = `Couldn't start OpenCode: ${e.message}`;
       $("boot-status").classList.add("err");
       if (attempt > 2) return;
@@ -63,6 +92,8 @@ async function boot() {
   S.defaultModel = data.defaultModel;
   S.agents = data.agents;
   applyAppearance();
+  initDelegate(ctx);
+  hooks.delegation = (p, o) => delegationCard(p, { ...o, onWatch: openWatch });
   wire();
   connectEvents(onEvent, (state) => $("conn").className = "conn " + (state === "open" ? "ok" : "bad"));
   $("app").hidden = false;
@@ -159,6 +190,7 @@ function projectMenu() {
   }
   if (S.settings.projects.length) items.push({ sep: true });
   items.push({ title: "Open folder…", icon: "folder-plus", onSelect: chooseFolder });
+  if (project()) items.push({ title: "Import thread…", sub: "From a file, OpenCode or Zadloop", icon: "arrow-down", onSelect: importThread });
   if (project()) items.push({ title: "Remove from list", sub: basename(project()), icon: "x", danger: true, onSelect: removeProject });
   popover($("project-picker"), items, { width: 300 });
 }
@@ -200,7 +232,7 @@ function renderThreads() {
       type: "button", title: s.title || "New thread", style: { animationDelay: `${Math.min(i, 12) * 18}ms` },
       on: { click: () => openThread(s.id) },
     },
-      S.busy.has(s.id) ? el("span.th-busy") : null,
+      S.busy.has(s.id) ? logoNode({ size: 18, working: true }) : null,
       el("span.th-title", s.title || "New thread"),
       el("span.th-time", ago(t)),
       el("span.th-del", { title: "Delete thread", html: icon("trash"), on: { click: (e) => { e.stopPropagation(); deleteThread(s.id); } } }));
@@ -227,6 +259,7 @@ async function openThread(id) {
     } catch (e) {
       toast(e.message, "err");
     }
+    syncChildren(t.id).then(() => { if (S.current === t) view.update({ all: true }); });
   }
   if (S.current !== t) return;
   view.mount(t);
@@ -246,7 +279,7 @@ function showHome() {
   view.thread = null;
   root.replaceChildren();
   if (!project()) {
-    root.append(el("div.hero.no-project", el("span.logo-mark"), el("h2", "Welcome to AFH"),
+    root.append(el("div.hero.no-project", logoNode({ size: 150 }), el("h2", "Welcome to Agent Flow Harness"),
       el("p", "Open a project folder and AFH will read, edit and run code there with any model you choose."),
       el("button.btn.primary", { on: { click: chooseFolder } }, ico("folder-plus"), "Open a folder")));
     return;
@@ -258,7 +291,7 @@ function showHome() {
     ["Write tests", "Add tests for the parts of this project that have none."],
     ["Review my changes", "Review the uncommitted changes and point out problems."],
   ];
-  root.append(el("div.hero", el("span.logo-mark"),
+  root.append(el("div.hero", logoNode({ size: 150 }),
     el("h2", name ? `What are we building, ${name}?` : "What are we building?"),
     el("p", el("span", "in "), el("b", basename(project()))),
     el("div.suggest", ideas.map(([title, text]) => el("button", { type: "button", on: { click: () => { setInput(text); $("input").focus(); } } }, el("b", title), text)))));
@@ -292,6 +325,58 @@ async function forkThread(messageId) {
   }
 }
 
+// ---- undo (OpenCode revert) & context editing -----------------------------------------
+
+async function reloadCurrent(id = S.current?.id) {
+  if (!id) return;
+  const t = S.threads.get(id);
+  if (t) t.loaded = false;
+  await openThread(id);
+  refreshSessionsSoon();
+}
+
+async function revertTo(messageId) {
+  const t = S.current;
+  if (!t) return;
+  let staged;
+  try {
+    staged = await api.post(`/api/sessions/${t.id}/revert`, { messageId, files: true });
+  } catch (e) {
+    return toast(e.message, "err", 6000);
+  }
+  const files = staged?.files?.length || 0;
+  document.querySelector(".revert-bar")?.remove();
+  const bar = el("div.revert-bar", ico("refresh"),
+    el("span", el("b", "Rewound. "), `Messages after that point are set aside${files ? ` and ${files} file${files > 1 ? "s" : ""} restored on disk` : ""}. Keep it, or put everything back.`),
+    el("button.btn.ghost.sm", { on: { click: async () => { try { await api.post(`/api/sessions/${t.id}/revert/clear`); } catch (e) { toast(e.message, "err"); } bar.remove(); reloadCurrent(t.id); } } }, "Put it back"),
+    el("button.btn.primary.sm", { on: { click: async () => { try { await api.post(`/api/sessions/${t.id}/revert/commit`); toast("Undone", "ok"); } catch (e) { toast(e.message, "err"); } bar.remove(); reloadCurrent(t.id); } } }, ico("check"), "Keep"));
+  $("messages").prepend(bar);
+  bar.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function editContext() {
+  const t = S.current;
+  if (!t) return;
+  openContextEditor(ctx, t, {
+    onSaved: async (session) => {
+      if (session.id !== t.id) {
+        S.threads.delete(t.id);
+        S.sessions = S.sessions.filter((s) => s.id !== t.id);
+        S.sessions.unshift(session);
+      }
+      await reloadCurrent(session.id);
+    },
+  });
+}
+
+async function importThread() {
+  if (!project()) return chooseFolder();
+  openImportDialog(ctx, async (session) => {
+    S.sessions.unshift(session);
+    await openThread(session.id);
+  });
+}
+
 async function renameThread() {
   const t = S.current;
   if (!t) return;
@@ -323,6 +408,7 @@ function renderTopbar() {
   $("btn-thread-menu").hidden = !t;
   $("btn-changes").hidden = !t;
   $("btn-harness").hidden = !t;
+  $("btn-context").hidden = !t;
   if (!t) {
     if (project()) box.append(el("span.tb-path", project()));
     return;
@@ -349,6 +435,8 @@ function threadMenu() {
   popover($("btn-thread-menu"), [
     { title: "Rename", icon: "edit", onSelect: renameThread },
     { title: "Fork thread", icon: "branch", onSelect: () => forkThread(t.messages.at(-1)?.id) },
+    { title: "Edit context…", sub: "Change or remove anything the model sees", icon: "list", onSelect: editContext },
+    { title: "Export thread…", sub: "Save as .afh-session.json to share or move", icon: "arrow-down", onSelect: () => exportThread(t.id, t.session.title) },
     { title: "Copy as Markdown", icon: "copy", onSelect: copyThread },
     { title: "Archive", icon: "archive", onSelect: async () => { await patchSession({ archived: true }); S.sessions = S.sessions.filter((s) => s.id !== t.id); showHome(); toast("Thread archived", "ok"); } },
     { sep: true },
@@ -373,8 +461,10 @@ async function copyThread() {
 
 function openDrawer(kind) {
   if (S.drawer === kind) return closeDrawer();
+  if (S.drawer === "watch") closeWatch();
   S.drawer = kind;
   $("drawer").classList.add("open");
+  $("drawer").classList.toggle("watch", kind === "watch");
   $("drawer").setAttribute("aria-hidden", "false");
   $("btn-changes").classList.toggle("on", kind === "changes");
   $("btn-harness").classList.toggle("on", kind === "harness");
@@ -382,11 +472,18 @@ function openDrawer(kind) {
 }
 
 function closeDrawer() {
+  if (S.drawer === "watch") closeWatch();
   S.drawer = null;
-  $("drawer").classList.remove("open");
+  $("drawer").classList.remove("open", "watch");
   $("drawer").setAttribute("aria-hidden", "true");
   $("btn-changes").classList.remove("on");
   $("btn-harness").classList.remove("on");
+}
+
+function openWatch(childId) {
+  D.watch = childId;
+  if (S.drawer !== "watch") openDrawer("watch");
+  else refreshDrawer();
 }
 
 async function refreshDrawer() {
@@ -394,6 +491,10 @@ async function refreshDrawer() {
   updateChangesBadge();
   if (!S.drawer || !t) return;
   const body = $("drawer-body");
+  if (S.drawer === "watch") {
+    await renderWatch(body, $("drawer-title"), { onOpenAsThread: (id) => { closeDrawer(); openThread(id); } });
+    return;
+  }
   if (S.drawer === "changes") {
     $("drawer-title").replaceChildren(ico("diff"), "Changes");
     let diffs = [];
@@ -488,6 +589,7 @@ function renderComposerState() {
 
   const t = S.current;
   const busy = !!t && (t.busy || S.busy.has(t.id));
+  $("tb-logo").hidden = !busy; // the mark flows beside the title while a model works
   const send = $("btn-send");
   send.classList.toggle("stop", busy);
   send.innerHTML = icon(busy ? "stop" : "send");
@@ -683,6 +785,7 @@ function onEvent(ev) {
     return;
   }
 
+  trackEvent(ev); // delegation children register themselves on session.created
   const sid = ev.data?.sessionID || ev.data?.session_id || (type.startsWith("session.") ? ev.data?.id : null);
   if (type === "session.execution.started" && sid) S.busy.add(sid);
   if (/^session\.execution\.(succeeded|failed|interrupted)$/.test(type) && sid) S.busy.delete(sid);
@@ -702,11 +805,15 @@ function onEvent(ev) {
   const t = sid && S.threads.get(sid);
   if (!t || !t.loaded) return;
   const result = applyEvent(t, ev);
+  if (type === "session.tool.called") registerDelegation(t, ev.data);
   if (!result) return;
   if (S.current === t) {
     view.update(result);
     if (result.status) renderComposerState();
     if (result.changes || /execution\.(succeeded|failed|interrupted)/.test(type)) refreshDrawerSoon();
+  } else if (D.children.has(sid)) {
+    onChildEvent(sid, result, view);
+    if (D.watch === sid && result.status) refreshDrawerSoon();
   }
   if (type === "permission.asked" && S.current !== t) toast(`"${t.session.title || "A thread"}" is waiting for your approval`, "info", 5000);
 }
@@ -718,7 +825,8 @@ const refreshDrawerSoon = () => { clearTimeout(drawerTimer); drawerTimer = setTi
 
 // ---- wiring ------------------------------------------------------------------------
 
-export const ctx = { S, saveSettings, reloadCatalog, project, onReady: null, onCatalogEvent: null };
+export const ctx = { S, saveSettings, reloadCatalog, project, modelName, onReady: null, onCatalogEvent: null };
+window.__afh = { S, D, ctx }; // for debugging from the devtools console
 
 function toggleSidebar() {
   $("app").classList.toggle(innerWidth <= 980 ? "sb-open" : "sb-hidden");
@@ -763,6 +871,7 @@ function wire() {
   $("btn-thread-menu").addEventListener("click", threadMenu);
   $("btn-changes").addEventListener("click", () => openDrawer("changes"));
   $("btn-harness").addEventListener("click", () => openDrawer("harness"));
+  $("btn-context").addEventListener("click", editContext);
   $("btn-drawer-close").addEventListener("click", closeDrawer);
   $("btn-collapse").addEventListener("click", toggleSidebar);
   $("btn-expand").addEventListener("click", toggleSidebar);

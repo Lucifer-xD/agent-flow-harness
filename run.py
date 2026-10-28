@@ -72,6 +72,12 @@ def main() -> None:
             sys.exit(f"AFH couldn't listen on port {port}; try --port with another number.")
         time.sleep(0.05)
     threading.Thread(target=engine.start, daemon=True).start()
+    try:  # resume remote control if it was left on
+        from afh import remote
+
+        remote.apply(remote.settings())
+    except Exception as exc:
+        logging.getLogger("afh").warning("remote control not started: %s", exc)
 
     url = f"http://127.0.0.1:{port}/#token={token}"
     try:
