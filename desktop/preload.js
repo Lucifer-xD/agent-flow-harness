@@ -27,6 +27,18 @@ contextBridge.exposeInMainWorld("afh", {
     maximize: () => ipcRenderer.invoke("afh:window:maximize"),
     close: () => ipcRenderer.invoke("afh:window:close"),
     isMaximized: () => ipcRenderer.invoke("afh:window:is-maximized"),
+    /**
+     * Re-tint the native window-control overlay (Windows/Linux) to match the page theme.
+     * `color` / `symbolColor` are hex strings (#rgb, #rrggbb, #rrggbbaa); the height is fixed
+     * at 38px by the main process. Resolves to true when applied, false when unsupported.
+     */
+    setTitleBarOverlay: (opts) => {
+      const o = opts && typeof opts === "object" ? opts : {};
+      return ipcRenderer.invoke("afh:window:set-title-bar-overlay", {
+        color: o.color == null ? undefined : String(o.color),
+        symbolColor: o.symbolColor == null ? undefined : String(o.symbolColor),
+      });
+    },
   },
 
   /**

@@ -1,6 +1,7 @@
 import { api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
 import { ChatView, applyEvent, collectEdits, createThread, hooks, loadThread } from "./chat.js";
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderWatch, syncChildren, trackEvent } from "./delegate.js";
+import { applyAppearance as applyTheme } from "./appearance.js";
 import { openContextEditor } from "./context.js";
 import { logoNode, setWorking } from "./logo.js";
 import { openSettings } from "./settings.js";
@@ -35,9 +36,11 @@ const MODES = {
 const view = new ChatView($("messages"), $("thread"), {
   settings: () => S.settings,
   modelName: (ref) => modelName(ref),
+  avatar: (live) => logoNode({ size: 22, working: live }),
   onFork: (id) => forkThread(id),
   onRetry: () => retryLast(),
   onRevert: (id) => revertTo(id),
+  onChangeModel: () => modelMenu(),
   onStatus: () => renderComposerState(),
   onScroll: (stick, top) => {
     $("jump").hidden = stick || !S.current;
@@ -105,6 +108,10 @@ async function boot() {
   $("brand").prepend(logoNode({ size: 30 }));
   $("tb-logo").append(logoNode({ size: 30, working: true }));
   apiHooks.onUnauthorized = () => showLogin();
+  if (native.electron()) {
+    document.body.classList.add("electron");
+    $("tb-brand").append(logoNode({ size: 22 }));
+  }
   for (const [id, name] of [["btn-collapse", "sidebar"], ["btn-expand", "sidebar"], ["btn-thread-menu", "more"], ["btn-attach", "paperclip"], ["btn-drawer-close", "x"]]) $(id).innerHTML = icon(name);
   let data;
   for (let attempt = 0; ; attempt++) {
@@ -123,6 +130,7 @@ async function boot() {
   S.settings = data.settings;
   S.models = data.models;
   S.defaultModel = data.defaultModel;
+  S.providerNames = data.providerNames || {};
   S.agents = data.agents;
   applyAppearance();
   initDelegate(ctx);
@@ -133,19 +141,41 @@ async function boot() {
   $("boot").classList.add("gone");
   setTimeout(() => $("boot")?.remove(), 600);
   await loadSessions();
-  showHome();
+  const last = S.settings.ui.reopenLast && S.settings.lastThread;
+  if (last && S.sessions.some((s) => s.id === last)) await openThread(last);
+  else showHome();
   $("input").focus();
 }
 
 export function applyAppearance() {
-  const ui = S.settings.ui;
-  const root = document.documentElement;
-  const dark = ui.theme === "dark" || (ui.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-  root.dataset.theme = dark ? "dark" : "light";
-  root.dataset.density = ui.density;
-  root.style.setProperty("--accent", ui.accent);
-  root.style.setProperty("--fs", `${ui.fontSize}px`);
-  document.body.classList.toggle("no-anim", !ui.animations);
+  applyTheme(S.settings.ui);
+}
+
+// ---- notifications --------------------------------------------------------------------
+
+let audio = null;
+function beep(kind = "done") {
+  if (!S.settings.ui.sounds) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const notes = kind === "ask" ? [660, 880] : kind === "error" ? [330, 220] : [523, 784];
+    notes.forEach((f, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, audio.currentTime + i * 0.12);
+      g.gain.exponentialRampToValueAtTime(0.12, audio.currentTime + i * 0.12 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + i * 0.12 + 0.25);
+      o.connect(g).connect(audio.destination);
+      o.start(audio.currentTime + i * 0.12); o.stop(audio.currentTime + i * 0.12 + 0.3);
+    });
+  } catch {}
+}
+
+function notify(kind, title, body) {
+  beep(kind);
+  if (!S.settings.ui.notify || !("Notification" in window) || document.hasFocus()) return;
+  if (Notification.permission === "granted") new Notification(title, { body, silent: true });
+  else if (Notification.permission !== "denied") Notification.requestPermission();
 }
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => S.settings && applyAppearance());
 
@@ -160,6 +190,7 @@ export async function reloadCatalog() {
   const [m, agents] = await Promise.all([api.get("/api/models"), api.get("/api/agents")]);
   S.models = m.models;
   S.defaultModel = m.defaultModel;
+  S.providerNames = m.providerNames || {};
   S.agents = agents;
   renderComposerState();
 }
@@ -299,6 +330,7 @@ async function openThread(id) {
   renderComposerState();
   refreshDrawer();
   $("input").focus();
+  if (S.settings.lastThread !== id) { S.settings.lastThread = id; api.put("/api/settings", { lastThread: id }).catch(() => {}); }
 }
 
 function showHome() {
@@ -332,7 +364,7 @@ function showHome() {
 
 async function deleteThread(id) {
   const s = S.sessions.find((x) => x.id === id);
-  if (!(await confirmDialog({ title: "Delete thread?", body: `"${s?.title || "New thread"}" and its history will be deleted. Files it changed are not reverted.`, confirm: "Delete", danger: true }))) return;
+  if (S.settings.ui.confirmDelete !== false && !(await confirmDialog({ title: "Delete thread?", body: `"${s?.title || "New thread"}" and its history will be deleted. Files it changed are not reverted.`, confirm: "Delete", danger: true }))) return;
   try {
     await api.del(`/api/sessions/${id}`);
     S.sessions = S.sessions.filter((x) => x.id !== id);
@@ -438,6 +470,7 @@ function renderTopbar() {
   const box = $("tb-title");
   box.replaceChildren();
   const t = S.current;
+  $("tb-thread").textContent = t ? t.session.title || "New thread" : project() ? basename(project()) : "";
   $("btn-thread-menu").hidden = !t;
   $("btn-changes").hidden = !t;
   $("btn-harness").hidden = !t;
@@ -629,16 +662,16 @@ function renderComposerState() {
   send.title = busy ? "Stop (Esc)" : S.settings.ui.sendKey === "ctrl-enter" ? "Send (Ctrl+Enter)" : "Send (Enter)";
   send.disabled = !busy && !$("input").value.trim();
 
-  // Context meter: the latest step's prompt size against the model's window.
-  const ctx = $("ctx-meter");
+  // Context meter: the latest step's prompt size against the model's window. Click for details.
+  const ctxm = $("ctx-meter");
   const last = t && [...t.messages].reverse().find((m) => m.type === "assistant" && m.tokens);
   const limit = findModel(ref)?.context;
-  if (last && limit) {
-    const used = (last.tokens.input || 0) + (last.tokens.cache?.read || 0);
-    ctx.className = "ctx on";
-    ctx.innerHTML = contextRing(used / limit);
-    ctx.title = `Context: ${fmtTokens(used)} of ${fmtTokens(limit)} tokens`;
-  } else ctx.className = "ctx";
+  if (t && (last || t.messages.length)) {
+    const used = last ? (last.tokens.input || 0) + (last.tokens.cache?.read || 0) : 0;
+    ctxm.className = "ctx on";
+    ctxm.innerHTML = contextRing(limit ? used / limit : 0);
+    ctxm.title = limit ? `Context: ${fmtTokens(used)} of ${fmtTokens(limit)} tokens — click for details` : "Context details";
+  } else ctxm.className = "ctx";
 
   const hint = $("composer-hint");
   hint.textContent = busy ? "Working… press Esc to stop, or type to queue a follow-up" : project() ? `${MODES[currentMode()].sub} · ${basename(project())}` : "";
@@ -664,35 +697,72 @@ function autosize() {
   ta.style.height = Math.min(ta.scrollHeight, 260) + "px";
 }
 
-function modelMenu() {
+// Two steps: pick a provider, then one of its models. Search jumps straight to models.
+const PROVIDER_NAMES = { "kimi-code-plan-global": "Kimi (kimi.ai)", "kimi-code-plan": "Kimi (kimi.com)", "zai-coding-plan": "Z.AI", openai: "OpenAI", anthropic: "Anthropic", google: "Google", "github-copilot": "GitHub Copilot" };
+const providerName = (pid) => S.providerNames?.[pid] || PROVIDER_NAMES[pid] || pid.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+let lastProvider = null;
+
+function modelMenu(pid = null) {
   const ref = currentModel();
   const byProvider = new Map();
   for (const m of S.models) {
     if (!byProvider.has(m.providerID)) byProvider.set(m.providerID, []);
     byProvider.get(m.providerID).push(m);
   }
-  const items = [];
-  for (const [pid, list] of byProvider) {
-    items.push({ group: pid });
-    for (const m of list) {
-      items.push({
-        title: m.name, sub: `${pid}${m.context ? ` · ${fmtTokens(m.context)} context` : ""}${m.tools ? "" : " · no tools"}`, keywords: pid + " " + m.id,
-        checked: ref && ref.id === m.id && ref.providerID === pid,
-        onSelect: () => chooseModel({ id: m.id, providerID: pid }),
-      });
+  if (byProvider.size === 1) pid = [...byProvider.keys()][0];
+  const anchor = $("pick-model");
+  if (!pid) {
+    const items = [{ group: "Providers" }];
+    for (const [p, list] of byProvider) {
+      items.push({ title: providerName(p), sub: list.length === 1 ? list[0].name : `${list.length} models`, icon: "cpu", count: list.length, arrow: true, checked: ref?.providerID === p, onSelect: () => modelMenu(p) });
     }
+    items.push({ sep: true }, { title: "Add or manage providers…", icon: "key", onSelect: () => openSettings("models", ctx) });
+    const all = S.models.map((m) => ({ title: m.name, sub: `${providerName(m.providerID)}${m.context ? ` · ${fmtTokens(m.context)} ctx` : ""}`, keywords: `${m.providerID} ${m.id}`, hidden: true, checked: ref && ref.id === m.id && ref.providerID === m.providerID, onSelect: () => chooseModel({ id: m.id, providerID: m.providerID }) }));
+    popover(anchor, items, { search: true, placeholder: "Search all models…", width: 320, align: "right", searchItems: all });
+    return;
   }
-  items.push({ sep: true }, { title: "Add or manage providers…", icon: "key", onSelect: () => openSettings("models", ctx) });
+  lastProvider = pid;
+  const list = byProvider.get(pid) || [];
+  const items = list.map((m) => ({
+    title: m.name, sub: `${m.id}${m.context ? ` · ${fmtTokens(m.context)} context` : ""}${m.tools ? "" : " · no tools"}`, keywords: m.id,
+    checked: ref && ref.id === m.id && ref.providerID === pid,
+    onSelect: () => chooseModel({ id: m.id, providerID: pid }),
+  }));
+  const header = el("div.pop-header", byProvider.size > 1 ? el("button.icon-btn", { html: icon("chev"), style: { transform: "rotate(180deg)" }, title: "All providers", on: { click: (e) => { e.stopPropagation(); modelMenu(null); } } }) : null, el("span", providerName(pid)), el("span.pi-count", { style: { marginLeft: "auto" } }, `${list.length} models`));
   const model = findModel(ref);
   let footer = null;
-  if (model?.variants?.length) {
+  if (model?.variants?.length && ref.providerID === pid) {
     const seg = el("div.seg");
     for (const v of ["default", ...model.variants.filter((x) => x !== "default")]) {
       seg.append(el(`button${(ref.variant || "default") === v ? ".on" : ""}`, { type: "button", on: { click: () => { closePopover(); chooseModel({ ...ref, variant: v === "default" ? undefined : v }); } } }, v));
     }
     footer = el("div.pop-variants", el("span", "Effort"), seg);
   }
-  popover($("pick-model"), items, { search: true, placeholder: "Search models", width: 340, footer, align: "right" });
+  popover(anchor, items, { search: list.length > 6, placeholder: `Search ${providerName(pid)} models`, width: 340, align: "right", header, footer });
+}
+
+async function contextPopover() {
+  const t = S.current;
+  if (!t) return;
+  const box = el("div.ctx-pop", el("div.empty-row", el("span.spinner")));
+  popover($("ctx-meter"), [], { header: box, width: 300, align: "right" });
+  try {
+    const u = await api.get(`/api/sessions/${t.id}/usage`);
+    const frac = u.contextLimit ? Math.min(1, u.lastInput / u.contextLimit) : 0;
+    const tot = u.totals || {};
+    box.replaceChildren(el("div",
+      el("h4", ico("list"), "Context"),
+      el("div.ctx-row", el("span", "In the window now"), el("b", `${fmtTokens(u.lastInput)}${u.contextLimit ? ` / ${fmtTokens(u.contextLimit)}` : ""}`)),
+      el("div.ctx-bar", el("i", { style: { width: `${Math.round(frac * 100)}%` } })),
+      el("div.ctx-row", el("span", "Model"), el("b", u.modelName || modelName(u.model) || "—")),
+      el("div.ctx-row", el("span", "Mode"), el("b", u.agent || "build")),
+      el("div.ctx-row", el("span", "Messages"), el("b", `${u.messages.user} you · ${u.messages.assistant} model · ${u.messages.tools} tools`)),
+      el("div.ctx-row", el("span", "Tokens this thread"), el("b", `${fmtTokens((tot.input || 0) + (tot.cache?.read || 0))} in · ${fmtTokens(tot.output || 0)} out · ${fmtTokens(tot.reasoning || 0)} thinking`)),
+      u.cost ? el("div.ctx-row", el("span", "Cost"), el("b", `$${u.cost.toFixed(4)}`)) : null,
+      el("div.actions", { style: { marginTop: "8px" } }, el("button.btn.sm", { on: { click: () => { closePopover(); editContext(); } } }, ico("edit"), "Open context editor"))));
+  } catch (e) {
+    box.replaceChildren(el("div.empty-row", e.message));
+  }
 }
 
 async function chooseModel(ref) {
@@ -848,7 +918,12 @@ function onEvent(ev) {
     onChildEvent(sid, result, view);
     if (D.watch === sid && result.status) refreshDrawerSoon();
   }
-  if (type === "permission.asked" && S.current !== t) toast(`"${t.session.title || "A thread"}" is waiting for your approval`, "info", 5000);
+  if (type === "permission.asked") {
+    if (S.current !== t) toast(`"${t.session.title || "A thread"}" is waiting for your approval`, "info", 5000);
+    notify("ask", "Approval needed", `${t.session.title || "A thread"} wants to ${ev.data?.action || "run a tool"}`);
+  }
+  if (type === "session.execution.succeeded" && !D.children.has(sid)) notify("done", "Done", t.session.title || "The thread finished");
+  if (type === "session.execution.failed" && !D.children.has(sid)) notify("error", "Run failed", ev.data?.error?.message || t.session.title || "");
 }
 
 let catalogTimer = 0;
@@ -895,7 +970,8 @@ function wire() {
     renderAttachments();
   });
   $("btn-attach").addEventListener("click", attach);
-  $("pick-model").addEventListener("click", modelMenu);
+  $("ctx-meter").addEventListener("click", contextPopover);
+  $("pick-model").addEventListener("click", () => modelMenu(lastProvider && S.models.some((m) => m.providerID === lastProvider) && currentModel()?.providerID === lastProvider ? lastProvider : null));
   $("pick-agent").addEventListener("click", agentMenu);
   $("pick-mode").addEventListener("click", modeMenu);
   $("btn-new").addEventListener("click", () => { showHome(); ta.focus(); });

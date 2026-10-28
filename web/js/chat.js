@@ -97,11 +97,12 @@ export function applyEvent(t, ev) {
     case "session.execution.failed":
       t.busy = false;
       t.retry = null;
-      t.error = d.error?.message || "The run failed";
+      t.error = d.error || { message: "The run failed" };
       finishLive(t);
       return { status: true, all: true };
     case "session.retry.scheduled":
       t.retry = d;
+      t.retryError = d.error || t.retryError;
       return { status: true };
     case "session.step.started":
       assistant(t, d.assistantMessageID, d);
@@ -451,8 +452,12 @@ export class ChatView {
         return el("div.sys-note", anim, `Switched agent to ${m.agent || "another agent"}`);
       case "shell":
         return el("div.msg.assistant", anim, renderTool({ id: m.id, name: "shell", state: { status: "completed", input: { command: m.command || m.text || "" }, content: m.output ? [{ type: "text", text: m.output }] : [] } }, this.openTools));
-      case "idle":
-        return m.outcome === "failed" && m.error ? el("div.error-card", ico("alert"), el("div", m.error.message || "Run failed")) : null;
+      case "idle": {
+        // History: a failed run. Skip when the live status card already shows the same error.
+        const isLast = this.thread.messages[this.thread.messages.length - 1] === m;
+        if (m.outcome !== "failed" || !m.error || (isLast && this.thread.error)) return null;
+        return errorCard(m.error, { model: this.opts.modelName(this.thread.session.model) });
+      }
       default:
         return null;
     }
@@ -500,23 +505,26 @@ export class ChatView {
         parts.push(renderTool(p, this.openTools, this.thread));
       }
     }
-    const error = typeof m.error === "string" ? m.error : m.error?.message;
     const stopped = m.stopped || isStop(m.error);
-    if (error && !stopped) parts.push(el("div.error-card", ico("alert"), el("div", error)));
+    const last2 = this.thread.messages[this.thread.messages.length - 1] === m;
+    if (m.error && !stopped && !(last2 && this.thread.error)) parts.push(errorCard(m.error, { model: this.opts.modelName(m.model) }));
     if (stopped) parts.push(el("div.sys-note", "Stopped"));
     if (!parts.length && !m.live) return null;
     if (!parts.length) parts.push(el("div.think.live", el("span.think-head", el("span.think-label", "Working"))));
 
     const tokens = m.tokens ? fmtTokens((m.tokens.input || 0) + (m.tokens.output || 0) + (m.tokens.reasoning || 0)) + " tokens" : null;
+    const when = m.time?.created ? new Date(m.time.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
     const meta = el("div.msg-meta",
-      el("span", this.opts.modelName(m.model) || m.model?.id || "Assistant"),
+      el("span.model", this.opts.modelName(m.model) || m.model?.id || "Assistant"),
       m.agent ? [el("span.dot"), el("span", m.agent)] : null,
-      tokens ? [el("span.dot"), el("span", tokens)] : null);
+      tokens ? [el("span.dot"), el("span", tokens)] : null,
+      when ? [el("span.dot"), el("span", when)] : null);
     const text = last && !m.live ? this.turnText(m) : "";
     const actions = m.live || !last || this.thread.busy ? null : el("div.msg-actions",
       text ? el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(text); toast("Copied", "ok", 1400); } } }) : null,
       el("button.icon-btn", { title: "Fork thread from here", html: icon("branch"), on: { click: () => this.opts.onFork(m.id) } }));
-    return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}`, anim, cont ? null : meta, parts, actions);
+    const avatar = el("div.avatar", this.opts.avatar ? this.opts.avatar(m.live) : null);
+    return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}`, anim, avatar, cont ? null : meta, el("div.msg-body", parts), actions);
   }
 
   renderPermissions() {
@@ -534,10 +542,55 @@ export class ChatView {
     if (!this.statusBox || !this.thread) return;
     const t = this.thread;
     this.statusBox.replaceChildren();
-    if (t.retry) this.statusBox.append(el("div.sys-note", `Provider error — retrying${t.retry.attempt ? ` (attempt ${t.retry.attempt})` : ""}…`));
-    if (t.error) this.statusBox.append(el("div.error-card", ico("alert"), el("div", el("b", "Run failed. "), t.error, el("div", el("button.btn.sm", { style: { marginTop: "8px" }, on: { click: () => this.opts.onRetry() } }, ico("refresh"), "Retry")))));
+    if (t.retry) {
+      const err = t.retry.error || {};
+      this.statusBox.append(el("div.sys-note", { title: err.message || "" }, `Provider error — retrying${t.retry.attempt ? ` (attempt ${t.retry.attempt})` : ""}${err.message ? `: ${String(err.message).slice(0, 90)}` : ""}…`));
+    }
+    if (t.error) this.statusBox.append(errorCard(t.error, { model: this.opts.modelName(t.session.model), onRetry: () => this.opts.onRetry(), onChangeModel: this.opts.onChangeModel }));
     this.opts.onStatus?.(t);
   }
+}
+
+/** A readable error card: what went wrong, with which model, why it probably happened, and the raw details. */
+export function errorCard(err, { model, onRetry, onChangeModel } = {}) {
+  const e = typeof err === "string" ? { message: err } : err || {};
+  const msg = String(e.message || e.type || "Something went wrong");
+  const text = `${e.type || ""} ${msg} ${e.status || ""}`;
+  let title = e.type && !/error$/i.test(e.type) ? e.type : "The run failed";
+  let hint = "";
+  if (/ConnectionRefused|ECONNREFUSED|ENOTFOUND|fetch failed|unable to connect|network/i.test(text)) {
+    title = "Couldn't reach the provider";
+    hint = "The model's endpoint didn't answer. If it's a local server (Ollama, LM Studio, a bridge), make sure it's running; otherwise check the provider's base URL in Settings → Models & providers.";
+  } else if (/\b401\b|unauthori[sz]ed|invalid api key|authentication/i.test(text)) {
+    title = "The provider rejected the credentials";
+    hint = "The API key or sign-in for this provider isn't accepted. Reconnect it in Settings → Models & providers.";
+  } else if (/\b429\b|rate ?limit|too many requests/i.test(text)) {
+    title = "Rate limited";
+    hint = "The provider is throttling requests. Wait a moment and retry, or switch to another model.";
+  } else if (/\b402\b|quota|billing|insufficient|credit|subscription plan/i.test(text)) {
+    title = "Plan or credit limit";
+    hint = "Your plan doesn't allow this model or has run out of credits. Pick another model or top up with the provider.";
+  } else if (/timeout|timed out|\b504\b/i.test(text)) {
+    title = "The provider timed out";
+    hint = "The model took too long to answer. Retry, or try a faster model for this step.";
+  } else if (/context|too long|maximum.*tokens|\b413\b/i.test(text)) {
+    title = "The conversation is too long for this model";
+    hint = "Use Context to trim or delete messages, start a fresh thread, or pick a model with a bigger context window.";
+  } else if (/\b5\d\d\b|internal server|overloaded|unavailable/i.test(text)) {
+    title = "The provider had a problem";
+    hint = "That's on their side. Retry in a bit or switch models.";
+  }
+  const details = e.response ? (typeof e.response === "string" ? e.response : JSON.stringify(e.response, null, 2)) : "";
+  return el("div.err",
+    el("div.err-head", ico("alert"), el("div", { style: { minWidth: 0 } },
+      el("div.err-title", title),
+      el("div.err-msg", msg),
+      hint ? el("div.err-hint", hint) : null,
+      el("div.err-chips", model ? el("span.pill-tag", model) : null, e.status ? el("span.pill-tag", `HTTP ${e.status}`) : null, e.type && e.type !== title ? el("span.pill-tag", e.type) : null),
+      details ? el("details", el("summary", "Raw response"), el("pre", details.slice(0, 4000))) : null,
+      onRetry || onChangeModel ? el("div.err-actions",
+        onRetry ? el("button.btn.sm", { on: { click: onRetry } }, ico("refresh"), "Retry") : null,
+        onChangeModel ? el("button.btn.ghost.sm", { on: { click: onChangeModel } }, ico("cpu"), "Change model") : null) : null)));
 }
 
 /** An approval request for session `sid`; `onDone(id)` runs after the reply is accepted. */

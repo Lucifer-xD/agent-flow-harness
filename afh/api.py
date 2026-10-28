@@ -190,7 +190,15 @@ def models_payload() -> dict:
         }
         for m in models
     ]
-    return {"models": slim, "defaultModel": default and {"id": default["id"], "providerID": default["providerID"]}}
+    pids = {m["providerID"] for m in slim}
+    try:
+        names = {i["id"]: i.get("name", i["id"]) for i in dump(client.integration.list().data) if i["id"] in pids}
+    except Exception:
+        names = {}
+    for pid, cfg in store.load_overlay().get("providers", {}).items():
+        if pid in pids and cfg.get("name"):
+            names[pid] = cfg["name"]
+    return {"models": slim, "defaultModel": default and {"id": default["id"], "providerID": default["providerID"]}, "providerNames": names}
 
 
 @app.get("/api/models")
@@ -323,6 +331,30 @@ def session_diff(sid: str):
     return [dump(d) for d in c().session.diff(sid)]
 
 
+@app.get("/api/sessions/{sid}/usage")
+def session_usage(sid: str):
+    """Numbers for the context popover: tokens, cost, context window, message counts."""
+    client = c()
+    session = dump(client.session.get(sid))
+    msgs = [dump(m) for m in islice(client.message.list(sid, order="asc", limit=200), 5000)]
+    last = next((m for m in reversed(msgs) if m.get("type") == "assistant" and m.get("tokens")), None)
+    ref = session.get("model") or {}
+    model = next((m for m in dump(client.model.list().data) if m["id"] == ref.get("id") and m["providerID"] == ref.get("providerID")), None)
+    tools = sum(1 for m in msgs if m.get("type") == "assistant" for p in m.get("content", []) if p.get("type") == "tool")
+    return {
+        "model": ref,
+        "modelName": (model or {}).get("name"),
+        "contextLimit": ((model or {}).get("limit") or {}).get("context"),
+        "outputLimit": ((model or {}).get("limit") or {}).get("output"),
+        "lastInput": ((last or {}).get("tokens") or {}).get("input", 0) + (((last or {}).get("tokens") or {}).get("cache") or {}).get("read", 0),
+        "totals": session.get("tokens"),
+        "cost": session.get("cost"),
+        "messages": {"user": sum(1 for m in msgs if m.get("type") == "user"), "assistant": sum(1 for m in msgs if m.get("type") == "assistant"), "system": sum(1 for m in msgs if m.get("type") == "system"), "tools": tools},
+        "agent": session.get("agent"),
+        "created": (session.get("time") or {}).get("created"),
+    }
+
+
 @app.get("/api/sessions/{sid}/permissions")
 def pending_permissions(sid: str):
     return [dump(p) for p in c().permission.list(sid)]
@@ -364,7 +396,13 @@ def harness(sid: str):
 
 @app.get("/api/prompts")
 def get_prompts(directory: str | None = None):
+    settings = store.load_settings()
     return {
+        "system": store.system_prompt(settings),
+        "systemIsDefault": not (settings.get("prompts", {}).get("system") or "").strip(),
+        "defaultSystem": store.DEFAULT_SYSTEM_PROMPT,
+        "planRules": store.PLAN_RULES.strip(),
+        "agentOverrides": settings.get("prompts", {}).get("agents", {}),
         "agents": agents_payload(),
         "globalInstructions": store.read_text(store.GLOBAL_AGENTS_MD),
         "globalInstructionsPath": str(store.GLOBAL_AGENTS_MD),
@@ -373,21 +411,30 @@ def get_prompts(directory: str | None = None):
     }
 
 
+@app.put("/api/prompts/system")
+def set_system_prompt(body: dict = Body(...)):
+    """The harness prompt every model gets. Empty text restores the built-in default."""
+    text = (body.get("text") or "").strip()
+    settings = store.load_settings()
+    prompts = settings.get("prompts", {})
+    prompts["system"] = "" if text == store.DEFAULT_SYSTEM_PROMPT.strip() else text
+    store.save_settings({"prompts": prompts})
+    return restart_soon()
+
+
 @app.put("/api/prompts/agent/{agent_id}")
 def set_agent_prompt(agent_id: str, body: dict = Body(...)):
+    """Replace one mode's prompt entirely (empty = back to the harness prompt)."""
     text = (body.get("system") or "").strip()
-
-    def apply(cfg: dict) -> None:
-        agents = cfg.setdefault("agents", {})
-        entry = agents.setdefault(agent_id, {})
-        if text:
-            entry["system"] = text
-        else:
-            entry.pop("system", None)
-            if not entry:
-                agents.pop(agent_id)
-
-    store.update_overlay(apply)
+    settings = store.load_settings()
+    prompts = settings.get("prompts", {})
+    agents = dict(prompts.get("agents", {}))
+    if text:
+        agents[agent_id] = text
+    else:
+        agents.pop(agent_id, None)
+    prompts["agents"] = agents
+    store.save_settings({"prompts": prompts})
     return restart_soon()
 
 
@@ -512,7 +559,9 @@ def providers():
             integrations.append({"id": pid, "name": (overlay_providers.get(pid) or {}).get("name") or pid, "methods": [], "oauth": [], "env": [], "credentials": [], "models": models, "connected": True, "custom": pid in overlay_providers and is_custom_provider(overlay_providers[pid])})
     integrations.sort(key=lambda i: (not i["connected"], i["name"].lower()))
     custom = {pid: mask(cfg) for pid, cfg in overlay_providers.items() if is_custom_provider(cfg)}
-    return {"integrations": integrations, "custom": custom}
+    names = {i["id"]: i["name"] for i in integrations}
+    hidden = [{"id": pid, "name": names.get(pid, pid)} for pid in store.load_settings().get("hiddenProviders", [])]
+    return {"integrations": integrations, "custom": custom, "hidden": hidden}
 
 
 @app.post("/api/models/visibility")
@@ -639,6 +688,21 @@ def save_custom_provider(body: dict = Body(...)):
 @app.delete("/api/providers/custom/{pid}")
 def delete_custom_provider(pid: str):
     store.update_overlay(lambda cfg: cfg.get("providers", {}).pop(pid, None))
+    return restart_soon()
+
+
+@app.post("/api/providers/{pid}/remove")
+def provider_remove(pid: str):
+    """Remove a provider from AFH entirely (deny policy), whatever config it came from."""
+    hidden = sorted(set(store.load_settings().get("hiddenProviders", [])) | {pid})
+    store.save_settings({"hiddenProviders": hidden})
+    return restart_soon()
+
+
+@app.post("/api/providers/{pid}/restore")
+def provider_restore(pid: str):
+    hidden = [p for p in store.load_settings().get("hiddenProviders", []) if p != pid]
+    store.save_settings({"hiddenProviders": hidden})
     return restart_soon()
 
 

@@ -28,13 +28,28 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "defaultAgent": "build",
     "defaultMode": "ask",  # ask | full | readonly
     "ui": {
-        "theme": "system",  # system | dark | light
+        "theme": "system",  # system | dark | light  (light = the Paper preset)
+        "preset": "sunset",  # sunset | midnight | forest | ocean | mono | custom
         "accent": "#ff6a2a",
+        "bg": "#0f0d0c",
+        "text": "#f1ede9",
+        "font": "inter",  # inter | system | serif | mono
         "fontSize": 14,
+        "radius": 12,
         "density": "comfortable",  # comfortable | compact
+        "bubbles": "bubbles",  # bubbles | flat
         "showReasoning": True,
+        "showMeta": True,  # model, tokens under replies
         "animations": True,
+        "animSpeed": 1.0,
+        "logoAnim": True,
+        "glass": True,
+        "customCss": "",
         "sendKey": "enter",  # enter | ctrl-enter
+        "sounds": True,
+        "notify": True,
+        "reopenLast": True,
+        "confirmDelete": True,
     },
     "personalization": {
         "enabled": True,
@@ -45,6 +60,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "tone": "",
         "instructions": "",
     },
+    # The harness system prompt (empty = DEFAULT_SYSTEM_PROMPT) and per-mode replacements.
+    "prompts": {"system": "", "agents": {}},
+    "hiddenProviders": [],
     # Remote control: LAN listener (+ optional Cloudflare quick tunnel) behind a password.
     "remote": {"enabled": False, "port": 0, "passwordHash": "", "tunnel": "none"},
     # Delegate mode: a leader agent that hands work to these delegates (each an OpenCode subagent).
@@ -56,6 +74,47 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 }
 
 LEADER_ID = "delegate"
+
+# The one harness system prompt. It goes to every model in every mode (OpenCode's own
+# provider prompts are replaced). Users can edit it in Settings → Prompts.
+DEFAULT_SYSTEM_PROMPT = """You are a coding agent running inside Agent Flow Harness (AFH), a desktop app that gives you tools to read, write and run code in the user's project folder. Help the user get real work done: understand the request, look at the actual code, make the change, verify it, and report plainly.
+
+# How you work
+- Start by understanding: read the relevant files, search the codebase (glob/grep), and check how things are already done before changing anything. Do not guess at file contents or APIs you can read.
+- Plan briefly for non-trivial tasks, then act. Prefer small, focused changes that match the project's existing style, naming and conventions.
+- Verify your work: run the tests, the build or the program when you can. Say exactly what you ran and what happened. Never claim something works without checking.
+- When something fails, read the error, investigate the cause, fix it, and re-verify. Do not loop on the same failing action.
+- If a request is ambiguous in a way that matters, ask one clear question; otherwise state your assumption and proceed.
+
+# Tools
+- Use `read` to look at files (not shell `cat`/`type`), with offsets for large files. Use `glob` to find files and `grep` to search contents.
+- Use `edit` for targeted changes to existing files; use `write` only for new files or full rewrites, and read a file before overwriting it.
+- Use `shell` to run commands, tests and builds. Quote paths with spaces. Prefer non-interactive flags; never start commands that wait for input.
+- Run independent tool calls in parallel when they don't depend on each other.
+- Load a skill with the `skill` tool when one matches the task. Use `webfetch`/`websearch` for documentation you don't have. Use the `subagent` tool only when an agent is configured for the job.
+
+# Safety
+- The user approves file changes and commands according to the thread's approval mode; respect every refusal and the message that comes with it.
+- Never run destructive or irreversible commands (deleting folders, `git push --force`, `git reset --hard`, dropping data, mass renames) unless the user explicitly asked for that exact action.
+- Never read, print or send secrets (API keys, tokens, passwords, .env contents) unless the task is specifically about them.
+- Do not change files outside the project folder unless asked.
+
+# Communication
+- Answer in concise GitHub-flavored Markdown. Use code blocks for code, paths and commands. No filler, no restating the request, no emoji.
+- Explain decisions when they matter; keep routine steps short. Reference files as `path:line`.
+- When done, summarize what changed, what you verified, and anything left open. Report failures honestly.
+
+Project instructions (AGENTS.md), personalization, loaded skills and the environment description follow this prompt; they take precedence where they are more specific."""
+
+PLAN_RULES = """
+
+# Plan mode
+You are in planning mode. Investigate the codebase as needed, but do not edit files or run commands that change anything. Produce a clear, ordered plan: what to change, where (files/functions), risks, and how to verify. End by asking the user to confirm before implementation."""
+
+
+def system_prompt(settings: dict | None = None) -> str:
+    s = settings or load_settings()
+    return (s.get("prompts", {}).get("system") or "").strip() or DEFAULT_SYSTEM_PROMPT
 
 LEADER_RULES = """
 # Delegation
@@ -95,14 +154,7 @@ def leader_prompt(delegates: list[dict], extra: str = "") -> str:
         model = _model_string(d.get("model")) or "the thread's model"
         lines.append(f"- **{d.get('name') or d['id']}** (id: `{d['id']}`, model: {model}): {d.get('job', '').strip() or 'general tasks'}")
     rules = LEADER_RULES.format(delegates="\n".join(lines) or "- (no delegates configured yet — do the work yourself)", extra=extra.strip())
-    base = ""
-    try:  # OpenCode's own harness prompt (rendered) keeps the tool guidance intact
-        from . import builtin_prompts
-
-        base = builtin_prompts.render(builtin_prompts.get_prompts().get("harness", "") or "", tools=("shell", "write", "edit"))
-    except Exception:
-        base = ""
-    return (base.strip() + "\n\n" + rules.strip()).strip()
+    return (system_prompt().strip() + "\n\n" + rules.strip()).strip()
 
 
 def apply_delegation(settings: dict) -> None:
@@ -238,11 +290,41 @@ def write_personalization(p: dict) -> None:
     PERSONALIZATION_PATH.write_text(body, encoding="utf-8")
 
 
+def apply_base_prompts(settings: dict | None = None) -> None:
+    """Every mode runs on AFH's own system prompt unless the user replaced that mode's prompt."""
+    s = settings or load_settings()
+    base = system_prompt(s)
+    overrides = s.get("prompts", {}).get("agents", {})
+
+    def apply(cfg: dict) -> None:
+        agents = cfg.setdefault("agents", {})
+        agents.setdefault("build", {})["system"] = overrides.get("build") or base
+        agents.setdefault("plan", {})["system"] = overrides.get("plan") or (base + PLAN_RULES)
+        for aid in s.get("customAgents", []):
+            entry = agents.get(aid)
+            if entry is not None:
+                entry["system"] = overrides.get(aid) or entry.get("system") or base
+        # Removed providers: a deny policy keeps them out entirely (OpenCode's own mechanism).
+        policies = [p for p in cfg.get("policies", []) if not p.get("_afh")]
+        policies += [{"action": "provider.use", "resource": pid, "effect": "deny", "_afh": True} for pid in s.get("hiddenProviders", [])]
+        if policies:
+            cfg["policies"] = policies
+        else:
+            cfg.pop("policies", None)
+
+    update_overlay(apply)
+
+
 def server_config() -> dict:
     """The overlay handed to `opencode serve`, plus AFH's personalization file."""
+    settings = load_settings()
+    apply_base_prompts(settings)
+    apply_delegation(settings)  # keeps Delegate mode present even with zero delegates
     cfg = copy.deepcopy(load_overlay())
+    for p in cfg.get("policies", []):
+        p.pop("_afh", None)
     if not PERSONALIZATION_PATH.exists():
-        write_personalization(load_settings()["personalization"])
+        write_personalization(settings["personalization"])
     instructions = list(cfg.get("instructions") or [])
     path = str(PERSONALIZATION_PATH)
     if path not in instructions:
