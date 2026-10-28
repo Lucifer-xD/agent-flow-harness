@@ -53,6 +53,7 @@ async function showSetup(message) {
   let info = {};
   try { info = await api.get("/api/setup"); } catch {}
   const missing = !info.opencode;
+  $("boot-status").textContent = ""; // the box below explains it better than the raw error
   const status = el("div", { style: { color: "var(--text-3)", fontSize: "12.5px", minHeight: "18px" } });
   const box = el("div.setup-box",
     el("h3", missing ? "One more thing: install OpenCode" : "OpenCode couldn't start"),
@@ -115,7 +116,7 @@ async function boot() {
       if (document.querySelector(".login-box")) return; // waiting for the remote password
       $("boot-status").textContent = `Couldn't start OpenCode: ${e.message}`;
       $("boot-status").classList.add("err");
-      if (attempt > 1) return showSetup(e.message);
+      if (attempt > 0) return showSetup(e.message);
     }
     await new Promise((r) => setTimeout(r, 1500));
   }
