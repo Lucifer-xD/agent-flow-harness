@@ -3,7 +3,7 @@ import { ChatView, applyEvent, collectEdits, createThread, hooks, loadThread } f
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderWatch, syncChildren, trackEvent } from "./delegate.js";
 import { applyAppearance as applyTheme } from "./appearance.js";
 import { openContextEditor } from "./context.js";
-import { initLive, onLiveEvent, renderLive } from "./livefile.js";
+import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
 import { openSettings } from "./settings.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
@@ -974,7 +974,7 @@ const refreshDrawerSoon = () => { clearTimeout(drawerTimer); drawerTimer = setTi
 // ---- wiring ------------------------------------------------------------------------
 
 export const ctx = { S, saveSettings, reloadCatalog, project, modelName, onReady: null, onCatalogEvent: null };
-window.__afh = { S, D, ctx }; // for debugging from the devtools console
+window.__afh = { S, D, ctx, live: liveState }; // for debugging from the devtools console
 
 function toggleSidebar() {
   $("app").classList.toggle(innerWidth <= 980 ? "sb-open" : "sb-hidden");
