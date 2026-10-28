@@ -26,8 +26,27 @@ async function request(method, path, body, retries = 6) {
     await new Promise((r) => setTimeout(r, 1500));
     return request(method, path, body, retries - 1);
   }
+  if (res.status === 401 && hooks.onUnauthorized) hooks.onUnauthorized(data);
   if (!res.ok) throw new Error(data?.error || `${res.status} ${res.statusText}`);
   return data;
+}
+
+export const hooks = { onUnauthorized: null };
+
+export function setToken(t) {
+  token = t;
+  try {
+    sessionStorage.setItem("afh-token", t);
+  } catch {}
+}
+
+/** Remote devices sign in with the password set in Settings → Remote control. */
+export async function remoteLogin(password) {
+  const res = await fetch("/api/remote/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Sign-in failed");
+  setToken(data.token);
+  return data.token;
 }
 
 export const api = {
@@ -57,8 +76,11 @@ export function connectEvents(onEvent, onState) {
   return () => es?.close();
 }
 
+// Native dialogs: the Electron preload exposes window.afh; the pywebview window exposes pywebview.api.
 export const native = {
-  available: () => !!window.pywebview?.api,
-  pickFolder: () => window.pywebview?.api?.pick_folder?.(),
-  pickFiles: () => window.pywebview?.api?.pick_files?.(),
+  available: () => !!(window.afh || window.pywebview?.api),
+  electron: () => !!window.afh,
+  pickFolder: () => (window.afh ? window.afh.pickFolder() : window.pywebview?.api?.pick_folder?.()),
+  pickFiles: () => (window.afh ? window.afh.pickFiles() : window.pywebview?.api?.pick_files?.()),
+  openExternal: (url) => (window.afh ? window.afh.openExternal(url) : window.open(url, "_blank", "noopener")),
 };

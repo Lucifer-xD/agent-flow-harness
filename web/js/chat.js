@@ -251,11 +251,15 @@ const countPatch = (patch) => {
   return [a, r];
 };
 
-function toolText(content) {
+export function toolText(content) {
   return (content || []).map((c) => (c.type === "text" ? c.text : c.type === "file" ? `[file] ${c.name || c.uri || ""}` : "")).join("\n").trim();
 }
 
-function renderTool(p, openSet) {
+/** Renderers other modules plug in: hooks.delegation(part, {thread, open}) draws `subagent` calls. */
+export const hooks = {};
+
+function renderTool(p, openSet, thread) {
+  if ((p.name || "").toLowerCase() === "subagent" && hooks.delegation) return hooks.delegation(p, { thread, open: openSet });
   const info = describeTool(p);
   const status = p.state?.status || "streaming";
   const live = status === "streaming" || status === "running";
@@ -297,21 +301,31 @@ export class ChatView {
     this.thread = null;
     this.nodes = new Map();
     this.pending = new Set();
+    this.streaming = new Set();
     this.openTools = new Set();
     this.openThinks = new Set();
     this.frame = 0;
     this.stick = true;
+    this.autoScrolling = false;
+    // Programmatic scrolls must not flip `stick`; only the user's own scrolling does.
     scroller.addEventListener("scroll", () => {
-      this.stick = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
+      if (!this.autoScrolling) this.stick = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 60;
       opts.onScroll?.(this.stick, scroller.scrollTop);
     });
+    scroller.addEventListener("wheel", (e) => { if (e.deltaY < 0) this.stick = false; }, { passive: true });
+    scroller.addEventListener("touchmove", () => { this.stick = false; }, { passive: true });
   }
 
   mount(thread) {
+    const switching = this.thread && this.thread.id !== thread.id;
     this.thread = thread;
     this.openTools.clear();
+    this.stick = true;
     this.renderAll();
-    this.scrollToEnd(true);
+    requestAnimationFrame(() => this.scrollToEnd(true));
+    if (switching && !document.body.classList.contains("no-anim") && this.root.animate) {
+      this.root.animate([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }
   }
 
   renderAll(quiet = false) {
@@ -335,11 +349,12 @@ export class ChatView {
     this.renderStatus();
   }
 
-  // Coalesce bursts of streaming events into at most one DOM update per frame.
+  // Coalesce bursts of streaming events into at most one DOM update per frame. Deltas only
+  // patch the live part of a message; everything else re-renders that message once.
   update(result) {
     if (!result || !this.thread) return;
     if (result.all) this.needAll = true;
-    if (result.msg) this.pending.add(result.msg);
+    if (result.msg) (result.stream ? this.streaming : this.pending).add(result.msg);
     if (result.perm) this.renderPermissions();
     if (result.status) this.renderStatus();
     if (this.frame) return;
@@ -348,29 +363,71 @@ export class ChatView {
       if (this.needAll) {
         this.needAll = false;
         this.pending.clear();
+        this.streaming.clear();
         this.renderAll(true);
       } else {
-        for (const id of this.pending) {
-          const m = this.thread.byId.get(id);
-          const old = this.nodes.get(id);
-          const fresh = m && this.renderMessage(m, true);
-          if (fresh && old) old.replaceWith(fresh);
-          else if (fresh) this.permBox.before(fresh);
-          else if (old) old.remove();
-          if (fresh) this.nodes.set(id, fresh);
-        }
+        for (const id of this.streaming) if (!this.pending.has(id) && !this.patchLive(id)) this.pending.add(id);
+        for (const id of this.pending) this.rerender(id);
         this.pending.clear();
+        this.streaming.clear();
       }
       this.follow();
     });
+  }
+
+  rerender(id) {
+    const m = this.thread.byId.get(id);
+    const old = this.nodes.get(id);
+    const fresh = m && this.renderMessage(m, true);
+    if (fresh && old) old.replaceWith(fresh);
+    else if (fresh) this.permBox.before(fresh);
+    else if (old) old.remove();
+    if (fresh) this.nodes.set(id, fresh);
+    else this.nodes.delete(id);
+  }
+
+  /** Update the streaming parts of a message in place. False when a full re-render is needed. */
+  patchLive(id) {
+    const m = this.thread.byId.get(id);
+    const node = this.nodes.get(id);
+    if (!m || !node) return false;
+    for (const p of m.content) {
+      if (p.type === "tool") {
+        if (p.state?.status !== "streaming") continue;
+        const pre = node.querySelector(`.tool[data-tool="${p.id}"] .tool-pre`);
+        if (!pre) return false;
+        pre.textContent = p.state.input;
+      } else if (p.live) {
+        const target = node.querySelector(`[data-part="${p.type}:${p.ordinal}"]`);
+        if (!target) return false;
+        if (p.type === "reasoning") target.textContent = p.text || "…";
+        else {
+          target.innerHTML = markdown(p.text);
+          (target.lastElementChild || target).classList.add("caret");
+        }
+      }
+    }
+    return true;
   }
 
   follow() {
     if (this.stick) this.scrollToEnd();
   }
 
+  // Eased follow: closes the gap a little each frame, so growing content glides instead of jumping.
   scrollToEnd(instant) {
-    requestAnimationFrame(() => this.scroller.scrollTo({ top: this.scroller.scrollHeight, behavior: instant ? "auto" : "smooth" }));
+    const s = this.scroller;
+    const set = (top) => { this.autoScrolling = true; s.scrollTop = top; requestAnimationFrame(() => (this.autoScrolling = false)); };
+    if (instant) return set(s.scrollHeight);
+    if (this.following) return;
+    this.following = true;
+    const step = () => {
+      const gap = s.scrollHeight - s.clientHeight - s.scrollTop;
+      if (!this.stick || Math.abs(gap) < 1) { this.following = false; if (this.stick) set(s.scrollHeight); return; }
+      set(s.scrollTop + gap * 0.22);
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   renderMessage(m, quiet) {
@@ -379,7 +436,10 @@ export class ChatView {
     switch (m.type) {
       case "user": {
         const files = (m.files || []).map((f) => el("span.file-chip", ico("file"), el("span", f.name || basename(f.uri))));
-        return el("div.msg.user", anim, el("div.bubble", { style: m.pending ? { opacity: 0.7 } : null }, m.text || "", files.length ? el("div.att", files) : null));
+        const actions = this.opts.onRevert && !m.pending && !this.thread.busy ? el("div.msg-actions.user-actions",
+          el("button.icon-btn", { title: "Undo to here — rewind the thread and the files to just before this message", html: icon("refresh"), on: { click: () => this.opts.onRevert(m.id) } }),
+          el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(m.text || ""); toast("Copied", "ok", 1200); } } })) : null;
+        return el("div.msg.user", anim, el("div.bubble", { style: m.pending ? { opacity: 0.7 } : null }, m.text || "", files.length ? el("div.att", files) : null), actions);
       }
       case "assistant":
         return this.renderAssistant(m, settings, anim);
@@ -429,15 +489,15 @@ export class ChatView {
         box.append(
           el("button.think-head", { type: "button", on: { click: () => { box.classList.toggle("open"); this.openThinks[box.classList.contains("open") ? "add" : "delete"](key); } } },
             el("span.chev", { html: icon("chev") }), el("span.think-label", label)),
-          el("div.think-body", el("div", el("div.think-text", p.text || "…"))));
+          el("div.think-body", el("div", el("div.think-text", { dataset: { part: `reasoning:${p.ordinal}` } }, p.text || "…"))));
         parts.push(box);
       } else if (p.type === "text") {
         if (!p.text && !p.live) continue;
-        const md = el("div.md", { html: markdown(p.text) });
+        const md = el("div.md", { html: markdown(p.text), dataset: { part: `text:${p.ordinal}` } });
         if (p.live && p === lastText) md.lastElementChild ? md.lastElementChild.classList.add("caret") : md.classList.add("caret");
         parts.push(md);
       } else if (p.type === "tool") {
-        parts.push(renderTool(p, this.openTools));
+        parts.push(renderTool(p, this.openTools, this.thread));
       }
     }
     const error = typeof m.error === "string" ? m.error : m.error?.message;
@@ -467,36 +527,7 @@ export class ChatView {
   }
 
   renderPermission(p) {
-    const action = p.action || "tool";
-    const title = action === "edit" ? "Allow file changes?" : action === "shell" ? "Run this command?" : `Allow ${action}?`;
-    const files = p.metadata?.files || [];
-    const cmd = p.metadata?.command;
-    const sid = this.thread.id;
-    const reply = async (decision, btn) => {
-      btn.closest(".approval").querySelectorAll("button").forEach((b) => (b.disabled = true));
-      let message;
-      if (decision === "reject") message = btn.closest(".approval").querySelector("input")?.value || undefined;
-      try {
-        await api.post(`/api/sessions/${sid}/permissions/${p.id}`, { decision, message });
-        this.thread.permissions.delete(p.id);
-        this.renderPermissions();
-      } catch (e) {
-        toast(e.message, "err");
-        btn.closest(".approval").querySelectorAll("button").forEach((b) => (b.disabled = false));
-      }
-    };
-    const feedback = el("input.inp", { placeholder: "Tell the agent what to do instead (optional)", style: { flex: "1 1 220px", height: "28px", fontSize: "12.5px" } });
-    return el("div.approval",
-      el("div.approval-head", ico(action === "shell" ? "terminal" : "shield"), el("div", title, p.message ? el("div.approval-sub", p.message) : null)),
-      cmd ? el("pre.tool-pre", { style: { borderTop: "1px solid var(--border)", paddingTop: "10px" } }, cmd) : null,
-      !files.length && (p.resources || []).length ? el("div.approval-res", p.resources.join("\n")) : null,
-      files.map((f) => el("div", el("div.tool-section-label", { style: { paddingBottom: "6px" } }, `${f.status || "change"} · ${f.file}`), diffView(f.patch))),
-      el("div.approval-actions",
-        el("button.btn.primary.sm", { on: { click: (e) => reply("once", e.currentTarget) } }, ico("check"), "Approve"),
-        el("button.btn.sm", { title: "Don't ask again for this in this thread", on: { click: (e) => reply("always", e.currentTarget) } }, "Always allow"),
-        el("span.spacer"),
-        feedback,
-        el("button.btn.danger.sm", { on: { click: (e) => reply("reject", e.currentTarget) } }, "Reject")));
+    return permissionCard(p, this.thread.id, (id) => { this.thread.permissions.delete(id); this.renderPermissions(); });
   }
 
   renderStatus() {
@@ -507,6 +538,38 @@ export class ChatView {
     if (t.error) this.statusBox.append(el("div.error-card", ico("alert"), el("div", el("b", "Run failed. "), t.error, el("div", el("button.btn.sm", { style: { marginTop: "8px" }, on: { click: () => this.opts.onRetry() } }, ico("refresh"), "Retry")))));
     this.opts.onStatus?.(t);
   }
+}
+
+/** An approval request for session `sid`; `onDone(id)` runs after the reply is accepted. */
+export function permissionCard(p, sid, onDone) {
+  const action = p.action || "tool";
+  const title = action === "edit" ? "Allow file changes?" : action === "shell" ? "Run this command?" : `Allow ${action}?`;
+  const files = p.metadata?.files || [];
+  const cmd = p.metadata?.command;
+  const reply = async (decision, btn) => {
+    const box = btn.closest(".approval");
+    box.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    const message = decision === "reject" ? box.querySelector("input")?.value || undefined : undefined;
+    try {
+      await api.post(`/api/sessions/${sid}/permissions/${p.id}`, { decision, message });
+      onDone?.(p.id);
+    } catch (e) {
+      toast(e.message, "err");
+      box.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
+  };
+  const feedback = el("input.inp", { placeholder: "Tell the agent what to do instead (optional)", style: { flex: "1 1 220px", height: "28px", fontSize: "12.5px" } });
+  return el("div.approval",
+    el("div.approval-head", ico(action === "shell" ? "terminal" : "shield"), el("div", title, p.message ? el("div.approval-sub", p.message) : null)),
+    cmd ? el("pre.tool-pre", { style: { borderTop: "1px solid var(--border)", paddingTop: "10px" } }, cmd) : null,
+    !files.length && (p.resources || []).length ? el("div.approval-res", p.resources.join("\n")) : null,
+    files.map((f) => el("div", el("div.tool-section-label", { style: { paddingBottom: "6px" } }, `${f.status || "change"} · ${f.file}`), diffView(f.patch))),
+    el("div.approval-actions",
+      el("button.btn.primary.sm", { on: { click: (e) => reply("once", e.currentTarget) } }, ico("check"), "Approve"),
+      el("button.btn.sm", { title: "Don't ask again for this in this thread", on: { click: (e) => reply("always", e.currentTarget) } }, "Always allow"),
+      el("span.spacer"),
+      feedback,
+      el("button.btn.danger.sm", { on: { click: (e) => reply("reject", e.currentTarget) } }, "Reject")));
 }
 
 /** Every file edit made in a thread, for the Changes drawer when the project isn't a git repo. */

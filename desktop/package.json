@@ -1,0 +1,63 @@
+{
+  "name": "agent-flow-harness",
+  "productName": "Agent Flow Harness",
+  "version": "1.0.0",
+  "description": "Desktop shell for Agent Flow Harness (AFH), an open-source desktop coding agent.",
+  "main": "main.js",
+  "private": true,
+  "author": "Agent Flow Harness contributors",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron .",
+    "icon": "node ../scripts/make-placeholder-icon.js",
+    "dist": "electron-builder --win nsis",
+    "dist:dir": "electron-builder --win --dir"
+  },
+  "devDependencies": {
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.agentflowharness.app",
+    "productName": "Agent Flow Harness",
+    "artifactName": "AFH-Setup-${version}.${ext}",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "assets/**"
+    ],
+    "extraResources": [
+      {
+        "from": "backend-dist/afh-backend",
+        "to": "backend"
+      }
+    ],
+    "asar": true,
+    "compression": "normal",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Agent Flow Harness",
+      "artifactName": "AFH-Setup-${version}.exe",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

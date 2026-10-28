@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from opencode import APIConnectionError, APIStatusError
 from opencode.types import ModelRef
 
-from . import __version__, store
+from . import __version__, builtin_prompts, remote, skills_store, store, transfer
 from .engine import dump, engine
 
 log = logging.getLogger("afh.api")
@@ -30,14 +30,24 @@ app = FastAPI(title="AFH", version=__version__)
 ACCESS = {"token": None, "hosts": set()}
 
 
+PUBLIC_PATHS = {"/api/remote/login", "/api/remote/ping"}
+
+
 @app.middleware("http")
 async def guard(request: Request, call_next):
-    if request.url.path.startswith("/api/"):
+    if request.url.path.startswith("/api/") and request.url.path not in PUBLIC_PATHS:
         token = request.headers.get("x-afh-token") or request.query_params.get("token")
-        if ACCESS["hosts"] and request.headers.get("host") not in ACCESS["hosts"]:
-            return JSONResponse({"error": "forbidden host"}, status_code=403)
-        if ACCESS["token"] and token != ACCESS["token"]:
-            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        server = request.scope.get("server") or ("", 0)
+        via_remote = remote.state["port"] and server[1] == remote.state["port"]
+        if via_remote:
+            # LAN/tunnel listener: only a token issued by /api/remote/login (password) is accepted.
+            if token not in remote.state["tokens"]:
+                return JSONResponse({"error": "unauthorized", "remote": True}, status_code=401)
+        else:
+            if ACCESS["hosts"] and request.headers.get("host") not in ACCESS["hosts"]:
+                return JSONResponse({"error": "forbidden host"}, status_code=403)
+            if ACCESS["token"] and token != ACCESS["token"] and token not in remote.state["tokens"]:
+                return JSONResponse({"error": "unauthorized"}, status_code=401)
     try:
         return await call_next(request)
     except Exception as exc:  # turn every failure into a JSON error the UI can show
@@ -50,6 +60,8 @@ def error_response(exc: Exception) -> JSONResponse:
     elif (isinstance(exc, (APIConnectionError, RuntimeError)) and not engine.ready.is_set()) or "client has been closed" in str(exc):
         # A request raced an engine restart; the UI retries 503s.
         return JSONResponse({"error": "OpenCode is restarting — try again in a moment"}, status_code=503)
+    elif isinstance(exc, skills_store.SkillsError):
+        status = exc.status or 502
     elif isinstance(exc, (ValueError, KeyError)):
         status = 400
     else:
@@ -186,17 +198,25 @@ def get_models():
 
 def agents_payload() -> list[dict]:
     overlay = store.load_overlay().get("agents", {})
+    settings = store.load_settings()
+    delegates = {d["id"]: d for d in settings["delegation"].get("delegates", [])}
+    custom = set(settings.get("customAgents", []))
     agents = []
     for a in dump(c().agent.list().data):
+        aid = a["id"]
         agents.append(
             {
-                "id": a["id"],
-                "name": a.get("name", a["id"]),
+                "id": aid,
+                "name": "Delegate" if aid == store.LEADER_ID else (delegates.get(aid, {}).get("name") or a.get("name", aid)),
                 "description": a.get("description", ""),
                 "mode": a.get("mode", "primary"),
                 "hidden": a.get("hidden", False),
-                "system": (overlay.get(a["id"]) or {}).get("system", ""),
-                "custom": a["id"] in overlay and bool((overlay[a["id"]] or {}).get("afhCustom")),
+                "system": (overlay.get(aid) or {}).get("system", ""),
+                "custom": aid in custom,
+                "delegate": aid in delegates,
+                "leader": aid == store.LEADER_ID,
+                "model": a.get("model"),
+                "color": a.get("color"),
             }
         )
     return agents
@@ -213,7 +233,7 @@ def get_agents():
 @app.get("/api/sessions")
 def list_sessions(directory: str, archived: bool = False):
     page = c().session.list(directory=directory, limit=80, order="desc", archived=archived)
-    return [dump(s) for s in islice(page, 200)]
+    return [dump(s) for s in islice(page, 200) if not s.parent_id]  # children belong to their delegation card
 
 
 @app.post("/api/sessions")
@@ -392,6 +412,8 @@ def save_agent(body: dict = Body(...)):
     agent_id = body["id"].strip().lower()
     if not AGENT_ID.match(agent_id):
         raise ValueError("Agent id must be lowercase letters, numbers, - or _")
+    if agent_id == store.LEADER_ID or agent_id in store.load_settings()["delegation"].get("managed", []):
+        raise ValueError("That id is used by Delegate mode — edit it in Settings → Delegation")
     entry: dict[str, Any] = {"mode": body.get("mode", "primary")}
     for key in ("description", "system", "color"):
         if body.get(key):
@@ -425,6 +447,10 @@ def delete_agent(agent_id: str):
 # ---- providers & credentials -----------------------------------------------------
 
 
+def is_custom_provider(cfg: dict) -> bool:
+    return bool(cfg.get("package") or cfg.get("settings") or cfg.get("name"))
+
+
 @app.get("/api/providers")
 def providers():
     client = c()
@@ -441,20 +467,114 @@ def providers():
                 "hint": mask(value.get("key", ""), "key") if value.get("type") == "key" else "",
             }
         )
+    overlay_providers = store.load_overlay().get("providers", {})
+    # Models per provider: the ones OpenCode offers plus the ones Astra hid through the overlay.
+    groups: dict[str, list] = {}
+    for m in dump(client.model.list().data):
+        groups.setdefault(m["providerID"], []).append(
+            {
+                "id": m["id"],
+                "name": m.get("name", m["id"]),
+                "family": m.get("family"),
+                "context": (m.get("limit") or {}).get("context"),
+                "variants": [v["id"] for v in m.get("variants", [])],
+                "tools": (m.get("capabilities") or {}).get("tools", True),
+                "status": m.get("status"),
+                "hidden": False,
+            }
+        )
+    for pid, cfg in overlay_providers.items():
+        for mid, mcfg in (cfg.get("models") or {}).items():
+            if (mcfg or {}).get("disabled") and not any(x["id"] == mid for x in groups.get(pid, [])):
+                groups.setdefault(pid, []).append({"id": mid, "name": (mcfg or {}).get("name") or mid, "hidden": True, "variants": []})
+    for lst in groups.values():
+        lst.sort(key=lambda x: (x["hidden"], x["name"].lower()))
     integrations = []
     for i in dump(client.integration.list().data):
+        methods = i.get("methods", [])
         integrations.append(
             {
                 "id": i["id"],
                 "name": i.get("name", i["id"]),
-                "methods": [m.get("type") for m in i.get("methods", [])],
-                "env": [n for m in i.get("methods", []) for n in m.get("names", [])],
+                "methods": [m.get("type") for m in methods],
+                "oauth": [{"id": m.get("id"), "label": m.get("label"), "form": m.get("form")} for m in methods if m.get("type") == "oauth"],
+                "env": [n for m in methods for n in m.get("names", [])],
                 "credentials": by_integration.get(i["id"], []),
+                "models": groups.get(i["id"], []),
+                "connected": bool(by_integration.get(i["id"])) or i["id"] in groups,
             }
         )
-    integrations.sort(key=lambda i: (not i["credentials"], i["name"].lower()))
-    custom = mask(store.load_overlay().get("providers", {}))
+    known = {i["id"] for i in integrations}
+    for pid, models in groups.items():  # providers with models but no integration entry (custom endpoints, plugins)
+        if pid not in known:
+            integrations.append({"id": pid, "name": (overlay_providers.get(pid) or {}).get("name") or pid, "methods": [], "oauth": [], "env": [], "credentials": [], "models": models, "connected": True, "custom": pid in overlay_providers and is_custom_provider(overlay_providers[pid])})
+    integrations.sort(key=lambda i: (not i["connected"], i["name"].lower()))
+    custom = {pid: mask(cfg) for pid, cfg in overlay_providers.items() if is_custom_provider(cfg)}
     return {"integrations": integrations, "custom": custom}
+
+
+@app.post("/api/models/visibility")
+def model_visibility(body: dict = Body(...)):
+    """Hide or show models in the picker. Batched: one restart for many toggles."""
+    changes = body.get("changes") or []
+
+    def apply(cfg: dict) -> None:
+        providers = cfg.setdefault("providers", {})
+        for ch in changes:
+            pid, mid = str(ch["providerID"]), str(ch["id"])
+            p = providers.setdefault(pid, {})
+            models = p.setdefault("models", {})
+            entry = models.setdefault(mid, {})
+            if ch.get("hidden"):
+                entry["disabled"] = True
+            else:
+                entry.pop("disabled", None)
+            if not entry and not is_custom_provider(p):
+                models.pop(mid, None)
+            if not models and not is_custom_provider(p):
+                providers.pop(pid, None)
+
+    store.update_overlay(apply)
+    return restart_soon()
+
+
+@app.post("/api/models/refresh")
+def models_refresh():
+    c().location.reload()
+    return models_payload()
+
+
+@app.get("/api/integrations/{iid}")
+def integration_get(iid: str):
+    return dump(c().integration.get(iid).data)
+
+
+@app.post("/api/integrations/{iid}/oauth")
+def oauth_start(iid: str, body: dict = Body(...)):
+    kwargs: dict[str, Any] = {"method_id": body["methodId"]}
+    if body.get("answer"):
+        kwargs["answer"] = body["answer"]
+    if body.get("label"):
+        kwargs["label"] = body["label"]
+    return dump(c().integration.oauth.connect(iid, **kwargs).data)
+
+
+@app.get("/api/integrations/{iid}/oauth/{aid}")
+def oauth_status(iid: str, aid: str):
+    return dump(c().integration.oauth.status(iid, aid).data)
+
+
+@app.post("/api/integrations/{iid}/oauth/{aid}/complete")
+def oauth_complete(iid: str, aid: str, body: dict = Body(default={})):
+    kwargs = {"code": body["code"].strip()} if body.get("code") else {}
+    c().integration.oauth.complete(iid, aid, **kwargs)
+    return {"ok": True}
+
+
+@app.delete("/api/integrations/{iid}/oauth/{aid}")
+def oauth_cancel(iid: str, aid: str):
+    c().integration.oauth.cancel(iid, aid)
+    return {"ok": True}
 
 
 @app.post("/api/credentials")
@@ -518,6 +638,18 @@ def save_custom_provider(body: dict = Body(...)):
 def delete_custom_provider(pid: str):
     store.update_overlay(lambda cfg: cfg.get("providers", {}).pop(pid, None))
     return restart_soon()
+
+
+@app.delete("/api/credentials/by-integration/{iid}")
+def disconnect_integration(iid: str):
+    """Remove every credential of a provider (the Disconnect button)."""
+    client = c()
+    removed = 0
+    for cred in dump(client.credential.list()):
+        if cred.get("integrationID") == iid:
+            client.credential.remove(cred["id"])
+            removed += 1
+    return {"ok": True, "removed": removed}
 
 
 # ---- MCP servers -----------------------------------------------------------------
@@ -711,6 +843,266 @@ def toggle_plugin(body: dict = Body(...)):
 @app.post("/api/restart")
 def restart():
     return restart_soon()
+
+
+# ---- skills store --------------------------------------------------------------------
+
+
+@app.get("/api/skills/search")
+def skills_search(q: str, limit: int = 30):
+    return skills_store.search(q, limit=min(max(limit, 1), 100))
+
+
+@app.get("/api/skills/browse")
+def skills_browse(view: str = "trending", page: int = 0):
+    return skills_store.browse(view=view, page=max(page, 0), per_page=40)
+
+
+@app.get("/api/skills/curated")
+def skills_curated():
+    return skills_store.curated()
+
+
+@app.get("/api/skills/detail")
+def skills_detail(source: str, slug: str):
+    detail = skills_store.detail(source, slug)
+    try:
+        audit = skills_store.audit(source, slug)
+    except Exception:
+        audit = None
+    return {"detail": detail, "audit": audit}
+
+
+@app.get("/api/skills/installed")
+def skills_installed(directory: str | None = None):
+    return skills_store.installed(project_dir=directory)
+
+
+@app.post("/api/skills/install")
+def skills_install(body: dict = Body(...)):
+    scope = "project" if body.get("scope") == "project" else "global"
+    out = skills_store.install(body["source"], body["slug"], scope=scope, project_dir=body.get("directory"))
+    try:
+        c().location.reload()
+    except Exception:
+        pass
+    return out
+
+
+@app.delete("/api/skills")
+def skills_uninstall(body: dict = Body(...)):
+    scope = "project" if body.get("scope") == "project" else "global"
+    ok = skills_store.uninstall(body["slug"], scope=scope, project_dir=body.get("directory"))
+    try:
+        c().location.reload()
+    except Exception:
+        pass
+    return {"ok": ok}
+
+
+@app.post("/api/skills/check-updates")
+def skills_check_updates(body: dict = Body(default={})):
+    return skills_store.check_updates(project_dir=body.get("directory"))
+
+
+# ---- built-in prompts --------------------------------------------------------------------
+
+
+@app.get("/api/prompts/builtin")
+def prompts_builtin(providerID: str | None = None, modelID: str | None = None, force: bool = False):
+    data = builtin_prompts.get_prompts(force=force)
+    out = {
+        "fetchedAt": data.get("fetchedAt"),
+        "source": data.get("source"),
+        "stale": data.get("stale", False),
+        "error": data.get("error"),
+        "harness": builtin_prompts.render(data.get("harness", ""), tools=("shell", "write", "edit")),
+        "providers": data.get("providers", {}),
+        "selectionRules": data.get("selection_rules", []),
+    }
+    if modelID:
+        model = next((m for m in dump(c().model.list().data) if m["id"] == modelID and (not providerID or m["providerID"] == providerID)), None)
+        out["forModel"] = builtin_prompts.compose_for_model(providerID or (model or {}).get("providerID", ""), modelID, family=(model or {}).get("family"), model_name=(model or {}).get("name"), prompts=data)
+    return out
+
+
+# ---- session transfer ----------------------------------------------------------------------
+
+
+@app.get("/api/sessions/{sid}/export")
+def session_export(sid: str):
+    payload = transfer.export_session(c(), sid)
+    title = re.sub(r"[^A-Za-z0-9._-]+", "-", (payload.get("info") or {}).get("title") or sid)[:60].strip("-") or sid
+    return JSONResponse(payload, headers={"Content-Disposition": f'attachment; filename="{title}.afh-session.json"'})
+
+
+@app.post("/api/sessions/import")
+def session_import(body: dict = Body(...)):
+    """Import an .afh-session.json / OpenCode export, given inline or as a file path."""
+    payload = body.get("payload")
+    if not payload and body.get("path"):
+        payload = json.loads(Path(body["path"]).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Nothing to import")
+    if body.get("preview"):
+        return transfer.summarize(payload)
+    return transfer.import_session(c(), payload, body["directory"])
+
+
+@app.get("/api/import/zadloop")
+def zadloop_list():
+    return transfer.list_zadloop_sessions()
+
+
+@app.post("/api/import/zadloop")
+def zadloop_import(body: dict = Body(...)):
+    payload = transfer.load_zadloop(body["path"])
+    if body.get("preview"):
+        return transfer.summarize(payload)
+    return transfer.import_session(c(), payload, body["directory"])
+
+
+# ---- remote control ------------------------------------------------------------------------
+
+
+@app.get("/api/remote/ping")
+def remote_ping():
+    return {"app": "agent-flow-harness", "version": __version__, "remote": bool(remote.state["server"])}
+
+
+@app.post("/api/remote/login")
+def remote_login(body: dict = Body(...)):
+    try:
+        token = remote.login(str(body.get("password", "")))
+    except PermissionError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=429)
+    if not token:
+        return JSONResponse({"error": "Wrong password"}, status_code=401)
+    return {"token": token}
+
+
+@app.get("/api/remote")
+def remote_status():
+    return remote.status()
+
+
+@app.put("/api/remote")
+def remote_update(body: dict = Body(...)):
+    current = store.load_settings().get("remote") or {}
+    patch: dict[str, Any] = {}
+    if "enabled" in body:
+        patch["enabled"] = bool(body["enabled"])
+    if body.get("password"):
+        if len(str(body["password"])) < 6:
+            raise ValueError("Use a password of at least 6 characters")
+        patch["passwordHash"] = remote.hash_password(str(body["password"]))
+    if "tunnel" in body:
+        patch["tunnel"] = "cloudflare" if body["tunnel"] == "cloudflare" else "none"
+    if body.get("port"):
+        patch["port"] = int(body["port"])
+    elif not current.get("port"):
+        patch["port"] = remote.free_port()
+    store.save_settings({"remote": patch})
+    s = remote.settings()
+    if s["enabled"] and not s["passwordHash"]:
+        raise ValueError("Set a password before turning remote control on")
+    remote.apply(s)
+    return remote.status()
+
+
+@app.post("/api/remote/disconnect-all")
+def remote_disconnect_all():
+    remote.state["tokens"].clear()
+    return {"ok": True}
+
+
+# ---- context editing & undo ---------------------------------------------------------------
+
+
+@app.get("/api/sessions/{sid}/context")
+def session_context(sid: str):
+    """Everything the model sees for this thread, including system messages."""
+    page = c().message.list(sid, order="asc", limit=200)
+    return [dump(m) for m in islice(page, 5000)]
+
+
+@app.put("/api/sessions/{sid}/messages")
+def replace_messages(sid: str, body: dict = Body(...)):
+    """Rewrite the thread's history (the context editor). Keeps the session id when it can."""
+    client = c()
+    payload = transfer.export_session(client, sid)
+    messages = body.get("messages")
+    if not isinstance(messages, list) or not messages:
+        raise ValueError("Nothing left in the thread")
+    payload["messages"] = messages
+    client.session.remove(sid)  # frees the ids so the import can keep them
+    try:
+        return transfer.import_session(client, payload, body.get("directory") or (payload.get("info") or {}).get("location", {}).get("directory") or str(Path.home()))
+    except Exception as exc:
+        log.exception("context edit import failed; re-importing with fresh ids")
+        for m in payload["messages"]:
+            m.pop("id", None)
+        return transfer.import_session(client, payload, body.get("directory") or str(Path.home()))
+
+
+@app.post("/api/sessions/{sid}/revert")
+def revert_stage(sid: str, body: dict = Body(...)):
+    """Undo: rewind the thread (and optionally the files) to just before a message."""
+    return dump(c().session.revert.stage(sid, message_id=body["messageId"], files=bool(body.get("files", True))))
+
+
+@app.post("/api/sessions/{sid}/revert/commit")
+def revert_commit(sid: str):
+    c().session.revert.commit(sid)
+    return {"ok": True}
+
+
+@app.post("/api/sessions/{sid}/revert/clear")
+def revert_clear(sid: str):
+    c().session.revert.clear(sid)
+    return {"ok": True}
+
+
+# ---- delegation --------------------------------------------------------------------
+
+
+@app.get("/api/delegation")
+def get_delegation():
+    return store.load_settings()["delegation"]
+
+
+@app.put("/api/delegation")
+def put_delegation(body: dict = Body(...)):
+    delegates = []
+    seen = set()
+    for d in body.get("delegates", []):
+        did = str(d.get("id", "")).strip().lower()
+        if not AGENT_ID.match(did) or did in {store.LEADER_ID, "build", "plan", "general"} or did in seen:
+            raise ValueError(f"Delegate id '{did}' is invalid or reserved")
+        seen.add(did)
+        delegates.append(
+            {
+                "id": did,
+                "name": str(d.get("name") or did)[:60],
+                "model": d.get("model") if isinstance(d.get("model"), dict) else None,
+                "job": str(d.get("job", ""))[:4000],
+                "system": str(d.get("system", ""))[:20000],
+                "enabled": bool(d.get("enabled", True)),
+                "readonly": bool(d.get("readonly", False)),
+                "color": d.get("color") or None,
+            }
+        )
+    current = store.load_settings()["delegation"]
+    settings = store.save_settings(
+        {"delegation": {"leaderInstructions": str(body.get("leaderInstructions", ""))[:8000], "delegates": delegates, "managed": current.get("managed", [])}}
+    )
+    store.apply_delegation(settings)
+    return restart_soon()
+
+
+@app.get("/api/sessions/{sid}/children")
+def session_children(sid: str):
+    return [dump(s) for s in islice(c().session.list(parent_id=sid, limit=50, order="desc"), 50)]
 
 
 # ---- events -----------------------------------------------------------------------

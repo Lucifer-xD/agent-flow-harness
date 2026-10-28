@@ -1,0 +1,418 @@
+"""Session import/export: AFH JSON files, raw OpenCode transcripts, and Zadloop (DeepSeek Harness) logs.
+
+Import rules learned from the OpenCode server (experimental endpoint):
+- `location` wins: the session lands in the given directory and projectID is recomputed; the
+  projectID/location inside `info` are ignored.
+- A session id that already exists is a 409. Session ids must start with "ses", message ids
+  with "msg_", and message ids must be new (reusing ids from another session is a 500).
+- parentID must point at an existing session (404 otherwise); fork/revert are dropped.
+- Messages keep payload order. An assistant message without time.completed is hidden (still
+  "streaming"), tool parts need `time`, and a completed tool state needs non-empty content.
+"""
+
+from __future__ import annotations
+
+import json
+import random
+import string
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from opencode import APIStatusError
+from opencode.types import SessionInfo
+
+from .engine import dump
+
+FORMAT = "afh-session"
+VERSION = 1
+APP = "agent-flow-harness"
+DSH_HOME = Path.home() / ".dsh"
+
+ZERO_TOKENS = {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}
+# Fields the server recomputes or rejects on import.
+DROP_INFO = {"parentID", "fork", "revert", "projectID", "location"}
+_B62 = string.digits + string.ascii_letters
+
+
+# ---- ids & time ------------------------------------------------------------
+
+
+def now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def iso(ms: float | None) -> str | None:
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat() if ms else None
+
+
+def new_id(prefix: str, ms: float | None = None, counter: int = 0) -> str:
+    """OpenCode-style id: prefix + 12 hex chars of (ms * 4096 + counter) + 14 random chars.
+
+    Session ids count down (newest first in listings); everything else counts up.
+    """
+    n = (int(ms if ms is not None else now_ms()) * 0x1000 + counter) & 0xFFFFFFFFFFFF
+    if prefix == "ses":
+        n = ~n & 0xFFFFFFFFFFFF
+    return f"{prefix}_{n:012x}" + "".join(random.choice(_B62) for _ in range(14))
+
+
+# ---- OpenCode export / import --------------------------------------------------
+
+
+def export_session(client, session_id: str) -> dict:
+    data = client.session.export(session_id)
+    return {
+        "format": FORMAT,
+        "version": VERSION,
+        "exportedAt": iso(now_ms()),
+        "app": APP,
+        "info": dump(data.info),
+        "messages": [dump(m) for m in data.messages],
+    }
+
+
+def unpack(payload: dict) -> tuple[dict, list[dict]]:
+    """Accept the afh-session envelope or a raw OpenCode `{info, messages}` export."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("info"), dict):
+        raise ValueError("Not a session export: expected an object with info and messages")
+    if payload.get("format") not in (None, FORMAT):
+        raise ValueError(f"Unsupported export format: {payload.get('format')}")
+    messages = payload.get("messages") or []
+    if not isinstance(messages, list):
+        raise ValueError("messages must be a list")
+    return dict(payload["info"]), [dict(m) for m in messages]
+
+
+def clean_info(info: dict, directory: str) -> dict:
+    out = {k: v for k, v in info.items() if k not in DROP_INFO}
+    if not str(out.get("id", "")).startswith("ses_"):  # the server only checks "ses"; keep ids canonical
+        out["id"] = new_id("ses")
+    out.setdefault("cost", 0)
+    out.setdefault("tokens", ZERO_TOKENS)
+    t = dict(out.get("time") or {})
+    t.setdefault("created", now_ms())
+    t.setdefault("updated", t["created"])
+    out["time"] = t
+    out["projectID"] = "imported"  # placeholder: the server derives it from `location`
+    out["location"] = {"directory": directory}
+    return out
+
+
+def clean_message(m: dict) -> dict:
+    out = dict(m)
+    t = dict(out.get("time") or {})
+    t.setdefault("created", now_ms())
+    if out.get("type") == "assistant":
+        out.setdefault("agent", "build")
+        t.setdefault("completed", t["created"])  # otherwise the server treats it as still streaming
+        parts = []
+        for part in out.get("content") or []:
+            part = dict(part)
+            if part.get("type") == "tool":
+                part.setdefault("time", {"created": t["created"]})
+                state = dict(part.get("state") or {})
+                if state.get("status") == "completed" and not state.get("content"):
+                    state["content"] = [{"type": "text", "text": "(no output)"}]
+                state.setdefault("input", {})
+                part["state"] = state
+            parts.append(part)
+        out["content"] = parts
+    out["time"] = t
+    return out
+
+
+def renumber(messages: list[dict]) -> list[dict]:
+    """Fresh, monotonic message ids (the server rejects ids that exist in any session)."""
+    base = now_ms()
+    return [dict(m, id=new_id("msg", base, i)) for i, m in enumerate(messages)]
+
+
+def session_exists(client, session_id: str) -> bool:
+    try:
+        client.session.get(session_id)
+        return True
+    except APIStatusError as exc:
+        if exc.status_code == 404:
+            return False
+        raise
+
+
+def import_session(client, payload: dict, directory: str) -> dict:
+    """Import an afh-session or raw OpenCode export into `directory`; returns the new SessionInfo."""
+    raw_info, raw_messages = unpack(payload)
+    info = clean_info(raw_info, directory)
+    messages = [clean_message(m) for m in raw_messages]
+    if not all(str(m.get("id", "")).startswith("msg_") for m in messages):
+        messages = renumber(messages)
+    if info["id"] != raw_info.get("id") or session_exists(client, info["id"]):
+        info["id"] = new_id("ses")
+        messages = renumber(messages)
+    try:
+        return _import(client, info, messages, directory)
+    except APIStatusError as exc:
+        if exc.status_code not in (409, 500):
+            raise
+        # Ids collided with a session or messages that still exist: retry with fresh ones.
+        info["id"] = new_id("ses")
+        return _import(client, info, renumber(messages), directory)
+
+
+def _import(client, info: dict, messages: list[dict], directory: str) -> dict:
+    result = client.session.import_(
+        info=SessionInfo.model_validate(info), messages=messages, location={"directory": directory}
+    )
+    return dump(result)
+
+
+# ---- preview -------------------------------------------------------------------
+
+
+def summarize(payload: dict) -> dict:
+    info, messages = unpack(payload)
+    first = next((m.get("text", "") for m in messages if m.get("type") == "user"), "")
+    created = (info.get("time") or {}).get("created")
+    return {
+        "title": info.get("title") or "",
+        "messages": sum(1 for m in messages if m.get("type") in ("user", "assistant")),
+        "firstUserText": first[:500],
+        "created": iso(created),
+        "model": info.get("model"),
+        "source": ((info.get("metadata") or {}).get("afh") or {}).get("importedFrom") or payload.get("app") or "opencode",
+    }
+
+
+# ---- Zadloop (DeepSeek Harness, ~/.dsh) -----------------------------------------
+
+
+def read_zadloop(path: str | Path) -> list[dict]:
+    """Records of a session.v4.jsonl.zstd log, in file order (multi-frame zstd)."""
+    import zstandard
+
+    with open(path, "rb") as fh:
+        raw = zstandard.ZstdDecompressor().stream_reader(fh).read()
+    records = []
+    for line in raw.decode("utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except ValueError:
+            continue  # a torn trailing line from a crashed writer
+    return records
+
+
+def _text(blocks: Any) -> str:
+    if isinstance(blocks, str):
+        return blocks
+    return "\n".join(b.get("text", "") for b in blocks or [] if isinstance(b, dict) and b.get("type") == "text")
+
+
+def _is_user(record: dict) -> bool:
+    data = record.get("data") or {}
+    return ((data.get("source") or {}).get("kind") or "user") == "user"  # skip runtime-context, skill-catalog…
+
+
+def zadloop_workspaces(home: Path | None = None) -> dict[str, dict]:
+    """Workspace registry keyed by session id: {path, title}."""
+    path = (home or DSH_HOME) / "storages" / "workspace.json"
+    try:
+        tables = json.loads(path.read_text(encoding="utf-8")).get("tables", {}).get("workspaces", {})
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for ws in tables.values():
+        for sid in ws.get("sessionIds", []):
+            out[sid] = {"path": ws.get("path"), "title": ws.get("title")}
+    return out
+
+
+def list_zadloop_sessions(home: Path | None = None) -> list[dict]:
+    root = (home or DSH_HOME) / "sessions"
+    workspaces = zadloop_workspaces(home)
+    out = []
+    for path in sorted(root.glob("*/session-*/session.v4.jsonl.zstd")) if root.is_dir() else []:
+        try:
+            records = read_zadloop(path)
+        except Exception:
+            continue
+        head = next((r for r in records if r.get("type") == "session"), {})
+        sid = head.get("id") or path.parent.name
+        titles = [r["data"].get("title") for r in records if r.get("type") == "session/title" and r.get("data")]
+        count = sum(
+            1 for r in records if r.get("type") == "assistant/message" or (r.get("type") == "user/message" and _is_user(r))
+        )
+        out.append(
+            {
+                "id": sid,
+                "title": (titles[-1] if titles else None) or _first_user_text(records)[:60] or sid,
+                "cwd": head.get("cwd") or (workspaces.get(sid) or {}).get("path"),
+                "workspace": (workspaces.get(sid) or {}).get("title"),
+                "createdAt": head.get("createdAt") or (records[0].get("time") if records else None),
+                "updatedAt": max((r.get("time") or 0 for r in records), default=None),
+                "path": str(path),
+                "messages": count,
+            }
+        )
+    out.sort(key=lambda s: s.get("createdAt") or 0, reverse=True)
+    return out
+
+
+def _first_user_text(records: list[dict]) -> str:
+    for r in records:
+        if r.get("type") == "user/message" and _is_user(r):
+            return _text((r.get("data") or {}).get("content"))
+    return ""
+
+
+def zadloop_to_opencode(path: str | Path) -> tuple[dict, list[dict]]:
+    """Convert a Zadloop log into OpenCode-shaped (info, messages)."""
+    path = Path(path)
+    records = read_zadloop(path)
+    head = next((r for r in records if r.get("type") == "session"), {})
+    created = head.get("createdAt") or (records[0].get("time") if records else None) or now_ms()
+    results = {}  # tool callId -> tool/result record
+    for r in records:
+        if r.get("type") == "tool/result":
+            msg = (r.get("data") or {}).get("message") or {}
+            if msg.get("toolCallId"):
+                results[msg["toolCallId"]] = r
+
+    messages: list[dict] = []
+    model = {"id": "unknown", "providerID": "unknown"}
+    title = None
+    seen_users: set[str] = set()
+    seen_system: set[str] = set()
+    tokens = dict(ZERO_TOKENS, cache=dict(ZERO_TOKENS["cache"]))
+    counter = 0
+
+    def mid(ms: float) -> str:
+        nonlocal counter
+        counter += 1
+        return new_id("msg", ms, counter)
+
+    for r in records:
+        kind, data, ms = r.get("type"), r.get("data") or {}, r.get("time") or created
+        if kind == "session/title" and data.get("title"):
+            title = data["title"]
+        elif kind in ("request/context", "model/selection") and data.get("model"):
+            model = {"id": data["model"], "providerID": data.get("provider") or "unknown"}
+        elif kind == "system/message":
+            text = _text((data.get("message") or {}).get("content"))
+            if text and text not in seen_system:
+                seen_system.add(text)
+                messages.append({"id": mid(ms), "type": "system", "text": text, "time": {"created": ms}})
+        elif kind == "user/message" and _is_user(r):
+            if data.get("id") in seen_users:
+                continue
+            seen_users.add(data.get("id"))
+            messages.append({"id": mid(ms), "type": "user", "text": _text(data.get("content")), "time": {"created": ms}})
+        elif kind == "assistant/message":
+            msg = data.get("message") or {}
+            src = msg.get("source") or {}
+            if src.get("model"):
+                model = {"id": src["model"], "providerID": src.get("provider") or "unknown"}
+            usage = data.get("usage") or {}
+            content, completed = [], ms
+            for block in msg.get("content") or []:
+                btype = block.get("type")
+                if btype == "text" and block.get("text"):
+                    content.append({"type": "text", "text": block["text"]})
+                elif btype in ("reasoning", "thinking") and block.get("text"):
+                    content.append({"type": "reasoning", "text": block["text"]})
+                elif btype == "tool-call":
+                    part, done = _tool_part(block, results.get(block.get("id")), ms)
+                    content.append(part)
+                    completed = max(completed, done)
+            if not content:
+                continue
+            has_tools = any(p["type"] == "tool" for p in content)
+            msg_tokens = {
+                "input": usage.get("inputTokens") or 0,
+                "output": usage.get("outputTokens") or 0,
+                "reasoning": usage.get("reasoningTokens") or 0,
+                "cache": {"read": usage.get("cacheReadTokens") or 0, "write": usage.get("cacheWriteTokens") or 0},
+            }
+            for k in ("input", "output", "reasoning"):
+                tokens[k] += msg_tokens[k]
+            for k in ("read", "write"):
+                tokens["cache"][k] += msg_tokens["cache"][k]
+            messages.append(
+                {
+                    "id": mid(ms),
+                    "type": "assistant",
+                    "agent": "build",
+                    "model": dict(model),
+                    "content": content,
+                    "time": {"created": ms, "completed": completed},
+                    "finish": "tool-calls" if has_tools else "stop",
+                    "cost": 0,
+                    "tokens": msg_tokens,
+                }
+            )
+
+    updated = max((r.get("time") or 0 for r in records), default=created) or created
+    info = {
+        "id": new_id("ses", created),
+        "projectID": "zadloop",  # replaced by the server from `location`
+        "agent": "build",
+        "model": dict(model),
+        "cost": 0,
+        "tokens": tokens,
+        "time": {"created": created, "updated": updated},
+        "title": title or _first_user_text(records)[:60] or head.get("id") or path.parent.name,
+        "metadata": {
+            "afh": {
+                "importedFrom": "zadloop",
+                "sourcePath": str(path),
+                "sourceId": head.get("id") or path.parent.name,
+                "sourceCwd": head.get("cwd"),
+            }
+        },
+        "location": {"directory": head.get("cwd") or str(Path.home())},
+    }
+    return info, messages
+
+
+def _tool_part(block: dict, result: dict | None, created: float) -> tuple[dict, float]:
+    args = block.get("arguments")
+    if isinstance(args, str):
+        try:
+            args = json.loads(args) if args.strip() else {}
+        except ValueError:
+            args = {"arguments": args}
+    if not isinstance(args, dict):
+        args = {"arguments": args}
+    part = {"id": block.get("id") or new_id("call"), "name": block.get("name") or "tool", "type": "tool"}
+    done = created
+    if result is None:
+        state = {"status": "completed", "input": args, "content": [{"type": "text", "text": "(no result recorded)"}]}
+    else:
+        msg = (result.get("data") or {}).get("message") or {}
+        text = _text(msg.get("content")) or "(empty result)"
+        done = max(created, result.get("time") or created)
+        if msg.get("isError"):
+            state = {"status": "error", "input": args, "error": {"type": "ToolError", "message": text}}
+        else:
+            state = {"status": "completed", "input": args, "content": [{"type": "text", "text": text}]}
+        meta = (result.get("data") or {}).get("meta")
+        if isinstance(meta, dict) and meta and state["status"] == "completed":
+            state["metadata"] = meta
+    part["state"] = state
+    part["time"] = {"created": created, "completed": done}
+    return part, done
+
+
+def load_zadloop(path: str | Path) -> dict:
+    """A Zadloop log as an afh-session payload, ready for summarize()/import_session()."""
+    info, messages = zadloop_to_opencode(path)
+    return {
+        "format": FORMAT,
+        "version": VERSION,
+        "exportedAt": iso(now_ms()),
+        "app": "zadloop",
+        "info": info,
+        "messages": messages,
+    }

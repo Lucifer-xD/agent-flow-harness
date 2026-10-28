@@ -3,21 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AFH</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3l3.2 9.8L29 16l-9.8 3.2L16 29l-3.2-9.8L3 16l9.8-3.2z' fill='%237c6cff'/%3E%3C/svg%3E" />
+  <title>Agent Flow Harness</title>
+  <link rel="icon" href="brand/favicon.png" />
   <link rel="stylesheet" href="app.css" />
 </head>
 <body>
   <div id="boot" class="boot">
-    <div class="boot-mark"><span class="logo-mark"></span></div>
-    <div class="boot-title">AFH</div>
+    <div class="boot-mark" id="boot-mark"></div>
+    <div class="boot-title">Agent Flow Harness</div>
     <div class="boot-status" id="boot-status">Starting OpenCode…</div>
   </div>
 
   <div id="app" class="app" hidden>
     <aside class="sidebar" id="sidebar">
       <div class="sb-head">
-        <div class="brand"><span class="logo-mark sm"></span><span>AFH</span></div>
+        <div class="brand" id="brand"><span>AFH</span></div>
         <button class="icon-btn" id="btn-collapse" title="Hide sidebar (Ctrl+B)"></button>
       </div>
       <button class="new-thread" id="btn-new" title="New thread (Ctrl+N)"><span class="ico" data-icon="plus"></span>New thread<kbd>Ctrl N</kbd></button>
@@ -33,8 +33,10 @@
     <main class="main">
       <header class="topbar">
         <button class="icon-btn" id="btn-expand" title="Show sidebar (Ctrl+B)" hidden></button>
+        <span class="tb-logo" id="tb-logo" hidden></span>
         <div class="tb-title" id="tb-title"></div>
         <div class="tb-actions">
+          <button class="chip-btn" id="btn-context" title="See and edit everything the model sees"><span class="ico" data-icon="list"></span>Context</button>
           <button class="chip-btn" id="btn-harness" title="See what the model is told"><span class="ico" data-icon="scroll"></span>Prompt</button>
           <button class="chip-btn" id="btn-changes" title="Changed files"><span class="ico" data-icon="diff"></span>Changes<span class="badge" id="changes-count" hidden></span></button>
           <button class="icon-btn" id="btn-thread-menu" title="Thread actions"></button>
