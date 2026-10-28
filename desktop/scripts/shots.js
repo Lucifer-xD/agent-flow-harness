@@ -51,7 +51,15 @@ const SCENES = [
       await new Promise(r => setTimeout(r, 2500));
       const d = document.querySelector('.deleg');
       if (!d) throw new Error('no .deleg card in first thread');
+      // The chat view keeps "sticking" to the bottom unless the user scrolls
+      // up (it only unsticks on an upward wheel/touch, or a gap >= 60px), so
+      // fake an upward wheel tick first, then align the card to the top.
+      const sc = d.closest('.thread') || d.parentElement;
+      sc.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
       d.scrollIntoView({ block: 'start' });
+      await new Promise(r => setTimeout(r, 600));
+      sc.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
+      sc.scrollTop += d.getBoundingClientRect().top - sc.getBoundingClientRect().top - 12;
     })()`,
   },
   {
@@ -206,7 +214,12 @@ async function main() {
   const loaded = new Promise((resolve) => win.webContents.once("did-finish-load", resolve));
   await win.loadURL(URL);
   await loaded;
+  win.webContents.setZoomFactor(OFFSCREEN ? SCALE : 1);
   await sleep(4000);
+  console.log(
+    "page viewport: " +
+      (await win.webContents.executeJavaScript(`innerWidth + 'x' + innerHeight + ' @ dpr ' + devicePixelRatio`))
+  );
   if (!(await waitForApp(win))) throw new Error("#app never became visible (bad token or backend down?)");
   await win.webContents.executeJavaScript(HELPERS);
   await sleep(500);
