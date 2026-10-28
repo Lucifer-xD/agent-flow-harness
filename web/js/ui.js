@@ -191,6 +191,12 @@ export function dayGroup(ms) {
   return String(d.getFullYear());
 }
 
+export const fmtDur = (ms) => {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
+};
 export const fmtTokens = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(Math.round(n || 0)));
 export const basename = (p) => (p || "").split(/[\\/]/).filter(Boolean).pop() || p;
 
@@ -262,21 +268,34 @@ export function popover(anchor, items, opts = {}) {
   render();
   document.getElementById("overlay-root").append(pop);
 
-  const r = anchor.getBoundingClientRect();
-  const pw = pop.offsetWidth, ph = pop.offsetHeight;
-  let left = Math.min(r.left, innerWidth - pw - 10);
-  let top = r.bottom + 6;
-  let origin = "top left";
-  if (top + ph > innerHeight - 10) { top = r.top - ph - 6; origin = "bottom left"; }
-  if (opts.align === "right") left = Math.max(10, r.right - pw);
-  Object.assign(pop.style, { left: Math.max(10, left) + "px", top: Math.max(10, top) + "px", "--origin": origin });
+  const place = () => {
+    const r = anchor.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let left = Math.min(r.left, innerWidth - pw - 10);
+    if (opts.align === "right") left = Math.max(10, r.right - pw);
+    // Open upward when the anchor sits in the lower half or there is no room below.
+    const below = r.bottom + 6, above = r.top - ph - 6;
+    const up = r.top > innerHeight / 2 || below + ph > innerHeight - 10;
+    let top = up ? above : below;
+    let origin = up ? "bottom left" : "top left";
+    if (top < 10) { top = 10; }
+    pop.style.maxHeight = Math.max(160, innerHeight - 20) + "px";
+    pop.style.overflowY = "auto";
+    Object.assign(pop.style, { left: Math.max(10, left) + "px", top: top + "px", "--origin": origin });
+  };
+  place();
 
   const onDown = (e) => { if (!pop.contains(e.target) && !anchor.contains(e.target)) closePopover(); };
   const onKey = (e) => { if (e.key === "Escape") closePopover(); };
   setTimeout(() => document.addEventListener("mousedown", onDown), 0);
   document.addEventListener("keydown", onKey);
-  openPop = { cleanup: () => { pop.remove(); document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); } };
+  openPop = { cleanup: () => { pop.remove(); document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); }, place };
   return pop;
+}
+
+/** Re-run placement after a popover's content changed size. */
+export function repositionPopover() {
+  openPop?.place?.();
 }
 
 // ---- modals -------------------------------------------------------------------

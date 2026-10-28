@@ -2,7 +2,7 @@
 // so a single renderer draws both.
 
 import { api } from "./api.js";
-import { el, ico, icon, markdown, diffView, patchFromStrings, copyText, fmtTokens, basename, toast } from "./ui.js";
+import { el, ico, icon, markdown, diffView, patchFromStrings, copyText, fmtDur, fmtTokens, basename, toast } from "./ui.js";
 
 // ---- state ----------------------------------------------------------------------
 
@@ -87,6 +87,7 @@ export function applyEvent(t, ev) {
     case "session.execution.started":
       t.busy = true;
       t.error = null;
+      t.runStart = t.runStart || Date.now();
       return { status: true };
     case "session.execution.succeeded":
     case "session.execution.interrupted":
@@ -104,9 +105,11 @@ export function applyEvent(t, ev) {
       t.retry = d;
       t.retryError = d.error || t.retryError;
       return { status: true };
-    case "session.step.started":
-      assistant(t, d.assistantMessageID, d);
+    case "session.step.started": {
+      const m = assistant(t, d.assistantMessageID, d);
+      m.startedAt = d.started || Date.now();
       return { all: true };
+    }
     case "session.step.failed": {
       const m = assistant(t, d.assistantMessageID);
       if (isStop(d.error)) m.stopped = true;
@@ -117,7 +120,16 @@ export function applyEvent(t, ev) {
       const m = assistant(t, d.assistantMessageID);
       m.tokens = d.tokens;
       m.finish = d.finish;
-      return { msg: m.id };
+      m.endedAt = Date.now();
+      m.durationMs = m.endedAt - (m.startedAt || m.time?.created || m.endedAt);
+      // Exact rate: the provider's output token count over the time we were actually receiving it.
+      if (m.firstDelta) {
+        const secs = (m.endedAt - m.firstDelta) / 1000;
+        const out = (d.tokens?.output || 0) + (d.tokens?.reasoning || 0);
+        if (secs > 0.1 && out > 0) { m.tps = out / secs; t.tps = m.tps; }
+      }
+      t.liveTps = 0;
+      return { msg: m.id, status: true };
     }
     case "session.reasoning.started":
     case "session.text.started": {
@@ -129,6 +141,11 @@ export function applyEvent(t, ev) {
     case "session.text.delta": {
       const m = assistant(t, d.assistantMessageID);
       part(m, ev.type.includes("reasoning") ? "reasoning" : "text", d.ordinal).text += d.delta || "";
+      const now = Date.now();
+      m.firstDelta = m.firstDelta || now;
+      m.liveChars = (m.liveChars || 0) + (d.delta || "").length;
+      const secs = (now - m.firstDelta) / 1000;
+      if (secs > 0.5) t.liveTps = m.liveChars / 4 / secs; // rough estimate until the step reports real counts
       return { msg: m.id, stream: true };
     }
     case "session.reasoning.ended":
@@ -202,6 +219,22 @@ function finishLive(t) {
     m.live = false;
     for (const p of m.content) p.live = false;
   }
+  const last = [...t.messages].reverse().find((m) => m.type === "assistant");
+  if (last && t.runStart) last.turnMs = Date.now() - t.runStart;
+  t.runStart = null;
+  t.liveTps = 0;
+}
+
+/** Duration and tokens/s of a finished message, from live timing or the stored timestamps. */
+function stepStats(m) {
+  const out = (m.tokens?.output || 0) + (m.tokens?.reasoning || 0);
+  const dur = m.durationMs ?? (m.time?.completed && m.time?.created ? m.time.completed - m.time.created : null);
+  let tps = m.tps;
+  if (!tps && m.time?.completed && m.time?.streamed && out) {
+    const secs = (m.time.completed - m.time.streamed) / 1000;
+    if (secs > 0.1) tps = out / secs;
+  }
+  return { dur, tps };
 }
 
 // ---- tools ----------------------------------------------------------------------
@@ -415,6 +448,12 @@ export class ChatView {
     if (this.stick) this.scrollToEnd();
   }
 
+  /** Once a second while busy: advance the visible timers without re-rendering anything else. */
+  tick() {
+    const now = Date.now();
+    for (const n of this.root.querySelectorAll(".pending-row .timer, .live-dur")) n.textContent = fmtDur(now - Number(n.dataset.start || now));
+  }
+
   // Eased follow: closes the gap a little each frame, so growing content glides instead of jumping.
   scrollToEnd(instant) {
     const s = this.scroller;
@@ -514,11 +553,16 @@ export class ChatView {
 
     const tokens = m.tokens ? fmtTokens((m.tokens.input || 0) + (m.tokens.output || 0) + (m.tokens.reasoning || 0)) + " tokens" : null;
     const when = m.time?.created ? new Date(m.time.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+    const { dur, tps } = stepStats(m);
+    const turnDone = last && m.turnMs ? m.turnMs : null;
     const meta = el("div.msg-meta",
       el("span.model", this.opts.modelName(m.model) || m.model?.id || "Assistant"),
       m.agent ? [el("span.dot"), el("span", m.agent)] : null,
       tokens ? [el("span.dot"), el("span", tokens)] : null,
-      when ? [el("span.dot"), el("span", when)] : null);
+      when ? [el("span.dot"), el("span", when)] : null,
+      m.live ? [el("span.dot"), el("span.dur.live-dur", { dataset: { start: String(m.startedAt || m.time?.created || Date.now()) } }, fmtDur(Date.now() - (m.startedAt || m.time?.created || Date.now())))]
+        : dur != null ? [el("span.dot"), el("span.dur", { title: turnDone ? `this step ${fmtDur(dur)} · whole reply ${fmtDur(turnDone)}` : "completed in" }, `completed in ${fmtDur(turnDone || dur)}`)] : null,
+      tps ? [el("span.dot"), el("span.dur", { title: "output tokens per second (provider count ÷ streaming time)" }, `${Math.round(tps)} tok/s`)] : null);
     const text = last && !m.live ? this.turnText(m) : "";
     const actions = m.live || !last || this.thread.busy ? null : el("div.msg-actions",
       text ? el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(text); toast("Copied", "ok", 1400); } } }) : null,
@@ -542,6 +586,12 @@ export class ChatView {
     if (!this.statusBox || !this.thread) return;
     const t = this.thread;
     this.statusBox.replaceChildren();
+    // Sent but nothing streaming yet: show the mark at work with a running timer right away.
+    const streaming = t.messages.some((m) => m.type === "assistant" && m.live && m.content.length);
+    if ((t.busy || t.runStart) && !streaming && !t.error) {
+      this.statusBox.append(el("div.msg.assistant.pending", { style: { animation: "none" } }, el("div.avatar", this.opts.avatar ? this.opts.avatar(true) : null),
+        el("div.msg-body", el("div.pending-row", el("span.lbl", "Thinking"), el("span.timer", { dataset: { start: String(t.runStart || Date.now()) } }, fmtDur(Date.now() - (t.runStart || Date.now())))))));
+    }
     if (t.retry) {
       const err = t.retry.error || {};
       this.statusBox.append(el("div.sys-note", { title: err.message || "" }, `Provider error — retrying${t.retry.attempt ? ` (attempt ${t.retry.attempt})` : ""}${err.message ? `: ${String(err.message).slice(0, 90)}` : ""}…`));
