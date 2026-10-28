@@ -1,0 +1,64 @@
+// Talks to AFH's Python backend. The per-launch token arrives in the URL hash.
+
+const fromHash = new URLSearchParams(location.hash.slice(1)).get("token");
+let token = fromHash;
+try {
+  if (fromHash) sessionStorage.setItem("afh-token", fromHash);
+  else token = sessionStorage.getItem("afh-token");
+} catch {}
+if (fromHash) history.replaceState(null, "", location.pathname);
+
+async function request(method, path, body, retries = 6) {
+  const res = await fetch(path, {
+    method,
+    headers: { "content-type": "application/json", "x-afh-token": token || "" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { error: text };
+  }
+  if (res.status === 503 && retries > 0) {
+    // OpenCode is restarting after a settings change; wait for it.
+    await new Promise((r) => setTimeout(r, 1500));
+    return request(method, path, body, retries - 1);
+  }
+  if (!res.ok) throw new Error(data?.error || `${res.status} ${res.statusText}`);
+  return data;
+}
+
+export const api = {
+  get: (p) => request("GET", p),
+  post: (p, b = {}) => request("POST", p, b),
+  put: (p, b = {}) => request("PUT", p, b),
+  patch: (p, b = {}) => request("PATCH", p, b),
+  del: (p, b) => request("DELETE", p, b),
+  q: (path, params) => path + "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v != null)),
+};
+
+export function connectEvents(onEvent, onState) {
+  let es;
+  const open = () => {
+    es = new EventSource(`/api/events?token=${encodeURIComponent(token || "")}`);
+    es.onopen = () => onState("open");
+    es.onerror = () => onState("error");
+    es.onmessage = (m) => {
+      try {
+        onEvent(JSON.parse(m.data));
+      } catch (err) {
+        console.error("bad event", err);
+      }
+    };
+  };
+  open();
+  return () => es?.close();
+}
+
+export const native = {
+  available: () => !!window.pywebview?.api,
+  pickFolder: () => window.pywebview?.api?.pick_folder?.(),
+  pickFiles: () => window.pywebview?.api?.pick_files?.(),
+};
