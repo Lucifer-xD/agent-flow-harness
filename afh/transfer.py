@@ -1,13 +1,7 @@
-"""Session import/export: AFH JSON files, raw OpenCode transcripts, and Zadloop (DeepSeek Harness) logs.
+"""Session import/export: AFH JSON files, OpenCode exports, and Zadloop (DeepSeek Harness) logs.
 
-Import rules learned from the OpenCode server (experimental endpoint):
-- `location` wins: the session lands in the given directory and projectID is recomputed; the
-  projectID/location inside `info` are ignored.
-- A session id that already exists is a 409. Session ids must start with "ses", message ids
-  with "msg_", and message ids must be new (reusing ids from another session is a 500).
-- parentID must point at an existing session (404 otherwise); fork/revert are dropped.
-- Messages keep payload order. An assistant message without time.completed is hidden (still
-  "streaming"), tool parts need `time`, and a completed tool state needs non-empty content.
+Everything lands in AFH's own session store. Imported messages get fresh ids; the message
+shapes are the ones the UI renders (user / assistant with text, reasoning and tool parts).
 """
 
 from __future__ import annotations
@@ -19,11 +13,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
-from opencode import APIStatusError
-from opencode.types import SessionInfo
-
-from .engine import dump
 
 FORMAT = "afh-session"
 VERSION = 1
@@ -61,16 +50,10 @@ def new_id(prefix: str, ms: float | None = None, counter: int = 0) -> str:
 # ---- OpenCode export / import --------------------------------------------------
 
 
-def export_session(client, session_id: str) -> dict:
-    data = client.session.export(session_id)
-    return {
-        "format": FORMAT,
-        "version": VERSION,
-        "exportedAt": iso(now_ms()),
-        "app": APP,
-        "info": dump(data.info),
-        "messages": [dump(m) for m in data.messages],
-    }
+def export_session(engine, session_id: str) -> dict:
+    """The afh-session envelope for one thread (info + messages, verbatim)."""
+    payload = engine.export_session(session_id)
+    return {"format": FORMAT, "version": VERSION, "exportedAt": iso(now_ms()), "app": APP, "info": payload["info"], "messages": payload["messages"]}
 
 
 def unpack(payload: dict) -> tuple[dict, list[dict]]:
@@ -87,7 +70,7 @@ def unpack(payload: dict) -> tuple[dict, list[dict]]:
 
 def clean_info(info: dict, directory: str) -> dict:
     out = {k: v for k, v in info.items() if k not in DROP_INFO}
-    if not str(out.get("id", "")).startswith("ses_"):  # the server only checks "ses"; keep ids canonical
+    if not str(out.get("id", "")).startswith("ses_"):
         out["id"] = new_id("ses")
     out.setdefault("cost", 0)
     out.setdefault("tokens", ZERO_TOKENS)
@@ -95,7 +78,7 @@ def clean_info(info: dict, directory: str) -> dict:
     t.setdefault("created", now_ms())
     t.setdefault("updated", t["created"])
     out["time"] = t
-    out["projectID"] = "imported"  # placeholder: the server derives it from `location`
+    out["projectID"] = directory
     out["location"] = {"directory": directory}
     return out
 
@@ -106,7 +89,7 @@ def clean_message(m: dict) -> dict:
     t.setdefault("created", now_ms())
     if out.get("type") == "assistant":
         out.setdefault("agent", "build")
-        t.setdefault("completed", t["created"])  # otherwise the server treats it as still streaming
+        t.setdefault("completed", t["created"])
         parts = []
         for part in out.get("content") or []:
             part = dict(part)
@@ -115,7 +98,11 @@ def clean_message(m: dict) -> dict:
                 state = dict(part.get("state") or {})
                 if state.get("status") == "completed" and not state.get("content"):
                     state["content"] = [{"type": "text", "text": "(no output)"}]
-                state.setdefault("input", {})
+                if state.get("status") in ("streaming", "pending", "running"):
+                    state["status"] = "error"
+                    state.setdefault("error", {"type": "aborted", "message": "Interrupted"})
+                if not isinstance(state.get("input"), dict):
+                    state["input"] = {}
                 part["state"] = state
             parts.append(part)
         out["content"] = parts
@@ -124,46 +111,32 @@ def clean_message(m: dict) -> dict:
 
 
 def renumber(messages: list[dict]) -> list[dict]:
-    """Fresh, monotonic message ids (the server rejects ids that exist in any session)."""
+    """Fresh, monotonic message ids."""
     base = now_ms()
     return [dict(m, id=new_id("msg", base, i)) for i, m in enumerate(messages)]
 
 
-def session_exists(client, session_id: str) -> bool:
-    try:
-        client.session.get(session_id)
-        return True
-    except APIStatusError as exc:
-        if exc.status_code == 404:
-            return False
-        raise
-
-
-def import_session(client, payload: dict, directory: str) -> dict:
-    """Import an afh-session or raw OpenCode export into `directory`; returns the new SessionInfo."""
+def import_session(engine, payload: dict, directory: str) -> dict:
+    """Import an afh-session, OpenCode or Zadloop payload into `directory`; returns the new session."""
     raw_info, raw_messages = unpack(payload)
     info = clean_info(raw_info, directory)
-    messages = [clean_message(m) for m in raw_messages]
-    if not all(str(m.get("id", "")).startswith("msg_") for m in messages):
-        messages = renumber(messages)
-    if info["id"] != raw_info.get("id") or session_exists(client, info["id"]):
-        info["id"] = new_id("ses")
-        messages = renumber(messages)
-    try:
-        return _import(client, info, messages, directory)
-    except APIStatusError as exc:
-        if exc.status_code not in (409, 500):
-            raise
-        # Ids collided with a session or messages that still exist: retry with fresh ones.
-        info["id"] = new_id("ses")
-        return _import(client, info, renumber(messages), directory)
+    messages = renumber([clean_message(m) for m in raw_messages])
+    model = info.get("model") if isinstance(info.get("model"), dict) and info["model"].get("id") else None
+    meta = dict(info.get("metadata") or {})
+    meta.setdefault("afh", {})
+    meta["afh"].setdefault("importedFrom", payload.get("app") or "export")
+    meta["afh"].setdefault("mode", "ask")
+    session = engine.store.create_session(directory, title=info.get("title") or None, agent=info.get("agent") if info.get("agent") in ("build", "plan", "delegate") else "build",
+                                          model=model, permissions=info.get("permissions") or None, metadata=meta)
+    if not session.get("permissions"):
+        from .engine import permissions as perm
 
-
-def _import(client, info: dict, messages: list[dict], directory: str) -> dict:
-    result = client.session.import_(
-        info=SessionInfo.model_validate(info), messages=messages, location={"directory": directory}
-    )
-    return dump(result)
+        engine.store.update_session(session["id"], permissions=perm.rules_for_mode("ask"))
+    for m in messages:
+        engine.store.add_message(session["id"], m)
+    engine.store.update_session(session["id"], tokens=info.get("tokens") or ZERO_TOKENS, cost=info.get("cost") or 0)
+    engine.publish({"type": "session.created", "data": {"sessionID": session["id"], "title": session.get("title")}})
+    return engine.store.get_session(session["id"])
 
 
 # ---- preview -------------------------------------------------------------------

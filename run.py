@@ -1,12 +1,14 @@
-"""Launch AFH: the API server, the OpenCode engine, and the desktop window.
+"""Launch AFH: the API server with the AFH Engine, and the desktop window.
 
     python run.py            desktop window
     python run.py --browser  open in your default browser instead
+    python run.py --headless only print the URL (for development / Electron)
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 import secrets
 import socket
@@ -18,15 +20,14 @@ import webbrowser
 import uvicorn
 
 from afh import api, store
-from afh.engine import engine
+from afh.engine.core import engine
 
 
 class WindowApi:
     """Native dialogs exposed to the page as window.pywebview.api.*"""
 
     def __init__(self) -> None:
-        # Private on purpose: pywebview exposes every public attribute to JavaScript.
-        self._window = None
+        self._window = None  # private on purpose: pywebview exposes every public attribute
 
     def pick_folder(self):
         import webview
@@ -48,7 +49,7 @@ def free_port() -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="AFH desktop coding agent")
+    parser = argparse.ArgumentParser(description="Agent Flow Harness")
     parser.add_argument("--browser", action="store_true", help="open in the default browser instead of a window")
     parser.add_argument("--headless", action="store_true", help="only print the URL (for development)")
     parser.add_argument("--port", type=int, default=0)
@@ -65,13 +66,13 @@ def main() -> None:
     api.ACCESS["hosts"] = {f"127.0.0.1:{port}", f"localhost:{port}"}
 
     server = uvicorn.Server(uvicorn.Config(api.app, host="127.0.0.1", port=port, log_level="warning"))
-    serving = threading.Thread(target=server.run, daemon=True)
+    serving = threading.Thread(target=server.run, daemon=True, name="afh-server")
     serving.start()
     while not server.started:
         if not serving.is_alive():
             sys.exit(f"AFH couldn't listen on port {port}; try --port with another number.")
         time.sleep(0.05)
-    threading.Thread(target=engine.start, daemon=True).start()
+    engine.ready.wait(timeout=30)
     try:  # resume remote control if it was left on
         from afh import remote
 
@@ -86,9 +87,7 @@ def main() -> None:
         import webview
 
         bridge = WindowApi()
-        bridge._window = webview.create_window(
-            "AFH", url, js_api=bridge, width=1320, height=860, min_size=(860, 560), background_color="#0d0e12"
-        )
+        bridge._window = webview.create_window("Agent Flow Harness", url, js_api=bridge, width=1320, height=860, min_size=(860, 560), background_color="#0f0d0c")
         webview.start(debug=args.debug)
     except ImportError:
         print(f"AFH is running at {url}", flush=True)
@@ -100,7 +99,11 @@ def main() -> None:
         except KeyboardInterrupt:
             pass
     finally:
-        engine.stop()
+        if engine.loop:
+            try:
+                asyncio.run_coroutine_threadsafe(engine.stop(), engine.loop).result(timeout=5)
+            except Exception:
+                pass
         server.should_exit = True
     sys.exit(0)
 

@@ -1,4 +1,4 @@
-"""skills.sh client plus an installer that writes skills where OpenCode reads them.
+"""skills.sh client plus an installer that writes skills where the AFH engine reads them.
 
 What the live skills.sh API looks like (checked 2026-10-28):
 
@@ -17,9 +17,9 @@ Every public function returns skill records normalised to the documented v1 shap
 ``{id, slug, name, source, installs, sourceType, installUrl, url}``.
 
 Install locations (OpenCode reads all of these; AFH only ever writes to the first two):
-- global:   ~/.config/opencode/skills/<slug>/
-- project:  <project>/.opencode/skills/<slug>/
-- external: ~/.claude/skills, ~/.agents/skills, <project>/.claude/skills, <project>/.agents/skills
+- global:   ~/.afh/skills/<slug>/
+- project:  <project>/.afh/skills/<slug>/
+- external: ~/.claude/skills, ~/.agents/skills, ~/.config/opencode/skills, <project>/.claude|.agents|.opencode/skills
 """
 
 from __future__ import annotations
@@ -50,10 +50,13 @@ SCOPES = ("global", "project")
 
 HOME = Path.home()
 XDG_CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")
-OPENCODE_SKILLS_DIR = XDG_CONFIG / "opencode" / "skills"
-EXTERNAL_SKILL_DIRS: tuple[Path, ...] = (HOME / ".claude" / "skills", HOME / ".agents" / "skills")
-PROJECT_SKILLS_SUBDIR = Path(".opencode") / "skills"
-PROJECT_EXTERNAL_SUBDIRS: tuple[Path, ...] = (Path(".claude") / "skills", Path(".agents") / "skills")
+from .store import AFH_DIR
+
+AFH_SKILLS_DIR = AFH_DIR / "skills"
+OPENCODE_SKILLS_DIR = AFH_SKILLS_DIR  # kept for older callers
+EXTERNAL_SKILL_DIRS: tuple[Path, ...] = (HOME / ".claude" / "skills", HOME / ".agents" / "skills", XDG_CONFIG / "opencode" / "skills")
+PROJECT_SKILLS_SUBDIR = Path(".afh") / "skills"
+PROJECT_EXTERNAL_SUBDIRS: tuple[Path, ...] = (Path(".claude") / "skills", Path(".agents") / "skills", Path(".opencode") / "skills")
 
 _SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SOURCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -571,7 +574,7 @@ def installed(
     root: str | Path | None = None,
     external_dirs: Iterable[str | Path] | None = None,
 ) -> list[dict]:
-    """Every skill OpenCode would see: AFH-managed (manifest) and unmanaged (bare SKILL.md) folders."""
+    """Every skill the engine would see: AFH-managed (manifest) and unmanaged (bare SKILL.md) folders."""
     out: list[dict] = []
     out += _scan(skills_root("global", None, root), "global")
     if project_dir:

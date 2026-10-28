@@ -17,13 +17,12 @@ const TABS = [
   ["models", "Models & providers", "cpu"],
   ["skills", "Skills", "book"],
   ["mcp", "MCP servers", "plug"],
-  ["plugins", "Plugins", "puzzle"],
   ["prompts", "Prompts & agents", "scroll"],
   ["remote", "Remote control", "globe"],
   ["about", "About", "info"],
 ];
 const ACCENTS = ["#ff6a2a", "#ff3d71", "#f59f00", "#2fbf71", "#22b8cf", "#4f8cff", "#7c6cff", "#e64980", "#ffffff"];
-const RESTART_NOTE = "Saving restarts OpenCode for a few seconds. Threads that are running will stop.";
+const RESTART_NOTE = "Saving reconnects MCP servers; running threads keep going.";
 
 let instance = null;
 
@@ -50,9 +49,9 @@ export function openSettings(tab = "general", ctx, opts = {}) {
     }
   };
   const m = modal([nav, body], { onClose: () => { instance = null; ctx.onReady = null; ctx.onCatalogEvent = null; ctx.redraw = null; } });
-  ctx.onReady = () => current && ["models", "mcp", "plugins", "prompts", "delegation"].includes(current) && show(current);
+  ctx.onReady = () => current && ["mcp"].includes(current) && show(current);
   let timer = 0;
-  ctx.onCatalogEvent = () => { if (current === "mcp" || current === "plugins") { clearTimeout(timer); timer = setTimeout(() => show(current), 900); } };
+  ctx.onCatalogEvent = () => { if (current === "mcp") { clearTimeout(timer); timer = setTimeout(() => show(current), 900); } };
   ctx.redraw = (id, o) => show(id, o);
   instance = { show };
   show(tab, opts);
@@ -80,7 +79,7 @@ function slider(min, max, step, value, fmt, onInput, onChange) {
 async function guard(fn, okMsg) {
   try {
     const out = await fn();
-    if (out?.restarting) toast("Saved — restarting OpenCode…", "ok");
+    if (out?.restarting) toast("Saved — reconnecting…", "ok");
     else if (okMsg) toast(okMsg, "ok");
     return out ?? true;
   } catch (e) {
@@ -191,7 +190,7 @@ const PANES = {
   },
 
   async mcp(pane, ctx) {
-    pane.append(...header("MCP servers", "Give agents new tools through the Model Context Protocol. Servers from your global OpenCode config show here too."));
+    pane.append(...header("MCP servers", "Give agents new tools through the Model Context Protocol. Local servers run on your computer; remote ones are plain HTTP."));
     const servers = await api.get("/api/mcp");
     const list = el("div");
     for (const s of servers) {
@@ -230,34 +229,6 @@ const PANES = {
       el("button.btn.sm", { on: { click: () => { form.hidden = false; name.value = r.name; command.value = r.command; kv.value = r.environment || ""; form.scrollIntoView({ behavior: "smooth", block: "nearest" }); } } }, ico("plus"), "Add"))));
     pane.append(card("Servers", `${servers.length} configured`, el("button.btn.sm", { on: { click: () => { form.hidden = !form.hidden; name.focus(); } } }, ico("plus"), "Add server"), list, form),
       card("Popular servers", "One click to prefill the form", null, rec.childElementCount ? rec : el("div.empty-row", "All added.")));
-  },
-
-  async plugins(pane, ctx) {
-    pane.append(...header("Plugins", "OpenCode plugins add tools, providers, agents and hooks. Plugins added here apply only when OpenCode runs inside AFH."));
-    const data = await api.get("/api/plugins");
-    const add = el("input.inp", { placeholder: "npm package (opencode-plugin-x@1.2.0) or a local folder path" });
-    const addBtn = el("button.btn.primary", { on: { click: () => add.value.trim() && guard(() => api.post("/api/plugins", { spec: add.value.trim() })) } }, ico("plus"), "Add");
-    const browse = native.available() ? el("button.btn", { title: "Pick a plugin folder", on: { click: async () => { const p = await native.pickFolder(); if (p) add.value = p; } } }, ico("folder")) : null;
-    const addedList = el("div");
-    for (const spec of data.added) {
-      addedList.append(el("div.list-item", ico("puzzle"), el("div.li-main", el("div.li-title", typeof spec === "string" ? basename(spec) : spec.package), el("div.li-sub", typeof spec === "string" ? spec : JSON.stringify(spec))),
-        el("button.btn.ghost.sm.danger", { on: { click: async () => { if (await confirmDialog({ title: "Remove plugin?", body: RESTART_NOTE, confirm: "Remove", danger: true })) guard(() => api.del("/api/plugins", { spec })); } } }, ico("trash"))));
-    }
-    if (!data.added.length) addedList.append(el("div.empty-row", "No plugins added here yet."));
-    pane.append(card("Add a plugin", null, null, el("div.card-body", el("div", { style: { display: "flex", gap: "8px" } }, add, browse, addBtn), el("div.help", { style: { fontSize: "12px", color: "var(--text-3)", marginTop: "8px" } }, "Plugins run code inside OpenCode — only install ones you trust. ", RESTART_NOTE))),
-      card("Added here", null, null, addedList));
-    const loaded = el("div");
-    const LOCKED = new Set(["opencode.config.policy", "opencode.provider.opencode"]);
-    const disabled = new Set(data.disabled);
-    const all = [...data.loaded, ...data.disabled.filter((id) => !data.loaded.some((p) => p.id === id)).map((id) => ({ id, source: { type: "builtin" }, state: { status: "disabled" } }))];
-    for (const p of all) {
-      const st = disabled.has(p.id) ? "disabled" : p.state?.status || "active";
-      loaded.append(el("div.list-item", el("span", { className: `status-dot ${st}` }),
-        el("div.li-main", el("div.li-title", p.id, el("span.pill-tag", p.source?.type || "plugin"), p.source?.version ? el("span.pill-tag", p.source.version) : null, p.source?.outdated ? el("span.pill-tag.accent", "update available") : null),
-          p.state?.error ? el("div.li-sub", { style: { color: "var(--bad)" } }, p.state.error) : p.source?.target ? el("div.li-sub", p.source.target) : null),
-        LOCKED.has(p.id) ? el("span.pill-tag", "required") : toggle(!disabled.has(p.id), (on) => guard(() => api.post("/api/plugins/enabled", { id: p.id, enabled: on })))));
-    }
-    pane.append(card("Loaded plugins", `${data.loaded.length} running · turning a built-in off removes that feature`, null, loaded));
   },
 
   async prompts(pane, ctx, opts = {}) {
@@ -315,20 +286,20 @@ const PANES = {
       const ta = el("textarea.ta.code", { value: text, placeholder: "# Instructions\n\n- Use TypeScript strict mode\n- Run `pnpm test` before finishing" });
       return card(title, path, el("button.btn.primary.sm", { on: { click: () => guard(() => save(ta.value), "Saved — applies to the next message") } }, "Save"), el("div.card-body", el("div.help", { style: { color: "var(--text-3)", fontSize: "12.5px", marginBottom: "8px" } }, sub), ta));
     };
-    pane.append(mdEditor("Global instructions", "AGENTS.md read by every thread in every project (also used by OpenCode itself).", data.globalInstructions, data.globalInstructionsPath, (text) => api.put("/api/prompts/global", { text })));
+    pane.append(mdEditor("Global instructions", "AGENTS.md read by every thread in every project.", data.globalInstructions, data.globalInstructionsPath, (text) => api.put("/api/prompts/global", { text })));
     if (project) pane.append(mdEditor(`Project instructions · ${basename(project)}`, "AGENTS.md at the project root. Commit it to share with your team.", data.projectInstructions, data.projectInstructionsPath, (text) => api.put("/api/prompts/project", { directory: project, text })));
   },
 
   async about(pane, ctx) {
     const info = await api.get("/api/bootstrap");
-    pane.append(...header("About", "Agent Flow Harness is an open-source desktop coding agent built on OpenCode through the opencode-python-sdk."),
+    pane.append(...header("About", "Agent Flow Harness is an open-source desktop coding agent with its own engine: no third-party harness, every prompt and tool is yours to see and change."),
       card("Version", null, el("span.pill-tag.accent", `v${info.version}`),
-        row("Engine", "OpenCode server, managed by AFH", el("span.status-dot.active")),
+        row("Engine", "AFH Engine (Python, in-process)", el("span.status-dot.active")),
         row("Models available", null, el("span", String(ctx.S.models.length))),
-        row("Restart engine", "Reloads config, plugins and MCP servers", el("button.btn.sm", { on: { click: () => guard(() => api.post("/api/restart")) } }, ico("refresh"), "Restart"))),
+        row("Reload engine", "Re-reads providers, agents and reconnects MCP servers", el("button.btn.sm", { on: { click: () => guard(() => api.post("/api/restart")) } }, ico("refresh"), "Restart"))),
       card("Where things live", null, null, el("div.card-body",
-        el("div.note", el("b", "AFH never edits your global opencode.json. "), "Its prompts, agents, delegates, MCP servers, plugins and providers are kept in ~/.afh/config.json and layered on top when OpenCode starts. API keys live in OpenCode's credential store."),
-        el("pre.h-pre", "~/.afh/settings.json       appearance, projects, personalization, delegation, prompts\n~/.afh/config.json         OpenCode overlay (agents, MCP, plugins, providers)\n~/.afh/personalization.md  generated instructions\n~/.config/opencode/AGENTS.md global instructions (shared with OpenCode)"))),
+        el("div.note", el("b", "Everything stays on this computer. "), "Settings, API keys and threads live under ~/.afh. Nothing is sent anywhere except to the model providers you configure."),
+        el("pre.h-pre", "~/.afh/settings.json       appearance, projects, personalization, delegation, prompts, agents, MCP servers\n~/.afh/providers.json      providers and API keys\n~/.afh/afh.db              threads, messages and undo snapshots\n~/.afh/skills/             installed skills\n~/.afh/personalization.md  generated instructions\n~/.afh/AGENTS.md           global instructions"))),
       card("Open source", "MIT licensed. Uses marked (MIT), DOMPurify (Apache-2.0/MPL-2.0), highlight.js (BSD-3), Electron (MIT), FastAPI (MIT).", null));
   },
 };

@@ -1,5 +1,5 @@
 // Delegate mode: delegation cards in the thread, the Watch pane, and the Delegation settings tab.
-// A delegation is OpenCode's `subagent` tool call; its child session is tracked here so the
+// A delegation is the engine's `subagent` tool call; its child session is tracked here so the
 // card can show live progress and the Watch pane can mount the child's thread.
 
 import { api } from "./api.js";
@@ -241,7 +241,7 @@ export async function delegationPane(pane, c) {
       el("div.card-head", el("div", { style: { display: "flex", alignItems: "center", gap: "10px" } }, logoNode({ size: 26 }), el("h3", d.name || "New delegate"), idBox),
         el("div", { style: { display: "flex", alignItems: "center", gap: "10px" } },
           el("span.h-muted", { style: { fontStyle: "normal", fontSize: "12px" } }, "enabled"), toggle(d.enabled !== false, (v) => { d.enabled = v; markDirty(); }),
-          el("button.btn.ghost.sm.danger", { title: "Remove", on: { click: async () => { if (!(await confirmDialog({ title: `Remove ${d.name || "this delegate"}?`, body: "The leader will stop delegating to it. Saving restarts OpenCode.", confirm: "Remove", danger: true }))) return; state.delegates.splice(i, 1); markDirty(); draw(); } } }, ico("trash")))),
+          el("button.btn.ghost.sm.danger", { title: "Remove", on: { click: async () => { if (!(await confirmDialog({ title: `Remove ${d.name || "this delegate"}?`, body: "The leader will stop delegating to it.", confirm: "Remove", danger: true }))) return; state.delegates.splice(i, 1); markDirty(); draw(); } } }, ico("trash")))),
       el("div.card-body",
         el("div.grid2", el("div.field", el("label", "Name"), name), el("div.field", el("label", "Model"), el("div", { style: { display: "flex", gap: "8px" } }, modelSel, varSel))),
         el("div.field", el("label", "Its job — when should the leader delegate to it?"), job, el("div.help", "The leader reads this to decide. Be concrete: what it's good at, what to send it, what not to.")),
@@ -266,7 +266,7 @@ export async function delegationPane(pane, c) {
     if (new Set(ids).size !== ids.length) return toast("Two delegates have the same id — give them different names", "err");
     try {
       await api.put("/api/delegation", { leaderInstructions: state.leaderInstructions, delegates: state.delegates.map((d) => ({ ...d, id: d.id || slug(d.name), _idLocked: undefined })) });
-      toast("Saved — restarting OpenCode…", "ok");
+      toast("Saved — applies to the next message", "ok");
       dirty = false;
       saveBtn.disabled = true;
       c.saveSettings({}).catch(() => {});
@@ -274,5 +274,5 @@ export async function delegationPane(pane, c) {
       toast(e.message, "err", 6000);
     }
   });
-  pane.append(el("div.actions", el("span.h-muted", { style: { flex: 1, fontStyle: "normal", fontSize: "12.5px", alignSelf: "center" } }, "Saving restarts OpenCode for a few seconds; running threads stop."), saveBtn));
+  pane.append(el("div.actions", el("span.h-muted", { style: { flex: 1, fontStyle: "normal", fontSize: "12.5px", alignSelf: "center" } }, "Changes apply to the next message in every thread."), saveBtn));
 }

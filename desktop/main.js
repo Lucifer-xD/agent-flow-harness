@@ -161,7 +161,7 @@ function backendAlive() {
   return !!backend && !backendExited && backend.exitCode === null && backend.signalCode === null;
 }
 
-/** Hard-kill the backend and everything it spawned (python/opencode). Synchronous. */
+/** Hard-kill the backend and everything it spawned (python, MCP servers). Synchronous. */
 function killBackendTree() {
   if (!backendAlive() || killRequested) return;
   killRequested = true;
@@ -476,7 +476,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", (event) => {
   quitting = true;
   if (!IS_WIN && backendAlive() && !gracefulQuitStarted) {
-    // Give run.py a chance to stop opencode itself; will-quit hard-kills whatever is left.
+    // Give run.py a chance to stop its MCP servers; will-quit hard-kills whatever is left.
     event.preventDefault();
     requestGracefulQuit();
   }

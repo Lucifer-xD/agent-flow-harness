@@ -1,4 +1,4 @@
-"""Tests for afh.transfer. Server-backed tests need `opencode` on PATH and are skipped otherwise."""
+"""Tests for afh.transfer (pure functions and the Zadloop converter)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from afh import transfer as t
 SCRATCH = Path(r"C:\Users\you\AppData\Local\Temp\afh-transfer-test\pytest")
 REAL_DSH = Path.home() / ".dsh" / "sessions"
 
-server = pytest.mark.skipif(shutil.which("opencode") is None, reason="opencode is not on PATH")
 
 
 # ---- fixtures ------------------------------------------------------------------
@@ -237,93 +236,3 @@ def test_real_zadloop_files_convert():
                         assert p["time"] and p["state"]["status"] in ("completed", "error")
 
 
-# ---- server-backed -----------------------------------------------------------------------
-
-
-@pytest.fixture(scope="module")
-def client():
-    from opencode import OpencodeServer
-
-    SCRATCH.mkdir(parents=True, exist_ok=True)
-    with OpencodeServer(cwd=str(SCRATCH), config={}) as srv, srv.client() as c:
-        created: list[str] = []
-        c.afh_created = created  # sessions to delete at teardown
-        yield c
-        for sid in created:
-            try:
-                c.session.remove(sid)
-            except Exception:
-                pass
-
-
-def message_list(client, sid: str) -> list[dict]:
-    return [t.dump(m) for m in islice(client.message.list(sid, order="asc", limit=200), 2000)]
-
-
-@server
-def test_export_import_roundtrip_real_session(client):
-    # An idle top-level session: a live one changes between export and import, a child can't be imported alone.
-    candidates = [s for s in islice(client.session.list(limit=20), 20) if not s.parent_id and s.time and s.time.idle]
-    source = next((s for s in candidates if len(message_list(client, s.id)) >= 2), None)
-    if source is None:
-        pytest.skip("no existing session with messages")
-    payload = t.export_session(client, source.id)
-    assert payload["format"] == t.FORMAT and payload["info"]["id"] == source.id
-    before = message_list(client, source.id)
-
-    imported = t.import_session(client, payload, str(SCRATCH))
-    client.afh_created.append(imported["id"])
-    assert imported["id"] != source.id and imported["id"].startswith("ses_")
-    assert imported["location"]["directory"] == str(SCRATCH) and imported["title"] == payload["info"]["title"]
-    after = message_list(client, imported["id"])
-    assert len(after) == len(before)
-    assert [m["type"] for m in after] == [m["type"] for m in before]
-    assert [m.get("text") for m in after if m["type"] == "user"] == [m.get("text") for m in before if m["type"] == "user"]
-    assert {m["id"] for m in after}.isdisjoint({m["id"] for m in before})
-
-    # Same payload again: the original still exists, so another fresh session is created.
-    again = t.import_session(client, payload, str(SCRATCH))
-    client.afh_created.append(again["id"])
-    assert again["id"] not in (source.id, imported["id"]) and len(message_list(client, again["id"])) == len(before)
-
-
-@server
-def test_import_raw_export_with_foreign_ids_and_metadata(client):
-    payload = raw_export()
-    payload["info"]["id"] = "session-not-opencode"  # Zadloop-style id must be replaced
-    imported = t.import_session(client, payload, str(SCRATCH))
-    client.afh_created.append(imported["id"])
-    assert imported["id"].startswith("ses_") and imported.get("parentID") is None
-    assert imported["metadata"] == {"afh": {"mode": "ask"}} and imported["time"]["created"] == 1700000000000
-    msgs = message_list(client, imported["id"])
-    assert [m["type"] for m in msgs] == ["user", "assistant"]
-    assert msgs[1]["content"][0]["state"]["status"] == "completed"
-
-
-@server
-def test_zadloop_import_keeps_tool_parts(client, tmp_path: Path):
-    real = [s for s in t.list_zadloop_sessions() if REAL_DSH.is_dir()]
-    path = next((s["path"] for s in real if any(
-        p["type"] == "tool" for m in t.zadloop_to_opencode(s["path"])[1] if m["type"] == "assistant" for p in m["content"])), None)
-    path = path or write_zadloop(tmp_path / "s.jsonl.zstd", zadloop_records())
-    payload = t.load_zadloop(path)
-    expected = payload["messages"]
-
-    imported = t.import_session(client, payload, str(SCRATCH))
-    client.afh_created.append(imported["id"])
-    assert imported["title"] == payload["info"]["title"]
-    assert imported["metadata"]["afh"]["importedFrom"] == "zadloop" and imported["metadata"]["afh"]["sourcePath"] == str(path)
-    assert imported["location"]["directory"] == str(SCRATCH)
-
-    msgs = message_list(client, imported["id"])
-    assert [m["type"] for m in msgs] == [m["type"] for m in expected]
-    assert [m["id"] for m in msgs] == [m["id"] for m in expected]  # fresh ids were accepted as-is
-    tools = [p for m in msgs if m["type"] == "assistant" for p in m["content"] if p["type"] == "tool"]
-    want = [p for m in expected if m["type"] == "assistant" for p in m["content"] if p["type"] == "tool"]
-    assert tools and len(tools) == len(want)
-    for got, exp in zip(tools, want):
-        assert got["id"] == exp["id"] and got["name"] == exp["name"]
-        assert got["state"]["status"] == exp["state"]["status"] and got["state"]["input"] == exp["state"]["input"]
-        if exp["state"]["status"] == "completed":
-            assert got["state"]["content"] == exp["state"]["content"]
-    assert [p["type"] for m in msgs for p in m.get("content", [])] == [p["type"] for m in expected for p in m.get("content", [])]

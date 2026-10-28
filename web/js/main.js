@@ -51,37 +51,15 @@ const view = new ChatView($("messages"), $("thread"), {
 
 // ---- boot -----------------------------------------------------------------------
 
-/** First-run help when the OpenCode engine can't start (usually: not installed yet). */
-async function showSetup(message) {
+/** The engine failed to start: show why and offer a retry. */
+function showSetup(message) {
   if (document.querySelector(".setup-box")) return;
-  let info = {};
-  try { info = await api.get("/api/setup"); } catch {}
-  const missing = !info.opencode;
-  $("boot-status").textContent = ""; // the box below explains it better than the raw error
-  const status = el("div", { style: { color: "var(--text-3)", fontSize: "12.5px", minHeight: "18px" } });
-  const box = el("div.setup-box",
-    el("h3", missing ? "One more thing: install OpenCode" : "OpenCode couldn't start"),
-    el("p", missing
-      ? "AFH runs on the open-source OpenCode engine. It's a one-time install (about a minute)."
-      : (message || "").slice(0, 300)),
-    missing && !info.npm ? el("p", el("b", "Node.js is needed first. "), "Download the LTS version from ", el("a", { href: "https://nodejs.org", target: "_blank", rel: "noopener" }, "nodejs.org"), ", install it, then come back and click Retry.") : null,
-    el("div", { style: { display: "flex", gap: "8px", justifyContent: "center", marginTop: "10px", flexWrap: "wrap" } },
-      missing && info.npm ? el("button.btn.primary", { on: { click: async (e) => {
-        e.currentTarget.disabled = true;
-        status.textContent = "Installing OpenCode… this takes about a minute.";
-        try {
-          await api.post("/api/setup/install-opencode");
-          status.textContent = "Installed. Starting…";
-          setTimeout(() => location.reload(), 3000);
-        } catch (err) {
-          status.textContent = err.message;
-          e.currentTarget.disabled = false;
-        }
-      } } }, ico("arrow-down"), "Install OpenCode") : null,
-      el("button.btn", { on: { click: () => location.reload() } }, ico("refresh"), "Retry")),
-    status,
-    el("details", { style: { marginTop: "8px" } }, el("summary", { style: { cursor: "pointer", color: "var(--text-3)", fontSize: "12px" } }, "Technical details"), el("pre.h-pre", { style: { textAlign: "left", maxWidth: "560px" } }, `${message || ""}\n\nopencode: ${info.opencode || "not found"}\nnode: ${info.node || "not found"}\nnpm: ${info.npm || "not found"}`)));
-  $("boot").append(box);
+  $("boot-status").textContent = "";
+  $("boot").append(el("div.setup-box",
+    el("h3", "AFH couldn't start"),
+    el("p", (message || "").slice(0, 300)),
+    el("div", { style: { display: "flex", gap: "8px", justifyContent: "center", marginTop: "10px" } }, el("button.btn", { on: { click: () => location.reload() } }, ico("refresh"), "Retry")),
+    el("details", { style: { marginTop: "8px" } }, el("summary", { style: { cursor: "pointer", color: "var(--text-3)", fontSize: "12px" } }, "Technical details"), el("pre.h-pre", { style: { textAlign: "left", maxWidth: "560px" } }, message || ""))));
 }
 
 function showLogin() {
@@ -122,7 +100,7 @@ async function boot() {
       if (data.error) throw new Error(data.error);
     } catch (e) {
       if (document.querySelector(".login-box")) return; // waiting for the remote password
-      $("boot-status").textContent = `Couldn't start OpenCode: ${e.message}`;
+      $("boot-status").textContent = `Couldn't start the engine: ${e.message}`;
       $("boot-status").classList.add("err");
       if (attempt > 0) return showSetup(e.message);
     }
@@ -133,6 +111,8 @@ async function boot() {
   S.defaultModel = data.defaultModel;
   S.providerNames = data.providerNames || {};
   S.agents = data.agents;
+  S.migration = data.migration || {};
+  S.providersConfigured = !!data.providersConfigured;
   applyAppearance();
   initDelegate(ctx);
   initLive(ctx);
@@ -149,6 +129,7 @@ async function boot() {
   if (last && S.sessions.some((s) => s.id === last)) await openThread(last);
   else showHome();
   $("input").focus();
+  if (!S.providersConfigured) setTimeout(() => openSettings("models", ctx, { onboarding: true }), 400);
 }
 
 export function applyAppearance() {
@@ -258,7 +239,7 @@ function projectMenu() {
   }
   if (S.settings.projects.length) items.push({ sep: true });
   items.push({ title: "Open folder…", icon: "folder-plus", onSelect: chooseFolder });
-  if (project()) items.push({ title: "Import thread…", sub: "From a file, OpenCode or Zadloop", icon: "arrow-down", onSelect: importThread });
+  if (project()) items.push({ title: "Import thread…", sub: "From an export file, OpenCode or Zadloop", icon: "arrow-down", onSelect: importThread });
   if (project()) items.push({ title: "Remove from list", sub: basename(project()), icon: "x", danger: true, onSelect: removeProject });
   popover($("project-picker"), items, { width: 300 });
 }
@@ -394,7 +375,7 @@ async function forkThread(messageId) {
   }
 }
 
-// ---- undo (OpenCode revert) & context editing -----------------------------------------
+// ---- undo (revert) & context editing -----------------------------------------
 
 async function reloadCurrent(id = S.current?.id) {
   if (!id) return;
@@ -615,9 +596,10 @@ function renderHarness(h) {
   const pre = (text, empty) => (text && text.trim() ? el("pre.h-pre", text) : el("div.h-muted", empty));
   const edit = (tab) => el("button.btn.ghost.sm", { on: { click: () => openSettings("prompts", ctx, { agent: h.agent }) } }, ico("edit"), "Edit");
   const out = [
-    el("div.note", "Assembled in this order: agent system prompt → MCP/skill guidance → AGENTS.md files → configured instructions (incl. personalization) → date & environment."),
+    el("div.note", "Assembled in this order: the mode's system prompt → AGENTS.md files → personalization → skills → MCP instructions → date & environment. This is the full text the model receives."),
     sec("Agent · model", el("div", el("span.tag", h.agent), h.model ? el("span.tag", `${h.model.providerID}/${h.model.id}${h.model.variant && h.model.variant !== "default" ? "#" + h.model.variant : ""}`) : el("span.tag", "default model"))),
-    sec("System prompt", pre(h.systemPrompt, `No override — OpenCode's built-in "${h.agent}" prompt for this provider is used.`), edit()),
+    sec("System prompt (exactly as sent)", pre(h.systemPrompt, "Empty."), edit()),
+    sec("Tools available", el("div", (h.tools || []).map((t) => el("span.tag", t)))),
     sec("Personalization", pre(h.personalization, "Nothing set."), el("button.btn.ghost.sm", { on: { click: () => openSettings("personalization", ctx) } }, ico("edit"), "Edit")),
     sec("Global AGENTS.md", pre(h.globalInstructions, "Empty."), edit()),
     sec("Project AGENTS.md", pre(h.projectInstructions, "No AGENTS.md in this project."), edit()),
@@ -908,7 +890,7 @@ function onEvent(ev) {
   const type = ev.type || "";
   if (type === "afh.restarting") {
     restartPill?.remove();
-    restartPill = el("div.restarting", el("span.spinner"), "Applying changes — restarting OpenCode…");
+    restartPill = el("div.restarting", el("span.spinner"), "Applying changes…");
     document.body.append(restartPill);
     $("conn").className = "conn busy";
     return;
@@ -923,7 +905,7 @@ function onEvent(ev) {
   }
   if (type === "afh.error") {
     restartPill?.remove();
-    toast(`OpenCode error: ${ev.data?.message}`, "err", 8000);
+    toast(`Engine error: ${ev.data?.message}`, "err", 8000);
     return;
   }
 

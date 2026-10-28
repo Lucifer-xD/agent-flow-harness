@@ -1,3 +1,3 @@
-"""AFH: an open-source desktop coding agent built on OpenCode."""
+"""Agent Flow Harness: an open-source desktop coding agent with its own engine."""
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"
