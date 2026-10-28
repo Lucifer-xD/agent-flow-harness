@@ -8,7 +8,7 @@ import { openSettings } from "./settings.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
 import {
   ago, basename, closePopover, confirmDialog, contextRing, dayGroup, diffView, el, escapeHtml, fmtTokens,
-  hydrateIcons, ico, icon, popover, promptDialog, toast,
+  hydrateIcons, ico, icon, popover, promptDialog, repositionPopover, toast,
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -105,7 +105,7 @@ function showLogin() {
 async function boot() {
   hydrateIcons();
   $("boot-mark").append(logoNode({ size: 110, working: true }));
-  $("brand").prepend(logoNode({ size: 30 }));
+  $("brand").prepend(logoNode({ size: 30, working: true }));
   $("tb-logo").append(logoNode({ size: 30, working: true }));
   apiHooks.onUnauthorized = () => showLogin();
   if (native.electron()) {
@@ -356,7 +356,7 @@ function showHome() {
     ["Write tests", "Add tests for the parts of this project that have none."],
     ["Review my changes", "Review the uncommitted changes and point out problems."],
   ];
-  root.append(el("div.hero", logoNode({ size: 150 }),
+  root.append(el("div.hero", logoNode({ size: 150, working: true }),
     el("h2", name ? `What are we building, ${name}?` : "What are we building?"),
     el("p", el("span", "in "), el("b", basename(project()))),
     el("div.suggest", ideas.map(([title, text]) => el("button", { type: "button", on: { click: () => { setInput(text); $("input").focus(); } } }, el("b", title), text)))));
@@ -673,6 +673,7 @@ function renderComposerState() {
     ctxm.title = limit ? `Context: ${fmtTokens(used)} of ${fmtTokens(limit)} tokens — click for details` : "Context details";
   } else ctxm.className = "ctx";
 
+  renderTps();
   const hint = $("composer-hint");
   hint.textContent = busy ? "Working… press Esc to stop, or type to queue a follow-up" : project() ? `${MODES[currentMode()].sub} · ${basename(project())}` : "";
   renderAttachments();
@@ -763,7 +764,29 @@ async function contextPopover() {
   } catch (e) {
     box.replaceChildren(el("div.empty-row", e.message));
   }
+  repositionPopover();
 }
+
+// ---- live timer & tokens/s -------------------------------------------------------------
+
+function renderTps() {
+  const t = S.current;
+  const chip = $("tps");
+  if (!t) { chip.className = "tps"; return; }
+  const live = t.busy || S.busy.has(t.id);
+  const rate = live && t.liveTps ? t.liveTps : t.tps;
+  if (!rate) { chip.className = "tps"; return; }
+  chip.className = `tps on${live && t.liveTps ? " live" : ""}`;
+  chip.replaceChildren(el("b", `${Math.round(rate)}`), el("span", live && t.liveTps ? "~tok/s" : "tok/s"));
+  chip.title = live && t.liveTps ? "Estimated while streaming; exact when the step finishes" : "Output tokens per second of the last step (provider token count ÷ streaming time)";
+}
+
+setInterval(() => {
+  const t = S.current;
+  if (!t || !(t.busy || S.busy.has(t.id))) return;
+  view.tick();
+  renderTps();
+}, 1000);
 
 async function chooseModel(ref) {
   if (S.current) await patchSession({ model: ref });
@@ -824,10 +847,14 @@ async function submit() {
       view.mount(thread);
     }
     thread.error = null;
+    thread.busy = true;
+    thread.runStart = Date.now(); // the timer starts the moment you send
+    thread.liveTps = 0;
     S.busy.add(thread.id);
     renderComposerState();
     renderThreads();
     view.stick = true;
+    view.update({ status: true });
     await api.post(`/api/sessions/${thread.id}/prompt`, { text, files });
   } catch (e) {
     toast(e.message, "err");
