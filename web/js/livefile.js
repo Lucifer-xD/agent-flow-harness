@@ -24,35 +24,73 @@ export function onLiveEvent(ev) {
     case "session.tool.input.started": {
       const n = (d.name || "").toLowerCase();
       if (!WRITE.has(n) && !EDIT.has(n)) return;
-      Object.assign(st, { tool: d.id, kind: WRITE.has(n) ? "write" : "edit", raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, scrolledTo: -1, startedAt: Date.now() });
+      Object.assign(st, { tool: d.id, kind: WRITE.has(n) ? "write" : "edit", raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, scrolledTo: -1, startedAt: Date.now(), anim: null, shown: null, streamed: false, replayed: false });
       ctx.openLive();
       schedule();
       break;
     }
     case "session.tool.input.delta":
-      if (d.id === st.tool) { st.raw += d.delta || ""; schedule(); }
+      if (d.id === st.tool) { st.raw += d.delta || ""; st.streamed = true; schedule(); }
       break;
     case "session.tool.input.ended":
-      if (d.id === st.tool && d.text) { st.raw = d.text; schedule(); }
+      if (d.id === st.tool && d.text) {
+        st.raw = d.text;
+        // Most providers don't stream tool arguments through OpenCode: the whole write arrives
+        // here at once. Replay it as a fast typewriter so you still see it happen.
+        if (!st.streamed && !st.replayed) {
+          try { st.input = JSON.parse(d.text); startReplay(); } catch {}
+        }
+        schedule();
+      }
       break;
     case "session.tool.called":
-      if (d.id === st.tool) { st.input = d.input || {}; schedule(); }
+      if (d.id === st.tool) {
+        st.input = d.input || {};
+        if (!st.streamed && !st.replayed) startReplay();
+        schedule();
+      }
       break;
     case "session.tool.success":
     case "session.tool.failed":
       if (d.id === st.tool) {
         st.done = true;
         st.error = ev.type.endsWith("failed") ? d.error?.message || "failed" : null;
-        if (st.filePath) loadFile(st.filePath, true).then(schedule);
+        if (st.filePath && !st.anim) loadFile(st.filePath, true).then(schedule);
         schedule();
       }
       break;
   }
 }
 
+function startReplay() {
+  const i = st.input;
+  const full = st.kind === "write" ? String(i.content ?? "") : String(pickKey(i, "newString", "new_string", "new") ?? "");
+  if (!full) return;
+  st.replayed = true;
+  const seconds = Math.min(8, Math.max(1.2, full.length / 700));
+  const anim = { full, pos: 0, cps: full.length / seconds, last: performance.now() };
+  st.anim = anim;
+  const timer = setInterval(() => {
+    if (st.anim !== anim) return clearInterval(timer); // superseded by a newer tool call
+    const now = performance.now();
+    anim.pos = Math.min(anim.full.length, anim.pos + ((now - anim.last) / 1000) * anim.cps);
+    anim.last = now;
+    st.shown = anim.full.slice(0, Math.floor(anim.pos));
+    if (anim.pos >= anim.full.length) {
+      clearInterval(timer);
+      st.anim = null;
+      st.shown = null;
+      if (st.done && st.filePath) loadFile(st.filePath, true).then(schedule);
+    }
+    schedule();
+  }, 33);
+}
+
+// A timer rather than requestAnimationFrame: rAF stops in hidden/minimized windows and a
+// pending frame would block every later render.
 function schedule() {
   if (st.frame) return;
-  st.frame = requestAnimationFrame(() => { st.frame = 0; ctx.renderLive(); });
+  st.frame = setTimeout(() => { st.frame = 0; ctx.renderLive(); }, 33);
 }
 
 /** Read a JSON string value that may still be streaming. Returns {value, complete} or null. */
@@ -100,7 +138,13 @@ function parse() {
   if (st.input) {
     const i = st.input;
     const s = (v) => (v == null ? null : { value: String(v), complete: true });
-    return { path: pickKey(i, "path", "filePath", "file_path", "file"), content: s(i.content), old: s(pickKey(i, "oldString", "old_string", "old")), new_: s(pickKey(i, "newString", "new_string", "new")) };
+    const replay = st.anim ? { value: st.shown || "", complete: false } : null;
+    return {
+      path: pickKey(i, "path", "filePath", "file_path", "file"),
+      content: st.kind === "write" && replay ? replay : s(i.content),
+      old: s(pickKey(i, "oldString", "old_string", "old")),
+      new_: st.kind === "edit" && replay ? replay : s(pickKey(i, "newString", "new_string", "new")),
+    };
   }
   const raw = st.raw;
   const path = partialString(raw, "path") || partialString(raw, "filePath") || partialString(raw, "file_path");
@@ -136,16 +180,18 @@ export function renderLive(body, titleBox) {
   if (p.path) p.path = absolute(p.path);
   if (p.path && st.filePath !== p.path && !st.loading) loadFile(p.path);
   const name = basename(p.path || "");
-  const verb = st.kind === "write" ? (st.done ? "Wrote" : "Writing") : st.done ? "Edited" : "Editing";
-  titleBox.replaceChildren(logoNode({ size: 26, working: !st.done }), el("span", `${verb} ${name || "…"}`),
-    st.done ? el("span.pill-tag", st.error ? "failed" : "done") : el("span.pill-tag.accent", "live"));
+  const finished = st.done && !st.anim;
+  const verb = st.kind === "write" ? (finished ? "Wrote" : "Writing") : finished ? "Edited" : "Editing";
+  titleBox.replaceChildren(logoNode({ size: 26, working: !finished }), el("span", `${verb} ${name || "…"}`),
+    finished ? el("span.pill-tag", st.error ? "failed" : "done") : el("span.pill-tag.accent", "live"));
 
   let lines = [], marks = new Map(), focus = -1, caret = -1, note = null;
   if (st.kind === "write") {
-    const text = st.done && st.file != null ? st.file : p.content?.value ?? "";
+    const text = finished && st.file != null ? st.file : p.content?.value ?? "";
     lines = text.split("\n");
-    if (!st.done) { caret = lines.length - 1; for (let i = 0; i < lines.length; i++) marks.set(i, "new"); }
-    else for (let i = 0; i < lines.length; i++) marks.set(i, "new");
+    if (!finished) { caret = lines.length - 1; }
+    for (let i = 0; i < lines.length; i++) marks.set(i, "new");
+    if (!p.content && !finished) note = "Preparing the file…";
   } else {
     const file = st.file ?? "";
     const oldS = p.old, newS = p.new_;
@@ -166,9 +212,10 @@ export function renderLive(body, titleBox) {
           focus = startLine;
         } else {
           const mid = newS.value;
-          const text = st.done && st.file != null && st.file.indexOf(mid) >= 0 ? file : before + mid + file.slice(idx + oldS.value.length);
+          const settled = finished && st.file != null && st.file.indexOf(mid) >= 0;
+          const text = settled ? file : before + mid + file.slice(idx + oldS.value.length);
           lines = text.split("\n");
-          const s = (st.done && st.file.indexOf(mid) >= 0 ? file.slice(0, file.indexOf(mid)) : before).split("\n").length - 1;
+          const s = (settled ? file.slice(0, file.indexOf(mid)) : before).split("\n").length - 1;
           const n = mid.split("\n").length;
           for (let i = 0; i < n; i++) marks.set(s + i, "new");
           focus = s;
@@ -189,10 +236,10 @@ export function renderLive(body, titleBox) {
     frag.append(row);
   });
   code.append(frag);
-  body.replaceChildren(head, note ? el("div.live-note", note) : null, code);
+  body.replaceChildren(el("div", head, note ? el("div.live-note", note) : null, code));
   if (st.follow) {
     requestAnimationFrame(() => {
-      if (st.kind === "write" && !st.done) body.scrollTop = body.scrollHeight;
+      if (st.kind === "write" && !finished) body.scrollTop = body.scrollHeight;
       else if (focus >= 0 && st.scrolledTo !== focus) {
         const row = body.querySelector("#live-focus");
         if (row) { body.scrollTop = Math.max(0, row.offsetTop - body.clientHeight / 3); st.scrolledTo = focus; }

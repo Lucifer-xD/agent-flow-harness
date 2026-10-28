@@ -306,9 +306,9 @@ const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name
 
 function pathNode(target) {
   const i = Math.max(target.lastIndexOf("/"), target.lastIndexOf("\\"));
-  if (i < 0) return el("span.step-target", { title: target }, el("span.name", target));
+  if (i < 0) return el("span.tool-target", { title: target }, el("span.name", target));
   const dir = target.slice(0, i + 1).split(/[\\/]/).filter(Boolean).slice(-2).join("/");
-  return el("span.step-target", { title: target }, el("span.dir", dir ? dir + "/" : ""), el("span.name", target.slice(i + 1)));
+  return el("span.tool-target", { title: target }, el("span.dir", dir ? dir + "/" : ""), el("span.name", target.slice(i + 1)));
 }
 
 function renderTool(p, openSet, thread) {
@@ -323,17 +323,19 @@ function renderTool(p, openSet, thread) {
   let stat = null;
   if (patches.length) {
     const [a, r] = patches.reduce((acc, x) => { const [aa, rr] = x.additions != null ? [x.additions, x.deletions] : countPatch(x.patch); return [acc[0] + aa, acc[1] + rr]; }, [0, 0]);
-    stat = el("span.step-stat", el("span.plus", `+${a}`), el("span.minus", `−${r}`));
-  } else if (status === "error") stat = el("span.step-stat.bad", "failed");
-  else if (status === "streaming") stat = el("span.step-stat", "preparing");
+    stat = el("span.tool-stat", el("span.plus", `+${a}`), el("span.minus", `−${r}`));
+  } else if (status === "error") stat = el("span.tool-stat", { style: { color: "var(--bad)" } }, "failed");
+  else if (status === "streaming") stat = el("span.tool-stat", "preparing");
+  else if (status === "running") stat = el("span.tool-stat", "running");
   const target = info.target || "";
-  const targetNode = kind === "edit" || kind === "read" ? pathNode(target) : el("span.step-target", { title: target }, el("span.name.plain", target));
+  const targetNode = kind === "edit" || kind === "read" ? pathNode(target) : el("span.tool-target", { title: target }, target);
 
-  const step = el(`div.step.${kind}.${status}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
-  const head = el("button.step-head", { type: "button", on: { click: () => { step.classList.toggle("open"); openSet[step.classList.contains("open") ? "add" : "delete"](p.id); } } },
-    el("span.step-node", live ? el("span.spinner") : ico(status === "error" ? "alert" : info.icon)),
-    el("span.step-verb", live ? verbs[1] : verbs[0]),
-    targetNode, stat, el("span.chev", { html: icon("chev-down") }));
+  // The card style: icon tile, verb, target, outcome — expandable.
+  const card = el(`div.tool.${kind}.${status}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
+  const head = el("button.tool-head", { type: "button", on: { click: () => { card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
+    el("span.tool-ico", live ? el("span.spinner") : ico(status === "error" ? "alert" : info.icon)),
+    el("span.tool-name", live ? verbs[1] : verbs[0]),
+    targetNode, stat);
   const sections = [];
   if (patches.length) for (const x of patches) sections.push(el("div.tool-section", patches.length > 1 ? el("div.tool-section-label", basename(x.file)) : null, diffView(x.patch)));
   else {
@@ -344,8 +346,8 @@ function renderTool(p, openSet, thread) {
   const out = toolText(p.state?.content);
   if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output"), el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + "\n…" : out)));
   if (p.state?.error) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", p.state.error.message || JSON.stringify(p.state.error))));
-  step.append(head, el("div.step-body", el("div", el("div.step-box", sections))));
-  return step;
+  card.append(head, el("div.tool-body", el("div", sections)));
+  return card;
 }
 
 // ---- view -----------------------------------------------------------------------
@@ -564,13 +566,7 @@ export class ChatView {
         if (p.live && p === lastText) md.lastElementChild ? md.lastElementChild.classList.add("caret") : md.classList.add("caret");
         parts.push(md);
       } else if (p.type === "tool") {
-        const node = renderTool(p, this.openTools, this.thread);
-        if (node.classList.contains("step")) {
-          // consecutive steps share one rail
-          let group = parts[parts.length - 1];
-          if (!(group instanceof HTMLElement) || !group.classList.contains("steps")) { group = el("div.steps"); parts.push(group); }
-          group.append(node);
-        } else parts.push(node);
+        parts.push(renderTool(p, this.openTools, this.thread));
       }
     }
     const stopped = m.stopped || isStop(m.error);
