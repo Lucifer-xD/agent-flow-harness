@@ -237,6 +237,22 @@ def get_agents():
     return agents_payload()
 
 
+# ---- files (for the live view) ---------------------------------------------------------
+
+
+@app.get("/api/files/read")
+def file_read(path: str):
+    """Read a file inside one of the user's project folders (for the Live pane)."""
+    target = Path(path).expanduser().resolve()
+    roots = [Path(p).resolve() for p in store.load_settings().get("projects", [])]
+    if not any(target == r or r in target.parents for r in roots):
+        raise ValueError("That file is outside your project folders")
+    if not target.is_file():
+        return {"content": None, "exists": False}
+    data = target.read_bytes()[:2_000_000]
+    return {"content": data.decode("utf-8", "replace"), "exists": True, "size": target.stat().st_size}
+
+
 # ---- sessions ------------------------------------------------------------------
 
 

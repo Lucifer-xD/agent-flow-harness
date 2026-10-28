@@ -82,12 +82,14 @@ export function applyEvent(t, ev) {
     case "session.inbox.delivered": {
       const m = t.byId.get(d.inboxID);
       if (m) m.pending = false;
-      return null;
+      t.phase = "delivered";
+      return { status: true };
     }
     case "session.execution.started":
       t.busy = true;
       t.error = null;
       t.runStart = t.runStart || Date.now();
+      if (t.phase !== "working") t.phase = "delivered";
       return { status: true };
     case "session.execution.succeeded":
     case "session.execution.interrupted":
@@ -108,7 +110,8 @@ export function applyEvent(t, ev) {
     case "session.step.started": {
       const m = assistant(t, d.assistantMessageID, d);
       m.startedAt = d.started || Date.now();
-      return { all: true };
+      t.phase = "working"; // the model has the request and is producing the reply
+      return { all: true, status: true };
     }
     case "session.step.failed": {
       const m = assistant(t, d.assistantMessageID);
@@ -292,37 +295,57 @@ export function toolText(content) {
 /** Renderers other modules plug in: hooks.delegation(part, {thread, open}) draws `subagent` calls. */
 export const hooks = {};
 
+// Activity timeline: each tool call is a step on a rail — verb, target, outcome — expandable.
+const VERBS = {
+  write: ["Wrote", "Writing"], edit: ["Edited", "Editing"], multiedit: ["Edited", "Editing"], patch: ["Patched", "Patching"], apply_patch: ["Patched", "Patching"],
+  shell: ["Ran", "Running"], bash: ["Ran", "Running"], execute: ["Ran code", "Running code"], read: ["Read", "Reading"], glob: ["Found files", "Finding files"],
+  grep: ["Searched", "Searching"], list: ["Listed", "Listing"], ls: ["Listed", "Listing"], webfetch: ["Fetched", "Fetching"], websearch: ["Searched the web", "Searching the web"],
+  skill: ["Loaded skill", "Loading skill"], question: ["Asked", "Asking"], todowrite: ["Planned", "Planning"], todoread: ["Checked plan", "Checking plan"],
+};
+const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name) ? "edit" : /^(shell|bash|execute)$/.test(name) ? "run" : /^(read|glob|grep|list|ls)$/.test(name) ? "read" : /web|fetch/.test(name) ? "web" : "other");
+
+function pathNode(target) {
+  const i = Math.max(target.lastIndexOf("/"), target.lastIndexOf("\\"));
+  if (i < 0) return el("span.step-target", { title: target }, el("span.name", target));
+  const dir = target.slice(0, i + 1).split(/[\\/]/).filter(Boolean).slice(-2).join("/");
+  return el("span.step-target", { title: target }, el("span.dir", dir ? dir + "/" : ""), el("span.name", target.slice(i + 1)));
+}
+
 function renderTool(p, openSet, thread) {
-  if ((p.name || "").toLowerCase() === "subagent" && hooks.delegation) return hooks.delegation(p, { thread, open: openSet });
+  const name = (p.name || "tool").toLowerCase();
+  if (name === "subagent" && hooks.delegation) return hooks.delegation(p, { thread, open: openSet });
   const info = describeTool(p);
   const status = p.state?.status || "streaming";
   const live = status === "streaming" || status === "running";
+  const kind = kindOf(name);
+  const verbs = VERBS[name] || [p.name, p.name];
   const patches = info.edit ? toolPatches(p) : [];
   let stat = null;
   if (patches.length) {
     const [a, r] = patches.reduce((acc, x) => { const [aa, rr] = x.additions != null ? [x.additions, x.deletions] : countPatch(x.patch); return [acc[0] + aa, acc[1] + rr]; }, [0, 0]);
-    stat = el("span.tool-stat", el("span.plus", `+${a}`), el("span.minus", `−${r}`));
-  } else if (status === "error") stat = el("span.tool-stat", "failed");
-  else if (live) stat = el("span.tool-stat", status === "streaming" ? "preparing" : "running");
+    stat = el("span.step-stat", el("span.plus", `+${a}`), el("span.minus", `−${r}`));
+  } else if (status === "error") stat = el("span.step-stat.bad", "failed");
+  else if (status === "streaming") stat = el("span.step-stat", "preparing");
+  const target = info.target || "";
+  const targetNode = kind === "edit" || kind === "read" ? pathNode(target) : el("span.step-target", { title: target }, el("span.name.plain", target));
 
-  const card = el(`div.tool.${status}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
-  const head = el("button.tool-head", { type: "button", on: { click: () => { card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
-    el("span.tool-ico", live ? el("span.spinner") : ico(info.icon)),
-    el("span.tool-name", info.label),
-    el("span.tool-target", { title: info.target }, info.target),
-    stat);
+  const step = el(`div.step.${kind}.${status}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
+  const head = el("button.step-head", { type: "button", on: { click: () => { step.classList.toggle("open"); openSet[step.classList.contains("open") ? "add" : "delete"](p.id); } } },
+    el("span.step-node", live ? el("span.spinner") : ico(status === "error" ? "alert" : info.icon)),
+    el("span.step-verb", live ? verbs[1] : verbs[0]),
+    targetNode, stat, el("span.chev", { html: icon("chev-down") }));
   const sections = [];
   if (patches.length) for (const x of patches) sections.push(el("div.tool-section", patches.length > 1 ? el("div.tool-section-label", basename(x.file)) : null, diffView(x.patch)));
   else {
     const input = p.state?.input;
-    const inputText = typeof input === "string" ? input : input && Object.keys(input).length ? (info.label === "Run" ? pick(input, "command", "cmd") : JSON.stringify(input, null, 2)) : "";
-    if (inputText) sections.push(el("div.tool-section", el("div.tool-section-label", "Input"), el("pre.tool-pre", inputText)));
+    const inputText = typeof input === "string" ? input : input && Object.keys(input).length ? (kind === "run" ? pick(input, "command", "cmd") : JSON.stringify(input, null, 2)) : "";
+    if (inputText) sections.push(el("div.tool-section", el("div.tool-section-label", kind === "run" ? "Command" : "Input"), el("pre.tool-pre", inputText)));
   }
   const out = toolText(p.state?.content);
   if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output"), el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + "\n…" : out)));
   if (p.state?.error) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", p.state.error.message || JSON.stringify(p.state.error))));
-  card.append(head, el("div.tool-body", el("div", sections)));
-  return card;
+  step.append(head, el("div.step-body", el("div", el("div.step-box", sections))));
+  return step;
 }
 
 // ---- view -----------------------------------------------------------------------
@@ -428,7 +451,7 @@ export class ChatView {
     for (const p of m.content) {
       if (p.type === "tool") {
         if (p.state?.status !== "streaming") continue;
-        const pre = node.querySelector(`.tool[data-tool="${p.id}"] .tool-pre`);
+        const pre = node.querySelector(`[data-tool="${p.id}"] .tool-pre`);
         if (!pre) return false;
         pre.textContent = p.state.input;
       } else if (p.live) {
@@ -541,7 +564,13 @@ export class ChatView {
         if (p.live && p === lastText) md.lastElementChild ? md.lastElementChild.classList.add("caret") : md.classList.add("caret");
         parts.push(md);
       } else if (p.type === "tool") {
-        parts.push(renderTool(p, this.openTools, this.thread));
+        const node = renderTool(p, this.openTools, this.thread);
+        if (node.classList.contains("step")) {
+          // consecutive steps share one rail
+          let group = parts[parts.length - 1];
+          if (!(group instanceof HTMLElement) || !group.classList.contains("steps")) { group = el("div.steps"); parts.push(group); }
+          group.append(node);
+        } else parts.push(node);
       }
     }
     const stopped = m.stopped || isStop(m.error);
@@ -589,8 +618,10 @@ export class ChatView {
     // Sent but nothing streaming yet: show the mark at work with a running timer right away.
     const streaming = t.messages.some((m) => m.type === "assistant" && m.live && m.content.length);
     if ((t.busy || t.runStart) && !streaming && !t.error) {
+      const model = this.opts.modelName(t.session.model) || "the model";
+      const label = t.phase === "working" ? `${model} is working` : t.phase === "delivered" ? `Delivered · waiting for ${model}` : "Sending your message";
       this.statusBox.append(el("div.msg.assistant.pending", { style: { animation: "none" } }, el("div.avatar", this.opts.avatar ? this.opts.avatar(true) : null),
-        el("div.msg-body", el("div.pending-row", el("span.lbl", "Thinking"), el("span.timer", { dataset: { start: String(t.runStart || Date.now()) } }, fmtDur(Date.now() - (t.runStart || Date.now())))))));
+        el("div.msg-body", el("div.pending-row", el("span.lbl", label), el("span.timer", { dataset: { start: String(t.runStart || Date.now()) } }, fmtDur(Date.now() - (t.runStart || Date.now())))))));
     }
     if (t.retry) {
       const err = t.retry.error || {};
