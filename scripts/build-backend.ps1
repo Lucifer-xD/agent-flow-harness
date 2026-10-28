@@ -58,7 +58,8 @@ $PyArgs = @(
     '--add-data', "$WebDir;web",
     # our own package + the MCP SDK (2.x: mcp, mcp_types, httpx2 are separate distributions)
     '--collect-submodules', 'afh',
-    '--collect-submodules', 'mcp',
+    '--collect-submodules', 'mcp.client',
+    '--collect-submodules', 'mcp.shared',
     '--collect-submodules', 'mcp_types',
     '--collect-submodules', 'httpx2',
     '--collect-submodules', 'httpx',
