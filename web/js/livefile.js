@@ -7,7 +7,7 @@ import { logoNode } from "./logo.js";
 import { basename, el, ico, toggle } from "./ui.js";
 
 let ctx = null;
-const st = { tool: null, kind: null, raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, follow: true, frame: 0, scrolledTo: -1, startedAt: 0 };
+const st = { tool: null, kind: null, raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, follow: true, frame: 0, scrolledTo: -1, startedAt: 0, pace: null };
 export const liveState = st;
 
 export function initLive(c) {
@@ -24,67 +24,72 @@ export function onLiveEvent(ev) {
     case "session.tool.input.started": {
       const n = (d.name || "").toLowerCase();
       if (!WRITE.has(n) && !EDIT.has(n)) return;
-      Object.assign(st, { tool: d.id, kind: WRITE.has(n) ? "write" : "edit", raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, scrolledTo: -1, startedAt: Date.now(), anim: null, shown: null, streamed: false, replayed: false });
+      Object.assign(st, { tool: d.id, kind: WRITE.has(n) ? "write" : "edit", raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, scrolledTo: -1, startedAt: Date.now() });
+      startPacing();
       ctx.openLive();
       schedule();
       break;
     }
     case "session.tool.input.delta":
-      if (d.id === st.tool) { st.raw += d.delta || ""; st.streamed = true; schedule(); }
+      if (d.id === st.tool) { st.raw += d.delta || ""; schedule(); }
       break;
     case "session.tool.input.ended":
-      if (d.id === st.tool && d.text) {
-        st.raw = d.text;
-        // Fallback when a provider sends the whole tool call at once: the write arrives
-        // here at once. Replay it as a fast typewriter so you still see it happen.
-        if (!st.streamed && !st.replayed) {
-          try { st.input = JSON.parse(d.text); startReplay(); } catch {}
-        }
-        schedule();
-      }
+      if (d.id === st.tool && d.text) { st.raw = d.text; schedule(); }
       break;
     case "session.tool.called":
-      if (d.id === st.tool) {
-        st.input = d.input || {};
-        if (!st.streamed && !st.replayed) startReplay();
-        schedule();
-      }
+      if (d.id === st.tool) { st.input = d.input || {}; schedule(); }
       break;
     case "session.tool.success":
     case "session.tool.failed":
       if (d.id === st.tool) {
         st.done = true;
         st.error = ev.type.endsWith("failed") ? d.error?.message || "failed" : null;
-        if (st.filePath && !st.anim) loadFile(st.filePath, true).then(schedule);
         schedule();
       }
       break;
   }
 }
 
-function startReplay() {
-  const i = st.input;
-  const full = st.kind === "write" ? String(i.content ?? "") : String(pickKey(i, "newString", "new_string", "new") ?? "");
-  if (!full) return;
-  st.replayed = true;
-  const seconds = Math.min(8, Math.max(1.2, full.length / 700));
-  const anim = { full, pos: 0, cps: full.length / seconds, last: performance.now() };
-  st.anim = anim;
+// The model's text can arrive faster than anyone can watch (a whole file in two seconds), or
+// all at once when a provider doesn't stream tool arguments. Either way the pane types it out
+// at a readable pace and only lags the model by a second or two: the rate rises with the backlog.
+const MIN_CPS = 260; // ~a line every third of a second
+const CATCH_UP_SECONDS = 2.0;
+
+function startPacing() {
+  const pace = { full: "", pos: 0, last: performance.now(), settled: false };
+  st.pace = pace;
   const timer = setInterval(() => {
-    if (st.anim !== anim) return clearInterval(timer); // superseded by a newer tool call
+    if (st.pace !== pace) return clearInterval(timer); // superseded by a newer tool call
     const now = performance.now();
-    anim.pos = Math.min(anim.full.length, anim.pos + ((now - anim.last) / 1000) * anim.cps);
-    anim.last = now;
-    st.shown = anim.full.slice(0, Math.floor(anim.pos));
-    if (anim.pos >= anim.full.length) {
+    const dt = (now - pace.last) / 1000;
+    pace.last = now;
+    const remaining = pace.full.length - pace.pos;
+    if (remaining > 0) {
+      const cps = Math.max(MIN_CPS, remaining / CATCH_UP_SECONDS);
+      pace.pos = Math.min(pace.full.length, pace.pos + dt * cps);
+      schedule();
+    } else if (st.done && !pace.settled) {
+      // Everything the model sent is on screen and the tool has finished: show the real file.
+      pace.settled = true;
       clearInterval(timer);
-      st.anim = null;
-      st.shown = null;
-      if (st.done && st.filePath) loadFile(st.filePath, true).then(schedule);
+      if (st.filePath) loadFile(st.filePath, true).then(schedule); else schedule();
     }
-    schedule();
   }, 33);
 }
+
+/** The part of `value` that has been typed out so far. */
+function paced(value) {
+  const pace = st.pace;
+  if (!pace || value == null) return value;
+  if (pace.full !== value) {
+    if (!value.startsWith(pace.full)) pace.pos = Math.min(pace.pos, value.length); // text was replaced, not extended
+    pace.full = value;
+  }
+  return value.slice(0, Math.floor(pace.pos));
+}
+
+const caughtUp = () => !st.pace || st.pace.pos >= st.pace.full.length;
 
 // A timer rather than requestAnimationFrame: rAF stops in hidden/minimized windows and a
 // pending frame would block every later render.
@@ -135,24 +140,28 @@ function absolute(path) {
 }
 
 function parse() {
+  const typed = (v) => {
+    if (!v) return v;
+    const shown = paced(v.value);
+    return { value: shown, complete: v.complete && shown.length >= v.value.length };
+  };
   if (st.input) {
     const i = st.input;
     const s = (v) => (v == null ? null : { value: String(v), complete: true });
-    const replay = st.anim ? { value: st.shown || "", complete: false } : null;
     return {
       path: pickKey(i, "path", "filePath", "file_path", "file"),
-      content: st.kind === "write" && replay ? replay : s(i.content),
+      content: st.kind === "write" ? typed(s(i.content)) : s(i.content),
       old: s(pickKey(i, "oldString", "old_string", "old")),
-      new_: st.kind === "edit" && replay ? replay : s(pickKey(i, "newString", "new_string", "new")),
+      new_: st.kind === "edit" ? typed(s(pickKey(i, "newString", "new_string", "new"))) : s(pickKey(i, "newString", "new_string", "new")),
     };
   }
   const raw = st.raw;
   const path = partialString(raw, "path") || partialString(raw, "filePath") || partialString(raw, "file_path");
   return {
     path: path?.complete ? path.value : null,
-    content: partialString(raw, "content"),
+    content: st.kind === "write" ? typed(partialString(raw, "content")) : partialString(raw, "content"),
     old: partialString(raw, "oldString") || partialString(raw, "old_string"),
-    new_: partialString(raw, "newString") || partialString(raw, "new_string"),
+    new_: st.kind === "edit" ? typed(partialString(raw, "newString") || partialString(raw, "new_string")) : (partialString(raw, "newString") || partialString(raw, "new_string")),
   };
 }
 
@@ -180,7 +189,7 @@ export function renderLive(body, titleBox) {
   if (p.path) p.path = absolute(p.path);
   if (p.path && st.filePath !== p.path && !st.loading) loadFile(p.path);
   const name = basename(p.path || "");
-  const finished = st.done && !st.anim;
+  const finished = st.done && caughtUp() && (st.pace?.settled ?? true);
   const verb = st.kind === "write" ? (finished ? "Wrote" : "Writing") : finished ? "Edited" : "Editing";
   titleBox.replaceChildren(logoNode({ size: 26, working: !finished }), el("span", `${verb} ${name || "…"}`),
     finished ? el("span.pill-tag", st.error ? "failed" : "done") : el("span.pill-tag.accent", "live"));
