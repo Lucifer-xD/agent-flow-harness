@@ -128,6 +128,8 @@ def c():
 def bootstrap():
     settings = store.load_settings()
     out = {"version": __version__, "settings": settings, "ready": engine.ready.is_set(), "error": engine.error}
+    if engine.error:  # the engine failed to start (e.g. OpenCode missing): answer at once so the UI can help
+        return out
     if engine.ready.wait(timeout=60):
         out.update(models_payload(), agents=agents_payload(), ready=True)
     return out
