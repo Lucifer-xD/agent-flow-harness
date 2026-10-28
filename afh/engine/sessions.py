@@ -154,15 +154,21 @@ class Store:
             self.db.execute("DELETE FROM snapshot WHERE session_id=? AND seq>=?", (sid, seq))
 
     def replace_messages(self, sid: str, messages: list[dict]) -> None:
-        """Context editing: rewrite the whole history (snapshots are kept by seq, so they stay valid only for untouched prefixes)."""
+        """Context editing: rewrite the whole history. Undo snapshots follow the messages that
+        survive (re-numbered to their new position); snapshots of removed messages are dropped."""
         with self.lock:
             self.db.execute("DELETE FROM message WHERE session_id=?", (sid,))
-            self.db.execute("DELETE FROM snapshot WHERE session_id=?", (sid,))
             for i, m in enumerate(messages, start=1):
                 m.setdefault("id", new_id("msg"))
                 m.setdefault("time", {"created": now_ms()})
                 self.db.execute("INSERT INTO message(id, session_id, seq, type, data, created) VALUES (?,?,?,?,?,?)",
                                 (m["id"], sid, i, m.get("type", "user"), _j(m), m["time"].get("created", now_ms())))
+            new_seq = {m["id"]: i for i, m in enumerate(messages, start=1)}
+            for r in self.db.execute("SELECT id, message_id FROM snapshot WHERE session_id=?", (sid,)).fetchall():
+                if r["message_id"] in new_seq:
+                    self.db.execute("UPDATE snapshot SET seq=? WHERE id=?", (new_seq[r["message_id"]], r["id"]))
+                else:
+                    self.db.execute("DELETE FROM snapshot WHERE id=?", (r["id"],))
 
     # ---- snapshots (undo) -------------------------------------------------------------
 
