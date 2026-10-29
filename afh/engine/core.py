@@ -788,7 +788,10 @@ class Engine:
 
         The trigger is the real size of what would be sent (an imported thread can be millions of
         tokens before the model ever answered), not just the last step's token count."""
-        msgs = self.store.list_messages(session["id"])
+        from .runner import live_start
+
+        everything = self.store.list_messages(session["id"])
+        msgs = everything[live_start(everything):]  # what the model sees now: the last summary onward
         try:
             ref = self.model_ref_for(session, agent)
             _, model = self.resolve_model(ref)
@@ -830,10 +833,13 @@ class Engine:
         if goal and goal.get("status") in ("active", "blocked"):
             extra.append(f"The thread's goal (still {goal['status']}): {goal['text']}")
         text = summary.strip() + ("\n\n" + "\n\n".join(extra) if extra else "")
+        compacted = sum(1 for m in old if m.get("type") != "compaction")
         compaction = {"id": new_id("msg"), "type": "compaction", "text": text, "time": {"created": now_ms()},
-                      "metadata": {"compacted": len(old), "auto": not force}}
-        self.store.replace_messages(session["id"], [compaction, *keep])
-        self.publish(event("session.compaction.ended", session["id"], compacted=len(old)))
+                      "metadata": {"compacted": compacted, "auto": not force}}
+        # Nothing is deleted: the summary goes in where it happened, before the messages it keeps.
+        # The model reads from the summary on; the user still sees every message above it.
+        self.store.insert_before(session["id"], keep[0]["id"], compaction)
+        self.publish(event("session.compaction.ended", session["id"], compacted=compacted))
         return True
 
     async def summarize_history(self, sid: str, ref: dict, model: ModelInfo, old: list[dict]) -> str:
