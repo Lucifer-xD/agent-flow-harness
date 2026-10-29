@@ -28,7 +28,7 @@
   </header>
 
   <section class="docs-hero">
-    <p class="eyebrow"><span class="dot"></span> API v1 · AFH <span data-version>1.7.5</span></p>
+    <p class="eyebrow"><span class="dot"></span> API v1 · AFH <span data-version>1.8.0</span></p>
     <h1 class="display"><span class="grad-text">Build on AFH.</span></h1>
     <p class="lead">Everything the app does is a local HTTP API. Start an agent from a script, a git hook or CI, stream what it does live, and schedule work for later — with one key and a few lines of Python or JavaScript.</p>
     <div class="cta-row">
@@ -127,7 +127,7 @@ console.log(result.reply);</code></pre></div>
         <p>AFH picks a free port each time it starts and writes where it is to a discovery file while it runs:</p>
         <div class="code" data-lang="~/.afh/api.json"><pre><code>{
   "url": "http://127.0.0.1:53817",
-  "version": "1.7.5",
+  "version": "1.8.0",
   "pid": 18244,
   "started": 1793270000000
 }</code></pre></div>
@@ -225,6 +225,7 @@ console.log(result.reply);</code></pre></div>
           <tr><td><span class="m get">GET</span></td><td><code>/api/sessions/{id}/permissions</code></td><td>Waiting requests: <code>[{id, action, resources, metadata}]</code>.</td></tr>
           <tr><td><span class="m post">POST</span></td><td><code>/api/sessions/{id}/permissions/{requestID}</code></td><td>Answer with <code>{decision, message?}</code>: <code>once</code>, <code>always</code> (this kind of action, for the rest of the thread) or <code>reject</code> (the message tells the agent why).</td></tr>
         </table>
+        <p>When the agent asks you questions, the request's <code>action</code> is <code>question</code> and <code>metadata.questions</code> holds them. Answer with <code>{decision: "answer", answers: [{selected: ["label", …], other: "free text"}, …]}</code> — one entry per question — or <code>{decision: "dismiss"}</code> to let it decide on its own.</p>
       </section>
 
       <!-- events -->
@@ -301,6 +302,8 @@ console.log(result.reply);</code></pre></div>
           <tr><td><code>todos(id)</code> · <code>set_todos(id, todos)</code> · <code>goal(id)</code> · <code>set_goal(id, text, criteria="", autopilot=True, start=False)</code></td><td>Plans and goals.</td></tr>
           <tr><td><code>diff(id)</code> · <code>usage(id)</code></td><td>What changed, what it cost.</td></tr>
           <tr><td><code>approvals(id)</code> · <code>approve(id, request_id, decision="once")</code></td><td>Answer approval requests.</td></tr>
+          <tr><td><code>answer(id, request_id, answers)</code> · <code>skip_questions(id, request_id)</code></td><td>Answer the agent's question cards: one label, a list of labels, or <code>{"selected": [...], "other": "..."}</code> per question.</td></tr>
+          <tr><td><code>providers()</code> · <code>add_provider(catalog, api_key, *, params)</code> · <code>test_provider(id)</code></td><td>List the 220+ providers AFH can use, connect one with a key, check it works.</td></tr>
           <tr><td><code>schedules()</code> · <code>save_schedule(job)</code> · <code>run_schedule(id)</code> · <code>delete_schedule(id)</code></td><td>Scheduled jobs.</td></tr>
           <tr><td><code>models()</code></td><td>Available models.</td></tr>
           <tr><td><code>events(session_id=None)</code></td><td>Generator of live events, optionally for one thread.</td></tr>
@@ -317,7 +320,9 @@ console.log(result.reply);</code></pre></div>
           <tr><td><code>run(prompt, { directory, sessionID, model, agent, mode, wait, timeout })</code></td><td>Do a task and wait for the answer.</td></tr>
           <tr><td><code>sessions</code> · <code>session</code> · <code>messages</code> · <code>createSession</code> · <code>prompt</code> · <code>reply</code> · <code>interrupt</code> · <code>deleteSession</code></td><td>Threads.</td></tr>
           <tr><td><code>todos</code> · <code>setTodos</code> · <code>goal</code> · <code>setGoal</code> · <code>diff</code> · <code>usage</code></td><td>Plans, goals, changes.</td></tr>
-          <tr><td><code>approvals</code> · <code>approve</code> · <code>schedules</code> · <code>saveSchedule</code> · <code>runSchedule</code> · <code>deleteSchedule</code> · <code>models</code></td><td>The rest.</td></tr>
+          <tr><td><code>approvals</code> · <code>approve</code> · <code>answer</code> · <code>skipQuestions</code></td><td>Approvals and question cards.</td></tr>
+          <tr><td><code>providers</code> · <code>addProvider</code> · <code>testProvider</code> · <code>models</code></td><td>Providers and models.</td></tr>
+          <tr><td><code>schedules</code> · <code>saveSchedule</code> · <code>runSchedule</code> · <code>deleteSchedule</code></td><td>Scheduled jobs.</td></tr>
           <tr><td><code>for await (const ev of afh.events(sessionID))</code></td><td>Live events.</td></tr>
         </table>
       </section>

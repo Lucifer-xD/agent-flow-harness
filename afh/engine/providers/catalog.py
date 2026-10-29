@@ -7,6 +7,9 @@ no reasoning flag). The heuristics here are only fallbacks for ids we have never
 
 from __future__ import annotations
 
+import os
+import re
+
 import httpx
 
 from afh.engine.types import ModelInfo, Provider, ProviderConfig
@@ -62,6 +65,18 @@ KNOWN: dict[str, dict] = {
         "env": ["OPENROUTER_API_KEY"], "docs": "https://openrouter.ai/docs/api-reference/overview",
         "headers": {"X-Title": "Agent Flow Harness"},
         "extra": {"effort_style": "openrouter"},  # ``{"reasoning": {"effort": ...}}``
+        "login": "openrouter",  # sign in with the browser, or paste a key
+    },
+    # Sign-in only (engine/auth.py): a subscription pays, there is no API key to paste.
+    "chatgpt": {
+        "name": "ChatGPT (Plus / Pro / Team)", "kind": "responses", "base_url": "https://chatgpt.com/backend-api/codex",
+        "env": [], "docs": "https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan",
+        "extra": {"effort_map": {"max": "high"}}, "login": "chatgpt", "login_only": True, "needs_key": False,
+    },
+    "github-copilot": {
+        "name": "GitHub Copilot", "kind": "openai", "base_url": "https://api.githubcopilot.com",
+        "env": [], "docs": "https://docs.github.com/en/copilot", "extra": {"max_tokens_param": "max_tokens"},
+        "fetch_models": False, "login": "copilot", "login_only": True, "needs_key": False,
     },
     "mistral": {
         "name": "Mistral", "kind": "openai", "base_url": "https://api.mistral.ai/v1",
@@ -101,6 +116,103 @@ KNOWN: dict[str, dict] = {
         "needs_key": False, "custom_url": True,
     },
 }
+
+# ---- every other provider, generated from models.dev ---------------------------------------
+# models.dev lists ~230 providers with their endpoint and models. Those that speak a protocol AFH
+# has an adapter for become catalog entries too; KNOWN's hand-tuned entries win on a clash.
+
+# models.dev ids that are the same service as a KNOWN entry.
+DEV_ALIASES: dict[str, str] = {
+    "google": "gemini", "togetherai": "together", "fireworks-ai": "fireworks", "moonshotai": "moonshot",
+    "zai-coding-plan": "zai-coding", "kimi-code-plan-global": "kimi", "lmstudio": "lmstudio", "ollama": "ollama",
+}
+
+# Endpoints for providers models.dev lists by SDK package only (no "api" URL).
+DEV_URLS: dict[str, str] = {
+    "cohere": "https://api.cohere.ai/compatibility/v1", "deepinfra": "https://api.deepinfra.com/v1/openai",
+    "venice": "https://api.venice.ai/api/v1", "aihubmix": "https://aihubmix.com/v1", "vercel": "https://ai-gateway.vercel.sh/v1",
+}
+
+# Endpoints that need account details: each ${VAR} becomes a field in the setup form.
+DEV_TEMPLATES: dict[str, dict] = {
+    "azure": {"url": "https://${AZURE_RESOURCE_NAME}.openai.azure.com/openai/v1", "key_env": ["AZURE_API_KEY"],
+              "extra": {"auth_header": "api-key", "auth_prefix": ""}, "hint": "Model ids are your deployment names."},
+    "azure-cognitive-services": {"url": "https://${AZURE_COGNITIVE_SERVICES_RESOURCE_NAME}.cognitiveservices.azure.com/openai/v1",
+                                 "key_env": ["AZURE_COGNITIVE_SERVICES_API_KEY"], "extra": {"auth_header": "api-key", "auth_prefix": ""}},
+    "amazon-bedrock": {"url": "https://bedrock-runtime.${AWS_REGION}.amazonaws.com/openai/v1", "key_env": ["AWS_BEARER_TOKEN_BEDROCK"],
+                       "defaults": {"AWS_REGION": "us-east-1"}, "hint": "Use a Bedrock API key (bearer token)."},
+    "cloudflare-ai-gateway": {"url": "https://gateway.ai.cloudflare.com/v1/${CLOUDFLARE_ACCOUNT_ID}/${CLOUDFLARE_GATEWAY_ID}/compat",
+                              "key_env": ["CLOUDFLARE_API_TOKEN"], "extra": {"auth_header": "cf-aig-authorization"}},
+}
+
+# Providers that need an SDK, a cloud credential file or a protocol AFH does not speak.
+DEV_UNSUPPORTED = {"qvac", "salad-cloud", "gitlab", "watsonx", "sap-ai-core", "google-vertex", "google-vertex-anthropic", "merge-gateway", "github-copilot"}
+
+_KIND_BY_NPM = {"@ai-sdk/anthropic": "anthropic", "@ai-sdk/google": "gemini"}
+_VAR = re.compile(r"\$\{([A-Z0-9_]+)\}")
+_PARAM_LABELS = {"ID": "ID", "URL": "URL", "AWS": "AWS", "AI": "AI", "PAT": "PAT"}
+_entries_cache: tuple[int, dict[str, dict]] | None = None
+
+
+def param_label(var: str, provider_id: str) -> str:
+    """``CLOUDFLARE_ACCOUNT_ID`` for cloudflare-workers-ai → ``Account ID``."""
+    drop = set(provider_id.upper().split("-"))
+    words = var.split("_")
+    while len(words) > 1 and words[0] in drop:
+        words = words[1:]
+    return " ".join(_PARAM_LABELS.get(w, w.capitalize()) for w in words)
+
+
+def _generated(dev_id: str, p: dict) -> dict | None:
+    if dev_id in DEV_UNSUPPORTED or dev_id in KNOWN or dev_id in DEV_ALIASES:
+        return None
+    tpl = DEV_TEMPLATES.get(dev_id, {})
+    url = tpl.get("url") or p.get("api") or DEV_URLS.get(dev_id)
+    if not url:
+        return None
+    npm = p.get("npm") or ""
+    kind = _KIND_BY_NPM.get(npm, "openai")
+    if dev_id == "perplexity-agent":
+        kind = "responses"
+    env = list(p.get("env") or [])
+    params = [{"name": v, "label": param_label(v, dev_id), "default": (tpl.get("defaults") or {}).get(v, "")} for v in dict.fromkeys(_VAR.findall(url))]
+    pnames = {x["name"] for x in params}
+    key_env = tpl.get("key_env") or [e for e in env if e not in pnames]
+    return {"name": p.get("name") or dev_id, "kind": kind, "base_url": url, "env": key_env, "docs": p.get("doc"), "extra": dict(tpl.get("extra") or {}),
+            "params": params, "hint": tpl.get("hint"), "source": "models.dev", "models_count": len(p.get("models") or {})}
+
+
+def entries() -> dict[str, dict]:
+    """Every provider the Models tab can add: KNOWN first, then models.dev's (rebuilt when it refreshes)."""
+    global _entries_cache
+    from afh.engine import modelsdev
+
+    data = modelsdev.load()
+    if _entries_cache and _entries_cache[0] == id(data):
+        return _entries_cache[1]
+    out = {pid: {**k, "params": k.get("params", []), "source": "afh"} for pid, k in KNOWN.items()}
+    for dev_id, p in data.items():
+        e = _generated(dev_id, p) if isinstance(p, dict) else None
+        if e:
+            out[dev_id] = e
+    _entries_cache = (id(data), out)
+    return out
+
+
+def render_url(template: str, params: dict | None) -> str:
+    """Fill ``${VAR}`` from the saved fields, then the environment; unknown ones stay visible."""
+    params = params or {}
+    return _VAR.sub(lambda m: str(params.get(m.group(1)) or os.environ.get(m.group(1)) or m.group(0)), template).rstrip("/")
+
+
+def env_key(catalog_id: str | None) -> str:
+    """An API key from the provider's usual environment variable, when the user set one."""
+    e = entries().get(catalog_id or "")
+    for var in (e or {}).get("env") or []:
+        if os.environ.get(var):
+            return os.environ[var]
+    return ""
+
 
 # OpenCode provider ids → AFH catalog ids (None = no equivalent, the migration skips it).
 OPENCODE_TO_AFH: dict[str, str | None] = {
@@ -188,6 +300,11 @@ STATIC_MODELS: dict[str, list[ModelInfo]] = {
         _m("gemini-3-flash-lite", "Gemini 3 Flash Lite", 1_000_000, 65_536, reasoning=True, variants=_LMH),
         _m("gemini-2.5-pro", "Gemini 2.5 Pro", 1_048_576, 65_536, reasoning=True, variants=_LHM),
         _m("gemini-2.5-flash", "Gemini 2.5 Flash", 1_048_576, 65_536, reasoning=True, variants=_LHM),
+    ],
+    "chatgpt": [
+        _m("gpt-6.1-codex", "GPT-6.1 Codex", 400_000, 128_000, reasoning=True, variants=_LMH),
+        _m("gpt-6.1", "GPT-6.1", 400_000, 128_000, reasoning=True, variants=_LMH),
+        _m("gpt-6.1-mini", "GPT-6.1 mini", 400_000, 128_000, reasoning=True, variants=_LMH),
     ],
     "deepseek": [
         _m("deepseek-chat", "DeepSeek Chat", 128_000, 8_192, image=False),
@@ -313,10 +430,10 @@ def merge_static(config: ProviderConfig, fetched: list[ModelInfo]) -> list[Model
     return out
 
 
-def config_from_catalog(provider_id: str, api_key: str = "", base_url: str | None = None) -> ProviderConfig:
-    entry = KNOWN[provider_id]
+def config_from_catalog(provider_id: str, api_key: str = "", base_url: str | None = None, params: dict | None = None) -> ProviderConfig:
+    entry = entries()[provider_id]
     return ProviderConfig(
-        id=provider_id, name=entry["name"], kind=entry["kind"], base_url=base_url or entry["base_url"], api_key=api_key,
+        id=provider_id, name=entry["name"], kind=entry["kind"], base_url=base_url or render_url(entry["base_url"], params), api_key=api_key or env_key(provider_id),
         headers=dict(entry.get("headers", {})), models=list(STATIC_MODELS.get(provider_id, [])),
         fetch_models=entry.get("fetch_models", True), extra=dict(entry.get("extra", {})),
     )
@@ -326,7 +443,10 @@ def make_provider(config: ProviderConfig, transport: httpx.AsyncBaseTransport | 
     from afh.engine.providers.anthropic import AnthropicProvider
     from afh.engine.providers.gemini import GeminiProvider
     from afh.engine.providers.openai_compat import OpenAICompatProvider
+    from afh.engine.providers.openai_responses import OpenAIResponsesProvider
 
+    if config.kind == "responses":
+        return OpenAIResponsesProvider(config, transport=transport)
     if config.kind == "anthropic":
         return AnthropicProvider(config, transport=transport)
     if config.kind == "gemini":

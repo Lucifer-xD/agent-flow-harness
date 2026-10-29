@@ -75,6 +75,11 @@ export class AFH {
   diff(id) { return this.request("GET", `/api/sessions/${id}/diff`); }
   usage(id) { return this.request("GET", `/api/sessions/${id}/usage`); }
   models() { return this.request("GET", "/api/models"); }
+  /** {configured, catalog}: your providers and every provider AFH can add. */
+  providers() { return this.request("GET", "/api/providers"); }
+  /** Connect a catalog provider with an API key; `params` fills account fields (Azure resource, AWS region...). */
+  addProvider(catalog, apiKey = "", { params = {}, baseURL = "", models } = {}) { return this.request("POST", "/api/providers", { catalog, id: catalog, api_key: apiKey, base_url: baseURL, params, ...(models ? { models } : {}) }); }
+  testProvider(id) { return this.request("POST", `/api/providers/${id}/test`, {}); }
   schedules() { return this.request("GET", "/api/schedules"); }
   runSchedule(id) { return this.request("POST", `/api/schedules/${id}/run`); }
   saveSchedule(job) { return job.id ? this.request("PUT", `/api/schedules/${job.id}`, job) : this.request("POST", "/api/schedules", job); }
@@ -82,6 +87,13 @@ export class AFH {
   approvals(id) { return this.request("GET", `/api/sessions/${id}/permissions`); }
   /** decision: "once", "always" or "reject". */
   approve(id, requestID, decision = "once", message) { return this.request("POST", `/api/sessions/${id}/permissions/${requestID}`, { decision, message }); }
+  /** Answer a question card: one entry per question — a label, an array of labels, or {selected, other}. */
+  answer(id, requestID, answers) {
+    const norm = answers.map((a) => (a && typeof a === "object" && !Array.isArray(a) ? { selected: a.selected || [], other: a.other || "" } : { selected: Array.isArray(a) ? a.map(String) : a ? [String(a)] : [], other: "" }));
+    return this.request("POST", `/api/sessions/${id}/permissions/${requestID}`, { decision: "answer", answers: norm });
+  }
+  /** Close a question card without answering. */
+  skipQuestions(id, requestID) { return this.request("POST", `/api/sessions/${id}/permissions/${requestID}`, { decision: "dismiss" }); }
 
   /** Live events (Server-Sent Events) as an async iterator, optionally for one thread. */
   async *events(sessionID) {

@@ -583,7 +583,7 @@ def test_catalog_entries_and_factory():
     required = {"name", "kind", "base_url", "env", "docs", "extra"}
     for pid, entry in catalog.KNOWN.items():
         assert required <= set(entry), pid
-        assert entry["kind"] in ("openai", "anthropic", "gemini"), pid
+        assert entry["kind"] in ("openai", "anthropic", "gemini", "responses"), pid
     assert catalog.KNOWN["kimi"]["base_url"] == "https://api.kimi.ai/coding/v1" and catalog.KNOWN["kimi"]["name"] == "Kimi (kimi.ai coding plan)"
     assert catalog.KNOWN["zai-coding"]["extra"]["thinking"] == "zai"
     assert catalog.KNOWN["ollama"]["needs_key"] is False and catalog.KNOWN["ollama"]["base_url"] == "http://localhost:11434/v1"

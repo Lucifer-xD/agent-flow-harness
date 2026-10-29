@@ -118,6 +118,16 @@ body.electron .titlebar .tb-name { font-weight: 600; color: var(--text); letter-
 body.electron .titlebar .tb-thread { color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50vw; }
 body.electron .titlebar .tb-thread::before { content: "·"; margin: 0 8px 0 0; }
 body.electron .titlebar button { -webkit-app-region: no-drag; }
+/* Page-drawn window controls (Windows/Linux): part of the page, so the border and theme changes span the full width. */
+body.win-controls .titlebar { padding-right: 0; }
+.wc-space { flex: 1; }
+.win-controls { display: flex; align-self: stretch; margin-left: 8px; -webkit-app-region: no-drag; }
+.wc-btn { width: 46px; height: 100%; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-2); cursor: default; transition: background 0.12s, color 0.12s; }
+.wc-btn svg { width: 10px; height: 10px; shape-rendering: crispEdges; }
+.wc-btn:hover { background: color-mix(in srgb, var(--text) 9%, transparent); color: var(--text); }
+.wc-btn:active { background: color-mix(in srgb, var(--text) 15%, transparent); }
+.wc-btn.wc-close:hover { background: #e81123; color: #fff; }
+.wc-btn.wc-close:active { background: #c50f1f; color: #fff; }
 body.electron .app { top: 38px; }
 body.electron .boot { padding-top: 38px; }
 body.electron .modal { max-height: calc(100vh - 38px - 48px); }
@@ -1340,3 +1350,51 @@ body.resizing-drawer .drawer, body.resizing-drawer .app { transition: none !impo
   .m-nav button { flex: none; white-space: nowrap; }
   .m-nav h3, .m-nav .spacer, .m-nav .h-muted { display: none; }
 }
+
+/* ---- provider sign-in (Settings → Models) ---- */
+.signin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; padding: 4px 18px 18px; }
+.signin-tile { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel-2); transition: border-color 0.2s, transform 0.2s; }
+.signin-tile:hover { border-color: var(--border-2); transform: translateY(-1px); }
+.signin-tile.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 7%, var(--panel-2)); }
+.signin-tile .li-main { flex: 1; min-width: 0; }
+.signin-tile .li-sub { white-space: normal; }
+.st-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.st-icon svg { width: 18px; height: 18px; }
+.signin-body { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 6px 0 14px; }
+.signin-status { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 13px; min-height: 22px; }
+.signin-status .err-text { color: #ff6b6b; }
+.device-code { font: 600 28px/1 var(--mono, ui-monospace, monospace); letter-spacing: 0.18em; padding: 14px 18px; border-radius: var(--radius); background: var(--panel-3); border: 1px dashed var(--border-2); user-select: all; }
+.signin-inline { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 13px; color: var(--text-2); }
+.signin-inline .muted { color: var(--text-3); }
+
+/* ---- theme switch effects (data-vt on <html> while a view transition runs) ---- */
+:root[data-vt="diamond"]::view-transition-new(root) { animation: theme-diamond calc(0.7s / var(--anim-speed, 1)) cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes theme-diamond {
+  from { clip-path: polygon(var(--vt-x) var(--vt-y), var(--vt-x) var(--vt-y), var(--vt-x) var(--vt-y), var(--vt-x) var(--vt-y)); }
+  to { clip-path: polygon(var(--vt-x) calc(var(--vt-y) - var(--vt-d)), calc(var(--vt-x) + var(--vt-d)) var(--vt-y), var(--vt-x) calc(var(--vt-y) + var(--vt-d)), calc(var(--vt-x) - var(--vt-d)) var(--vt-y)); }
+}
+:root[data-vt="wipe"]::view-transition-new(root) { animation: theme-wipe calc(0.65s / var(--anim-speed, 1)) cubic-bezier(0.65, 0, 0.35, 1); }
+:root[data-vt="wipe"][data-vt-dir="rtl"]::view-transition-new(root) { animation-name: theme-wipe-rtl; }
+@keyframes theme-wipe { from { clip-path: polygon(0 0, 0 0, -12% 100%, -12% 100%); } to { clip-path: polygon(0 0, 112% 0, 100% 100%, -12% 100%); } }
+@keyframes theme-wipe-rtl { from { clip-path: polygon(100% 0, 112% 0, 112% 100%, 112% 100%); } to { clip-path: polygon(-12% 0, 112% 0, 112% 100%, 0 100%); } }
+:root[data-vt="fade"]::view-transition-old(root) { animation: vt-out calc(0.45s / var(--anim-speed, 1)) ease both; }
+:root[data-vt="fade"]::view-transition-new(root) { animation: vt-in calc(0.45s / var(--anim-speed, 1)) ease both; }
+:root[data-vt="blur"]::view-transition-old(root) { animation: vt-blur-out calc(0.55s / var(--anim-speed, 1)) ease both; }
+:root[data-vt="blur"]::view-transition-new(root) { animation: vt-blur-in calc(0.55s / var(--anim-speed, 1)) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes vt-out { to { opacity: 0; } }
+@keyframes vt-in { from { opacity: 0; } }
+@keyframes vt-blur-out { to { opacity: 0; filter: blur(16px); transform: scale(0.985); } }
+@keyframes vt-blur-in { from { opacity: 0; filter: blur(16px); transform: scale(1.015); } }
+
+/* ---- how new messages arrive ---- */
+:root[data-msg-anim="fade"] .msg { animation-name: msg-fade; }
+:root[data-msg-anim="slide"] .msg.user { animation-name: msg-slide-r; }
+:root[data-msg-anim="slide"] .msg.assistant { animation-name: msg-slide-l; }
+:root[data-msg-anim="pop"] .msg { animation-name: msg-pop; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+:root[data-msg-anim="blur"] .msg { animation-name: msg-blur; }
+:root[data-msg-anim="none"] .msg { animation: none; }
+@keyframes msg-fade { from { opacity: 0; } }
+@keyframes msg-slide-r { from { opacity: 0; transform: translateX(28px); } }
+@keyframes msg-slide-l { from { opacity: 0; transform: translateX(-28px); } }
+@keyframes msg-pop { from { opacity: 0; transform: scale(0.94) translateY(6px); } }
+@keyframes msg-blur { from { opacity: 0; filter: blur(8px); transform: translateY(4px); } }

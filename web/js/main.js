@@ -1,7 +1,7 @@
 import { api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
 import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread, viewImage } from "./chat.js";
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
-import { PRESETS, applyAppearance as applyTheme } from "./appearance.js";
+import { PRESETS, applyAppearance as applyTheme, themeTransition } from "./appearance.js";
 import { applyLanguage } from "./i18n.js";
 import { openPalette } from "./palette.js";
 import { openContextEditor } from "./context.js";
@@ -86,6 +86,29 @@ function showLogin() {
   setTimeout(() => pw.focus(), 50);
 }
 
+// Minimize / maximize / close drawn by the page (Windows, Linux), so they take part in theme
+// changes and the title bar's border runs the full width. Native controls would be a separate
+// opaque layer the page cannot animate. macOS keeps its inset traffic lights.
+const WIN_ICONS = {
+  min: '<svg viewBox="0 0 10 10"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"/></svg>',
+  max: '<svg viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/></svg>',
+  restore: '<svg viewBox="0 0 10 10"><path d="M2.5 2.5V0.5h7v7h-2" fill="none" stroke="currentColor" stroke-width="1"/><rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/></svg>',
+  close: '<svg viewBox="0 0 10 10"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" stroke-width="1"/></svg>',
+};
+
+function mountWindowControls() {
+  const w = window.afh.window;
+  document.body.classList.add("win-controls");
+  const max = el("button.wc-btn", { type: "button", title: "Maximize", html: WIN_ICONS.max, on: { click: () => w.maximize() } });
+  const setMax = (on) => { max.innerHTML = on ? WIN_ICONS.restore : WIN_ICONS.max; max.title = on ? "Restore down" : "Maximize"; };
+  $("titlebar").append(el("span.wc-space"), el("div.win-controls",
+    el("button.wc-btn", { type: "button", title: "Minimize", html: WIN_ICONS.min, on: { click: () => w.minimize() } }),
+    max,
+    el("button.wc-btn.wc-close", { type: "button", title: "Close", html: WIN_ICONS.close, on: { click: () => w.close() } })));
+  w.isMaximized().then(setMax).catch(() => {});
+  window.afh.onEvent?.((ev) => { if (ev?.type === "maximized") setMax(!!ev.value); });
+}
+
 async function boot() {
   hydrateIcons();
   $("boot-mark").append(logoNode({ size: 110, working: true }));
@@ -96,6 +119,7 @@ async function boot() {
   if (native.electron()) {
     document.body.classList.add("electron");
     $("tb-brand").append(logoNode({ size: 22 }));
+    if (window.afh?.platform !== "darwin") mountWindowControls();
   }
   for (const [id, name] of [["btn-collapse", "sidebar"], ["btn-expand", "sidebar"], ["btn-thread-menu", "more"], ["btn-attach", "paperclip"], ["btn-mic", "mic"], ["btn-drawer-close", "x"]]) $(id).innerHTML = icon(name);
   let data;
@@ -177,14 +201,7 @@ async function toggleTheme(e) {
     Object.assign(patch, { accentOverride: false, bg: p.bg, text: p.text, accent: p.accent });
   }
   const apply = () => { S.settings.ui = { ...u, ...patch }; applyAppearance(); };
-  const r = (e?.currentTarget || $("btn-theme")).getBoundingClientRect();
-  const x = r.left + r.width / 2, y = r.top + r.height / 2;
-  const root = document.documentElement;
-  root.style.setProperty("--vt-x", `${x}px`);
-  root.style.setProperty("--vt-y", `${y}px`);
-  root.style.setProperty("--vt-r", `${Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))}px`);
-  if (document.startViewTransition && u.animations !== false && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(apply);
-  else apply();
+  themeTransition(u, apply, e?.currentTarget || $("btn-theme"));
   try { S.settings = await api.put("/api/settings", { ui: patch }); } catch (err) { toast(err.message, "err"); }
 }
 
@@ -699,7 +716,7 @@ async function applyPreset(id) {
   const p = PRESETS[id];
   const patch = { preset: id, accentOverride: false, bg: p.bg, text: p.text, accent: p.accent, theme: p.dark ? "dark" : "light", [p.dark ? "darkPreset" : "lightPreset"]: id };
   const apply = () => { S.settings.ui = { ...S.settings.ui, ...patch }; applyAppearance(); };
-  if (document.startViewTransition && S.settings.ui.animations !== false) document.startViewTransition(apply); else apply();
+  themeTransition(S.settings.ui, apply, $("btn-theme"));
   try { S.settings = await api.put("/api/settings", { ui: patch }); } catch (err) { toast(err.message, "err"); }
 }
 

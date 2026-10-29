@@ -61,13 +61,14 @@ class ProviderConfig:
 
     id: str  # e.g. "kimi", "zai-coding", "openai", "ollama", or a user id for custom endpoints
     name: str
-    kind: Literal["openai", "anthropic", "gemini"]  # wire protocol
+    kind: Literal["openai", "anthropic", "gemini", "responses"]  # wire protocol ("responses" = OpenAI Responses API)
     base_url: str
     api_key: str = ""
     headers: dict[str, str] = field(default_factory=dict)
     models: list[ModelInfo] = field(default_factory=list)  # known/static models (merged with /models when fetched)
     fetch_models: bool = True  # try GET /models on refresh
     extra: dict[str, Any] = field(default_factory=dict)  # provider-specific knobs (e.g. {"reasoning_field": "reasoning_content"})
+    auth: dict[str, Any] = field(default_factory=dict)  # sign-in credentials (see engine/auth.py); empty = api_key
 
 
 @dataclass

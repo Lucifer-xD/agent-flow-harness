@@ -23,7 +23,7 @@ from typing import AsyncIterator
 
 import httpx
 
-from afh.engine import pricing
+from afh.engine import auth, pricing
 from afh.engine.providers import catalog
 from afh.engine.providers.sse import (
     NETWORK_ERRORS, ProviderError, decode_body, error_message, http_error, image_data, iter_json, join_url,
@@ -54,8 +54,9 @@ class OpenAICompatProvider:
 
     def headers(self) -> dict[str, str]:
         h = {"content-type": "application/json", "accept": "text/event-stream"}
-        if self.config.api_key:
-            h["authorization"] = f"Bearer {self.config.api_key}"
+        if self.config.api_key:  # Azure wants ``api-key: <key>``, Cloudflare's gateway its own header
+            prefix = self.config.extra.get("auth_prefix", "Bearer ")
+            h[self.config.extra.get("auth_header", "authorization")] = f"{prefix}{self.config.api_key}"
         h.update(self.config.headers)
         return h
 
@@ -122,12 +123,28 @@ class OpenAICompatProvider:
     # ---- streaming --------------------------------------------------------------------
 
     async def stream(self, req: ChatRequest) -> AsyncIterator[ProviderEvent]:
-        url = join_url(self.config.base_url, "/chat/completions")
+        try:
+            base, signed = await auth.prepare(self.config, req)  # signed-in providers (Copilot): fresh token + headers
+        except Exception as exc:
+            yield {"type": "error", "message": str(exc), "status": 401, "kind": "auth", "response": ""}
+            return
+        url = join_url(base, "/chat/completions")
         body = self.build_body(req)
-        async with make_client(self.headers(), self._transport) as client:
+        async with make_client(self.headers() | signed, self._transport) as client:
             for attempt in (0, 1):
                 try:
                     async with client.stream("POST", url, json=body) as resp:
+                        if resp.status_code == 401 and attempt == 0 and auth.signed_in(self.config):
+                            # A revoked or rotated token: get a new one and try once more.
+                            await resp.aread()
+                            try:
+                                base, signed = await auth.prepare(self.config, req, force=True)
+                            except Exception as exc:
+                                yield {"type": "error", "message": str(exc), "status": 401, "kind": "auth", "response": ""}
+                                return
+                            client.headers.update(signed)
+                            url = join_url(base, "/chat/completions")
+                            continue
                         if resp.status_code == 400 and attempt == 0 and "stream_options" in body:
                             # Older servers reject stream_options; a 400 costs no tokens, so retry without it.
                             await resp.aread()
@@ -234,8 +251,9 @@ class OpenAICompatProvider:
     async def list_models(self) -> list[ModelInfo]:
         if not self.config.fetch_models:
             return catalog.merge_static(self.config, [])
-        url = join_url(self.config.base_url, "/models")
-        async with make_client(self.headers(), self._transport) as client:
+        base, signed = await auth.prepare(self.config)
+        url = join_url(base, "/models")
+        async with make_client(self.headers() | signed, self._transport) as client:
             try:
                 resp = await client.get(url)
             except NETWORK_ERRORS as exc:

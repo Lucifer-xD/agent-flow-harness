@@ -19,13 +19,10 @@ const BACKEND_TIMEOUT_MS = 60_000;
 const URL_RE = /AFH is running at (http:\/\/\S+)/;
 const STDERR_TAIL_LINES = 40;
 
-// Custom title bar: the page draws its own drag strip (`-webkit-app-region: drag`) and
-// Electron overlays the native minimize/maximize/close controls on top of it (Windows/Linux).
-// The colors match the app's dark theme; the page can re-tint them via
-// window.afh.window.setTitleBarOverlay(). On macOS the traffic lights are inset instead.
-const TITLE_BAR_HEIGHT = 38;
-const TITLE_BAR_OVERLAY = { color: "#121010", symbolColor: "#f1ede9", height: TITLE_BAR_HEIGHT };
-const COLOR_RE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+// Custom title bar: the page draws its own drag strip (`-webkit-app-region: drag`) and, on
+// Windows/Linux, its own minimize/maximize/close buttons (so they follow theme changes and the
+// title bar border runs the full width; a native overlay is a separate opaque layer the page
+// cannot animate). On macOS the traffic lights are inset instead.
 
 let mainWindow = null;
 let tray = null;
@@ -269,9 +266,9 @@ function createWindow() {
     autoHideMenuBar: true,
     title: "Agent Flow Harness",
     icon: appIcon(),
-    // Frameless-looking window with native window controls (see TITLE_BAR_OVERLAY).
+    // Frameless-looking window; the page draws the window controls (see the title bar note above).
+    // "hidden" keeps the resize borders and Windows snapping.
     titleBarStyle: IS_MAC ? "hiddenInset" : "hidden",
-    ...(IS_MAC ? {} : { titleBarOverlay: { ...TITLE_BAR_OVERLAY } }),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -529,23 +526,8 @@ ipcMain.handle("afh:window:is-maximized", (event) => {
   const w = windowOf(event);
   return !!w && w.isMaximized();
 });
-// Re-tint the native window controls (e.g. when the page switches theme). Height stays fixed
-// so the page's drag strip and the overlay keep lining up. No-op on macOS / unsupported builds.
-ipcMain.handle("afh:window:set-title-bar-overlay", (event, opts) => {
-  const w = windowOf(event);
-  if (!w || IS_MAC || typeof w.setTitleBarOverlay !== "function") return false;
-  const o = opts && typeof opts === "object" ? opts : {};
-  const overlay = { height: TITLE_BAR_HEIGHT };
-  if (typeof o.color === "string" && COLOR_RE.test(o.color)) overlay.color = o.color;
-  if (typeof o.symbolColor === "string" && COLOR_RE.test(o.symbolColor)) overlay.symbolColor = o.symbolColor;
-  try {
-    w.setTitleBarOverlay(overlay);
-    return true;
-  } catch (err) {
-    logErr("setTitleBarOverlay failed:", err.message);
-    return false;
-  }
-});
+// Kept for older pages: the window controls are drawn by the page now, so there is nothing to re-tint.
+ipcMain.handle("afh:window:set-title-bar-overlay", () => false);
 
 // ---- app lifecycle -----------------------------------------------------------------------------
 

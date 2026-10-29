@@ -140,6 +140,22 @@ class AFH:
         """{models: [...], defaultModel, providerNames}. Use "providerID/id" of a model as `model=`."""
         return self.request("GET", "/api/models")
 
+    def providers(self) -> dict:
+        """{configured: [...], catalog: [...]} — your providers, and every provider AFH can add."""
+        return self.request("GET", "/api/providers")
+
+    def add_provider(self, catalog: str, api_key: str = "", *, params: dict | None = None, base_url: str = "", models: list[str] | None = None) -> dict:
+        """Connect a catalog provider with an API key. `params` fills account fields (Azure resource
+        name, AWS region...). Sign-in providers (chatgpt, github-copilot) need the app."""
+        body: dict = {"catalog": catalog, "id": catalog, "api_key": api_key, "base_url": base_url, "params": params or {}}
+        if models:
+            body["models"] = models
+        return self.request("POST", "/api/providers", body)
+
+    def test_provider(self, provider_id: str) -> dict:
+        """One tiny request through the provider: {ok, model, reply | error}."""
+        return self.request("POST", f"/api/providers/{provider_id}/test", {})
+
     def schedules(self) -> list[dict]:
         return self.request("GET", "/api/schedules")
 
@@ -166,6 +182,23 @@ class AFH:
     def approve(self, session_id: str, request_id: str, decision: str = "once", message: str | None = None) -> None:
         """decision: "once", "always" (for this kind of action in this thread) or "reject"."""
         self.request("POST", f"/api/sessions/{session_id}/permissions/{request_id}", {"decision": decision, "message": message})
+
+    def answer(self, session_id: str, request_id: str, answers: list) -> None:
+        """Answer a question card (a waiting request whose action is "question"), one entry per
+        question: an option label, a list of labels, or {"selected": [...], "other": "free text"}."""
+        norm = []
+        for a in answers:
+            if isinstance(a, dict):
+                norm.append({"selected": list(a.get("selected") or []), "other": a.get("other") or ""})
+            elif isinstance(a, (list, tuple)):
+                norm.append({"selected": [str(x) for x in a], "other": ""})
+            else:
+                norm.append({"selected": [str(a)] if a else [], "other": ""})
+        self.request("POST", f"/api/sessions/{session_id}/permissions/{request_id}", {"decision": "answer", "answers": norm})
+
+    def skip_questions(self, session_id: str, request_id: str) -> None:
+        """Close a question card without answering; the agent carries on with its own judgement."""
+        self.request("POST", f"/api/sessions/{session_id}/permissions/{request_id}", {"decision": "dismiss"})
 
     # ---- live events ----
 
