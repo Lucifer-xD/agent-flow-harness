@@ -198,3 +198,35 @@ def test_bug_report_has_no_secrets(home, monkeypatch, tmp_path):
         assert secret not in everything
     assert providers[0]["hasKey"] is True and "api_key" not in providers[0]
     assert "ERROR afh" in everything  # the problem lines are still there
+
+
+# ---- a provider retry stays with the reply it happened in -------------------------------------
+
+
+class FlakyProvider(FakeProvider):
+    """Times out on the first call, then answers."""
+
+    async def stream(self, req):
+        if not getattr(self, "failed", False):
+            self.failed = True
+            yield {"type": "error", "kind": "network", "message": "Timed out connecting to https://api.example"}
+            return
+        async for ev in super().stream(req):
+            yield ev
+
+
+def test_retry_is_recorded_on_the_retried_reply(home, tmp_path, monkeypatch):
+    from test_engine_features import run_prompt
+
+    from afh.engine import runner as runmod
+
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(runmod.asyncio, "sleep", lambda s: real_sleep(0))
+    e = make_engine(FlakyProvider(["Recovered answer."]))
+    session = asyncio.run(run_prompt(e, tmp_path, "hi"))
+    replies = [m for m in e.store.list_messages(session["id"]) if m.get("type") == "assistant"]
+    assert len(replies) == 1
+    assert replies[0]["retries"][0]["attempt"] == 1 and "Timed out" in replies[0]["retries"][0]["error"]["message"]
+    assert replies[0]["content"][0]["text"] == "Recovered answer."
+    ev = next(x for x in e.events if x["type"] == "session.retry.scheduled")
+    assert ev["data"]["assistantMessageID"] == replies[0]["id"]
