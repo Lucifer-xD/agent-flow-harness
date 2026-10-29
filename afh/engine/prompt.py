@@ -65,6 +65,14 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
         lines.append("- **Browser** (`browser` tool): a real Chrome/Edge tab for this thread. After building or changing anything with a UI, open it "
                      "(start the dev server as a background job first), look at the screenshot, click through the change and read `console` for errors "
                      "before you call it done.")
+    if "harness" in have:
+        lines.append("- **Extending AFH** (`harness` tool): when the user asks to install, add or remove a skill, an MCP server, a slash command, a hook "
+                     "or a custom agent - a GitHub link, a repo, an npm/pip package, a URL - do it with `harness`, never by cloning into folders or "
+                     "editing settings.json yourself (AFH would not pick it up). Skills install from any Git/GitHub link (`/tree/<branch>/<path>` "
+                     "picks one folder); MCP servers connect immediately and their tools are yours on the next step. For an MCP server, read its "
+                     "README first for the exact command and required environment variables, and ask the user for API keys you do not have. "
+                     "After installing, confirm it worked (the skill is listed, the server is connected with tools) and tell the user; if a "
+                     "server fails, read the error, fix the command and add it again. `harness` with action `list` shows everything installed.")
     lines.append("- **Error checks**: after you edit files, AFH checks them (syntax, types, lint) and appends any problems to the tool result. Fix them.")
     lines.append("- **Context**: long threads are summarised automatically and old tool outputs may be shortened. Re-run a tool if you need its full output again.")
     lines.append("- **The user's controls**: approval modes (some actions ask the user first), undo, context editing, hooks that may block a tool or "

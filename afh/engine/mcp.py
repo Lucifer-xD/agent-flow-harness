@@ -255,6 +255,29 @@ class McpManager:
         await self.disconnect(name)
         return await self.connect(name)
 
+    async def add(self, cfg: dict) -> dict:
+        """Register (or replace) one server while the others keep running; returns its status."""
+        name = str(cfg.get("name") or "").strip()
+        if name in self._servers:
+            await self.disconnect(name)
+        srv = _Server(name=name, config=cfg)
+        self._servers[name] = srv
+        if cfg.get("disabled"):
+            srv.status = "disabled"
+        else:
+            await self.connect(name)
+        return next(s for s in self.status() if s["name"] == name)
+
+    async def remove(self, name: str) -> None:
+        if name in self._servers:
+            await self.disconnect(name)
+            del self._servers[name]
+            self._rebuild_tools()
+
+    def tool_names(self, server: str) -> list[str]:
+        """The names the model calls this server's tools by."""
+        return [t.spec.name for t in self._tools if t.server == server]
+
     async def stop(self) -> None:
         for t in list(self._refreshing):
             t.cancel()

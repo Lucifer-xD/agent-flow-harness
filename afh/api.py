@@ -225,7 +225,7 @@ def save_agent(body: dict = Body(...)):
 def delete_agent(agent_id: str):
     settings = store.load_settings()
     agents = {k: v for k, v in (settings.get("agents") or {}).items() if k != agent_id}
-    store.save_settings({"agents": agents})
+    store.replace_setting("agents", agents)
     engine.publish({"type": "agent.updated", "data": {}})
     return {"ok": True, "agents": agents_payload()}
 
