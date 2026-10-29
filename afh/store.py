@@ -75,8 +75,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "leaderInstructions": "",
         "delegates": [],  # {id, name, model: {providerID, id, variant}, job, system, enabled, readonly, color}
     },
+    # The agent's browser tool (Chrome/Edge via DevTools): visible = show its window instead of headless.
+    "browser": {"enabled": True, "visible": False, "path": ""},
+    # The mic button: transcription provider ("" = Groq, then OpenAI), model and spoken language.
+    "voice": {"provider": "", "model": "", "language": ""},
+    # Desktop app updates: auto = download new versions in the background; feed = where to look.
+    "updates": {"auto": True, "feed": ""},
     # The agent loop: steps per run, and whether an out-of-date to-do list sends it back to work once.
-    "agent": {"maxSteps": 200, "todoNudge": True, "resumeOnRestart": True},
+    "agent": {"maxSteps": 200, "todoNudge": True, "resumeOnRestart": True, "compactAt": 80},  # compactAt: % of the context window
     # Goals: autopilot keeps the agent going until it reports the goal achieved or blocked.
     "goals": {"autopilot": True, "maxTurns": 10, "auto": True},
     # Error checks after edits (see engine/diagnostics.py). commands: [{name, glob, command, timeout, enabled}]

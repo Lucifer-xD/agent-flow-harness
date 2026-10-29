@@ -31,7 +31,29 @@ export async function agentPane(pane, ctx) {
 
   pane.append(card("Work loop", null, null,
     row("Steps per run", "The most model calls one message may trigger before AFH stops and waits for you", num(ag.maxSteps ?? 200, { min: 10, max: 1000, onChange: (v) => save({ agent: { maxSteps: v } }, "Saved") })),
+    row("Compact the conversation at", "When this much of the model's context window is used, older messages are summarised in place (they stay readable in the thread). Lower = cheaper, faster turns; higher = the model sees more detail",
+      select([["40", "40% of the context window"], ["60", "60% of the context window"], ["80", "80% of the context window (default)"]], String(ag.compactAt ?? 80), (v) => save({ agent: { compactAt: Number(v) } }, "Saved"), "260px")),
     row("Check the to-do list before finishing", "If the agent ends its turn with open to-do items, it is asked once to finish them or update the list", toggle(ag.todoNudge !== false, (v) => save({ agent: { todoNudge: v } })))));
+
+  const br = s.browser || {};
+  const brPath = el("input.inp", { value: br.path || "", placeholder: "Found automatically (Chrome or Edge)", style: { width: "320px" } });
+  brPath.addEventListener("change", () => save({ browser: { path: brPath.value.trim() } }, "Saved"));
+  pane.append(card("Browser", "A real browser the agent drives to check its work: open your dev server, look at screenshots, click and type, read console errors. It uses its own profile — never your sign-ins.", null,
+    row("Let the agent use a browser", "Adds the browser tool. Screenshots go to models that accept images", toggle(br.enabled !== false, (v) => save({ browser: { enabled: v } }))),
+    row("Show the browser window", "Watch it work instead of running it hidden (headless). Takes effect on its next start", toggle(!!br.visible, (v) => save({ browser: { visible: v } }))),
+    row("Browser program", "Only if you want a specific Chrome/Edge/Chromium", brPath)));
+
+  const vo = s.voice || {};
+  const names = ctx.S.providerNames || {};
+  const voModel = el("input.inp", { value: vo.model || "", placeholder: "Default for the provider", style: { width: "220px" } });
+  const voLang = el("input.inp", { value: vo.language || "", placeholder: "Detect", style: { width: "90px" } });
+  voModel.addEventListener("change", () => save({ voice: { model: voModel.value.trim() } }, "Saved"));
+  voLang.addEventListener("change", () => save({ voice: { language: voLang.value.trim().toLowerCase() } }, "Saved"));
+  pane.append(card("Voice", "The mic button in the message box: speak, click again, and your words are typed in for you to check and send. Uses a speech-to-text (Whisper) endpoint of a provider you added.", null,
+    row("Speech-to-text provider", "Automatic uses Groq (fast, cheap), then OpenAI — whichever has a key",
+      select([["", "Automatic"], ...Object.entries(names).map(([id, n]) => [id, n])], vo.provider || "", (v) => save({ voice: { provider: v } }, "Saved"), "220px")),
+    row("Model", "Groq: whisper-large-v3-turbo · OpenAI: gpt-4o-mini-transcribe", voModel),
+    row("Language", "A code like en or ar makes short clips more accurate", voLang)));
 
   pane.append(card("Goals", "The agent sets a goal itself for multi-step work; you can also set one with the Goal button or /goal", null,
     row("Goals for every multi-step task", "When the agent plans 3 or more steps without a goal, your request becomes the thread's goal", toggle(goals.auto !== false, (v) => save({ goals: { auto: v } }))),

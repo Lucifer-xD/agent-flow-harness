@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, remote, skills_store, store, transfer
+from . import __version__, devapi, remote, skills_store, store, transfer
 from .engine import agents as agentmod
 from .engine import config as provcfg
 from .engine import migrate
@@ -26,7 +26,8 @@ from .engine.types import ChatMessage, ChatRequest
 log = logging.getLogger("afh.api")
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
-app = FastAPI(title="AFH", version=__version__)
+app = FastAPI(title="Agent Flow Harness API", version=__version__, docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json",
+              description="The local API of Agent Flow Harness. Authenticate with an API key from Settings → Developer: `Authorization: Bearer afh_…`.")
 
 # The API can run commands (MCP servers, shell) and write files, so only the AFH window may call it:
 # a per-launch token blocks other local pages, and the Host check blocks DNS rebinding.
@@ -45,6 +46,9 @@ async def _startup() -> None:
 async def guard(request: Request, call_next):
     if request.url.path.startswith("/api/") and request.url.path not in PUBLIC_PATHS:
         token = request.headers.get("x-afh-token") or request.query_params.get("token")
+        auth = request.headers.get("authorization") or ""
+        if not token and auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
         server = request.scope.get("server") or ("", 0)
         via_remote = remote.state["port"] and server[1] == remote.state["port"]
         if via_remote:
@@ -53,7 +57,7 @@ async def guard(request: Request, call_next):
         else:
             if ACCESS["hosts"] and request.headers.get("host") not in ACCESS["hosts"]:
                 return JSONResponse({"error": "forbidden host"}, status_code=403)
-            if ACCESS["token"] and token != ACCESS["token"] and token not in remote.state["tokens"]:
+            if ACCESS["token"] and token != ACCESS["token"] and token not in remote.state["tokens"] and not devapi.check(token):
                 return JSONResponse({"error": "unauthorized"}, status_code=401)
     try:
         response = await call_next(request)
@@ -86,7 +90,10 @@ def restart_soon() -> dict:
     return {"ok": True, "restarting": True}
 
 
-def model_ref(m: dict | None) -> dict | None:
+def model_ref(m: dict | str | None) -> dict | None:
+    if isinstance(m, str):  # "provider/model" (scripts and the SDKs)
+        pid, _, mid = m.partition("/")
+        m = {"providerID": pid, "id": mid} if mid else None
     if not m or not m.get("id") or not m.get("providerID"):
         return None
     out = {"id": m["id"], "providerID": m["providerID"]}
@@ -307,17 +314,74 @@ async def prompt(sid: str, body: dict = Body(...)):
     files = []
     for p in body.get("files", []):
         path = Path(p)
-        entry: dict[str, Any] = {"uri": path.resolve().as_uri(), "name": path.name}
-        if path.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp") and path.is_file() and path.stat().st_size < 8_000_000:
+        entry: dict[str, Any] = {"uri": path.resolve().as_uri(), "name": re.sub(r"^\d{8}-\d{6}-[0-9a-f]{6}-", "", path.name)}
+        if path.suffix.lower() in IMAGE_TYPES and path.is_file() and path.stat().st_size < 8_000_000:
             import base64
-            import mimetypes
 
-            mime = mimetypes.guess_type(path.name)[0] or "image/png"
+            mime = IMAGE_TYPES[path.suffix.lower()]
             entry["uri"] = f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
             entry["mime"] = mime
         files.append(entry)
     out = await engine.prompt(sid, body["text"], files or None, agent=body.get("agent"), model=model_ref(body.get("model")))
     return {"ok": True, **({"command": out["command"]} if isinstance(out, dict) and isinstance(out.get("command"), str) else {})}
+
+
+IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
+UPLOAD_LIMIT = 25_000_000
+
+
+def _uploads_dir() -> Path:
+    d = store.AFH_DIR / "uploads"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@app.post("/api/uploads")
+async def upload(request: Request):
+    """Save a pasted or dropped file (an image from the clipboard has no path) and return its path."""
+    import secrets
+    import time
+
+    data = await request.body()
+    if not data:
+        raise ValueError("Empty upload")
+    if len(data) > UPLOAD_LIMIT:
+        raise ValueError("That file is over 25 MB")
+    from urllib.parse import unquote
+
+    name = re.sub(r"[^\w.\- ]+", "_", unquote(request.headers.get("x-filename") or "pasted.png")).strip(" .")[:80] or "pasted.png"
+    folder = _uploads_dir()
+    cutoff = time.time() - 30 * 86400  # uploads only matter while you're writing the message: keep a month
+    for old in folder.iterdir():
+        try:
+            if old.stat().st_mtime < cutoff:
+                old.unlink()
+        except OSError:
+            pass
+    path = folder / f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}-{name}"
+    path.write_bytes(data)
+    return {"path": str(path), "name": name, "size": len(data)}
+
+
+@app.get("/api/image")
+def image(path: str):
+    """An image file for attachment thumbnails."""
+    p = Path(path)
+    mime = IMAGE_TYPES.get(p.suffix.lower())
+    if not mime or not p.is_file():
+        raise KeyError(path)
+    return FileResponse(p, media_type=mime)
+
+
+@app.post("/api/transcribe")
+async def transcribe(request: Request):
+    """Speech to text for the mic button, through a Whisper-style endpoint of a provider you set up."""
+    from .engine import voice
+
+    data = await request.body()
+    if not data:
+        raise ValueError("No audio recorded")
+    return {"text": await voice.transcribe(data, request.headers.get("content-type") or "audio/webm", store.load_settings())}
 
 
 @app.post("/api/sessions/{sid}/interrupt")
@@ -527,6 +591,32 @@ def _worktree_of(sid: str) -> dict:
     if not wt:
         raise ValueError("This thread does not use a worktree")
     return wt
+
+
+@app.get("/api/bugreport")
+def bugreport_preview():
+    from . import bugreport
+
+    return bugreport.preview()
+
+
+@app.post("/api/bugreport")
+def bugreport_create(body: dict = Body(default={})):
+    """Make the zip in Downloads and show it in the file manager."""
+    import subprocess
+    import sys
+
+    from . import bugreport
+
+    path = bugreport.build(str(body.get("description") or ""), include_log=body.get("includeLog", True) is not False)
+    if body.get("reveal", True):
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer", "/select,", str(path)])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path.parent)])
+    return {"path": str(path), "size": path.stat().st_size}
 
 
 @app.post("/api/reveal")
@@ -1245,6 +1335,131 @@ def remote_disconnect_all():
 
 
 # ---- events -----------------------------------------------------------------------
+
+
+# ---- scheduled jobs ----------------------------------------------------------------------------
+
+
+@app.get("/api/schedules")
+def schedules_list():
+    from .engine import schedules
+
+    return schedules.list_jobs()
+
+
+@app.post("/api/schedules")
+def schedules_create(body: dict = Body(...)):
+    from .engine import schedules
+
+    return schedules.upsert({k: v for k, v in body.items() if k != "id"})
+
+
+@app.put("/api/schedules/{job_id}")
+def schedules_update(job_id: str, body: dict = Body(...)):
+    from .engine import schedules
+
+    if not any(j["id"] == job_id for j in schedules.load()):
+        raise KeyError(job_id)
+    return schedules.upsert({**body, "id": job_id})
+
+
+@app.delete("/api/schedules/{job_id}")
+def schedules_delete(job_id: str):
+    from .engine import schedules
+
+    if not schedules.delete(job_id):
+        raise KeyError(job_id)
+    return {"ok": True}
+
+
+@app.post("/api/schedules/{job_id}/run")
+async def schedules_run(job_id: str):
+    from .engine import schedules
+
+    job = next((j for j in schedules.load() if j["id"] == job_id), None)
+    if not job:
+        raise KeyError(job_id)
+    sid = await engine.scheduler.run(job)
+    if not sid:
+        raise ValueError("This job is already starting")
+    return {"sessionID": sid}
+
+
+# ---- developer API: keys, info and one-call runs ---------------------------------------------------
+
+
+@app.get("/api/developer")
+def developer_info():
+    dev = store.load_settings().get("developer") or {}
+    return {"version": __version__, "keys": [devapi.public(k) for k in devapi.list_keys()], "port": int(dev.get("port") or 0),
+            "discovery": str(store.AFH_DIR / devapi.DISCOVERY_FILE)}
+
+
+@app.post("/api/developer/keys")
+def developer_create_key(body: dict = Body(default={})):
+    rec, raw = devapi.create_key(str(body.get("name") or "API key"))
+    return {**rec, "key": raw}
+
+
+@app.delete("/api/developer/keys/{key_id}")
+def developer_delete_key(key_id: str):
+    if not devapi.delete_key(key_id):
+        raise KeyError(key_id)
+    return {"ok": True}
+
+
+def reply_of(sid: str) -> str:
+    """The text of the newest assistant reply in a thread."""
+    for m in reversed(engine.store.list_messages(sid)):
+        if m.get("type") == "assistant":
+            text = "".join(p.get("text", "") for p in m.get("content") or [] if p.get("type") == "text").strip()
+            if text:
+                return text
+    return ""
+
+
+async def wait_idle(sid: str, timeout: float) -> bool:
+    """Wait until the thread's run (with any autopilot turns) is over. False on timeout."""
+    loop = asyncio.get_running_loop()
+    end = loop.time() + timeout
+    await asyncio.sleep(0.3)
+    while engine.is_running(sid):
+        if loop.time() > end:
+            return False
+        await asyncio.sleep(0.3)
+    return True
+
+
+@app.post("/api/v1/run")
+async def run_task(body: dict = Body(...)):
+    """One call for scripts: start a thread (or continue `sessionID`), send the prompt, wait for the
+    answer. With `wait: false` it returns right away with the thread id."""
+    text = str(body.get("prompt") or "").strip()
+    if not text:
+        raise ValueError("prompt is required")
+    sid = body.get("sessionID")
+    if sid:
+        session_or_404(sid)
+    else:
+        directory = str(body.get("directory") or "").strip()
+        if not directory or not Path(directory).is_dir():
+            raise ValueError("directory must be an existing folder")
+        sid = engine.create_session(directory, title=body.get("title") or None, agent=body.get("agent"),
+                                    model=model_ref(body.get("model")), mode=body.get("mode") or "full")["id"]
+    await engine.prompt(sid, text, None, agent=body.get("agent"), model=model_ref(body.get("model")))
+    if body.get("wait") is False:
+        return {"sessionID": sid, "done": False}
+    done = await wait_idle(sid, float(body.get("timeout") or 1800))
+    s = engine.store.get_session(sid) or {}
+    afh = (s.get("metadata") or {}).get("afh") or {}
+    return {"sessionID": sid, "done": done, "reply": reply_of(sid), "todos": afh.get("todos") or [], "goal": afh.get("goal"),
+            "cost": s.get("cost") or 0, "title": s.get("title")}
+
+
+@app.get("/api/v1/sessions/{sid}/reply")
+def last_reply(sid: str):
+    session_or_404(sid)
+    return {"sessionID": sid, "running": engine.is_running(sid), "reply": reply_of(sid)}
 
 
 @app.get("/api/events")

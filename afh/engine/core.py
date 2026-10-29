@@ -91,6 +91,15 @@ MERGE_PROMPT = ("These are summaries of consecutive parts of one long coding con
                 "commands, Problems and how they ended, Next steps. Keep exact names, paths and numbers. Write the summary after the ANSWER: marker, all on following lines.")
 
 
+
+def compact_ratio(settings: dict) -> float:
+    """How full the context window may get before older messages are summarised (Settings → Agent)."""
+    try:
+        pct = int((settings.get("agent") or {}).get("compactAt") or 80)
+    except (TypeError, ValueError):
+        pct = 80
+    return max(20, min(95, pct)) / 100
+
 class Engine:
     def __init__(self) -> None:
         self.store = Store(appstore.AFH_DIR / "afh.db")
@@ -123,6 +132,22 @@ class Engine:
         self.publish(event("afh.ready"))
         asyncio.ensure_future(self.resume_interrupted())
         asyncio.ensure_future(self._refresh_catalog())
+        from .schedules import Scheduler
+
+        self.scheduler = Scheduler(self._start_scheduled, lambda ev: self.publish(event(ev["type"], None, **ev["data"])))
+        self.scheduler.start()
+
+    async def _start_scheduled(self, job: dict) -> str:
+        """One run of a scheduled job: a new thread in the job's folder, with the job's prompt."""
+        ref = job.get("model")
+        if isinstance(ref, str) and "/" in ref:
+            pid, _, mid = ref.partition("/")
+            ref = {"providerID": pid, "id": mid}
+        when = time.strftime("%b %d %H:%M")
+        s = self.create_session(job["directory"], title=f"{job['name']} · {when}", agent=job.get("agent"), model=ref or None, mode=job.get("mode") or "full")
+        self._patch_afh(s["id"], scheduled={"id": job["id"], "name": job["name"]})
+        await self.prompt(s["id"], job["prompt"])
+        return s["id"]
 
     async def _refresh_catalog(self) -> None:
         """Model facts (context, efforts, inputs, prices) from models.dev, once a day, in the background."""
@@ -193,6 +218,11 @@ class Engine:
             self.publish(event("agent.updated"))
 
     async def stop(self) -> None:
+        if getattr(self, "scheduler", None):
+            self.scheduler.stop()
+        from .tools.browser import MANAGER as browser
+
+        await browser.shutdown()
         for run in list(self.runs.values()):
             run.abort.set()
         await self.jobs.stop_all()
@@ -822,7 +852,7 @@ class Engine:
             from .runner import estimate_tokens
 
             estimated = estimate_tokens(to_chat(msgs))
-            if max(measured, estimated) < model.context * 0.8:
+            if max(measured, estimated) < model.context * compact_ratio(self.settings()):
                 return False
         keep_n = 6 if len(msgs) > 8 else max(1, len(msgs) // 2)
         keep = msgs[-keep_n:]

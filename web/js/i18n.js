@@ -170,6 +170,18 @@ const AR = {
   // about
   "Version": "الإصدار", "Engine": "المحرك", "Models available": "النماذج المتاحة", "Reload engine": "أعد تحميل المحرك", "Where things live": "أين تُحفظ الأشياء", "Open source": "مفتوح المصدر",
   "Everything stays on this computer.": "كل شيء يبقى على هذا الجهاز.",
+  // 1.7: schedules, developer, bug report, updates, browser, voice, images
+  "Schedules": "الجدولة", "Developer": "المطوّر", "Report a bug": "الإبلاغ عن مشكلة", "Jobs": "المهام", "New job": "مهمة جديدة", "Repeat": "التكرار", "Every": "كل",
+  "At minute": "عند الدقيقة", "Day": "اليوم", "Time": "الوقت", "Project": "المشروع", "Permissions": "الصلاحيات",
+  "Run now": "شغّل الآن", "Other…": "أخرى…", "API keys": "مفاتيح API", "Create key": "أنشئ مفتاحًا", "Where the API is": "مكان الواجهة البرمجية", "Address right now": "العنوان الحالي",
+  "Discovery file": "ملف الاكتشاف", "Fixed port": "منفذ ثابت", "Interactive reference": "المرجع التفاعلي", "Quick start": "بداية سريعة", "Open": "فتح",
+  "What went wrong": "ما الذي حدث", "Include the backend log": "أرفق سجل الخادم", "Create report": "أنشئ التقرير", "What goes in the zip": "محتويات الملف المضغوط", "Bug report saved": "تم حفظ تقرير المشكلة",
+  "Updates": "التحديثات", "Status": "الحالة", "Check now": "تحقق الآن", "Download": "تنزيل", "Restart to update": "أعد التشغيل للتحديث", "Download updates automatically": "نزّل التحديثات تلقائيًا",
+  "Update address": "عنوان التحديثات", "Checking for a new version…": "جارٍ البحث عن إصدار جديد…", "Set the update address below to get updates": "اضبط عنوان التحديثات أدناه لتصلك التحديثات",
+  "Browser": "المتصفح", "Let the agent use a browser": "اسمح للوكيل باستخدام متصفح", "Show the browser window": "أظهر نافذة المتصفح", "Browser program": "برنامج المتصفح",
+  "Voice": "الصوت", "Speech-to-text provider": "مزوّد تحويل الكلام إلى نص", "Language": "اللغة", "Compact the conversation at": "اضغط المحادثة عند",
+  "Speak — your words are typed here": "تحدّث — تُكتب كلماتك هنا", "Stop and transcribe": "أوقف وحوّل إلى نص", "Didn't catch any words — try again": "لم تُلتقط أي كلمات — حاول مجددًا",
+  "Scheduled job started": "بدأت مهمة مجدولة",
 };
 
 // Text with numbers or names in it.

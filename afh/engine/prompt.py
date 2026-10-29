@@ -61,6 +61,10 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
     if "jobs" in have:
         lines.append("- **Background jobs**: start servers and watchers with `shell` and `background: true`, then `jobs` to read output, wait for a "
                      "line like \"ready\", and stop them when done.")
+    if "browser" in have:
+        lines.append("- **Browser** (`browser` tool): a real Chrome/Edge tab for this thread. After building or changing anything with a UI, open it "
+                     "(start the dev server as a background job first), look at the screenshot, click through the change and read `console` for errors "
+                     "before you call it done.")
     lines.append("- **Error checks**: after you edit files, AFH checks them (syntax, types, lint) and appends any problems to the tool result. Fix them.")
     lines.append("- **Context**: long threads are summarised automatically and old tool outputs may be shortened. Re-run a tool if you need its full output again.")
     lines.append("- **The user's controls**: approval modes (some actions ask the user first), undo, context editing, hooks that may block a tool or "

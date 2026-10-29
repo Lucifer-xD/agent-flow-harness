@@ -64,6 +64,7 @@ $PyArgs = @(
     '--collect-submodules', 'mcp_types',
     '--collect-submodules', 'httpx2',
     '--collect-submodules', 'httpx',
+    '--collect-submodules', 'websockets',  # the browser tool imports it lazily
     '--copy-metadata', 'mcp',
     # uvicorn picks its implementation modules by string at runtime
     '--hidden-import', 'uvicorn.logging',

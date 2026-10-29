@@ -2,7 +2,7 @@
 // ever sees the `window.afh` object built here, never Node or Electron internals.
 "use strict";
 
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const EVENT_CHANNEL = "afh:event";
 
@@ -19,8 +19,25 @@ contextBridge.exposeInMainWorld("afh", {
   /** Native multi-select file picker. Resolves to an array of paths (empty when cancelled). */
   pickFiles: () => ipcRenderer.invoke("afh:pick-files"),
 
+  /** The path on disk of a dropped File ("" for things with no file behind them, like a pasted image). */
+  pathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || "";
+    } catch {
+      return "";
+    }
+  },
+
   /** Opens an http(s) URL in the user's default browser. Other schemes are rejected. */
   openExternal: (url) => ipcRenderer.invoke("afh:open-external", String(url)),
+
+  /** App updates (see main.js): state(), check(), download(), install() → restarts into the new version. */
+  updates: {
+    state: () => ipcRenderer.invoke("afh:update:state"),
+    check: () => ipcRenderer.invoke("afh:update:check"),
+    download: () => ipcRenderer.invoke("afh:update:download"),
+    install: () => ipcRenderer.invoke("afh:update:install"),
+  },
 
   window: {
     minimize: () => ipcRenderer.invoke("afh:window:minimize"),

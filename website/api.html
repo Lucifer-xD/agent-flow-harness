@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AFH API Reference</title>
+  <meta name="description" content="Drive Agent Flow Harness from your own scripts: the local REST API, live events, scheduled jobs, and the Python and JavaScript SDKs.">
+  <meta name="theme-color" content="#0a0807">
+  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body class="docs">
+  <div class="docs-glow" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="nav scrolled">
+    <a class="brand" href="index.html"><img src="assets/mark.svg" alt="" width="34" height="20"><span>Agent Flow Harness</span></a>
+    <nav class="nav-links">
+      <a href="index.html#flow">How it works</a>
+      <a href="index.html#features">Features</a>
+      <a href="api.html" class="active">API</a>
+    </nav>
+    <a class="btn btn-small" href="index.html#download">Download</a>
+  </header>
+
+  <section class="docs-hero">
+    <p class="eyebrow"><span class="dot"></span> API v1 · AFH <span data-version>1.7.0</span></p>
+    <h1 class="display"><span class="grad-text">Build on AFH.</span></h1>
+    <p class="lead">Everything the app does is a local HTTP API. Start an agent from a script, a git hook or CI, stream what it does live, and schedule work for later — with one key and a few lines of Python or JavaScript.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#quickstart">Quick start</a>
+      <a class="btn btn-ghost" href="sdk/afh_sdk.py" download>Python SDK</a>
+      <a class="btn btn-ghost" href="sdk/afh.mjs" download>JavaScript SDK</a>
+    </div>
+  </section>
+
+  <div class="docs-layout">
+    <aside class="toc" aria-label="On this page">
+      <div class="toc-inner">
+        <p class="toc-title">Getting started</p>
+        <a href="#overview">Overview</a>
+        <a href="#quickstart">Quick start</a>
+        <a href="#auth">Authentication</a>
+        <a href="#discovery">Finding the app</a>
+        <a href="#errors">Errors</a>
+        <p class="toc-title">Endpoints</p>
+        <a href="#run">Run a task</a>
+        <a href="#threads">Threads</a>
+        <a href="#work">To-dos &amp; goals</a>
+        <a href="#changes">Changes &amp; usage</a>
+        <a href="#approvals">Approvals</a>
+        <a href="#events">Live events</a>
+        <a href="#schedules">Scheduled jobs</a>
+        <a href="#models">Models</a>
+        <p class="toc-title">SDKs</p>
+        <a href="#python">Python</a>
+        <a href="#javascript">JavaScript</a>
+        <a href="#recipes">Recipes</a>
+      </div>
+    </aside>
+
+    <main class="doc">
+      <!-- overview -->
+      <section id="overview">
+        <h2>Overview</h2>
+        <p>While AFH is open it serves an API on <code>127.0.0.1</code> — the same one its own window uses. Anything you can do in the app you can do from code: create threads, send messages, read replies and diffs, set goals and to-do lists, approve actions, and schedule recurring jobs.</p>
+        <div class="cards3">
+          <div class="mini"><b>Local only</b><span>The API listens on your computer. Nothing is exposed to the network unless you turn on Remote control.</span></div>
+          <div class="mini"><b>One key</b><span>Create API keys in Settings → Developer. Keys are stored hashed and can be revoked at any time.</span></div>
+          <div class="mini"><b>No dependencies</b><span>Each SDK is a single file: Python's standard library, or Node 18+ <code>fetch</code>.</span></div>
+        </div>
+        <p class="note">The app also serves an interactive reference generated from your exact version: <b>Settings → Developer → Interactive reference</b> (it opens <code>/api/docs</code>).</p>
+      </section>
+
+      <!-- quick start -->
+      <section id="quickstart">
+        <h2>Quick start</h2>
+        <ol class="steps">
+          <li><b>Create a key.</b> In AFH open <b>Settings → Developer</b> and click <b>Create key</b>. Copy it — it's shown only once.</li>
+          <li><b>Save it as an environment variable</b> so it stays out of your code:
+            <div class="code" data-lang="powershell"><pre><code>setx AFH_API_KEY "afh_your_key_here"</code></pre></div></li>
+          <li><b>Run a task.</b> AFH must be open. The SDK finds it on its own.</li>
+        </ol>
+        <div class="tabs" role="tablist">
+          <div class="tab-bar"><button class="on" data-tab="py">Python</button><button data-tab="js">JavaScript</button><button data-tab="curl">curl</button></div>
+          <div class="code" data-pane="py"><pre><code>from afh_sdk import AFH
+
+afh = AFH()  # finds the running app, reads AFH_API_KEY
+result = afh.run("Add a /health endpoint with a test, then run the tests",
+                 directory=r"C:\code\my-api")
+print(result["reply"])
+print(result["todos"], result["cost"])</code></pre></div>
+          <div class="code" data-pane="js" hidden><pre><code>import { AFH } from "./afh.mjs";
+
+const afh = await AFH.connect(); // finds the running app, reads AFH_API_KEY
+const result = await afh.run("Add a /health endpoint with a test, then run the tests", {
+  directory: "C:/code/my-api",
+});
+console.log(result.reply);</code></pre></div>
+          <div class="code" data-pane="curl" hidden><pre><code>curl -s http://127.0.0.1:PORT/api/v1/run \
+  -H "Authorization: Bearer $AFH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Add a /health endpoint with a test", "directory": "C:/code/my-api"}'</code></pre></div>
+        </div>
+      </section>
+
+      <!-- auth -->
+      <section id="auth">
+        <h2>Authentication</h2>
+        <p>Send your key in the <code>Authorization</code> header of every request:</p>
+        <div class="code"><pre><code>Authorization: Bearer afh_3kX9…</code></pre></div>
+        <ul class="facts">
+          <li>Keys start with <code>afh_</code>. AFH keeps only a SHA-256 hash in <code>~/.afh/api-keys.json</code>, so a lost key can't be shown again — create a new one.</li>
+          <li>Settings → Developer lists each key with when it was last used. Deleting a key stops it working immediately.</li>
+          <li>API keys work on the local address only. Phones and other computers use Remote control, which has its own password.</li>
+          <li>A key can do anything the app can, including running commands in your projects. Treat it like a password.</li>
+        </ul>
+      </section>
+
+      <!-- discovery -->
+      <section id="discovery">
+        <h2>Finding the app</h2>
+        <p>AFH picks a free port each time it starts and writes where it is to a discovery file while it runs:</p>
+        <div class="code" data-lang="~/.afh/api.json"><pre><code>{
+  "url": "http://127.0.0.1:53817",
+  "version": "1.7.0",
+  "pid": 18244,
+  "started": 1793270000000
+}</code></pre></div>
+        <p>The SDKs read it for you. To always use the same address instead, set a <b>Fixed port</b> in Settings → Developer, or pass <code>url</code> / set <code>AFH_URL</code>. If you moved AFH's data folder with <code>AFH_HOME</code>, the file is there instead.</p>
+      </section>
+
+      <!-- errors -->
+      <section id="errors">
+        <h2>Errors</h2>
+        <p>Failed requests answer with a JSON body <code>{"error": "message"}</code> and a status code:</p>
+        <table class="ref">
+          <tr><th>Status</th><th>Meaning</th></tr>
+          <tr><td><code>400</code></td><td>A field is missing or wrong — the message says which.</td></tr>
+          <tr><td><code>401</code></td><td>No key, or the key was deleted.</td></tr>
+          <tr><td><code>403</code></td><td>The request came through a host name other than 127.0.0.1/localhost.</td></tr>
+          <tr><td><code>404</code></td><td>No thread, job or key with that id.</td></tr>
+          <tr><td><code>503</code></td><td>The engine is restarting after a settings change. Retry in a second or two.</td></tr>
+        </table>
+        <p>The SDKs raise <code>AFHError</code> with <code>status</code> and the message.</p>
+      </section>
+
+      <!-- run -->
+      <section id="run">
+        <h2>Run a task</h2>
+        <div class="ep"><span class="m post">POST</span><code>/api/v1/run</code></div>
+        <p>The one-call way: start a thread in a folder (or continue one), send the prompt, and wait until the agent is done — including any autopilot turns toward a goal.</p>
+        <table class="ref">
+          <tr><th>Field</th><th>Type</th><th></th></tr>
+          <tr><td><code>prompt</code></td><td>string</td><td>Required. What you want done.</td></tr>
+          <tr><td><code>directory</code></td><td>string</td><td>The project folder for a new thread. Required unless you pass <code>sessionID</code>.</td></tr>
+          <tr><td><code>sessionID</code></td><td>string</td><td>Continue this thread instead of starting one.</td></tr>
+          <tr><td><code>model</code></td><td>string</td><td><code>"provider/model"</code>, e.g. <code>"anthropic/claude-sonnet-5-5"</code>. Default: the app's default model.</td></tr>
+          <tr><td><code>agent</code></td><td>string</td><td>An agent id from Settings → Prompts &amp; agents.</td></tr>
+          <tr><td><code>mode</code></td><td>string</td><td><code>full</code> (default — no approvals, it just works), <code>build</code> (asks before risky actions) or <code>plan</code> (read-only planning).</td></tr>
+          <tr><td><code>wait</code></td><td>boolean</td><td>Default <code>true</code>. <code>false</code> returns at once with the thread id.</td></tr>
+          <tr><td><code>timeout</code></td><td>number</td><td>Seconds to wait, default 1800. The run keeps going after a timeout; <code>done</code> is then <code>false</code>.</td></tr>
+        </table>
+        <div class="code" data-lang="response"><pre><code>{
+  "sessionID": "ses_01J…",
+  "done": true,
+  "reply": "Added GET /health returning {\"ok\": true} and tests/test_health.py. All 42 tests pass.",
+  "todos": [{"content": "Add the route", "status": "completed"}, …],
+  "goal": null,
+  "cost": 0.0412,
+  "title": "Add /health endpoint"
+}</code></pre></div>
+        <div class="ep"><span class="m get">GET</span><code>/api/v1/sessions/{id}/reply</code></div>
+        <p>For runs started with <code>wait: false</code>: <code>{sessionID, running, reply}</code> — the newest answer so far.</p>
+      </section>
+
+      <!-- threads -->
+      <section id="threads">
+        <h2>Threads</h2>
+        <p>A thread (session) is one conversation in one project folder, with its messages, to-do list, goal and undo history.</p>
+        <table class="ref eps">
+          <tr><td><span class="m get">GET</span></td><td><code>/api/sessions?directory=…</code></td><td>Threads in a project, newest first. <code>&amp;archived=true</code> for archived ones.</td></tr>
+          <tr><td><span class="m post">POST</span></td><td><code>/api/sessions</code></td><td>Create: <code>{directory, title?, model?: {providerID, id}, agent?, mode?, worktree?}</code>. <code>worktree: true</code> gives the thread its own git branch and folder.</td></tr>
+          <tr><td><span class="m get">GET</span></td><td><code>/api/sessions/{id}</code></td><td>The thread: title, folder, model, mode, cost, <code>running</code>.</td></tr>
+          <tr><td><span class="m patch">PATCH</span></td><td><code>/api/sessions/{id}</code></td><td>Change <code>title</code>, <code>model</code>, <code>agent</code>, <code>mode</code> or <code>archived</code>.</td></tr>
+          <tr><td><span class="m get">GET</span></td><td><code>/api/sessions/{id}/messages</code></td><td>Every message with its parts: text, reasoning, tool calls and their results.</td></tr>
+          <tr><td><span class="m post">POST</span></td><td><code>/api/sessions/{id}/prompt</code></td><td>Send <code>{text, files?: [paths]}</code>. Returns at once; follow the run with events or <code>/reply</code>. Images in <code>files</code> are sent to vision models. While a run is going the message is queued and delivered between steps.</td></tr>
+          <tr><td><span class="m post">POST</span></td><td><code>/api/sessions/{id}/interrupt</code></td><td>Stop the current run.</td></tr>
+          <tr><td><span class="m post">POST</span></td><td><code>/api/sessions/{id}/fork</code></td><td>Copy the thread, optionally <code>{before: messageID}</code>.</td></tr>
+          <tr><td><span class="m del">DELETE</span></td><td><code>/api/sessions/{id}</code></td><td>Delete the thread.</td></tr>
+        </table>
+      </section>
+
+      <!-- work -->
+      <section id="work">
+        <h2>To-dos &amp; goals</h2>
+        <table class="ref eps">
+          <tr><td><span class="m get">GET</span></td><td><code>/api/sessions/{id}/todos</code></td><td>The agent's to-do list: <code>[{content, status}]</code> with status <code>pending</code>, <code>in_progress</code> or <code>completed</code>.</td></tr>
+          <tr><td><span class="m put">PUT</span></td><td><code>/api/sessions/{id}/todos</code></td><td>Replace the list: <code>{todos: [...]}</code>. The agent sees your edit on its next step.</td></tr>
+          <tr><td><span class="m get">GET</span></td><td><code>/api/sessions/{id}/goal</code></td><td>The goal, or <code>null</code>.</td></tr>
+          <tr><td><span class="m put">PUT</span></td><td><code>/api/sessions/{id}/goal</code></td><td>Set a goal: <code>{text, criteria?, autopilot?: true, maxTurns?, start?: false}</code>. With autopilot the agent keeps working until it reports the goal achieved or blocked. <code>start: true</code> sends the first message.</td></tr>
+          <tr><td><span class="m del">DELETE</span></td><td><code>/api/sessions/{id}/goal</code></td><td>Clear the goal.</td></tr>
+        </table>
+      </section>
+
+      <!-- changes -->
+      <section id="changes">
+        <h2>Changes &amp; usage</h2>
+        <table class="ref eps">
+          <tr><td><span class="m get">GET</span></td><td><code>/api/sessions/{id}/diff</code></td><td>Every file the thread changed, with a unified diff and added/removed line counts.</td></tr>
+          <tr><td><span class="m get">GET</span></td><td><code>/api/sessions/{id}/usage</code></td><td>Tokens in/out, cache reads, cost and context used, per model.</td></tr>
+          <tr><td><span class="m post">POST</span></td><td><code>/api/sessions/{id}/revert</code></td><td>Undo back to just before <code>{messageId}</code> — messages and files. Sending a new message makes it final.</td></tr>
+        </table>
+      </section>
+
+      <!-- approvals -->
+      <section id="approvals">
+        <h2>Approvals</h2>
+        <p>In <code>build</code> mode the agent asks before risky actions. You get a <code>permission.asked</code> event, or poll:</p>
+        <table class="ref eps">
+          <tr><td><span class="m get">GET</span></td><td><code>/api/sessions/{id}/permissions</code></td><td>Waiting requests: <code>[{id, action, resources, metadata}]</code>.</td></tr>
+          <tr><td><span class="m post">POST</span></td><td><code>/api/sessions/{id}/permissions/{requestID}</code></td><td>Answer with <code>{decision, message?}</code>: <code>once</code>, <code>always</code> (this kind of action, for the rest of the thread) or <code>reject</code> (the message tells the agent why).</td></tr>
+        </table>
+      </section>
+
+      <!-- events -->
+      <section id="events">
+        <h2>Live events</h2>
+        <div class="ep"><span class="m get">GET</span><code>/api/events</code></div>
+        <p>A <a href="https://developer.mozilla.org/docs/Web/API/Server-sent_events" target="_blank" rel="noopener">Server-Sent Events</a> stream of everything happening in every thread — the same feed the app draws from. Each event is one <code>data:</code> line of JSON:</p>
+        <div class="code"><pre><code>data: {"id":"evt_…","type":"session.text.delta","created":1793270001234,
+       "data":{"sessionID":"ses_01J…","assistantMessageID":"msg_…","delta":"Adding the route"}}</code></pre></div>
+        <table class="ref">
+          <tr><th>Type</th><th>When</th></tr>
+          <tr><td><code>session.execution.started</code> / <code>succeeded</code> / <code>failed</code> / <code>interrupted</code></td><td>A run begins and ends.</td></tr>
+          <tr><td><code>session.text.delta</code></td><td>Streaming answer text (<code>delta</code>).</td></tr>
+          <tr><td><code>session.reasoning.delta</code></td><td>Streaming thinking, for models that show it.</td></tr>
+          <tr><td><code>session.tool.input.started</code></td><td>The model starts calling a tool (<code>name</code>: edit, shell, browser…).</td></tr>
+          <tr><td><code>session.tool.called</code> / <code>success</code> / <code>failed</code></td><td>The call with its <code>input</code>, then its result.</td></tr>
+          <tr><td><code>session.todos.updated</code></td><td>The to-do list changed.</td></tr>
+          <tr><td><code>session.goal.updated</code></td><td>A goal was set, achieved or blocked.</td></tr>
+          <tr><td><code>permission.asked</code> / <code>permission.replied</code></td><td>An approval is waiting / was answered.</td></tr>
+          <tr><td><code>session.usage.updated</code></td><td>Tokens and cost after each model call.</td></tr>
+          <tr><td><code>session.compaction.started</code> / <code>ended</code></td><td>Older messages are being summarised to free context (at 40, 60 or 80% — Settings → Agent).</td></tr>
+          <tr><td><code>schedule.ran</code> / <code>schedule.failed</code></td><td>A scheduled job started a thread, or couldn't.</td></tr>
+        </table>
+        <p>A comment line (<code>: ping</code>) arrives every 15 seconds so idle connections stay open.</p>
+      </section>
+
+      <!-- schedules -->
+      <section id="schedules">
+        <h2>Scheduled jobs</h2>
+        <p>Run a prompt in a project on a timetable — <em>"every weekday at 9:00, update the dependencies and run the tests"</em>. Each run is a new thread you can read later. Jobs run while AFH is open; one that was due while it was closed runs once soon after it starts.</p>
+        <table class="ref eps">
+          <tr><td><span class="m get">GET</span></td><td><code>/api/schedules</code></td><td>All jobs, each with <code>nextRun</code>, <code>lastRun</code>, <code>lastStatus</code> and <code>lastSession</code>.</td></tr>
+          <tr><td><span class="m post">POST</span></td><td><code>/api/schedules</code></td><td>Create a job.</td></tr>
+          <tr><td><span class="m put">PUT</span></td><td><code>/api/schedules/{id}</code></td><td>Change a job (send the whole job).</td></tr>
+          <tr><td><span class="m post">POST</span></td><td><code>/api/schedules/{id}/run</code></td><td>Run it now → <code>{sessionID}</code>.</td></tr>
+          <tr><td><span class="m del">DELETE</span></td><td><code>/api/schedules/{id}</code></td><td>Delete it.</td></tr>
+        </table>
+        <table class="ref">
+          <tr><th>Field</th><th></th></tr>
+          <tr><td><code>name</code>, <code>directory</code>, <code>prompt</code></td><td>What to run, and where. The folder must exist.</td></tr>
+          <tr><td><code>every</code></td><td><code>interval</code>, <code>hourly</code>, <code>daily</code>, <code>weekdays</code> or <code>weekly</code>.</td></tr>
+          <tr><td><code>minutes</code></td><td>For <code>interval</code>: 5 to 1440.</td></tr>
+          <tr><td><code>time</code></td><td><code>"HH:MM"</code> local time (for <code>hourly</code> only the minutes count).</td></tr>
+          <tr><td><code>weekday</code></td><td>For <code>weekly</code>: 0 = Monday … 6 = Sunday.</td></tr>
+          <tr><td><code>model</code>, <code>agent</code>, <code>mode</code></td><td>Like <a href="#run">/v1/run</a>. Mode defaults to <code>full</code> since nobody is there to approve.</td></tr>
+          <tr><td><code>enabled</code></td><td><code>false</code> pauses the job.</td></tr>
+        </table>
+        <div class="code" data-lang="python"><pre><code>afh.save_schedule({
+    "name": "Morning check",
+    "directory": r"C:\code\my-api",
+    "prompt": "Update outdated dependencies, run the tests, and fix anything that broke.",
+    "every": "weekdays",
+    "time": "09:00",
+})</code></pre></div>
+      </section>
+
+      <!-- models -->
+      <section id="models">
+        <h2>Models</h2>
+        <div class="ep"><span class="m get">GET</span><code>/api/models</code></div>
+        <p><code>{models, defaultModel, providerNames}</code>. Each model has <code>providerID</code>, <code>id</code>, <code>name</code>, <code>context</code>, <code>input</code> (e.g. <code>["text", "image"]</code>) and its prices. Pass <code>"providerID/id"</code> as <code>model</code> anywhere above.</p>
+      </section>
+
+      <!-- python -->
+      <section id="python">
+        <h2>Python SDK</h2>
+        <p>One file, standard library only, Python 3.9+. <a href="sdk/afh_sdk.py" download>Download afh_sdk.py</a> next to your script.</p>
+        <table class="ref api">
+          <tr><td><code>AFH(api_key=None, url=None, timeout=60)</code></td><td>Connect. Defaults: <code>AFH_API_KEY</code>, then <code>AFH_URL</code> or the discovery file.</td></tr>
+          <tr><td><code>run(prompt, *, directory, session_id, model, agent, mode="full", wait=True, timeout=1800)</code></td><td>Do a task and wait for the answer.</td></tr>
+          <tr><td><code>sessions(directory)</code> · <code>session(id)</code> · <code>messages(id)</code></td><td>Read threads.</td></tr>
+          <tr><td><code>create_session(directory, *, title, model, agent, mode, worktree)</code></td><td>Start an empty thread.</td></tr>
+          <tr><td><code>prompt(id, text, files=None)</code> · <code>reply(id)</code> · <code>interrupt(id)</code> · <code>delete_session(id)</code></td><td>Talk to a thread.</td></tr>
+          <tr><td><code>todos(id)</code> · <code>set_todos(id, todos)</code> · <code>goal(id)</code> · <code>set_goal(id, text, criteria="", autopilot=True, start=False)</code></td><td>Plans and goals.</td></tr>
+          <tr><td><code>diff(id)</code> · <code>usage(id)</code></td><td>What changed, what it cost.</td></tr>
+          <tr><td><code>approvals(id)</code> · <code>approve(id, request_id, decision="once")</code></td><td>Answer approval requests.</td></tr>
+          <tr><td><code>schedules()</code> · <code>save_schedule(job)</code> · <code>run_schedule(id)</code> · <code>delete_schedule(id)</code></td><td>Scheduled jobs.</td></tr>
+          <tr><td><code>models()</code></td><td>Available models.</td></tr>
+          <tr><td><code>events(session_id=None)</code></td><td>Generator of live events, optionally for one thread.</td></tr>
+        </table>
+        <p>From a terminal: <code>python afh_sdk.py "Fix the failing test" C:\code\my-api</code></p>
+      </section>
+
+      <!-- javascript -->
+      <section id="javascript">
+        <h2>JavaScript SDK</h2>
+        <p>One ES module for Node 18+ — no packages. <a href="sdk/afh.mjs" download>Download afh.mjs</a>.</p>
+        <table class="ref api">
+          <tr><td><code>await AFH.connect({ apiKey, url })</code></td><td>Connect. Defaults like Python.</td></tr>
+          <tr><td><code>run(prompt, { directory, sessionID, model, agent, mode, wait, timeout })</code></td><td>Do a task and wait for the answer.</td></tr>
+          <tr><td><code>sessions</code> · <code>session</code> · <code>messages</code> · <code>createSession</code> · <code>prompt</code> · <code>reply</code> · <code>interrupt</code> · <code>deleteSession</code></td><td>Threads.</td></tr>
+          <tr><td><code>todos</code> · <code>setTodos</code> · <code>goal</code> · <code>setGoal</code> · <code>diff</code> · <code>usage</code></td><td>Plans, goals, changes.</td></tr>
+          <tr><td><code>approvals</code> · <code>approve</code> · <code>schedules</code> · <code>saveSchedule</code> · <code>runSchedule</code> · <code>deleteSchedule</code> · <code>models</code></td><td>The rest.</td></tr>
+          <tr><td><code>for await (const ev of afh.events(sessionID))</code></td><td>Live events.</td></tr>
+        </table>
+      </section>
+
+      <!-- recipes -->
+      <section id="recipes">
+        <h2>Recipes</h2>
+        <h3>Stream a run as it happens</h3>
+        <div class="code" data-lang="python"><pre><code>started = afh.run("Refactor utils.py into a package", directory=repo, wait=False)
+for ev in afh.events(started["sessionID"]):
+    if ev["type"] == "session.text.delta":
+        print(ev["data"]["delta"], end="", flush=True)
+    elif ev["type"] == "session.tool.input.started":
+        print(f"\n→ {ev['data']['name']}")
+    elif ev["type"].startswith("session.execution.") and ev["type"] != "session.execution.started":
+        break</code></pre></div>
+        <h3>Review every commit before it lands</h3>
+        <div class="code" data-lang=".git/hooks/pre-push (Node)"><pre><code>#!/usr/bin/env node
+import { AFH } from "./afh.mjs";
+const afh = await AFH.connect();
+const out = await afh.run("Review the changes on this branch against main. Reply PASS or list the problems.",
+  { directory: process.cwd(), mode: "plan", timeout: 600 });
+console.log(out.reply);
+process.exit(out.reply.trim().startsWith("PASS") ? 0 : 1);</code></pre></div>
+        <h3>Work toward a goal with autopilot</h3>
+        <div class="code" data-lang="python"><pre><code>thread = afh.create_session(repo, title="Dark mode")
+afh.set_goal(thread["id"], "Add a dark theme with a toggle in the header",
+             criteria="Toggle works, choice persists, tests pass", start=True)
+while afh.reply(thread["id"])["running"]:
+    time.sleep(5)
+print(afh.goal(thread["id"])["status"])</code></pre></div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <div class="brand"><img src="assets/mark.svg" alt="" width="30" height="18"><span>Agent Flow Harness</span></div>
+    <p><a href="index.html">Home</a> · <a href="api.html">API reference</a> · <a href="index.html#download">Download</a></p>
+    <p class="fine">© 2026 Agent Flow Harness</p>
+  </footer>
+
+  <script src="js/docs.js"></script>
+</body>
+</html>

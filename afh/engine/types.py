@@ -193,6 +193,7 @@ class ToolResult:
     files: list[FileDiff] = field(default_factory=list)  # edits made (for the Changes panel and undo)
     is_error: bool = False
     truncated: bool = False
+    images: list[str] = field(default_factory=list)  # data: URLs (browser screenshots) shown in the card and to vision models
 
 
 class Tool(Protocol):
