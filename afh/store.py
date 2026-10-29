@@ -238,6 +238,15 @@ def save_settings(patch: dict) -> dict:
         return merged
 
 
+def replace_setting(key: str, value: Any) -> dict:
+    """Set one top-level key outright; ``save_settings`` merges dicts, so it can never drop an entry."""
+    with _lock:
+        current = load_settings()
+        current[key] = value
+        _write_json(SETTINGS_PATH, current)
+        return current
+
+
 
 
 

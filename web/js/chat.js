@@ -281,6 +281,13 @@ const pick = (o, ...keys) => {
   return null;
 };
 
+const HARNESS_VERBS = {
+  list: ["Checked what's installed", "Checking what's installed"], install_skill: ["Installed skill", "Installing skill"], remove_skill: ["Removed skill", "Removing skill"],
+  add_mcp: ["Added MCP server", "Adding MCP server"], remove_mcp: ["Removed MCP server", "Removing MCP server"], add_command: ["Added command", "Adding command"],
+  remove_command: ["Removed command", "Removing command"], add_hook: ["Added hook", "Adding hook"], remove_hook: ["Removed hook", "Removing hook"],
+  add_agent: ["Added agent", "Adding agent"], remove_agent: ["Removed agent", "Removing agent"],
+};
+
 export function describeTool(p) {
   const name = (p.name || "tool").toLowerCase();
   const input = typeof p.state?.input === "object" ? p.state.input : {};
@@ -294,6 +301,7 @@ export function describeTool(p) {
   if (/web|fetch|browse/.test(name)) return { icon: "globe", label: name === "websearch" ? "Search web" : "Fetch", target: pick(input, "url", "query") || "" };
   if (/task|agent/.test(name)) return { icon: "bot", label: "Subagent", target: pick(input, "description", "prompt") || "" };
   if (/todo/.test(name)) return { icon: "list", label: "Plan", target: "" };
+  if (name === "harness") return { icon: "plug", label: (HARNESS_VERBS[input.action] || ["Harness"])[0], target: pick(input, "source", "name", "id", "url") || "" };
   if (/skill/.test(name)) return { icon: "book", label: "Skill", target: pick(input, "name", "id") || "" };
   const first = Object.values(input).find((v) => typeof v === "string") || "";
   return { icon: name.includes("_") || name.includes(".") ? "plug" : "zap", label: p.name, target: first };
@@ -403,6 +411,7 @@ function renderTool(p, openSet, thread) {
   const verbs = name === "browser" ? BROWSER[input0.action] || ["Used the browser", "Using the browser"]
     : name === "shell" && input0.background ? ["Started in background", "Starting in background"]
     : name === "jobs" ? ({ stop: ["Stopped job", "Stopping job"], list: ["Listed jobs", "Listing jobs"] }[input0.action] || ["Read job output", "Waiting for job output"])
+      : name === "harness" ? HARNESS_VERBS[input0.action] || ["Changed AFH setup", "Changing AFH setup"]
       : VERBS[name] || [p.name, p.name];
   const patches = info.edit ? toolPatches(p) : [];
   const meta = p.state?.metadata || {};
@@ -843,7 +852,7 @@ export function errorCard(err, { model, onRetry, onChangeModel } = {}) {
 /** An approval request for session `sid`; `onDone(id)` runs after the reply is accepted. */
 export function permissionCard(p, sid, onDone) {
   const action = p.action || "tool";
-  const title = action === "edit" ? "Allow file changes?" : action === "shell" ? "Run this command?" : `Allow ${action}?`;
+  const title = p.metadata?.title || (action === "edit" ? "Allow file changes?" : action === "shell" ? "Run this command?" : `Allow ${action}?`);
   const files = p.metadata?.files || [];
   const cmd = p.metadata?.command;
   const reply = async (decision, btn) => {

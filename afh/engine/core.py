@@ -22,6 +22,7 @@ from . import pricing
 from . import prompt as promptmod
 from . import state as statemod
 from . import worktree as wtmod
+from .install import HarnessTool
 from .jobs import JobManager, JobsTool
 from .runner import Run, to_chat
 from .sessions import Store
@@ -383,7 +384,7 @@ class Engine:
         from .tools.registry import builtin_tools
 
         tools = list(builtin_tools(self.settings()))
-        tools += [JobsTool(), statemod.TodoTool(self)]
+        tools += [JobsTool(), statemod.TodoTool(self), HarnessTool(self)]
         if agent.kind != "delegate":  # goals belong to the thread the user talks to
             tools.append(statemod.GoalTool(self))
         skills = self.skills_for(session["location"]["directory"])

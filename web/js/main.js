@@ -1505,7 +1505,7 @@ function onEvent(ev) {
   }
   if (type === "permission.asked") {
     if (S.current !== t) toast(`"${t.session.title || "A thread"}" is waiting for your approval`, "info", 5000);
-    notify("ask", "Approval needed", `${t.session.title || "A thread"} wants to ${ev.data?.action || "run a tool"}`);
+    notify("ask", ev.data?.metadata?.title || "Approval needed", `${t.session.title || "A thread"} wants to ${ev.data?.action || "run a tool"}`);
   }
   if (type === "session.execution.succeeded" && !D.children.has(sid)) notify("done", "Done", t.session.title || "The thread finished");
   if (type === "session.execution.failed" && !D.children.has(sid)) notify("error", "Run failed", ev.data?.error?.message || t.session.title || "");
