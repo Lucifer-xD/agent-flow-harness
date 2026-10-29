@@ -655,8 +655,17 @@ class Engine:
 
     def set_todos(self, sid: str, todos: list, by: str = "agent") -> list[dict]:
         todos = statemod.normalize_todos(todos, self.todos(sid))
-        self._patch_afh(sid, todos=todos)
-        self.publish(event("session.todos.updated", sid, todos=todos, counts=statemod.todo_counts(todos), by=by))
+        fields: dict[str, Any] = {"todos": todos}
+        c = statemod.todo_counts(todos)
+        if c["total"] and not c["open"] and c["completed"]:
+            # A finished list goes to the thread's history ("Completed lists" in the Goal menu).
+            history = list(self._afh(sid).get("todoHistory") or [])
+            sig = [t["content"] for t in todos]
+            if not history or [t["content"] for t in history[-1]["todos"]] != sig:
+                history.append({"todos": todos, "completed": now_ms()})
+                fields["todoHistory"] = history[-30:]
+        self._patch_afh(sid, **fields)
+        self.publish(event("session.todos.updated", sid, todos=todos, counts=c, by=by, history=fields.get("todoHistory")))
         if by == "user":
             # The model learns about the user's edit the next time it is called.
             self.store.add_message(sid, {"id": new_id("msg"), "type": "system", "metadata": {"notice": "todos"}, "time": {"created": now_ms()},
@@ -687,8 +696,14 @@ class Engine:
             goal["progress"] = [*(goal.get("progress") or []), note][-20:]
             if note.get("status") in ("achieved", "blocked"):
                 goal["summary"] = note.get("summary", "")
-        self._patch_afh(sid, goal=goal)
-        self.publish(event("session.goal.updated", sid, goal=goal))
+        extra: dict[str, Any] = {}
+        if status == "achieved":
+            # Achieved goals are kept in the thread's history ("Achieved goals" in the Goal menu).
+            history = list(self._afh(sid).get("goalHistory") or [])
+            history.append({k: goal.get(k) for k in ("text", "criteria", "summary", "achieved", "created", "by")})
+            extra["goalHistory"] = history[-30:]
+        self._patch_afh(sid, goal=goal, **extra)
+        self.publish(event("session.goal.updated", sid, goal=goal, history=extra.get("goalHistory")))
         return goal
 
     def clear_goal(self, sid: str) -> None:

@@ -14,6 +14,7 @@ export function syncState(t) {
   const afh = t.session?.metadata?.afh || {};
   if (!t.todosFromEvents) t.todos = afh.todos || [];
   if (!t.goalFromEvents) t.goal = afh.goal || null;
+  if (!t.historyFromEvents) { t.goalHistory = afh.goalHistory || []; t.todoHistory = afh.todoHistory || []; }
   t.jobs = t.jobs || [];
   return t;
 }
@@ -29,6 +30,8 @@ export function applyWorkEvent(t, ev) {
     const before = t.todos || [];
     t.todos = d.todos || [];
     t.todosFromEvents = true;
+    if (d.history) { t.todoHistory = d.history; t.historyFromEvents = true; }
+    if (allDone(t.todos) && !allDone(before)) celebrate(t, "todosShownUntil");
     t.justDone = new Set(t.todos.filter((x) => x.status === "completed" && before.find((b) => b.id === x.id && b.status !== "completed")).map((x) => x.id));
     return true;
   }
@@ -36,6 +39,8 @@ export function applyWorkEvent(t, ev) {
     t.prevGoalStatus = t.goal?.status;
     t.goal = d.goal || null;
     t.goalFromEvents = true;
+    if (d.history) { t.goalHistory = d.history; t.historyFromEvents = true; }
+    if (t.goal?.status === "achieved" && t.prevGoalStatus !== "achieved") celebrate(t, "goalShownUntil");
     return true;
   }
   if (ev.type === "session.jobs.updated") {
@@ -43,6 +48,19 @@ export function applyWorkEvent(t, ev) {
     return true;
   }
   return false;
+}
+
+const allDone = (todos) => todos.length > 0 && todos.every((x) => x.status === "completed" || x.status === "cancelled") && todos.some((x) => x.status === "completed");
+const SHOW_DONE_MS = 4500; // a finished goal or list stays a moment so you see it complete, then leaves the dock
+
+/** Keep a just-finished goal or list on screen for a moment, then slide it out of the dock. */
+function celebrate(t, key) {
+  t[key] = Date.now() + SHOW_DONE_MS;
+  setTimeout(() => {
+    const part = document.querySelector(key === "goalShownUntil" ? ".dock-goal" : ".dock-todos");
+    part?.classList.add("leaving");
+    setTimeout(() => ctxRedraw?.(), 380);
+  }, SHOW_DONE_MS);
 }
 
 const counts = (todos) => {
@@ -60,8 +78,10 @@ const counts = (todos) => {
  * Empty (hidden) when the thread has neither a goal nor a to-do list.
  */
 export function renderDock(box, t, opts = {}) {
-  const goal = t?.goal;
-  const todos = t?.todos || [];
+  const now = Date.now();
+  // Achieved goals and finished lists leave the dock (they live on under the Goal button).
+  const goal = t?.goal && (t.goal.status !== "achieved" || now < (t.goalShownUntil || 0)) ? t.goal : null;
+  const todos = t?.todos && (!allDone(t.todos) || now < (t.todosShownUntil || 0) || t.showTodos) ? t.todos : [];
   const show = !!t && (goal || todos.length || t.showTodos);
   box.classList.toggle("on", !!show);
   if (!show) { box.replaceChildren(); return; }
@@ -310,4 +330,35 @@ export function jobOutput(jid, t) {
   const m = modal(el("div.m-body", { style: { padding: "18px 20px" } }, el("div.job-modal-head", title, state, el("span.spacer"), stop), pre), { onClose: () => clearTimeout(timer) });
   m.box.classList.add("wide");
   refresh();
+}
+
+// ---- the Goal menu: the current goal, achieved goals and completed lists ----------------------
+
+export function goalsPopover(anchor, t, { onEdit, onNew }) {
+  const goal = t.goal;
+  const goals = [...(t.goalHistory || [])].reverse();
+  const lists = [...(t.todoHistory || [])].reverse();
+  const box = el("div.goals-pop");
+  const when = (ms) => (ms ? new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+  if (goal && goal.status !== "achieved") {
+    box.append(el("div.gp-section", el("div.gp-title", ico("target"), "Current goal"),
+      el("div.gp-goal", el("div.gp-text", goal.text), goal.criteria ? el("div.gp-sub", goal.criteria) : null),
+      el("div.gp-actions", el("button.btn.sm", { on: { click: () => { closePopover(); onEdit(); } } }, ico("edit"), "Edit"))));
+  } else {
+    box.append(el("div.gp-section", el("div.gp-actions", el("button.btn.sm.primary", { on: { click: () => { closePopover(); onNew(); } } }, ico("target"), "Set a new goal"))));
+  }
+  box.append(el("div.gp-title", ico("check"), el("span", "Achieved goals"), goals.length ? el("span.gp-n", String(goals.length)) : null));
+  if (!goals.length) box.append(el("div.empty-row", "No achieved goals in this thread yet."));
+  for (const g of goals) {
+    box.append(el("details.gp-item", el("summary", el("span.gp-check", ico("check")), el("span.gp-text", g.text), el("span.gp-when", when(g.achieved))),
+      g.summary ? el("div.gp-body", g.summary) : null, g.criteria ? el("div.gp-sub", g.criteria) : null));
+  }
+  box.append(el("div.gp-title", ico("checklist"), el("span", "Completed lists"), lists.length ? el("span.gp-n", String(lists.length)) : null));
+  if (!lists.length) box.append(el("div.empty-row", "No completed to-do lists yet."));
+  for (const l of lists) {
+    const done = l.todos.filter((x) => x.status === "completed").length;
+    box.append(el("details.gp-item", el("summary", el("span.gp-check", ico("checklist")), el("span.gp-text", l.todos[0]?.content || "To-do list"), el("span.gp-when", `${done}/${l.todos.length} · ${when(l.completed)}`)),
+      el("div.gp-body", l.todos.map((x) => el(`div.plan-item.${x.status}`, el("span.plan-mark", x.status === "completed" ? ico("check") : x.status === "cancelled" ? ico("x") : null), el("span", x.content))))));
+  }
+  popover(anchor, [], { header: box, width: 420, align: "right" });
 }
