@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Flow Harness</title>
+  <meta name="description" content="Agent Flow Harness (AFH) — a desktop coding agent that runs on your machine, with your models. Goals, to-do lists, subagents and a live view of every file it writes.">
+  <meta name="theme-color" content="#0a0807">
+  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="sections.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a class="brand" href="#top"><img src="assets/mark.svg" alt="" width="34" height="20"><span>Agent Flow Harness</span></a>
+    <nav class="nav-links">
+      <a href="#flow">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#models">Models</a>
+    </nav>
+    <a class="btn btn-small" href="#download">Download</a>
+  </header>
+
+  <main id="top">
+    <!-- 1 · hero -->
+    <section class="hero" data-chapter="0">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="dot"></span> Version <span data-version>1.6.3</span> · Windows</p>
+        <h1 class="display">
+          <span class="line"><span>Your agents.</span></span>
+          <span class="line"><span>Your machine.</span></span>
+          <span class="line grad"><span>Your flow.</span></span>
+        </h1>
+        <p class="lead">A desktop coding agent that plans, delegates and writes code with the models you choose — and lets you watch every line as it happens.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" data-download href="downloads/AFH-Setup-1.6.3.exe">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn btn-ghost" href="#flow">See how it works</a>
+        </div>
+        <p class="fine">Free · 64-bit Windows 10/11 · <span data-size>142 MB</span></p>
+      </div>
+      <div class="scroll-hint" aria-hidden="true"><span></span>Scroll</div>
+    </section>
+
+    <!-- 2 · how it works: a pinned story, the 3D world changes shape with each step -->
+    <section id="flow" class="flow">
+      <div class="flow-stage">
+        <div class="flow-head">
+          <p class="kicker">How it works</p>
+          <div class="flow-progress"><i></i></div>
+        </div>
+        <div class="flow-steps">
+          <article class="step" data-step="0">
+            <span class="step-n">01</span>
+            <h2>Say what you want.</h2>
+            <p>Type it like you'd tell a teammate. No setup, no special commands — AFH reads your project and gets moving.</p>
+            <div class="mini prompt-mini"><span class="caret-text" data-type="Add a login page with email and password, and make sure the tests pass."></span><span class="caret"></span></div>
+          </article>
+          <article class="step" data-step="1">
+            <span class="step-n">02</span>
+            <h2>It sets a goal and makes a plan.</h2>
+            <p>The agent writes down what "done" means, then breaks the work into a to-do list you can watch tick off — and edit any time.</p>
+            <div class="mini plan-mini">
+              <div class="pm-goal"><span class="pm-ico">◎</span><div><b>Goal</b><span>Users can sign up and log in; all tests pass</span></div></div>
+              <ul class="pm-list">
+                <li class="done"><i></i>Read the auth code</li>
+                <li class="done"><i></i>Build the login form</li>
+                <li class="now"><i></i>Add session handling</li>
+                <li><i></i>Write tests and run them</li>
+              </ul>
+            </div>
+          </article>
+          <article class="step" data-step="2">
+            <span class="step-n">03</span>
+            <h2>It splits the work across agents.</h2>
+            <p>A lead agent hands pieces to helpers that run side by side — each in its own lane, even its own git worktree — and checks what they bring back.</p>
+            <div class="mini agents-mini">
+              <div class="am lead"><span class="am-dot"></span>Lead · Kimi K3.1</div>
+              <div class="am"><span class="am-dot"></span>Helper · writing tests</div>
+              <div class="am"><span class="am-dot"></span>Helper · styling the form</div>
+              <div class="am"><span class="am-dot"></span>Reviewer · checking diffs</div>
+            </div>
+          </article>
+          <article class="step" data-step="3">
+            <span class="step-n">04</span>
+            <h2>You watch every line land.</h2>
+            <p>The Live pane streams each file as it's written. Don't like a turn? Rewind the thread <em>and</em> the files, edit your message, send it again.</p>
+            <div class="mini code-mini"><pre><code data-code></code></pre></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · the app, tilting up into view -->
+    <section class="showcase" id="app">
+      <div class="showcase-copy">
+        <p class="kicker">The app</p>
+        <h2 class="h2">Everything in one calm window.</h2>
+        <p class="sub">Threads on the left, the conversation in the middle, the goal and to-do list right above your message, and the file being written — live — on the right.</p>
+      </div>
+      <div class="device-wrap">
+        <div class="device">
+          <div class="dv-bar"><i></i><i></i><i></i><span>Agent Flow Harness</span></div>
+          <div class="dv-body">
+            <aside class="dv-side">
+              <div class="dv-new">+ New thread</div>
+              <div class="dv-label">Today</div>
+              <div class="dv-thread on">Login page with tests</div>
+              <div class="dv-thread">Fix flaky upload test</div>
+              <div class="dv-thread">Dark mode for settings</div>
+              <div class="dv-thread">Refactor payments API</div>
+              <div class="dv-label">Yesterday</div>
+              <div class="dv-thread">Arabic translations</div>
+              <div class="dv-thread">Speed up CI</div>
+            </aside>
+            <div class="dv-chat">
+              <div class="dv-msg you">Add a login page with email and password, and make sure the tests pass.</div>
+              <div class="dv-msg ai">
+                <div class="dv-who"><img src="assets/mark.svg" alt="" width="22" height="13">Kimi K3.1 Pro <span>· build</span></div>
+                <div class="dv-think">▸ Thought for 4.2s</div>
+                <div class="dv-tool"><b>read</b> src/auth/session.ts</div>
+                <div class="dv-tool"><b>write</b> src/pages/login.tsx <span class="ok">+84</span></div>
+                <div class="dv-tool"><b>delegate</b> Helper → "write the login tests" <span class="run">running</span></div>
+                <p>The form is in place. A helper is writing tests while I wire the session cookie…</p>
+              </div>
+              <div class="dv-dock">
+                <div class="dv-goal">◎ <b>Goal</b> Users can sign up and log in; all tests pass</div>
+                <div class="dv-todo"><span>To-do</span><em>3/5</em><div class="dv-bar2"><i></i></div></div>
+              </div>
+              <div class="dv-input">Message Kimi…<span class="dv-send">↑</span></div>
+            </div>
+            <div class="dv-live">
+              <div class="dv-live-head"><span class="live-dot"></span>Live · login.tsx</div>
+              <pre class="dv-code"><code data-live></code></pre>
+            </div>
+          </div>
+        </div>
+        <div class="float-card fc-1"><b>Goal achieved</b><span>Login works · 12 tests passed</span></div>
+        <div class="float-card fc-2"><b>Rewound 2 messages</b><span>3 files restored on disk</span></div>
+        <div class="float-card fc-3"><b>Compacted</b><span>6,040 messages kept · summary inline</span></div>
+      </div>
+    </section>
+
+    <!-- 4 · features -->
+    <section id="features" class="features">
+      <div class="section-head">
+        <p class="kicker">Features</p>
+        <h2 class="h2">Built for the long sessions.</h2>
+        <p class="sub">The parts that make an agent dependable when the job takes hours, not minutes.</p>
+      </div>
+      <div class="grid">
+        <article class="card"><div class="card-ico">◎</div><h3>Goals</h3><p>The agent sets its own goal from your request and keeps going until it's met — or tells you what's blocking it. Achieved goals are kept under the Goal button.</p></article>
+        <article class="card"><div class="card-ico">☰</div><h3>A to-do list you can touch</h3><p>Every step shows live. Add, reorder or tick items yourself and the agent sees your edits on its next turn.</p></article>
+        <article class="card"><div class="card-ico">⇶</div><h3>Subagents in parallel</h3><p>A built-in Helper plus your own agents. Watch any of them work from the top bar, see what the lead asked and what came back.</p></article>
+        <article class="card"><div class="card-ico">◉</div><h3>Live file pane</h3><p>Tool arguments stream as they're generated, so you see code appear character by character — not after the fact.</p></article>
+        <article class="card"><div class="card-ico">↺</div><h3>Rewind anything</h3><p>Undo to any message: the thread and the files on disk go back together, and your message returns to the box to edit and resend.</p></article>
+        <article class="card"><div class="card-ico">⑂</div><h3>Git worktrees</h3><p>Give a thread or a helper its own worktree, then merge it back when you're happy. Your main branch stays clean.</p></article>
+        <article class="card"><div class="card-ico">∞</div><h3>Endless threads</h3><p>Huge histories are summarised in parts, in place — old messages stay readable, the model reads the summary. Runs cut off by a restart resume by themselves.</p></article>
+        <article class="card"><div class="card-ico">⚑</div><h3>Hooks, commands, jobs</h3><p>Run checks before or after any tool, add your own slash commands, and let long processes like dev servers run in the background.</p></article>
+        <article class="card"><div class="card-ico">$</div><h3>Cost you can see</h3><p>Tokens and cost per thread, budgets that stop a run, prompt caching on by default for Anthropic models.</p></article>
+        <article class="card"><div class="card-ico">ع</div><h3>English &amp; Arabic</h3><p>A full Arabic interface with right-to-left layout, switchable live — plus 25 themes and a one-click light/dark toggle.</p></article>
+        <article class="card"><div class="card-ico">⌘</div><h3>MCP &amp; skills</h3><p>Plug in MCP servers and skills, and bring your threads over from OpenCode or Zadloop in one click.</p></article>
+        <article class="card"><div class="card-ico">⌂</div><h3>Yours, locally</h3><p>Everything runs and is stored on your PC. Your keys, your providers, your files — no account needed.</p></article>
+      </div>
+    </section>
+
+    <!-- 5 · models: a 3D ring of providers -->
+    <section id="models" class="models">
+      <div class="section-head center">
+        <p class="kicker">Models</p>
+        <h2 class="h2">Bring any model.<br><span class="grad-text">Mix them in one thread.</span></h2>
+        <p class="sub">19 providers built in, plus any OpenAI-compatible endpoint. Use a strong model to lead and a fast one to help — context sizes, prices and reasoning levels come straight from models.dev.</p>
+      </div>
+      <div class="ring-stage">
+        <div class="ring">
+          <span>Anthropic</span><span>OpenAI</span><span>Google Gemini</span><span>Kimi</span><span>Moonshot AI</span><span>Z.AI · GLM</span>
+          <span>DeepSeek</span><span>Groq</span><span>OpenRouter</span><span>Mistral</span><span>xAI</span><span>Together AI</span>
+          <span>Fireworks AI</span><span>Cerebras</span><span>Perplexity</span><span>Ollama</span><span>LM Studio</span><span>vLLM</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 · numbers -->
+    <section class="stats">
+      <div class="stat"><b data-count="19">0</b><span>providers built in</span></div>
+      <div class="stat"><b data-count="25">0</b><span>themes, light &amp; dark</span></div>
+      <div class="stat"><b data-count="1" data-suffix="M">0</b><span>token context on Kimi &amp; GLM</span></div>
+      <div class="stat"><b data-count="2">0</b><span>languages, LTR &amp; RTL</span></div>
+    </section>
+
+    <!-- 7 · download -->
+    <section id="download" class="download">
+      <div class="dl-card">
+        <div class="dl-space" aria-hidden="true"></div>
+        <h2 class="display dl-title"><span class="line"><span>Start your</span></span><span class="line grad"><span>flow.</span></span></h2>
+        <p class="lead center">Free for Windows. Install it, add an API key, and give it something to build.</p>
+        <div class="cta-row center">
+          <a class="btn btn-primary btn-big" data-download href="downloads/AFH-Setup-1.6.3.exe">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
+            Download AFH <span data-version>1.6.3</span>
+          </a>
+        </div>
+        <ol class="dl-steps">
+          <li><b>1</b>Run <code>AFH-Setup-<span data-version>1.6.3</span>.exe</code></li>
+          <li><b>2</b>Add a key in Settings → Models</li>
+          <li><b>3</b>Open a folder and say what you want</li>
+        </ol>
+        <p class="fine center">Windows 10/11, 64-bit · <span data-size>142 MB</span> · Windows may ask before running a new app — choose "More info → Run anyway".</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="brand"><img src="assets/mark.svg" alt="" width="30" height="18"><span>Agent Flow Harness</span></div>
+    <p>Made for people who like to watch their agents work.</p>
+    <p class="fine">© 2026 Agent Flow Harness</p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

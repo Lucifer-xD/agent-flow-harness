@@ -734,3 +734,17 @@ def test_finished_lists_and_achieved_goals_are_kept_in_history(home, tmp_path):
     assert len(e.store.get_session(sid)["metadata"]["afh"]["todoHistory"]) == 1
     ev = [x for x in e.events if x["type"] == "session.goal.updated" and x["data"].get("history")]
     assert ev and ev[-1]["data"]["history"][0]["text"] == "ship it"
+
+
+def test_sending_after_an_undo_keeps_the_undo(home, tmp_path):
+    p = FakeProvider(["first answer", "second answer"])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "first"))
+    sid = s["id"]
+    user = next(m for m in e.store.list_messages(sid) if m["type"] == "user")
+    e.revert_stage(sid, user["id"])
+    assert sid in e.stashes
+    asyncio.run(run_prompt(e, tmp_path, "first, edited", sid=sid))
+    assert sid not in e.stashes
+    e.revert_clear(sid)  # nothing left to put back
+    assert [m["text"] for m in e.store.list_messages(sid) if m["type"] == "user"] == ["first, edited"]
