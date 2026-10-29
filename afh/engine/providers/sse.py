@@ -10,6 +10,7 @@ import base64
 import json
 import mimetypes
 import secrets
+import ssl
 from pathlib import Path
 from typing import Any, AsyncIterator
 from urllib.parse import urlsplit
@@ -166,13 +167,20 @@ def network_error(exc: Exception, url: str) -> ProviderEvent:
         msg = f"Timed out waiting for {where} to send data"
     elif isinstance(exc, httpx.RemoteProtocolError):
         msg = f"Connection to {where} was closed unexpectedly" + (f": {detail}" if detail else "")
+    elif isinstance(exc, ssl.SSLError):
+        reason = getattr(exc, "reason", None) or detail or "TLS error"
+        msg = f"Secure connection to {where} failed ({reason})"
+    elif isinstance(exc, OSError):
+        msg = f"Connection to {where} dropped" + (f": {detail}" if detail else "")
     else:
         msg = detail or type(exc).__name__
     return {"type": "error", "message": msg, "status": None, "kind": "network", "response": ""}
 
 
-# Everything httpx can raise while connecting, sending or reading a stream.
-NETWORK_ERRORS = (httpx.HTTPError, httpx.StreamError, httpx.InvalidURL)
+# Everything that can break a request while connecting, sending or reading a stream. httpx wraps
+# most transport failures, but a TLS error mid-stream (e.g. SSLV3_ALERT_BAD_RECORD_MAC) or a reset
+# can surface as a raw ssl.SSLError / OSError — catch those too so the run retries instead of dying.
+NETWORK_ERRORS = (httpx.HTTPError, httpx.StreamError, httpx.InvalidURL, ssl.SSLError, OSError)
 
 
 # ---- message helpers ------------------------------------------------------------------------

@@ -230,3 +230,48 @@ def test_retry_is_recorded_on_the_retried_reply(home, tmp_path, monkeypatch):
     assert replies[0]["content"][0]["text"] == "Recovered answer."
     ev = next(x for x in e.events if x["type"] == "session.retry.scheduled")
     assert ev["data"]["assistantMessageID"] == replies[0]["id"]
+
+
+# ---- transport errors (SSL, dropped sockets) are retryable, not fatal -------------------------
+
+
+def test_ssl_and_os_errors_count_as_retryable_network_errors():
+    import ssl
+
+    from afh.engine.providers import sse
+    from afh.engine.runner import RETRYABLE  # noqa: F401 - documents where retry is decided
+
+    assert issubclass(ssl.SSLError, sse.NETWORK_ERRORS) and issubclass(OSError, sse.NETWORK_ERRORS)
+    e = sse.network_error(ssl.SSLError("SSLV3_ALERT_BAD_RECORD_MAC"), "https://api.kimi.ai/coding/v1/chat/completions")
+    assert e["kind"] == "network" and "api.kimi.ai" in e["message"]
+    # kind == "network" is what runner._stream_step retries on
+    assert e["kind"] == "network"
+    dropped = sse.network_error(ConnectionResetError(10054, "forcibly closed"), "https://api.example/v1")
+    assert dropped["kind"] == "network" and "api.example" in dropped["message"]
+
+
+def test_provider_stream_turns_a_raw_ssl_error_into_a_retryable_event():
+    import ssl
+    import unittest.mock as mock
+
+    from afh.engine.providers import openai_compat
+    from afh.engine.types import ChatRequest, ProviderConfig
+
+    p = openai_compat.OpenAICompatProvider(ProviderConfig(id="kimi", name="Kimi", kind="openai", base_url="https://x/v1", api_key="k"))
+
+    class Client:  # async context manager whose .stream() raises a raw TLS error, as httpx can mid-read
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def stream(self, *a, **k):
+            raise ssl.SSLError("[SSL: SSLV3_ALERT_BAD_RECORD_MAC] sslv3 alert bad record mac")
+
+    async def collect():
+        with mock.patch.object(openai_compat, "make_client", lambda *a, **k: Client()):
+            return [ev async for ev in p.stream(ChatRequest(model="m", system="", messages=[]))]
+
+    evs = asyncio.run(collect())
+    assert evs and evs[-1]["type"] == "error" and evs[-1]["kind"] == "network"

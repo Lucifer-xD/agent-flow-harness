@@ -441,7 +441,8 @@ function renderTool(p, openSet, thread) {
   // Browser screenshots stay visible under the card's header; click one to see it full size.
   const shots = (p.state?.content || []).filter((c) => c.type === "image" && c.uri);
   const gallery = shots.length ? el("div.tool-shots", shots.map((c) => el("img.tool-shot", { src: c.uri, alt: "Browser screenshot", loading: "lazy", on: { click: () => viewImage(c.uri) } }))) : null;
-  card.append(head, gallery, el("div.tool-body", el("div", sections)));
+  // Native .append stringifies null ("null" text node), so leave the gallery out when there is none.
+  card.append(head, ...(gallery ? [gallery] : []), el("div.tool-body", el("div", sections)));
   return card;
 }
 
