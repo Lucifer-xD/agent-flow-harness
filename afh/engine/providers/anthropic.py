@@ -9,7 +9,11 @@ turned off for that one request instead of letting the API reject it. Thinking b
 turns are never replayed (the API drops them anyway).
 
 Knobs read from ``config.extra``: ``max_tokens`` (default 16384), ``budgets`` (variant → budget_tokens),
-``version`` (anthropic-version header), ``body`` (extra top-level fields).
+``version`` (anthropic-version header), ``body`` (extra top-level fields), ``cache`` (prompt caching, default on).
+
+Prompt caching: up to four ``cache_control`` breakpoints - the last tool definition, the system
+prompt, and the newest two user turns - so every step re-reads the long, unchanged prefix of the
+conversation from Anthropic's cache instead of paying for it again.
 """
 
 from __future__ import annotations
@@ -55,10 +59,15 @@ class AnthropicProvider:
         messages = self.translate_messages(req.messages)
         body: dict = {"model": req.model, "max_tokens": max_tokens, "messages": messages, "stream": True}
         system = "\n\n".join(s for s in [req.system] + [m.text for m in req.messages if m.role == "system"] if s)
+        cache = extra.get("cache", True)
         if system:
-            body["system"] = system
+            body["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}] if cache else system
         if req.tools:
             body["tools"] = [{"name": t.name, "description": t.description, "input_schema": t.parameters} for t in req.tools]
+            if cache:
+                body["tools"][-1]["cache_control"] = {"type": "ephemeral"}
+        if cache:
+            self._mark_cache(messages)
         thinking = bool(req.reasoning and req.variant) and self._can_think(messages)
         if thinking:
             budget = extra.get("budgets", BUDGETS).get(req.variant, BUDGETS["high"])
@@ -68,6 +77,20 @@ class AnthropicProvider:
             body["temperature"] = req.temperature
         body.update(extra.get("body", {}))
         return body
+
+    @staticmethod
+    def _mark_cache(messages: list[dict]) -> None:
+        """Breakpoints on the last block of the newest two user turns (four in all with tools and system)."""
+        marked = 0
+        for msg in reversed(messages):
+            if msg["role"] != "user" or not msg["content"]:
+                continue
+            block = msg["content"][-1]
+            if block.get("type") in ("text", "tool_result", "image"):
+                block["cache_control"] = {"type": "ephemeral"}
+                marked += 1
+            if marked == 2:
+                break
 
     @staticmethod
     def _can_think(messages: list[dict]) -> bool:
@@ -138,7 +161,7 @@ class AnthropicProvider:
         thinking: list[dict] = []  # signed thinking blocks of this response, for replay
         tool_ids: list[str] = []
         stop_reason: str | None = None
-        input_tokens = output_tokens = cache_read = 0
+        input_tokens = output_tokens = cache_read = cache_write = 0
 
         async for ev in iter_json(resp):
             t = ev.get("type")
@@ -146,6 +169,7 @@ class AnthropicProvider:
                 u = (ev.get("message") or {}).get("usage") or {}
                 input_tokens = u.get("input_tokens") or 0
                 cache_read = u.get("cache_read_input_tokens") or 0
+                cache_write = u.get("cache_creation_input_tokens") or 0
                 output_tokens = u.get("output_tokens") or 0
             elif t == "content_block_start":
                 cb = ev.get("content_block") or {}
@@ -200,7 +224,7 @@ class AnthropicProvider:
 
         if thinking and tool_ids:
             self._remember(tool_ids, thinking)
-        yield usage_event(input=input_tokens, output=output_tokens, cache_read=cache_read)
+        yield usage_event(input=input_tokens, output=output_tokens, cache_read=cache_read, cache_write=cache_write)
         reason = STOP_REASONS.get(stop_reason or "", "tool_calls" if tool_ids else "stop")
         yield {"type": "finish", "reason": reason}
 

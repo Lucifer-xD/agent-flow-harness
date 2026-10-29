@@ -160,7 +160,7 @@ def test_openai_text_reasoning_usage_and_finish():
     assert types(events) == ["reasoning.delta", "reasoning.delta", "text.delta", "text.delta", "usage", "finish"]
     assert text_of(events, "reasoning.delta") == "Let me think."
     assert text_of(events) == "Hello world"
-    assert events[-2] == {"type": "usage", "input": 12, "output": 7, "reasoning": 3, "cache_read": 4}
+    assert events[-2] == {"type": "usage", "input": 8, "output": 7, "reasoning": 3, "cache_read": 4, "cache_write": 0}
     assert events[-1] == {"type": "finish", "reason": "stop"}
     req = server.requests[0]
     assert req.headers["authorization"] == "Bearer sk-test"
@@ -385,17 +385,17 @@ def test_anthropic_stream_thinking_text_tool_usage_finish():
     assert text_of(events, "reasoning.delta") == "Need to read." and text_of(events) == "Let me look."
     assert events[4] == {"type": "tool.start", "id": "toolu_1", "name": "read"}
     assert events[8] == {"type": "tool.end", "id": "toolu_1", "name": "read", "input": {"path": "a.txt"}, "raw": '{"path": "a.txt"}'}
-    assert events[9] == {"type": "usage", "input": 10, "output": 42, "reasoning": 0, "cache_read": 3}
+    assert events[9] == {"type": "usage", "input": 10, "output": 42, "reasoning": 0, "cache_read": 3, "cache_write": 0}
     assert events[10] == {"type": "finish", "reason": "tool_calls"}
 
     request = server.requests[0]
     assert str(request.url) == "https://api.anthropic.com/v1/messages"
     assert request.headers["x-api-key"] == "sk-test" and request.headers["anthropic-version"] == "2023-06-01"
     body = server.body()
-    assert body["system"] == "sys" and body["stream"] is True
+    assert body["system"][0]["text"] == "sys" and body["stream"] is True
     assert body["thinking"] == {"type": "enabled", "budget_tokens": 8192} and body["max_tokens"] >= 16384
-    assert body["tools"] == [{"name": "read", "description": "Read a file", "input_schema": READ_TOOL.parameters}]
-    assert body["messages"] == [{"role": "user", "content": [{"type": "text", "text": "read a.txt"}]}]
+    assert body["tools"] == [{"name": "read", "description": "Read a file", "input_schema": READ_TOOL.parameters, "cache_control": {"type": "ephemeral"}}]
+    assert body["messages"] == [{"role": "user", "content": [{"type": "text", "text": "read a.txt", "cache_control": {"type": "ephemeral"}}]}]
 
 
 def test_anthropic_translation_round_trip_and_thinking_replay():
@@ -428,7 +428,12 @@ def test_anthropic_translation_round_trip_and_thinking_replay():
     assert [m["role"] for m in msgs] == ["assistant", "user"] and len(msgs[1]["content"]) == 2
     assert msgs[1]["content"][1]["content"] == "(no output)"
     body = p.build_body(ChatRequest(model="m", system="A", messages=[ChatMessage(role="system", text="B"), ChatMessage(role="user", text="hi")]))
-    assert body["system"] == "A\n\nB" and body["max_tokens"] == 16384
+    assert body["system"] == [{"type": "text", "text": "A\n\nB", "cache_control": {"type": "ephemeral"}}] and body["max_tokens"] == 16384
+    # prompt caching: the newest user turn carries a breakpoint; turned off, the system prompt is plain text
+    assert body["messages"][-1]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+    off = AnthropicProvider(cfg("anthropic", cache=False))
+    plain = off.build_body(ChatRequest(model="m", system="A", messages=[ChatMessage(role="user", text="hi")]))
+    assert plain["system"] == "A" and "cache_control" not in plain["messages"][-1]["content"][-1]
 
 
 def test_anthropic_http_401_and_network_error():
@@ -496,7 +501,7 @@ def test_gemini_stream_text_reasoning_tool_usage_finish():
     assert events[3]["name"] == "read" and call_id.startswith("call_")
     assert events[4] == {"type": "tool.delta", "id": call_id, "text": '{"path": "a.txt"}'}
     assert events[5] == {"type": "tool.end", "id": call_id, "name": "read", "input": {"path": "a.txt"}, "raw": '{"path": "a.txt"}'}
-    assert events[6] == {"type": "usage", "input": 20, "output": 15, "reasoning": 6, "cache_read": 2}
+    assert events[6] == {"type": "usage", "input": 18, "output": 15, "reasoning": 6, "cache_read": 2, "cache_write": 0}
     assert events[7] == {"type": "finish", "reason": "tool_calls"}
 
     request = server.requests[0]

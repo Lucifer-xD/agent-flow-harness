@@ -122,6 +122,7 @@ export function applyEvent(t, ev) {
     case "session.step.ended": {
       const m = assistant(t, d.assistantMessageID);
       m.tokens = d.tokens;
+      if (d.cost != null) m.cost = d.cost;
       m.finish = d.finish;
       m.endedAt = Date.now();
       m.durationMs = m.endedAt - (m.startedAt || m.time?.created || m.endedAt);
@@ -196,6 +197,17 @@ export function applyEvent(t, ev) {
     }
     case "session.usage.updated":
       t.tokens = d.tokens;
+      if (d.cost != null) t.session.cost = d.cost;
+      return { status: true };
+    case "session.notice": {
+      // The engine sent the agent back to work (goal autopilot, a stop hook, open to-dos), or stopped it.
+      const m = d.message || { id: ev.id, type: "synthetic", text: "", metadata: { notice: d.kind, label: d.label } };
+      m.time = m.time || { created: ev.created || Date.now() };
+      addMessage(t, m);
+      return { all: true };
+    }
+    case "session.compaction.started":
+      t.compacting = true;
       return { status: true };
     case "permission.asked":
       t.permissions.set(d.id, d);
@@ -204,8 +216,8 @@ export function applyEvent(t, ev) {
       t.permissions.delete(d.id || d.permissionID || d.requestID);
       return { perm: true };
     case "session.compaction.ended":
-      addMessage(t, { id: ev.id, type: "compaction", time: { created: Date.now() } });
-      return { all: true };
+      t.compacting = false;
+      return { status: true, reload: !d.skipped };
     case "session.model.selected":
     case "session.agent.selected":
       return { status: true };
@@ -239,6 +251,8 @@ function stepStats(m) {
   }
   return { dur, tps };
 }
+
+export const fmtCost = (usd) => (!usd ? "$0" : usd >= 100 ? `$${usd.toFixed(0)}` : usd >= 1 ? `$${usd.toFixed(2)}` : usd >= 0.01 ? `$${usd.toFixed(3)}` : `$${usd.toFixed(4)}`);
 
 // ---- tools ----------------------------------------------------------------------
 
@@ -311,31 +325,81 @@ function pathNode(target) {
   return el("span.tool-target", { title: target }, el("span.dir", dir ? dir + "/" : ""), el("span.name", target.slice(i + 1)));
 }
 
+const TODO_MARK = { completed: "check", cancelled: "x", in_progress: "zap", pending: null };
+
+/** The agent's `todo` call: the list as it stands after the call, not raw JSON. */
+function renderTodoTool(p, openSet) {
+  const status = p.state?.status || "streaming";
+  const input = typeof p.state?.input === "object" ? p.state.input : {};
+  const todos = p.state?.metadata?.todos || (Array.isArray(input.todos) && !input.merge ? input.todos : []);
+  const done = todos.filter((x) => x.status === "completed").length;
+  const of = todos.filter((x) => x.status !== "cancelled").length;
+  const read = p.state?.metadata?.read;
+  const live = status === "streaming" || status === "running";
+  const card = el(`div.tool.plan.${status}${openSet.has(p.id) || (!openSet.has("x" + p.id) && todos.length <= 8) ? ".open" : ""}`, { dataset: { tool: p.id } });
+  const head = el("button.tool-head", { type: "button", on: { click: () => { const o = card.classList.toggle("open"); openSet[o ? "add" : "delete"](p.id); openSet[o ? "delete" : "add"]("x" + p.id); } } },
+    el("span.tool-ico", live ? el("span.spinner") : ico(status === "error" ? "alert" : "checklist")),
+    el("span.tool-name", live ? "Planning" : read ? "Checked the to-do list" : "Updated the to-do list"),
+    el("span.tool-target", ""),
+    todos.length ? el("span.tool-stat", `${done}/${of} done`) : null);
+  const list = el("div.plan-list", todos.map((x) => el(`div.plan-item.${x.status || "pending"}`, el("span.plan-mark", TODO_MARK[x.status] ? ico(TODO_MARK[x.status]) : null), el("span", x.status === "in_progress" && x.activeForm ? x.activeForm : x.content))));
+  const err = p.state?.error ? el("pre.tool-pre.tool-error", p.state.error.message || "") : null;
+  card.append(head, el("div.tool-body", el("div", todos.length ? list : null, err)));
+  return card;
+}
+
+/** The agent's `goal` report: achieved / blocked get a card of their own. */
+function renderGoalTool(p, openSet) {
+  const input = typeof p.state?.input === "object" ? p.state.input : {};
+  const status = p.state?.status || "streaming";
+  if (status === "error" || !["achieved", "blocked", "progress"].includes(input.status)) return null;
+  if (input.status === "progress") {
+    return el("div.goal-note", { dataset: { tool: p.id } }, ico("target"), el("span", el("b", "Milestone: "), input.summary || ""));
+  }
+  const ok = input.status === "achieved";
+  return el(`div.goal-card.${ok ? "achieved" : "blocked"}`, { dataset: { tool: p.id } },
+    el("div.goal-card-head", el("span.goal-card-ico", ico(ok ? "check" : "alert")), el("b", ok ? "Goal achieved" : "Goal blocked — needs you")),
+    input.summary ? el("div.goal-card-text", input.summary) : null,
+    input.evidence ? el("details", el("summary", "How it was verified"), el("pre.tool-pre", input.evidence)) : null);
+}
+
 function renderTool(p, openSet, thread) {
   const name = (p.name || "tool").toLowerCase();
   if (name === "subagent" && hooks.delegation) return hooks.delegation(p, { thread, open: openSet });
+  if (name === "todo") return renderTodoTool(p, openSet);
+  if (name === "goal") { const g = renderGoalTool(p, openSet); if (g) return g; }
   const info = describeTool(p);
   const status = p.state?.status || "streaming";
   const live = status === "streaming" || status === "running";
   const kind = kindOf(name);
-  const verbs = VERBS[name] || [p.name, p.name];
+  const input0 = typeof p.state?.input === "object" ? p.state.input : {};
+  const verbs = name === "shell" && input0.background ? ["Started in background", "Starting in background"]
+    : name === "jobs" ? ({ stop: ["Stopped job", "Stopping job"], list: ["Listed jobs", "Listing jobs"] }[input0.action] || ["Read job output", "Waiting for job output"])
+      : VERBS[name] || [p.name, p.name];
   const patches = info.edit ? toolPatches(p) : [];
+  const meta = p.state?.metadata || {};
   let stat = null;
   if (patches.length) {
     const [a, r] = patches.reduce((acc, x) => { const [aa, rr] = x.additions != null ? [x.additions, x.deletions] : countPatch(x.patch); return [acc[0] + aa, acc[1] + rr]; }, [0, 0]);
     stat = el("span.tool-stat", el("span.plus", `+${a}`), el("span.minus", `−${r}`));
-  } else if (status === "error") stat = el("span.tool-stat", { style: { color: "var(--bad)" } }, "failed");
+  } else if (meta.blockedBy) stat = el("span.tool-stat", { style: { color: "var(--warn)" } }, "blocked by hook");
+  else if (status === "error") stat = el("span.tool-stat", { style: { color: "var(--bad)" } }, "failed");
   else if (status === "streaming") stat = el("span.tool-stat", "preparing");
-  else if (status === "running") stat = el("span.tool-stat", "running");
-  const target = info.target || "";
+  else if (status === "running") stat = el("span.tool-stat", name === "jobs" && input0.wait ? `waiting up to ${input0.wait}s` : "running");
+  else if (meta.job) stat = el("span.tool-stat", el("span.job-id", meta.job.id), meta.job.running ? " running" : meta.job.stopped ? " stopped" : ` exited ${meta.job.exitCode ?? ""}`);
+  const diag = meta.diagnostics;
+  const diagChip = diag ? el(`span.diag-chip.${diag.ok ? "ok" : "bad"}`, { title: `Checked with ${diag.ran.join(", ")}` }, ico(diag.ok ? "shield-check" : "alert"), diag.ok ? "checked" : `${diag.problems} problem${diag.problems === 1 ? "" : "s"}`) : null;
+  const hookRuns = meta.hooks || [];
+  const hookChip = hookRuns.length && !meta.blockedBy ? el(`span.diag-chip.hook${hookRuns.some((h) => h.code !== 0) ? ".bad" : ""}`, { title: hookRuns.map((h) => `${h.event} · ${h.name}: exit ${h.code}`).join("\n") }, ico("hook"), `${hookRuns.length} hook${hookRuns.length > 1 ? "s" : ""}`) : null;
+  const target = name === "jobs" ? input0.id || "" : info.target || "";
   const targetNode = kind === "edit" || kind === "read" ? pathNode(target) : el("span.tool-target", { title: target }, target);
 
   // The card style: icon tile, verb, target, outcome — expandable.
   const card = el(`div.tool.${kind}.${status}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
   const head = el("button.tool-head", { type: "button", on: { click: () => { card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
-    el("span.tool-ico", live ? el("span.spinner") : ico(status === "error" ? "alert" : info.icon)),
+    el("span.tool-ico", live ? el("span.spinner") : ico(status === "error" ? "alert" : name === "jobs" ? "activity" : info.icon)),
     el("span.tool-name", live ? verbs[1] : verbs[0]),
-    targetNode, stat);
+    targetNode, stat, diagChip, hookChip);
   const sections = [];
   if (patches.length) for (const x of patches) sections.push(el("div.tool-section", patches.length > 1 ? el("div.tool-section-label", basename(x.file)) : null, diffView(x.patch)));
   else {
@@ -351,6 +415,14 @@ function renderTool(p, openSet, thread) {
 }
 
 // ---- view -----------------------------------------------------------------------
+
+const toolIds = (root) => new Set([...root.querySelectorAll("[data-tool]")].map((n) => n.dataset.tool));
+
+/** Cards that were already on screen keep still when their message re-renders (no replayed fade-in). */
+function stillAnimations(node, seen) {
+  if (!seen.size) return;
+  for (const n of node.querySelectorAll("[data-tool]")) if (seen.has(n.dataset.tool)) n.style.animation = "none";
+}
 
 export class ChatView {
   constructor(root, scroller, opts) {
@@ -390,6 +462,7 @@ export class ChatView {
   renderAll(quiet = false) {
     const t = this.thread;
     const seen = new Set(this.nodes.keys());
+    const seenTools = quiet ? toolIds(this.root) : new Set();
     this.nodes.clear();
     this.root.replaceChildren();
     if (!t) return;
@@ -397,6 +470,7 @@ export class ChatView {
       // Only messages that weren't on screen before get the entrance animation.
       const n = this.renderMessage(m, quiet && seen.has(m.id));
       if (n) {
+        stillAnimations(n, seenTools);
         this.nodes.set(m.id, n);
         this.root.append(n);
       }
@@ -438,7 +512,10 @@ export class ChatView {
     const m = this.thread.byId.get(id);
     const old = this.nodes.get(id);
     const fresh = m && this.renderMessage(m, true);
-    if (fresh && old) old.replaceWith(fresh);
+    if (fresh && old) {
+      stillAnimations(fresh, toolIds(old));
+      old.replaceWith(fresh);
+    }
     else if (fresh) this.permBox.before(fresh);
     else if (old) old.remove();
     if (fresh) this.nodes.set(id, fresh);
@@ -504,7 +581,18 @@ export class ChatView {
         const actions = this.opts.onRevert && !m.pending && !this.thread.busy ? el("div.msg-actions.user-actions",
           el("button.icon-btn", { title: "Undo to here — rewind the thread and the files to just before this message", html: icon("refresh"), on: { click: () => this.opts.onRevert(m.id) } }),
           el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(m.text || ""); toast("Copied", "ok", 1200); } } })) : null;
-        return el("div.msg.user", anim, el("div.bubble", { style: m.pending ? { opacity: 0.7 } : null }, m.text || "", files.length ? el("div.att", files) : null), actions);
+        const cmd = m.command;
+        const content = !cmd ? [m.text || ""]
+          : cmd.name === "goal" ? [el("span.cmd-chip.goal", ico("target"), "Goal"), " ", cmd.args]
+            : [el("span.cmd-chip", `/${cmd.name}`), cmd.args ? ` ${cmd.args}` : "", el("details.cmd-full", el("summary", "prompt"), el("div", m.text || ""))];
+        return el("div.msg.user", anim, el("div.bubble", { style: m.pending ? { opacity: 0.7 } : null }, content, files.length ? el("div.att", files) : null), actions);
+      }
+      case "synthetic": {
+        const n = m.metadata?.notice;
+        if (!n) return null;
+        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert" };
+        const label = m.metadata?.label || (n === "goal" ? "Goal not achieved yet — continuing" : n === "hook" ? "A stop hook failed — continuing" : n === "todo" ? "To-do items still open — checking" : "Notice");
+        return el(`div.notice.${n}`, anim, ico(icons[n] || "info"), el("span", label), m.text ? el("details", el("summary", "what the agent was told"), el("pre", m.text)) : null);
       }
       case "assistant":
         return this.renderAssistant(m, settings, anim);
@@ -576,14 +664,17 @@ export class ChatView {
     if (!parts.length && !m.live) return null;
     if (!parts.length) parts.push(el("div.think.live", el("span.think-head", el("span.think-label", "Working"))));
 
-    const tokens = m.tokens ? fmtTokens((m.tokens.input || 0) + (m.tokens.output || 0) + (m.tokens.reasoning || 0)) + " tokens" : null;
+    // Output already includes reasoning; input is the uncached part, so add what the cache served.
+    const tokens = m.tokens ? fmtTokens((m.tokens.input || 0) + (m.tokens.cache?.read || 0) + (m.tokens.cache?.write || 0) + (m.tokens.output || 0)) + " tokens" : null;
+    const cost = m.cost != null && m.cost > 0 ? fmtCost(m.cost) : null;
     const when = m.time?.created ? new Date(m.time.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
     const { dur, tps } = stepStats(m);
     const turnDone = last && m.turnMs ? m.turnMs : null;
     const meta = el("div.msg-meta",
       el("span.model", this.opts.modelName(m.model) || m.model?.id || "Assistant"),
       m.agent ? [el("span.dot"), el("span", m.agent)] : null,
-      tokens ? [el("span.dot"), el("span", tokens)] : null,
+      tokens ? [el("span.dot"), el("span", { title: m.tokens.cache?.read ? `${fmtTokens(m.tokens.cache.read)} read from the prompt cache` : null }, tokens)] : null,
+      cost ? [el("span.dot"), el("span", { title: "cost of this step" }, cost)] : null,
       when ? [el("span.dot"), el("span", when)] : null,
       m.live ? [el("span.dot"), el("span.dur.live-dur", { dataset: { start: String(m.startedAt || m.time?.created || Date.now()) } }, fmtDur(Date.now() - (m.startedAt || m.time?.created || Date.now())))]
         : dur != null ? [el("span.dot"), el("span.dur", { title: turnDone ? `this step ${fmtDur(dur)} · whole reply ${fmtDur(turnDone)}` : "completed in" }, `completed in ${fmtDur(turnDone || dur)}`)] : null,
@@ -619,6 +710,7 @@ export class ChatView {
       this.statusBox.append(el("div.msg.assistant.pending", { style: { animation: "none" } }, el("div.avatar", this.opts.avatar ? this.opts.avatar(true) : null),
         el("div.msg-body", el("div.pending-row", el("span.lbl", label), el("span.timer", { dataset: { start: String(t.runStart || Date.now()) } }, fmtDur(Date.now() - (t.runStart || Date.now())))))));
     }
+    if (t.compacting) this.statusBox.append(el("div.notice", el("span.spinner"), el("span", "Summarising older messages to free up context…")));
     if (t.retry) {
       const err = t.retry.error || {};
       this.statusBox.append(el("div.sys-note", { title: err.message || "" }, `Provider error — retrying${t.retry.attempt ? ` (attempt ${t.retry.attempt})` : ""}${err.message ? `: ${String(err.message).slice(0, 90)}` : ""}…`));

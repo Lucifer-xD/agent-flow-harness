@@ -23,6 +23,7 @@ from typing import AsyncIterator
 
 import httpx
 
+from afh.engine import pricing
 from afh.engine.providers import catalog
 from afh.engine.providers.sse import (
     NETWORK_ERRORS, ProviderError, decode_body, error_message, http_error, image_data, iter_json, join_url,
@@ -202,10 +203,11 @@ class OpenAICompatProvider:
         for ev in self._end_calls(calls):
             yield ev
         if usage:
+            cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or usage.get("prompt_cache_hit_tokens") or 0
             yield usage_event(
-                input=usage.get("prompt_tokens", 0), output=usage.get("completion_tokens", 0),
+                input=(usage.get("prompt_tokens") or 0) - cached, output=usage.get("completion_tokens", 0),
                 reasoning=(usage.get("completion_tokens_details") or {}).get("reasoning_tokens", 0),
-                cache_read=(usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
+                cache_read=cached,
             )
         started = any(c.started for c in calls.values())
         if finish == "length":
@@ -253,7 +255,9 @@ class OpenAICompatProvider:
             mid = str(item["id"])
             context = item.get("context_length") or item.get("context_window") or (item.get("top_provider") or {}).get("context_length")
             output = item.get("max_output_tokens") or item.get("max_completion_tokens") or (item.get("top_provider") or {}).get("max_completion_tokens")
-            fetched.append(catalog.guess_model(mid, "openai", name=item.get("display_name") or "", context=context, output=output))
+            model = catalog.guess_model(mid, "openai", name=item.get("display_name") or item.get("name") or "", context=context, output=output)
+            model.cost = pricing.from_openrouter(item.get("pricing"))
+            fetched.append(model)
         return catalog.merge_static(self.config, fetched)
 
 

@@ -5,18 +5,65 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .types import ChatMessage, ChatRequest, PermissionDenied, ToolCall, ToolContext, ToolResult, event, new_id, now_ms
+from . import diagnostics as diagmod
+from . import hooks as hookmod
+from .types import BudgetExceeded, ChatMessage, ChatRequest, PermissionDenied, ToolCall, ToolContext, ToolResult, event, new_id, now_ms
 
 if TYPE_CHECKING:
     from .core import Engine
 
 log = logging.getLogger("afh.runner")
 
-MAX_STEPS = 100
+MAX_STEPS = 200
 RETRYABLE = {429, 500, 502, 503, 504}
+# Tools that only read (or wait on other agents) run at the same time when one reply calls several.
+PARALLEL_SAFE = {"read", "glob", "grep", "list", "webfetch", "websearch", "subagent", "skill", "jobs"}
+PRUNE_AT = 0.55  # share of the context window: above it, old tool outputs are shortened
+PRUNE_TO = 0.40
+PRUNE_KEEP = 8  # the newest tool results are never shortened
+PRUNE_HEAD = 600
+
+
+def estimate_tokens(messages: list[ChatMessage], system: str = "") -> int:
+    chars = len(system)
+    images = 0
+    for m in messages:
+        chars += len(m.text) + len(m.reasoning)
+        for c in m.tool_calls:
+            chars += len(c.name) + len(json.dumps(c.input, ensure_ascii=False))
+        images += len(m.images)
+    return int(chars / 3.6) + images * 1200
+
+
+def prune_history(messages: list[ChatMessage], context: int, system: str = "") -> int:
+    """Shorten old tool outputs in place when the prompt gets big. Stored messages are untouched:
+    only what is sent changes, and it is cut down to PRUNE_TO so the cache prefix stays stable for a while."""
+    est = estimate_tokens(messages, system)
+    if est < context * PRUNE_AT:
+        return 0
+    tool_idx = [i for i, m in enumerate(messages) if m.role == "tool"]
+    candidates = tool_idx[:-PRUNE_KEEP] if len(tool_idx) > PRUNE_KEEP else []
+    trimmed = 0
+    for i in candidates:
+        m = messages[i]
+        if len(m.text) <= PRUNE_HEAD * 2:
+            continue
+        saved = len(m.text) - PRUNE_HEAD
+        m.text = m.text[:PRUNE_HEAD] + f"\n… [{saved:,} characters of this old output were removed to save context; run the tool again if you need it]"
+        est -= int(saved / 3.6)
+        trimmed += 1
+        if est <= context * PRUNE_TO:
+            break
+    return trimmed
+
+
+def _norm(path: str) -> str:
+    return os.path.normcase(path).replace("\\", "/")
 
 
 class Interrupted(Exception):
@@ -73,6 +120,9 @@ class Run:
         self.abort = asyncio.Event()
         self.queued: list[dict] = []  # follow-up prompts sent while running
         self.task: asyncio.Task | None = None
+        self.stop_rounds = 0  # stop hooks that sent the agent back to work
+        self.todo_nudged = False
+        self.step_files: list[tuple[str, str]] = []  # (tool call id, absolute path) changed in this step
 
     def emit(self, type_: str, **data: Any) -> None:
         self.engine.publish(event(type_, self.sid, **data))
@@ -89,32 +139,48 @@ class Run:
             agent = e.agent_for(self.session)
             gate = e.gate_for(self.session, agent)
             await e.maybe_compact(self.session, agent)
-            for step in range(MAX_STEPS):
+            max_steps = int((e.settings().get("agent") or {}).get("maxSteps") or MAX_STEPS)
+            for step in range(max_steps):
                 if self.abort.is_set():
                     raise Interrupted()
+                e.check_budget(self.session)
                 model_ref = e.model_ref_for(self.session, agent)
                 provider, model = e.resolve_model(model_ref)
                 msg = {"id": new_id("msg"), "type": "assistant", "agent": agent.id, "model": model_ref, "content": [], "time": {"created": now_ms()}}
                 store.add_message(self.sid, msg)
                 self.emit("session.step.started", assistantMessageID=msg["id"], agent=agent.id, model=model_ref, started=msg["time"]["created"])
                 tools = e.tools_for(self.session, agent)
-                req = ChatRequest(model=model.id, system=e.system_prompt_for(self.session, agent), messages=to_chat(store.list_messages(self.sid)[:-1]),
+                system = e.system_prompt_for(self.session, agent)
+                history = to_chat(store.list_messages(self.sid)[:-1])
+                pruned = prune_history(history, model.context, system)
+                if pruned:
+                    msg["pruned"] = pruned
+                req = ChatRequest(model=model.id, system=system, messages=history,
                                   tools=[t.spec for t in tools] if model.tools else [], variant=model_ref.get("variant") or None, max_tokens=min(model.output, 32_000),
                                   reasoning=model.reasoning)
-                tool_calls = await self._stream_step(provider, req, msg, model)
+                tool_calls = await self._stream_step(provider, req, msg, model, model_ref)
                 if self.abort.is_set():
                     raise Interrupted()
                 if not tool_calls:
                     if self.queued:
+                        self.queued.clear()
                         continue  # a follow-up arrived while answering: go around once more
+                    nudge = await e.on_agent_stop(self)
+                    if nudge and not self.abort.is_set():
+                        note = {"id": new_id("msg"), "type": "synthetic", "text": nudge["text"], "time": {"created": now_ms()},
+                                "metadata": {"notice": nudge["kind"], "label": nudge.get("label", "")}}
+                        store.add_message(self.sid, note)
+                        self.emit("session.notice", kind=nudge["kind"], label=nudge.get("label", ""), message=note)
+                        continue
                     break
-                for call in tool_calls:
-                    if self.abort.is_set():
-                        raise Interrupted()
-                    await self._run_tool(call, msg, tools, gate, agent)
+                self.step_files = []
+                await self._run_tools(tool_calls, msg, tools, gate, agent)
+                await self._diagnose(msg)
                 store.save_message(self.sid, msg)
                 if self.queued:
                     self.queued.clear()
+            else:
+                self.emit("session.notice", kind="limit", label=f"Stopped after {max_steps} steps (the per-run limit) — send a message to continue")
             self.emit("session.execution.succeeded")
         except Interrupted:
             self._mark_interrupted()
@@ -122,6 +188,9 @@ class Run:
         except ProviderError as err:
             failed = True
             self.emit("session.execution.failed", error=err.to_dict())
+        except BudgetExceeded as err:
+            failed = True
+            self.emit("session.execution.failed", error={"type": "Spending limit reached", "message": str(err)})
         except Exception as err:  # a bug in the engine: surface it, don't hang the thread
             failed = True
             log.exception("run failed")
@@ -134,7 +203,7 @@ class Run:
         if not failed:
             await e.after_run(self.session)
 
-    async def _stream_step(self, provider, req: ChatRequest, msg: dict, model) -> list[ToolCall]:
+    async def _stream_step(self, provider, req: ChatRequest, msg: dict, model, model_ref: dict | None = None) -> list[ToolCall]:
         """One model call with retries. Fills msg.content in place and persists it. Returns tool calls to run."""
         store = self.engine.store
         attempt = 0
@@ -207,7 +276,8 @@ class Run:
                         self.emit("session.tool.input.ended", assistantMessageID=msg["id"], id=ev["id"], text=raw)
                         tool_calls.append(ToolCall(ev["id"], ev["name"], inp))
                     elif t == "usage":
-                        tokens = {"input": ev.get("input", 0), "output": ev.get("output", 0), "reasoning": ev.get("reasoning", 0), "cache": {"read": ev.get("cache_read", 0), "write": 0}}
+                        tokens = {"input": ev.get("input", 0), "output": ev.get("output", 0), "reasoning": ev.get("reasoning", 0),
+                                  "cache": {"read": ev.get("cache_read", 0), "write": ev.get("cache_write", 0)}}
                     elif t == "finish":
                         finish = ev.get("reason", "stop")
                     elif t == "error":
@@ -235,10 +305,20 @@ class Run:
         msg["tokens"] = tokens
         msg["finish"] = "tool-calls" if tool_calls else finish
         msg["time"]["completed"] = now_ms()
+        cost = None
+        try:
+            from .pricing import cost_of
+
+            cost = cost_of(tokens, self.engine.price_for(model_ref))
+        except Exception as err:  # pricing must never break a run
+            log.info("cost: %s", err)
+        if cost is not None:
+            msg["cost"] = cost
         store.save_message(self.sid, msg)
-        self.engine.add_usage(self.sid, tokens)
-        self.emit("session.step.ended", assistantMessageID=msg["id"], finish=msg["finish"], tokens=tokens)
-        self.emit("session.usage.updated", tokens=self.engine.store.get_session(self.sid)["tokens"])
+        self.engine.add_usage(self.sid, tokens, cost)
+        self.emit("session.step.ended", assistantMessageID=msg["id"], finish=msg["finish"], tokens=tokens, cost=cost)
+        s = self.engine.store.get_session(self.sid) or {}
+        self.emit("session.usage.updated", tokens=s.get("tokens"), cost=s.get("cost", 0))
         return tool_calls
 
     def _close(self, part: dict, msg: dict) -> None:
@@ -249,6 +329,27 @@ class Run:
         else:
             self.emit("session.text.ended", assistantMessageID=msg["id"], ordinal=part["ordinal"], text=part["text"])
 
+    async def _run_tools(self, calls: list[ToolCall], msg: dict, tools, gate, agent) -> None:
+        """Run a reply's tool calls in order; consecutive read-only calls (and delegations) run together."""
+        i = 0
+        while i < len(calls):
+            if self.abort.is_set():
+                raise Interrupted()
+            group = [calls[i]]
+            if calls[i].name in PARALLEL_SAFE:
+                while i + len(group) < len(calls) and calls[i + len(group)].name in PARALLEL_SAFE:
+                    group.append(calls[i + len(group)])
+            if len(group) == 1:
+                await self._run_tool(group[0], msg, tools, gate, agent)
+            else:
+                results = await asyncio.gather(*(self._run_tool(c, msg, tools, gate, agent) for c in group), return_exceptions=True)
+                for r in results:
+                    if isinstance(r, asyncio.CancelledError):
+                        raise r
+                    if isinstance(r, BaseException):
+                        log.error("parallel tool failed: %r", r)
+            i += len(group)
+
     async def _run_tool(self, call: ToolCall, msg: dict, tools, gate, agent) -> None:
         part = next((p for p in msg["content"] if p.get("type") == "tool" and p["id"] == call.id), None)
         if part is None:
@@ -257,24 +358,52 @@ class Run:
         self.emit("session.tool.called", assistantMessageID=msg["id"], id=call.id, input=call.input, executed=False)
         tool = next((t for t in tools if t.spec.name == call.name), None)
         started = time.time()
+        settings = self.engine.settings()
+        directory = self.session["location"]["directory"]
+        hook_runs: list[dict] = []
         if tool is None:
             result = ToolResult(text=f"Unknown tool '{call.name}'. Available tools: {', '.join(t.spec.name for t in tools)}", is_error=True)
         elif "_raw" in call.input:
             result = ToolResult(text="The tool arguments were not valid JSON. Try again with well-formed arguments.", is_error=True)
         else:
-            ctx = ToolContext(session_id=self.sid, message_id=msg["id"], directory=self.session["location"]["directory"], permissions=gate,
-                              snapshots=self.engine.snapshots_for(self.sid, msg["id"]), emit=lambda t, d: self.emit(t, assistantMessageID=msg["id"], id=call.id, **d),
-                              settings=self.engine.settings(), read_only=self.engine.is_read_only(self.session, agent))
-            try:
-                result = await tool.run(ctx, call.input)
-            except PermissionDenied as err:
-                result = ToolResult(text=f"The user did not allow this action. {err.message}".strip(), is_error=True, metadata={"rejected": True})
-            except asyncio.CancelledError:
-                raise
-            except Exception as err:
-                log.exception("tool %s failed", call.name)
-                result = ToolResult(text=f"{type(err).__name__}: {err}", is_error=True)
+            blocked = None
+            pre = hookmod.hooks_for(settings, "pre_tool", call.name)
+            if pre:
+                payload = {"event": "pre_tool", "tool": call.name, "input": call.input, "files": hookmod.files_of(call.input), "sessionID": self.sid, "project": directory}
+                runs = await hookmod.run_all(pre, payload, directory, settings.get("shell"))
+                hook_runs += [{**r, "event": "pre_tool"} for r in runs]
+                blocked = next((r for r in runs if r["code"] == hookmod.BLOCK_CODE), None)
+            if blocked:
+                result = ToolResult(text=f"Blocked by the user's hook '{blocked['name']}': {blocked['output'] or 'no reason given'}", is_error=True, metadata={"blockedBy": blocked["name"]})
+            else:
+                ctx = ToolContext(session_id=self.sid, message_id=msg["id"], directory=directory, permissions=gate,
+                                  snapshots=self.engine.snapshots_for(self.sid, msg["id"]), emit=lambda t, d: self.emit(t, assistantMessageID=msg["id"], id=call.id, **d),
+                                  settings=settings, read_only=self.engine.is_read_only(self.session, agent), jobs=self.engine.jobs)
+                try:
+                    result = await tool.run(ctx, call.input)
+                except PermissionDenied as err:
+                    result = ToolResult(text=f"The user did not allow this action. {err.message}".strip(), is_error=True, metadata={"rejected": True})
+                except asyncio.CancelledError:
+                    raise
+                except Exception as err:
+                    log.exception("tool %s failed", call.name)
+                    result = ToolResult(text=f"{type(err).__name__}: {err}", is_error=True)
+                if not result.is_error:
+                    changed = [self._abs(f.file, directory) for f in result.files if f.status != "deleted"]
+                    self.step_files += [(call.id, p) for p in changed]
+                    post = hookmod.hooks_for(settings, "post_tool", call.name)
+                    if post:
+                        payload = {"event": "post_tool", "tool": call.name, "input": call.input, "files": hookmod.files_of(call.input, changed), "sessionID": self.sid,
+                                   "project": directory, "output": result.text[:20_000]}
+                        runs = await hookmod.run_all(post, payload, directory, settings.get("shell"))
+                        hook_runs += [{**r, "event": "post_tool"} for r in runs]
+                        notes = [f"[Hook '{r['name']}' exited {r['code']}]\n{r['output']}".rstrip() if r["code"] != 0 else f"[Hook '{r['name']}']\n{r['output']}"
+                                 for r in runs if r["output"] or r["code"] != 0]
+                        if notes:
+                            result.text = result.text + "\n\n" + "\n\n".join(notes)
         meta = dict(result.metadata)
+        if hook_runs:
+            meta["hooks"] = [{k: r[k] for k in ("name", "event", "code", "output", "ms")} for r in hook_runs]
         if result.files:
             meta["files"] = [f.to_dict() for f in result.files]
         meta["duration_ms"] = int((time.time() - started) * 1000)
@@ -285,6 +414,44 @@ class Run:
         else:
             part["state"] = {"status": "completed", "input": call.input, "content": content, "metadata": meta}
             self.emit("session.tool.success", assistantMessageID=msg["id"], id=call.id, content=content, metadata=meta, executed=True)
+        self.engine.store.save_message(self.sid, msg)
+
+    @staticmethod
+    def _abs(file: str, directory: str) -> str:
+        return file if os.path.isabs(file) else os.path.normpath(os.path.join(directory, file))
+
+    async def _diagnose(self, msg: dict) -> None:
+        """After a step that changed files: check them and append any problems to the last edit's result."""
+        if not self.step_files or self.abort.is_set():
+            return
+        settings = self.engine.settings()
+        directory = self.session["location"]["directory"]
+        paths = list(dict.fromkeys(p for _, p in self.step_files))
+        try:
+            results = await diagmod.check_files(paths, directory, settings)
+        except Exception as err:
+            log.warning("diagnostics failed: %s", err)
+            return
+        if not results:
+            return
+        parts = {p["id"]: p for p in msg["content"] if p.get("type") == "tool" and p.get("state", {}).get("status") == "completed"}
+        last_id = next((cid for cid, _ in reversed(self.step_files) if cid in parts), None)
+        if last_id is None:
+            return
+        # Each edit card shows the checks of its own files; the model gets one report, on the last edit.
+        for cid in dict.fromkeys(cid for cid, _ in self.step_files):
+            part = parts.get(cid)
+            if part is None:
+                continue
+            mine = {_norm(diagmod._rel(p, directory)) for c, p in self.step_files if c == cid}
+            own = [r for r in results if any(_norm(f) in mine for f in r["files"])]
+            st = part["state"]
+            if own:
+                st.setdefault("metadata", {})["diagnostics"] = diagmod.summary(own)
+            if cid == last_id and st.get("content"):
+                st["content"][0]["text"] = st["content"][0]["text"] + diagmod.report(results)
+            if own or cid == last_id:
+                self.emit("session.tool.success", assistantMessageID=msg["id"], id=cid, content=st["content"], metadata=st.get("metadata", {}), executed=True)
         self.engine.store.save_message(self.sid, msg)
 
     def _mark_interrupted(self) -> None:

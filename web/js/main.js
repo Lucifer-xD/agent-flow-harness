@@ -1,5 +1,5 @@
 import { api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
-import { ChatView, applyEvent, collectEdits, createThread, hooks, loadThread } from "./chat.js";
+import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread } from "./chat.js";
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderWatch, syncChildren, trackEvent } from "./delegate.js";
 import { applyAppearance as applyTheme } from "./appearance.js";
 import { openContextEditor } from "./context.js";
@@ -7,6 +7,7 @@ import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
 import { openSettings } from "./settings.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
+import { applyWorkEvent, jobsPopover, loadJobs, openGoalDialog, renderDock, renderJobsChip, setRedraw, syncState } from "./work.js";
 import {
   ago, basename, closePopover, confirmDialog, contextRing, dayGroup, diffView, el, escapeHtml, fmtTokens,
   hydrateIcons, ico, icon, popover, promptDialog, repositionPopover, toast,
@@ -23,7 +24,7 @@ export const S = {
   threads: new Map(),
   busy: new Set(),
   current: null,
-  draft: { model: null, agent: null, mode: null, files: [] },
+  draft: { model: null, agent: null, mode: null, files: [], goal: null, worktree: false },
   search: "",
   drawer: null, // "changes" | "harness"
 };
@@ -186,6 +187,7 @@ const project = () => S.settings.lastProject;
 
 async function loadSessions() {
   renderProjectPicker();
+  checkGit();
   if (!project()) {
     S.sessions = [];
     return renderThreads();
@@ -259,6 +261,7 @@ async function removeProject() {
   showHome();
 }
 
+const shownThreads = new Set(); // rows already on screen don't replay their entrance animation
 function renderThreads() {
   const box = $("threads");
   box.replaceChildren();
@@ -277,11 +280,15 @@ function renderThreads() {
     const t = s.time?.updated || s.time?.created;
     const g = dayGroup(t);
     if (g !== group) box.append(el("div.th-group", (group = g)));
+    const seen = shownThreads.has(s.id);
+    shownThreads.add(s.id);
     const item = el(`button.th-item${S.current?.id === s.id ? ".active" : ""}`, {
-      type: "button", title: s.title || "New thread", style: { animationDelay: `${Math.min(i, 12) * 18}ms` },
+      type: "button", title: s.title || "New thread", style: seen ? { animation: "none" } : { animationDelay: `${Math.min(i, 12) * 18}ms` },
       on: { click: () => openThread(s.id) },
     },
       S.busy.has(s.id) ? logoNode({ size: 18, working: true }) : null,
+      s.metadata?.afh?.worktree ? el("span.th-wt", { title: `Worktree · ${s.metadata.afh.worktree.branch}`, html: icon("branch") }) : null,
+      s.metadata?.afh?.goal ? el(`span.th-goal.${s.metadata.afh.goal.status}`, { title: `Goal (${s.metadata.afh.goal.status}): ${s.metadata.afh.goal.text}`, html: icon(s.metadata.afh.goal.status === "achieved" ? "check" : "target") }) : null,
       el("span.th-title", s.title || "New thread"),
       el("span.th-time", ago(t)),
       el("span.th-del", { title: "Delete thread", html: icon("trash"), on: { click: (e) => { e.stopPropagation(); deleteThread(s.id); } } }));
@@ -297,6 +304,7 @@ async function openThread(id) {
     t = createThread(session);
     S.threads.set(id, t);
   } else t.session = session;
+  syncState(t);
   S.current = t;
   renderThreads();
   renderTopbar();
@@ -312,6 +320,7 @@ async function openThread(id) {
   }
   if (S.current !== t) return;
   view.mount(t);
+  loadJobs(t).then(() => { if (S.current === t) renderWork(); });
   renderComposerState();
   refreshDrawer();
   $("input").focus();
@@ -351,7 +360,9 @@ async function deleteThread(id) {
   const s = S.sessions.find((x) => x.id === id);
   if (S.settings.ui.confirmDelete !== false && !(await confirmDialog({ title: "Delete thread?", body: `"${s?.title || "New thread"}" and its history will be deleted. Files it changed are not reverted.`, confirm: "Delete", danger: true }))) return;
   try {
-    await api.del(`/api/sessions/${id}`);
+    const res = await api.del(`/api/sessions/${id}`);
+    const kept = (res?.worktrees || []).filter((w) => w.kept);
+    if (kept.length) toast(`Its worktree has unmerged work, so it was kept: ${kept[0].path}`, "info", 9000);
     S.sessions = S.sessions.filter((x) => x.id !== id);
     S.threads.delete(id);
     if (S.current?.id === id) showHome();
@@ -480,6 +491,103 @@ function renderTopbar() {
     input.select();
   });
   box.append(h, el("span.tb-path", basename(project())));
+  renderWork();
+}
+
+// ---- goal, to-do list, background jobs, worktree ------------------------------------------
+
+function renderWork() {
+  const t = S.current;
+  renderDock($("work-dock"), t, { busy: !!t && (t.busy || S.busy.has(t.id)), onEditGoal: () => editGoal(), onChanged: renderWork });
+  renderJobsChip($("jobs-pill"), t);
+  const gb = $("btn-goal");
+  gb.hidden = !t;
+  const g = t?.goal;
+  gb.classList.toggle("on", !!g && g.status === "active");
+  gb.classList.toggle("achieved", g?.status === "achieved");
+  gb.title = g ? `Goal: ${g.text}` : "Set a goal: the agent keeps working until it is achieved";
+  const wt = t?.session?.metadata?.afh?.worktree;
+  const wb = $("btn-worktree");
+  wb.hidden = !wt;
+  if (wt) wb.replaceChildren(ico("branch"), el("span.wt-branch", wt.branch.replace(/^afh\//, "")));
+  // Draft pills: only before the thread exists.
+  const dg = $("draft-goal"), dw = $("draft-worktree");
+  dg.hidden = !!t || !project();
+  dg.classList.toggle("on", !!S.draft.goal);
+  dg.replaceChildren(ico("target"), el("span.lbl", S.draft.goal ? "Goal set" : "Goal"));
+  dg.title = S.draft.goal ? `Goal: ${S.draft.goal.text} — click to edit` : "Set a goal for the new thread";
+  dw.hidden = !!t || !project() || !S.gitRepo;
+  dw.classList.toggle("on", !!S.draft.worktree);
+  dw.replaceChildren(ico("branch"), el("span.lbl", S.draft.worktree ? "Worktree" : "Worktree"));
+}
+setRedraw(() => renderWork());
+
+function editGoal() {
+  const t = S.current;
+  if (!t) {
+    openGoalDialog({ draft: S.draft.goal, onDraft: (g) => { S.draft.goal = g; renderWork(); }, onStart: (g) => startWithGoal(g) });
+    return;
+  }
+  openGoalDialog({ thread: t, busy: t.busy || S.busy.has(t.id), onSaved: () => renderWork() });
+}
+
+/** Home screen "Start now": a new thread with the goal, and the first message toward it. */
+async function startWithGoal(g) {
+  const text = $("input").value.trim();
+  $("input").value = "";
+  autosize();
+  await submit(text || `Work toward the goal of this thread:\n\n${g.text}`);
+}
+
+async function checkGit() {
+  S.gitRepo = false;
+  if (!project()) return;
+  try { S.gitRepo = (await api.get(api.q("/api/git/check", { directory: project() }))).repo; } catch {}
+  renderWork();
+}
+
+async function worktreeMenu() {
+  const t = S.current;
+  const wt = t?.session?.metadata?.afh?.worktree;
+  if (!wt) return;
+  const box = el("div.wt-pop", el("div.empty-row", el("span.spinner")));
+  popover($("btn-worktree"), [], { header: box, width: 340, align: "right" });
+  let st;
+  try { st = await api.get(`/api/sessions/${t.id}/worktree`); } catch (e) { box.replaceChildren(el("div.empty-row", e.message)); return; }
+  const act = (label, iconName, fn, cls = "") => el(`button.pop-item${cls}`, { type: "button", on: { click: () => { closePopover(); fn(); } } }, ico(iconName), el("div.pi-main", el("div.pi-title", label)));
+  box.replaceChildren(
+    el("h4", ico("branch"), "Worktree"),
+    el("div.ctx-row", el("span", "Branch"), el("b", st.branch)),
+    el("div.ctx-row", el("span", "Made from"), el("b", st.base || "—")),
+    el("div.ctx-row", el("span", "Changes"), el("b", st.exists ? `${st.dirty.length} uncommitted · ${st.ahead} commit${st.ahead === 1 ? "" : "s"}${st.merged ? " · merged" : ""}` : "folder is gone")),
+    el("div.wt-path", { title: st.path }, st.path),
+    el("div.pop-sep"),
+    st.exists && (st.dirty.length || (st.ahead && !st.merged)) ? act(`Merge into ${st.base || "the main branch"}`, "git-merge", () => mergeWorktree(t)) : null,
+    act("Copy folder path", "copy", async () => { await navigator.clipboard.writeText(st.path); toast("Path copied", "ok", 1400); }),
+    act("Open the folder", "folder", () => api.post("/api/reveal", { path: st.path }).catch((e) => toast(e.message, "err"))),
+    act("Remove worktree…", "trash", () => removeWorktree(t, st), ".danger"));
+  repositionPopover();
+}
+
+async function mergeWorktree(t) {
+  if (!(await confirmDialog({ title: "Merge this thread's branch?", body: "AFH commits any uncommitted changes in the worktree, then merges its branch into the branch your project folder is on. If there are conflicts nothing is changed.", confirm: "Merge" }))) return;
+  try {
+    const r = await api.post(`/api/sessions/${t.id}/worktree/merge`);
+    toast(`Merged into ${r.into}`, "ok", 4000);
+  } catch (e) {
+    toast(e.message, "err", 9000);
+  }
+}
+
+async function removeWorktree(t, st) {
+  const unsaved = st.dirty.length || (st.ahead && !st.merged);
+  if (!(await confirmDialog({ title: "Remove the worktree?", body: unsaved ? `It still has ${st.dirty.length} uncommitted file(s) and ${st.ahead} unmerged commit(s) — they will be lost. The thread stays.` : "The folder and its branch are deleted. The thread stays.", confirm: "Remove", danger: true }))) return;
+  try {
+    await api.post(`/api/sessions/${t.id}/worktree/remove`, { force: true });
+    toast("Worktree removed", "ok");
+  } catch (e) {
+    toast(e.message, "err");
+  }
 }
 
 function threadMenu() {
@@ -661,7 +769,7 @@ function renderComposerState() {
   const last = t && [...t.messages].reverse().find((m) => m.type === "assistant" && m.tokens);
   const limit = findModel(ref)?.context;
   if (t && (last || t.messages.length)) {
-    const used = last ? (last.tokens.input || 0) + (last.tokens.cache?.read || 0) : 0;
+    const used = last ? (last.tokens.input || 0) + (last.tokens.cache?.read || 0) + (last.tokens.cache?.write || 0) : 0;
     ctxm.className = "ctx on";
     ctxm.innerHTML = contextRing(limit ? used / limit : 0);
     ctxm.title = limit ? `Context: ${fmtTokens(used)} of ${fmtTokens(limit)} tokens — click for details` : "Context details";
@@ -669,8 +777,9 @@ function renderComposerState() {
 
   renderTps();
   const hint = $("composer-hint");
-  hint.textContent = busy ? "Working… press Esc to stop, or type to queue a follow-up" : project() ? `${MODES[currentMode()].sub} · ${basename(project())}` : "";
+  hint.textContent = busy ? "Working… press Esc to stop, or type to queue a follow-up" : project() ? `${MODES[currentMode()].sub} · ${basename(project())} · type / for commands` : "";
   renderAttachments();
+  renderWork();
 }
 
 function renderAttachments() {
@@ -752,9 +861,13 @@ async function contextPopover() {
       el("div.ctx-row", el("span", "Model"), el("b", u.modelName || modelName(u.model) || "—")),
       el("div.ctx-row", el("span", "Mode"), el("b", u.agent || "build")),
       el("div.ctx-row", el("span", "Messages"), el("b", `${u.messages.user} you · ${u.messages.assistant} model · ${u.messages.tools} tools`)),
-      el("div.ctx-row", el("span", "Tokens this thread"), el("b", `${fmtTokens((tot.input || 0) + (tot.cache?.read || 0))} in · ${fmtTokens(tot.output || 0)} out · ${fmtTokens(tot.reasoning || 0)} thinking`)),
-      u.cost ? el("div.ctx-row", el("span", "Cost"), el("b", `$${u.cost.toFixed(4)}`)) : null,
-      el("div.actions", { style: { marginTop: "8px" } }, el("button.btn.sm", { on: { click: () => { closePopover(); editContext(); } } }, ico("edit"), "Open context editor"))));
+      el("div.ctx-row", el("span", "Tokens this thread"), el("b", `${fmtTokens((tot.input || 0) + (tot.cache?.read || 0) + (tot.cache?.write || 0))} in · ${fmtTokens(tot.output || 0)} out`)),
+      tot.cache?.read ? el("div.ctx-row", el("span", "From the prompt cache"), el("b", `${fmtTokens(tot.cache.read)} (${Math.round((100 * tot.cache.read) / Math.max(1, (tot.input || 0) + tot.cache.read + (tot.cache.write || 0)))}%)`)) : null,
+      el("div.ctx-row", el("span", "Cost"), el("b", u.plan ? "plan (no per-token cost)" : u.cost ? fmtCost(u.cost) : u.price ? "$0" : "price not set")),
+      !u.plan && !u.price ? el("div.h-muted", { style: { fontSize: "11.5px", fontStyle: "normal", margin: "2px 0 6px" } }, "Set this model's price in Settings → Usage & cost to track spending.") : null,
+      el("div.actions", { style: { marginTop: "8px" } },
+        el("button.btn.sm.ghost", { title: "Summarise older messages now to free up context", on: { click: async () => { closePopover(); await localCommand("/compact"); } } }, ico("archive"), "Compact now"),
+        el("button.btn.sm", { on: { click: () => { closePopover(); editContext(); } } }, ico("edit"), "Context editor"))));
   } catch (e) {
     box.replaceChildren(el("div.empty-row", e.message));
   }
@@ -811,13 +924,122 @@ async function attach() {
   renderAttachments();
 }
 
-async function submit() {
+// ---- slash commands menu ---------------------------------------------------------------------
+
+const slash = { open: false, items: [], index: 0 };
+let cmdCache = { dir: null, at: 0, list: [] };
+
+async function commandList() {
+  if (cmdCache.dir === project() && Date.now() - cmdCache.at < 30_000) return cmdCache.list;
+  try {
+    cmdCache = { dir: project(), at: Date.now(), list: await api.get(api.q("/api/commands", { directory: project() })) };
+  } catch {
+    cmdCache = { dir: project(), at: Date.now(), list: [] };
+  }
+  return cmdCache.list;
+}
+const invalidateCommands = () => { cmdCache.at = 0; };
+
+const RUN_NOW = new Set(["new", "todo", "jobs", "cost", "compact"]);
+
+async function updateSlash() {
+  const v = $("input").value;
+  const m = v.match(/^\/([a-z0-9_:-]*)$/i);
+  if (!m) return closeSlash();
+  const q = m[1].toLowerCase();
+  const needsThread = new Set(["compact", "cost", "jobs", "todo"]);
+  const list = (await commandList()).filter((c) => (S.current || !needsThread.has(c.name)) && (!q || c.name.startsWith(q) || c.name.includes(q) || (c.description || "").toLowerCase().includes(q)));
+  if ($("input").value !== v) return; // typed on while loading
+  if (!list.length) return closeSlash();
+  list.sort((a, b) => (b.name.startsWith(q) - a.name.startsWith(q)) || 0);
+  slash.items = list.slice(0, 12);
+  slash.index = Math.min(slash.index, slash.items.length - 1);
+  slash.open = true;
+  drawSlash();
+}
+
+function drawSlash() {
+  const box = $("slash-menu");
+  box.hidden = false;
+  box.replaceChildren(el("div.slash-head", ico("slash"), "Commands", el("span.slash-keys", "↑↓ choose · Enter run · Esc close")),
+    ...slash.items.map((c, i) => el(`button.slash-item${i === slash.index ? ".on" : ""}`, { type: "button", on: { mousedown: (e) => { e.preventDefault(); pickSlash(c); }, mousemove: () => { if (slash.index !== i) { slash.index = i; drawSlash(); } } } },
+      el("span.slash-name", `/${c.name}`), c.args ? el("span.slash-args", c.args) : null, el("span.slash-desc", c.description || ""),
+      el("span.slash-src", c.builtin ? "built-in" : c.source === "project" ? "project" : c.source === "global" ? "global" : "yours"))));
+}
+
+function closeSlash() {
+  slash.open = false;
+  slash.index = 0;
+  $("slash-menu").hidden = true;
+}
+
+function pickSlash(c) {
+  closeSlash();
+  if (RUN_NOW.has(c.name)) { setInput(`/${c.name}`); submit(); return; }
+  if (c.name === "goal") { setInput(""); editGoal(); return; }
+  setInput(`/${c.name} `);
+  $("input").focus();
+}
+
+function slashKey(e) {
+  if (!slash.open) return false;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    slash.index = (slash.index + (e.key === "ArrowDown" ? 1 : -1) + slash.items.length) % slash.items.length;
+    drawSlash();
+    return true;
+  }
+  if (e.key === "Enter" || e.key === "Tab") {
+    e.preventDefault();
+    pickSlash(slash.items[slash.index]);
+    return true;
+  }
+  if (e.key === "Escape") { e.preventDefault(); closeSlash(); return true; }
+  return false;
+}
+
+/** Slash commands the composer runs itself. Returns true when handled (nothing is sent). */
+async function localCommand(text) {
+  const m = text.match(/^\/([a-z0-9][a-z0-9_:-]*)(?:\s+([\s\S]*))?$/i);
+  if (!m) return false;
+  const name = m[1].toLowerCase(), args = (m[2] || "").trim();
+  const t = S.current;
+  const clear = () => { $("input").value = ""; autosize(); renderComposerState(); };
+  if (name === "new") { clear(); showHome(); return true; }
+  if (name === "goal" && !args) { clear(); editGoal(); return true; }
+  if (name === "todo") {
+    clear();
+    if (!t) { toast("Start a thread first", "info"); return true; }
+    t.showTodos = true;
+    renderWork();
+    setTimeout(() => document.querySelector(".todo-add")?.focus(), 50);
+    return true;
+  }
+  if (name === "jobs") { clear(); if (t) jobsPopover($("jobs-pill").hidden ? $("btn-send") : $("jobs-pill"), t); return true; }
+  if (name === "cost") { clear(); if (t) contextPopover(); return true; }
+  if (name === "compact") {
+    clear();
+    if (!t) return true;
+    try {
+      toast("Compacting…", "info", 1500);
+      const r = await api.post(`/api/sessions/${t.id}/compact`);
+      toast(r.ok ? "Older messages summarised" : "Nothing to compact yet", r.ok ? "ok" : "info");
+      if (r.ok) reloadCurrent(t.id);
+    } catch (e) { toast(e.message, "err"); }
+    return true;
+  }
+  return false;
+}
+
+async function submit(override) {
+  closeSlash();
   const ta = $("input");
-  const text = ta.value.trim();
+  const text = (typeof override === "string" ? override : ta.value).trim();
   const t = S.current;
   if (t && (t.busy || S.busy.has(t.id)) && !text) return interrupt();
   if (!text) return;
   if (!project()) return chooseFolder();
+  if (text.startsWith("/") && (await localCommand(text))) return;
   if (!currentModel()) {
     toast("Add a provider and pick a model first", "info");
     return openSettings("models", ctx);
@@ -829,13 +1051,20 @@ async function submit() {
   try {
     let thread = S.current;
     if (!thread) {
-      const session = await api.post("/api/sessions", { directory: project(), model: currentModel(), agent: currentAgent(), mode: currentMode() });
+      const goal = S.draft.goal;
+      const worktree = S.draft.worktree && S.gitRepo;
+      if (worktree) toast("Creating a worktree…", "info", 1800);
+      const session = await api.post("/api/sessions", { directory: project(), model: currentModel(), agent: currentAgent(), mode: currentMode(), worktree, worktreeName: worktree ? text.replace(/^\/\S+\s*/, "").split(/\s+/).slice(0, 5).join(" ") : undefined });
+      if (goal) session.metadata = { ...(session.metadata || {}), afh: { ...(session.metadata?.afh || {}), goal: await api.put(`/api/sessions/${session.id}/goal`, goal) } };
       S.sessions.unshift(session);
       thread = createThread(session);
+      syncState(thread);
       thread.loaded = true;
       S.threads.set(session.id, thread);
       S.current = thread;
-      S.draft = { model: null, agent: null, mode: null, files: [] };
+      S.draft = { model: null, agent: null, mode: null, files: [], goal: null, worktree: false };
+      S.settings.lastThread = session.id;
+      api.put("/api/settings", { lastThread: session.id }).catch(() => {});
       renderThreads();
       renderTopbar();
       view.mount(thread);
@@ -928,8 +1157,16 @@ function onEvent(ev) {
   if (type.startsWith("mcp.") || type.startsWith("plugin.")) ctx.onCatalogEvent?.(type);
 
   const t = sid && S.threads.get(sid);
+  if (t && applyWorkEvent(t, ev)) {
+    if (S.current === t) renderWork();
+    if (type === "session.goal.updated" && ev.data?.goal?.status === "achieved" && t.prevGoalStatus && t.prevGoalStatus !== "achieved") {
+      notify("done", "Goal achieved", ev.data.goal.text);
+      toast("Goal achieved", "ok", 4000);
+    }
+  }
   if (!t || !t.loaded) return;
   const result = applyEvent(t, ev);
+  if (result?.reload && S.current === t && !t.busy) { reloadCurrent(t.id); return; }
   if (type === "session.tool.called") registerDelegation(t, ev.data);
   if (S.current === t && type.startsWith("session.tool.")) onLiveEvent(ev);
   if (!result) return;
@@ -956,7 +1193,7 @@ const refreshDrawerSoon = () => { clearTimeout(drawerTimer); drawerTimer = setTi
 
 // ---- wiring ------------------------------------------------------------------------
 
-export const ctx = { S, saveSettings, reloadCatalog, project, modelName, onReady: null, onCatalogEvent: null };
+export const ctx = { S, saveSettings, reloadCatalog, project, modelName, invalidateCommands, onReady: null, onCatalogEvent: null };
 window.__afh = { S, D, ctx, live: liveState }; // for debugging from the devtools console
 
 function toggleSidebar() {
@@ -972,8 +1209,10 @@ addEventListener("resize", syncSidebarButton);
 
 function wire() {
   const ta = $("input");
-  ta.addEventListener("input", () => { autosize(); renderComposerState(); });
+  ta.addEventListener("input", () => { autosize(); renderComposerState(); updateSlash(); });
+  ta.addEventListener("blur", () => setTimeout(closeSlash, 120));
   ta.addEventListener("keydown", (e) => {
+    if (slashKey(e)) return;
     if (e.key !== "Enter" || e.isComposing) return;
     const ctrlMode = S.settings.ui.sendKey === "ctrl-enter";
     if ((ctrlMode && (e.ctrlKey || e.metaKey)) || (!ctrlMode && !e.shiftKey && !e.ctrlKey)) {
@@ -1005,6 +1244,11 @@ function wire() {
   $("btn-harness").addEventListener("click", () => openDrawer("harness"));
   $("btn-context").addEventListener("click", editContext);
   $("btn-live").addEventListener("click", () => openDrawer("live"));
+  $("btn-goal").addEventListener("click", editGoal);
+  $("btn-worktree").addEventListener("click", worktreeMenu);
+  $("draft-goal").addEventListener("click", editGoal);
+  $("draft-worktree").addEventListener("click", () => { S.draft.worktree = !S.draft.worktree; renderWork(); if (S.draft.worktree) toast("The new thread gets its own git worktree: a separate folder on a new branch", "info", 3500); });
+  $("jobs-pill").addEventListener("click", () => S.current && jobsPopover($("jobs-pill"), S.current));
   $("btn-drawer-close").addEventListener("click", closeDrawer);
   $("btn-collapse").addEventListener("click", toggleSidebar);
   $("btn-expand").addEventListener("click", toggleSidebar);

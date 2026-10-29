@@ -13,14 +13,50 @@ from typing import Any
 
 from .. import store as appstore
 from . import agents as agentmod
+from . import commands as cmdmod
 from . import config as provcfg
+from . import hooks as hookmod
 from . import permissions as perm
+from . import pricing
 from . import prompt as promptmod
+from . import state as statemod
+from . import worktree as wtmod
+from .jobs import JobManager, JobsTool
 from .runner import Run, to_chat
 from .sessions import Store
-from .types import ChatMessage, ChatRequest, FileDiff, ModelInfo, Provider, ToolContext, ToolResult, ToolSpec, event, new_id, now_ms
+from .types import BudgetExceeded, ChatMessage, ChatRequest, FileDiff, ModelInfo, Provider, ToolContext, ToolResult, ToolSpec, event, new_id, now_ms
 
 log = logging.getLogger("afh.engine")
+
+
+def used_tokens(tokens: dict) -> int:
+    """Prompt size of a step: uncached input plus what was read from or written to the cache."""
+    cache = tokens.get("cache") or {}
+    return int(tokens.get("input", 0) or 0) + int(cache.get("read", 0) or 0) + int(cache.get("write", 0) or 0)
+
+
+def transcript_of(messages: list[dict]) -> str:
+    """Stored messages as plain text for the summariser, tool calls included (shortened)."""
+    out = []
+    for m in messages:
+        t = m.get("type")
+        if t == "user":
+            out.append(f"[user] {m.get('text', '')}")
+        elif t in ("system", "synthetic", "compaction"):
+            if m.get("text"):
+                out.append(f"[{t}] {m['text'][:4000]}")
+        elif t == "assistant":
+            for p in m.get("content", []):
+                if p.get("type") == "text" and p.get("text"):
+                    out.append(f"[assistant] {p['text']}")
+                elif p.get("type") == "tool":
+                    st = p.get("state") or {}
+                    inp = st.get("input")
+                    args = json.dumps(inp, ensure_ascii=False)[:400] if isinstance(inp, dict) else str(inp or "")[:400]
+                    result = "\n".join(c.get("text", "") for c in st.get("content") or [] if c.get("type") == "text")
+                    status = st.get("status", "")
+                    out.append(f"[tool {p.get('name')} {status}] {args}\n  → {result[:600]}")
+    return "\n\n".join(out)
 
 
 class Engine:
@@ -37,6 +73,7 @@ class Engine:
         self.ready = threading.Event()
         self.error: str | None = None
         self.stashes: dict[str, dict] = {}  # staged undos per session
+        self.jobs = JobManager(self.publish)  # background shell commands
 
     # ---- lifecycle ---------------------------------------------------------------------
 
@@ -68,6 +105,7 @@ class Engine:
     async def stop(self) -> None:
         for run in list(self.runs.values()):
             run.abort.set()
+        await self.jobs.stop_all()
         if self.mcp:
             try:
                 await self.mcp.stop()
@@ -188,8 +226,15 @@ class Engine:
 
         directory = session["location"]["directory"]
         skills = self.skills_for(directory)
+        extra = statemod.goal_prompt(self.goal(session["id"]))
+        wt = self._afh(session["id"]).get("worktree")
+        if wt:
+            extra = (extra + "\n\n" if extra else "") + (
+                f"# Worktree\n\nThis thread works in its own git worktree (a separate copy of the repository) on branch `{wt['branch']}`, "
+                f"made from `{wt.get('base')}`. Edit files only here: {directory}. The user merges the branch back from the app; "
+                "commit your work with git when a piece is done.")
         return promptmod.build(agent_system=agent.system, directory=directory, skills_text=catalog_text(skills) if skills else "",
-                               mcp_instructions=self.mcp.instructions() if self.mcp else "", settings=self.settings())
+                               mcp_instructions=self.mcp.instructions() if self.mcp else "", settings=self.settings(), extra=extra)
 
     def skills_for(self, directory: str) -> list:
         from .skills import discover
@@ -205,6 +250,10 @@ class Engine:
         from .tools.registry import builtin_tools
 
         tools = list(builtin_tools(self.settings()))
+        tools += [JobsTool(), statemod.TodoTool(self)]
+        goal = self.goal(session["id"])
+        if goal and goal.get("status") in ("active", "blocked", "paused"):
+            tools.append(statemod.GoalTool(self))
         skills = self.skills_for(session["location"]["directory"])
         if skills:
             tools.append(SkillTool(skills))
@@ -261,32 +310,92 @@ class Engine:
     # ---- sessions ----------------------------------------------------------------------------
 
     def create_session(self, directory: str, *, title: str | None = None, agent: str | None = None, model: dict | None = None, mode: str | None = None,
-                       parent_id: str | None = None, permissions: list | None = None) -> dict:
+                       parent_id: str | None = None, permissions: list | None = None, project: str | None = None, worktree: dict | None = None) -> dict:
         mode = mode or self.settings().get("defaultMode", "ask")
+        afh: dict[str, Any] = {"mode": mode}
+        if worktree:
+            afh["worktree"] = worktree
+            directory = worktree["directory"]
         s = self.store.create_session(directory, title=title, agent=agent or self.settings().get("defaultAgent", "build"), model=model,
-                                      permissions=permissions if permissions is not None else perm.rules_for_mode(mode), metadata={"afh": {"mode": mode}}, parent_id=parent_id)
+                                      permissions=permissions if permissions is not None else perm.rules_for_mode(mode), metadata={"afh": afh}, parent_id=parent_id,
+                                      project=project)
         self.publish(event("session.created", s["id"], parentID=parent_id, title=title, agent=s["agent"], model=s["model"], location=s["location"]))
         return s
+
+    async def create_worktree_session(self, directory: str, name: str | None = None, **kw: Any) -> dict:
+        """A thread in its own git worktree: same repository, its own branch (named after `name`) and folder."""
+        project = kw.pop("project", None) or directory
+        wt = await wtmod.create(directory, name or kw.get("title") or "thread")
+        return self.create_session(wt["directory"], project=project, worktree=wt, **kw)
 
     def update_session(self, sid: str, **fields: Any) -> dict:
         if "mode" in fields:
             mode = fields.pop("mode")
             fields["permissions"] = perm.rules_for_mode(mode)
-            s = self.store.get_session(sid) or {}
-            fields["metadata"] = {**s.get("metadata", {}), "afh": {**s.get("metadata", {}).get("afh", {}), "mode": mode}}
-        s = self.store.update_session(sid, **fields)
+            with self.store.lock:
+                s = self.store.get_session(sid) or {}
+                fields["metadata"] = {**s.get("metadata", {}), "afh": {**s.get("metadata", {}).get("afh", {}), "mode": mode}}
+                s = self.store.update_session(sid, **fields)
+        else:
+            s = self.store.update_session(sid, **fields)
         if "title" in fields:
             self.publish(event("session.renamed", sid, title=fields["title"]))
         if "archived" in fields:
             self.publish(event("session.archived" if fields["archived"] else "session.unarchived", sid))
         return s
 
-    def delete_session(self, sid: str) -> None:
-        run = self.runs.get(sid)
-        if run:
-            run.abort.set()
+    def delete_session(self, sid: str) -> dict:
+        """Delete a thread (and its delegations). Its background jobs stop; a worktree with no
+        unsaved or unmerged work is removed, one with work in it is kept and reported."""
+        out: dict[str, Any] = {"ok": True}
+        sessions = [sid] + [c["id"] for c in self.store.list_sessions(parent_id=sid, limit=1000)]
+        worktrees = []
+        for s_id in sessions:
+            run = self.runs.get(s_id)
+            if run:
+                run.abort.set()
+            self.on_loop(self.jobs.stop_session(s_id, forget=True))
+            wt = self._afh(s_id).get("worktree")
+            if wt:
+                worktrees.append(wt)
         self.store.delete_session(sid)
         self.publish(event("session.deleted", sid))
+        if worktrees:
+            fut = self.on_loop(self._cleanup_worktrees(worktrees))
+            if fut is not None and not isinstance(fut, asyncio.Task):
+                try:
+                    out["worktrees"] = fut.result(60)
+                except Exception as err:
+                    out["worktrees"] = [{"path": w["path"], "kept": True, "error": str(err)} for w in worktrees]
+        return out
+
+    def on_loop(self, coro):
+        """Schedule a coroutine on the engine's loop from any thread. From another thread it
+        returns a concurrent Future (wait on it with .result()); on the loop, a Task."""
+        if self.loop is None or self.loop.is_closed():
+            coro.close()
+            return None
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if running is self.loop:
+            return asyncio.ensure_future(coro)
+        return asyncio.run_coroutine_threadsafe(coro, self.loop)
+
+    async def _cleanup_worktrees(self, worktrees: list[dict]) -> list[dict]:
+        report = []
+        for wt in worktrees:
+            try:
+                st = await wtmod.status(wt)
+                if st["exists"] and (st["dirty"] or (st["ahead"] and not st["merged"])):
+                    report.append({"path": wt["path"], "branch": wt["branch"], "kept": True, "dirty": len(st["dirty"]), "ahead": st["ahead"]})
+                    continue
+                await wtmod.remove(wt)
+                report.append({"path": wt["path"], "branch": wt["branch"], "kept": False})
+            except Exception as err:
+                report.append({"path": wt["path"], "branch": wt.get("branch"), "kept": True, "error": str(err)})
+        return report
 
     def fork_session(self, sid: str, before: str | None = None) -> dict:
         src = self.store.get_session(sid)
@@ -320,7 +429,32 @@ class Engine:
             session = self.store.update_session(sid, **fields)
         from .skills import discover, mentioned
 
+        command = None
+        parsed = cmdmod.parse(text) if text.lstrip().startswith("/") else None
+        if parsed:
+            name, args = parsed
+            if name == "goal":
+                if not args:
+                    raise ValueError("Write the goal after /goal, e.g. /goal all tests pass and the login page works")
+                self.set_goal(sid, args, autopilot=self.settings().get("goals", {}).get("autopilot", True))
+                text, command = f"Work toward the goal of this thread:\n\n{args}", {"name": "goal", "args": args}
+            elif name == "compact":
+                await self.compact_now(sid)
+                return {"command": "compact"}
+            else:
+                found = next((c for c in cmdmod.all_commands(session["location"]["directory"], self.settings()) if c["name"] == name and c.get("prompt")), None)
+                if found:
+                    text, command = cmdmod.expand(found["prompt"], args), {"name": name, "args": args, "source": found.get("source")}
+                elif any(c["name"] == name for c in cmdmod.BUILTINS):
+                    raise ValueError(f"/{name} runs in the composer of the AFH window")
+        goal = self.goal(sid)
+        if goal and (goal.get("turns") or goal.get("exhausted") or goal.get("status") == "blocked") and (command or {}).get("name") != "goal":
+            # The user replied: a fresh autopilot budget, and a blocked goal is back in play.
+            self.update_goal(sid, status="active" if goal.get("status") == "blocked" else None, turns=0, exhausted=False)
+
         msg = {"id": new_id("msg"), "type": "user", "text": text, "time": {"created": now_ms()}}
+        if command:
+            msg["command"] = command
         if files:
             msg["files"] = files
         self.store.add_message(sid, msg)
@@ -351,16 +485,153 @@ class Engine:
     def is_running(self, sid: str) -> bool:
         return sid in self.runs
 
-    def add_usage(self, sid: str, tokens: dict) -> None:
-        s = self.store.get_session(sid)
-        if not s:
-            return
-        t = s.get("tokens") or {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}
-        t["input"] += tokens.get("input", 0)
-        t["output"] += tokens.get("output", 0)
-        t["reasoning"] += tokens.get("reasoning", 0)
-        t["cache"]["read"] += tokens.get("cache", {}).get("read", 0)
-        self.store.update_session(sid, tokens=t)
+    def add_usage(self, sid: str, tokens: dict, cost: float | None = None) -> None:
+        with self.store.lock:
+            s = self.store.get_session(sid)
+            if not s:
+                return
+            t = s.get("tokens") or {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}
+            t.setdefault("cache", {}).setdefault("read", 0)
+            t["cache"].setdefault("write", 0)
+            t["input"] += tokens.get("input", 0)
+            t["output"] += tokens.get("output", 0)
+            t["reasoning"] += tokens.get("reasoning", 0)
+            t["cache"]["read"] += tokens.get("cache", {}).get("read", 0)
+            t["cache"]["write"] += tokens.get("cache", {}).get("write", 0)
+            fields: dict[str, Any] = {"tokens": t}
+            if cost:
+                fields["cost"] = round((s.get("cost") or 0) + cost, 8)
+            self.store.update_session(sid, **fields)
+
+    # ---- cost & spending limits ---------------------------------------------------------------------
+
+    def price_for(self, ref: dict | None) -> dict | None:
+        """USD per 1M tokens for a model, or None (unknown price, or a flat-rate plan)."""
+        if not ref:
+            return None
+        entry = provcfg.entry(ref.get("providerID", "")) or {}
+        if pricing.is_plan(entry, ref.get("providerID", "")):
+            return None
+        return pricing.price_for(entry, ref.get("providerID", ""), self.find_model(ref))
+
+    def check_budget(self, session: dict) -> None:
+        b = self.settings().get("budget") or {}
+        per_thread = float(b.get("perThread") or 0)
+        per_day = float(b.get("perDay") or 0)
+        if per_thread > 0:
+            spent = (self.store.get_session(session["id"]) or {}).get("cost") or 0
+            if spent >= per_thread:
+                raise BudgetExceeded(f"This thread has spent ${spent:.2f}, over its ${per_thread:.2f} limit. Raise the limit in Settings → Usage & cost to continue.")
+        if per_day > 0:
+            import datetime as dt
+
+            start = int(dt.datetime.combine(dt.date.today(), dt.time()).timestamp() * 1000)
+            spent = self.store.cost_since(start)
+            if spent >= per_day:
+                raise BudgetExceeded(f"Today's spending is ${spent:.2f}, over the ${per_day:.2f} daily limit. Raise it in Settings → Usage & cost to continue.")
+
+    # ---- thread state: to-do list & goal ------------------------------------------------------------
+
+    def _afh(self, sid: str) -> dict:
+        s = self.store.get_session(sid) or {}
+        return (s.get("metadata") or {}).get("afh") or {}
+
+    def _patch_afh(self, sid: str, **fields: Any) -> dict:
+        with self.store.lock:
+            s = self.store.get_session(sid)
+            if not s:
+                raise KeyError(sid)
+            meta = s.get("metadata") or {}
+            afh = {**(meta.get("afh") or {}), **fields}
+            afh = {k: v for k, v in afh.items() if v is not None}
+            self.store.update_session(sid, metadata={**meta, "afh": afh}, updated=s["time"]["updated"])
+        return afh
+
+    def todos(self, sid: str) -> list[dict]:
+        return list(self._afh(sid).get("todos") or [])
+
+    def set_todos(self, sid: str, todos: list, by: str = "agent") -> list[dict]:
+        todos = statemod.normalize_todos(todos, self.todos(sid))
+        self._patch_afh(sid, todos=todos)
+        self.publish(event("session.todos.updated", sid, todos=todos, counts=statemod.todo_counts(todos), by=by))
+        if by == "user":
+            # The model learns about the user's edit the next time it is called.
+            self.store.add_message(sid, {"id": new_id("msg"), "type": "system", "metadata": {"notice": "todos"}, "time": {"created": now_ms()},
+                                         "text": "The user edited your to-do list. It is now:\n" + statemod.render_todos(todos) + "\n\nFollow this list from now on."})
+        return todos
+
+    def goal(self, sid: str) -> dict | None:
+        return self._afh(sid).get("goal")
+
+    def set_goal(self, sid: str, text: str, criteria: str = "", autopilot: bool = True, max_turns: int | None = None) -> dict:
+        prev = self.goal(sid)
+        goal = statemod.make_goal(text, criteria, autopilot, max_turns or self.settings().get("goals", {}).get("maxTurns", statemod.DEFAULT_GOAL_TURNS), prev)
+        self._patch_afh(sid, goal=goal)
+        self.publish(event("session.goal.updated", sid, goal=goal))
+        return goal
+
+    def update_goal(self, sid: str, status: str | None = None, note: dict | None = None, **fields: Any) -> dict | None:
+        goal = self.goal(sid)
+        if not goal:
+            return None
+        goal = {**goal, **fields, "updated": now_ms()}
+        if status:
+            goal["status"] = status
+            if status == "achieved":
+                goal["achieved"] = now_ms()
+        if note:
+            goal["progress"] = [*(goal.get("progress") or []), note][-20:]
+            if note.get("status") in ("achieved", "blocked"):
+                goal["summary"] = note.get("summary", "")
+        self._patch_afh(sid, goal=goal)
+        self.publish(event("session.goal.updated", sid, goal=goal))
+        return goal
+
+    def clear_goal(self, sid: str) -> None:
+        with self.store.lock:
+            s = self.store.get_session(sid)
+            if not s:
+                raise KeyError(sid)
+            meta = s.get("metadata") or {}
+            afh = {k: v for k, v in (meta.get("afh") or {}).items() if k != "goal"}
+            self.store.update_session(sid, metadata={**meta, "afh": afh}, updated=s["time"]["updated"])
+        self.publish(event("session.goal.updated", sid, goal=None))
+
+    async def on_agent_stop(self, run: Run) -> dict | None:
+        """The model ended its turn without tool calls. Returns {kind, text} to make it continue:
+        a stop hook that failed, goal autopilot, or (once per run) an out-of-date to-do list."""
+        sid = run.sid
+        settings = self.settings()
+        directory = run.session["location"]["directory"]
+        if run.stop_rounds < hookmod.STOP_ROUNDS:
+            hs = hookmod.hooks_for(settings, "stop")
+            if hs:
+                results = await hookmod.run_all(hs, {"event": "stop", "sessionID": sid, "project": directory}, directory, settings.get("shell"))
+                self.publish(event("session.hooks.ran", sid, hook="stop", results=results))
+                blocking = [r for r in results if r["code"] == hookmod.BLOCK_CODE]
+                if blocking:
+                    run.stop_rounds += 1
+                    body = "\n\n".join(f"Hook '{r['name']}':\n{r['output'] or '(no output)'}" for r in blocking)
+                    return {"kind": "hook", "text": f"A stop hook did not pass, so the work is not finished yet. Fix this, then finish again:\n\n{body}",
+                            "label": f"Stop hook failed: {', '.join(r['name'] for r in blocking)} — continuing"}
+        goal = self.goal(sid)
+        if goal and goal.get("status") == "active" and goal.get("autopilot"):
+            if goal.get("turns", 0) < goal.get("maxTurns", statemod.DEFAULT_GOAL_TURNS):
+                goal = self.update_goal(sid, turns=goal.get("turns", 0) + 1)
+                return {"kind": "goal", "text": statemod.continuation_text(goal, self.todos(sid)),
+                        "label": f"Goal not achieved yet — continuing ({goal['turns']}/{goal['maxTurns']})"}
+            if not goal.get("exhausted"):
+                self.update_goal(sid, exhausted=True)
+                self.publish(event("session.notice", sid, kind="goal", label=f"Autopilot paused after {goal.get('maxTurns')} continuations — reply to keep going"))
+        todos = self.todos(sid)
+        left = statemod.open_todos(todos)
+        if left and not run.todo_nudged and (settings.get("agent") or {}).get("todoNudge", True):
+            run.todo_nudged = True
+            return {"kind": "todo", "label": f"{len(left)} to-do item{'s' if len(left) != 1 else ''} still open — checking",
+                    "text": ("You ended your turn, but your to-do list still has open items:\n" + statemod.render_todos(left) +
+                             "\n\nIf they are done, mark them completed (todo tool). If they are no longer needed, mark them cancelled. "
+                             "Otherwise keep working on them now. If you stopped because you need the user's answer, keep the list as it is and end your turn with the question.")}
+        return None
 
     async def after_run(self, session: dict) -> None:
         s = self.store.get_session(session["id"])
@@ -382,9 +653,13 @@ class Engine:
             elif ev["type"] == "error":
                 raise RuntimeError(ev.get("message"))
         text_out = "".join(out).strip()
-        for line in reversed(text_out.splitlines()):
-            if line.strip().upper().startswith("ANSWER:"):
-                return line.split(":", 1)[1].strip()
+        lines = text_out.splitlines()
+        for i in range(len(lines) - 1, -1, -1):
+            if lines[i].strip().upper().startswith("ANSWER:"):
+                # The answer is the rest of the marker line plus everything after it (summaries span lines).
+                rest = lines[i].split(":", 1)[1].strip()
+                tail = "\n".join(lines[i + 1:]).strip()
+                return "\n".join(x for x in (rest, tail) if x).strip()
         return text_out
 
     async def make_title(self, session: dict) -> None:
@@ -404,30 +679,60 @@ class Engine:
             title = " ".join(first.get("text", "").split()[:6]) or "New thread"
         self.update_session(session["id"], title=title)
 
-    async def maybe_compact(self, session: dict, agent: agentmod.AgentConfig) -> None:
-        """When the last step used most of the window, summarise older messages."""
+    async def maybe_compact(self, session: dict, agent: agentmod.AgentConfig, force: bool = False) -> bool:
+        """When the last step used most of the window (or on /compact), summarise older messages."""
         msgs = self.store.list_messages(session["id"])
-        last = next((m for m in reversed(msgs) if m.get("type") == "assistant" and m.get("tokens")), None)
-        if not last:
-            return
+        if not force:
+            last = next((m for m in reversed(msgs) if m.get("type") == "assistant" and m.get("tokens")), None)
+            if not last:
+                return False
+            try:
+                _, model = self.resolve_model(self.model_ref_for(session, agent))
+            except Exception:
+                return False
+            if used_tokens(last["tokens"]) < model.context * 0.8 or len(msgs) < 8:
+                return False
+        keep_n = 6 if len(msgs) > 8 else max(1, len(msgs) // 2)
+        keep = msgs[-keep_n:]
+        old = msgs[:-keep_n]
+        if not old:
+            return False
+        self.publish(event("session.compaction.started", session["id"]))
+        transcript = transcript_of(old)[-160_000:]
         try:
-            _, model = self.resolve_model(self.model_ref_for(session, agent))
-        except Exception:
-            return
-        used = last["tokens"].get("input", 0) + last["tokens"].get("cache", {}).get("read", 0)
-        if used < model.context * 0.8 or len(msgs) < 8:
-            return
-        keep = msgs[-6:]
-        old = msgs[:-6]
-        transcript = "\n\n".join(f"[{m.get('type')}] " + (m.get("text") or "\n".join(p.get("text", "") for p in m.get("content", []) if p.get("type") == "text")) for m in old)[:120_000]
-        try:
-            summary = await self._complete(self.model_ref_for(session, agent), "Summarise this coding conversation for the assistant that will continue it: goals, decisions, files touched, what is done and what is left. Be precise and compact. Write the summary itself after the ANSWER: marker, all on following lines.", transcript, 1500)
+            summary = await self._complete(self.model_ref_for(session, agent),
+                                           "Summarise this coding conversation for the assistant that will continue it: the user's requests and goal, decisions made, "
+                                           "files created or changed (paths), commands that matter and their results, what is done, what is left, and any open questions. "
+                                           "Be precise and compact; keep exact names, paths and numbers. Write the summary itself after the ANSWER: marker, all on following lines.",
+                                           transcript, 2000)
         except Exception as err:
             log.info("compaction skipped: %s", err)
-            return
-        compaction = {"id": new_id("msg"), "type": "compaction", "text": summary, "time": {"created": now_ms()}}
+            self.publish(event("session.compaction.ended", session["id"], skipped=str(err)))
+            return False
+        if len(summary.strip()) < 10:  # never trade the history for an empty summary
+            log.info("compaction skipped: the summary came back empty")
+            self.publish(event("session.compaction.ended", session["id"], skipped="the model returned no summary"))
+            return False
+        extra = []
+        todos = self.todos(session["id"])
+        if todos:
+            extra.append("Your to-do list at this point:\n" + statemod.render_todos(todos))
+        goal = self.goal(session["id"])
+        if goal and goal.get("status") in ("active", "blocked"):
+            extra.append(f"The thread's goal (still {goal['status']}): {goal['text']}")
+        text = summary.strip() + ("\n\n" + "\n\n".join(extra) if extra else "")
+        compaction = {"id": new_id("msg"), "type": "compaction", "text": text, "time": {"created": now_ms()}, "metadata": {"compacted": len(old)}}
         self.store.replace_messages(session["id"], [compaction, *keep])
-        self.publish(event("session.compaction.ended", session["id"]))
+        self.publish(event("session.compaction.ended", session["id"], compacted=len(old)))
+        return True
+
+    async def compact_now(self, sid: str) -> bool:
+        session = self.store.get_session(sid)
+        if not session:
+            raise KeyError(sid)
+        if self.is_running(sid):
+            raise ValueError("Wait for the thread to finish (or stop it) before compacting")
+        return await self.maybe_compact(session, self.agent_for(session), force=True)
 
     # ---- undo (revert) ------------------------------------------------------------------------------
 
@@ -501,9 +806,11 @@ class Engine:
         ref = s.get("model") or self.default_model() or {}
         model = self.find_model(ref)
         tools = sum(1 for m in msgs if m.get("type") == "assistant" for p in m.get("content", []) if p.get("type") == "tool")
+        entry = provcfg.entry(ref.get("providerID", "")) or {}
         return {"model": ref, "modelName": model.name if model else None, "contextLimit": model.context if model else None, "outputLimit": model.output if model else None,
-                "lastInput": ((last or {}).get("tokens") or {}).get("input", 0) + (((last or {}).get("tokens") or {}).get("cache") or {}).get("read", 0),
-                "totals": s.get("tokens"), "cost": s.get("cost", 0), "agent": s.get("agent"), "created": (s.get("time") or {}).get("created"),
+                "lastInput": used_tokens((last or {}).get("tokens") or {}),
+                "totals": s.get("tokens"), "cost": s.get("cost", 0), "price": self.price_for(ref), "plan": pricing.is_plan(entry, ref.get("providerID", "")),
+                "agent": s.get("agent"), "created": (s.get("time") or {}).get("created"),
                 "messages": {"user": sum(1 for m in msgs if m.get("type") == "user"), "assistant": sum(1 for m in msgs if m.get("type") == "assistant"),
                              "system": sum(1 for m in msgs if m.get("type") in ("system", "synthetic")), "tools": tools}}
 
@@ -546,13 +853,16 @@ class SubagentTool:
         description=("Delegate a task to one of the configured delegate agents. It runs in its own session with its own model and reports back. "
                      "Give a complete, self-contained prompt (goal, exact file paths, constraints, acceptance criteria, what to report). "
                      "Pass sessionID to continue a previous delegation with the same delegate; omit it for a fresh one. Set background=true to return "
-                     "immediately and be told when it finishes."),
+                     "immediately and be told when it finishes. Several subagent calls in the same reply run AT THE SAME TIME - use that to fan out "
+                     "independent tasks. When parallel delegates would edit files, give each `worktree: true` so it works in its own git worktree "
+                     "(own branch and folder); its report names the branch to merge (git merge <branch>)."),
         parameters={"type": "object", "properties": {
             "agent": {"type": "string", "description": "The delegate's id"},
             "description": {"type": "string", "description": "A short title for the task (3-8 words)"},
             "prompt": {"type": "string", "description": "The full brief for the delegate"},
             "sessionID": {"type": "string", "description": "Continue this earlier child session instead of starting a new one"},
             "background": {"type": "boolean", "description": "Return immediately; the result arrives later as a message"},
+            "worktree": {"type": "boolean", "description": "Run the delegate in its own git worktree (a separate copy on a new branch) so parallel delegates never clash"},
         }, "required": ["agent", "description", "prompt"]},
     )
 
@@ -568,9 +878,19 @@ class SubagentTool:
         await ctx.permissions.require("subagent", [aid], {"agent": aid, "description": input.get("description")})
         parent = e.store.get_session(ctx.session_id) or {}
         child = e.store.get_session(str(input.get("sessionID") or "")) if input.get("sessionID") else None
+        wt_note = ""
         if child is None:
-            child = e.create_session(ctx.directory, title=str(input.get("description") or f"Delegated to {agent.name}")[:80], agent=aid, model=agent.model,
-                                     parent_id=ctx.session_id, permissions=parent.get("permissions"))
+            title = str(input.get("description") or f"Delegated to {agent.name}")[:80]
+            kw = dict(title=title, agent=aid, model=agent.model, parent_id=ctx.session_id, permissions=parent.get("permissions"))
+            if input.get("worktree"):
+                try:
+                    child = await e.create_worktree_session(ctx.directory, project=parent.get("project") or ctx.directory, **kw)
+                    wt = e._afh(child["id"]).get("worktree") or {}
+                    wt_note = f"\nWorktree: {wt.get('path')} on branch {wt.get('branch')} (merge it with: git merge {wt.get('branch')})"
+                except wtmod.GitError as err:
+                    return ToolResult(text=f"Could not create a worktree for the delegate: {err}", is_error=True)
+            else:
+                child = e.create_session(ctx.directory, **kw)
         msg = {"id": new_id("msg"), "type": "user", "text": str(input.get("prompt", "")), "time": {"created": now_ms()}}
         e.store.add_message(child["id"], msg)
         e.publish(event("session.inbox.enqueued", child["id"], inboxID=msg["id"], item={"type": "user", "payload": {"text": msg["text"]}, "delivery": "steer"}))
@@ -583,12 +903,16 @@ class SubagentTool:
                 if not e.is_running(ctx.session_id):
                     e.start_run(e.store.get_session(ctx.session_id))
             asyncio.create_task(notify())
-            return ToolResult(text=f"<subagent sessionID=\"{child['id']}\" state=\"running\">Started in the background. You'll get its report as a new message.</subagent>",
+            return ToolResult(text=f"<subagent sessionID=\"{child['id']}\" state=\"running\">Started in the background. You'll get its report as a new message.{wt_note}</subagent>",
                               metadata={"sessionID": child["id"], "status": "running"})
-        await run.task
+        try:
+            await run.task
+        except asyncio.CancelledError:
+            e.interrupt(child["id"])
+            raise
         report = self._report(child["id"])
         state = "completed" if "failed" not in report[:40].lower() else "failed"
-        return ToolResult(text=f"<subagent sessionID=\"{child['id']}\" state=\"{state}\">\n{report}\n</subagent>", metadata={"sessionID": child["id"], "status": state})
+        return ToolResult(text=f"<subagent sessionID=\"{child['id']}\" state=\"{state}\">\n{report}{wt_note}\n</subagent>", metadata={"sessionID": child["id"], "status": state})
 
     def _report(self, sid: str) -> str:
         msgs = self.engine.store.list_messages(sid)

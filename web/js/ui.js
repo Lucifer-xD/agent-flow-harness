@@ -44,6 +44,13 @@ export const ICONS = {
   archive: P('<rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/>'),
   book: P('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>'),
   list: P('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'),
+  target: P('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>'),
+  checklist: P('<path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17M11 6h10M11 12h10M11 18h10"/>'),
+  coin: P('<circle cx="12" cy="12" r="9"/><path d="M14.8 9.2A2.8 2.4 0 0 0 12 8c-1.6 0-2.8.9-2.8 2s1.2 1.7 2.8 2 2.8.9 2.8 2-1.2 2-2.8 2a2.8 2.4 0 0 1-2.8-1.2M12 6.5V8M12 16v1.5"/>'),
+  slash: P('<rect x="3" y="3" width="18" height="18" rx="4"/><path d="m14.5 7-5 10"/>'),
+  hook: P('<path d="M18 3v8a6 6 0 0 1-12 0V9"/><path d="m3 12 3-3 3 3"/>'),
+  activity: P('<path d="M3 12h4l3-8 4 16 3-8h4"/>'),
+  "git-merge": P('<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8 7.5c2 3 5 4.5 7.5 4.5"/>'),
 };
 
 export function icon(name) {

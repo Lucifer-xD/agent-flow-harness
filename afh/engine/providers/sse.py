@@ -225,5 +225,7 @@ def tool_name_for(messages: list[ChatMessage], tool_call_id: str) -> str:
     return ""
 
 
-def usage_event(input: int = 0, output: int = 0, reasoning: int = 0, cache_read: int = 0) -> ProviderEvent:
-    return {"type": "usage", "input": int(input or 0), "output": int(output or 0), "reasoning": int(reasoning or 0), "cache_read": int(cache_read or 0)}
+def usage_event(input: int = 0, output: int = 0, reasoning: int = 0, cache_read: int = 0, cache_write: int = 0) -> ProviderEvent:
+    """``input`` = uncached prompt tokens only (adapters subtract cache reads where the API includes them)."""
+    return {"type": "usage", "input": max(0, int(input or 0)), "output": int(output or 0), "reasoning": int(reasoning or 0),
+            "cache_read": int(cache_read or 0), "cache_write": int(cache_write or 0)}

@@ -71,7 +71,8 @@ def set_hidden(changes: list[dict]) -> None:
 
 def _model(d: dict) -> ModelInfo:
     return ModelInfo(id=d["id"], name=d.get("name") or d["id"], context=int(d.get("context") or 128_000), output=int(d.get("output") or 16_384),
-                     tools=d.get("tools", True), reasoning=d.get("reasoning", False), variants=list(d.get("variants") or []), input=list(d.get("input") or ["text"]))
+                     tools=d.get("tools", True), reasoning=d.get("reasoning", False), variants=list(d.get("variants") or []), input=list(d.get("input") or ["text"]),
+                     cost=d["cost"] if isinstance(d.get("cost"), dict) else None)
 
 
 def models_of(p: dict) -> list[ModelInfo]:
