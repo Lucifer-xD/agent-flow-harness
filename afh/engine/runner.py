@@ -115,10 +115,16 @@ class ProviderError(Exception):
         return {"type": e.get("kind") or "ProviderError", "message": e.get("message", ""), "status": e.get("status"), "response": e.get("response")}
 
 
+def live_start(messages: list[dict]) -> int:
+    """Index of the latest compaction: the model sees it and what follows. Everything before stays in
+    the thread for the user to read; the compaction summary stands in for it."""
+    return max((i for i, m in enumerate(messages) if m.get("type") == "compaction"), default=0)
+
+
 def to_chat(messages: list[dict]) -> list[ChatMessage]:
     """Stored messages → provider-neutral chat history (tool results follow their call)."""
     out: list[ChatMessage] = []
-    for m in messages:
+    for m in messages[live_start(messages):]:
         t = m.get("type")
         if t == "user":
             out.append(ChatMessage("user", m.get("text", ""), images=[f.get("uri", "") for f in m.get("files", []) if str(f.get("uri", "")).startswith("data:")]))

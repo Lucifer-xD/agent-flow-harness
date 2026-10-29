@@ -429,7 +429,11 @@ def test_manual_compaction_keeps_todos_and_goal(home, tmp_path):
     e.set_goal(sid, "the big goal", autopilot=False)
     assert asyncio.run(e.compact_now(sid)) is True
     msgs = e.store.list_messages(sid)
-    assert msgs[0]["type"] == "compaction"
+    comp = [m for m in msgs if m["type"] == "compaction"]
+    assert len(comp) == 1 and msgs[0]["type"] == "user"  # the history stays; the summary sits where it happened
+    assert len(msgs) == 4 * 2 + 1 and msgs[-5]["type"] == "compaction"  # before the four messages it keeps (half of eight)
+    assert runmod.to_chat(msgs)[0].text.startswith("Summary of the conversation so far")
+    msgs[0] = comp[0]  # the rest of this test reads the summary text
     assert "summary of the work" in msgs[0]["text"] and "keep me" in msgs[0]["text"] and "the big goal" in msgs[0]["text"]
 
 
@@ -440,7 +444,7 @@ def test_compaction_keeps_a_multi_line_summary_and_never_an_empty_one(home, tmp_
     for t in ("a", "b", "c", "d"):
         asyncio.run(run_prompt(e, tmp_path, t, sid=sid))
     assert asyncio.run(e.compact_now(sid)) is True
-    text = e.store.list_messages(sid)[0]["text"]
+    text = next(m for m in e.store.list_messages(sid) if m["type"] == "compaction")["text"]
     assert "The user built a parser." in text and "Left: docs." in text and "Let me sum up" not in text
 
     p2 = FakeProvider(["one", "two", "three", "four", "ANSWER:"])
@@ -593,7 +597,9 @@ def test_huge_history_is_compacted_in_chunks_before_the_first_answer(home, tmp_p
 
     asyncio.run(go())
     stored = e.store.list_messages(sid)
-    assert stored[0]["type"] == "compaction" and stored[0]["text"].strip()
+    comp = [m for m in stored if m["type"] == "compaction"]
+    assert len(comp) == 1 and comp[0]["text"].strip() and comp[0]["metadata"]["compacted"] > 100
+    assert stored[0]["type"] == "user" and len(stored) > 160  # nothing deleted
     progress = [ev["data"] for ev in e.events if ev["type"] == "session.compaction.progress"]
     assert progress and progress[-1]["done"] == progress[-1]["total"] > 2  # several parts plus the merge
     final = p.requests[-1]
@@ -687,3 +693,24 @@ def test_models_get_real_facts_from_models_dev(home):
     # the user's own correction wins
     fixed = {m.id: m for m in provcfg.models_of({"catalog": "zai-coding", "overrides": {"glm-5.3": {"context": 123456, "variants": ["high"]}}}, "zai-coding")}["glm-5.3"]
     assert fixed.context == 123456 and fixed.variants == ["high"]
+
+
+def test_a_second_compaction_summarises_from_the_first_and_keeps_everything(home, tmp_path):
+    p = FakeProvider(["r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10"])
+    e = make_engine(p)
+    sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+    for t in "abcde":
+        asyncio.run(run_prompt(e, tmp_path, t, sid=sid))
+    p.replies = ["ANSWER:\nfirst summary of a to c"]
+    assert asyncio.run(e.compact_now(sid)) is True
+    p.replies = ["r6", "r7", "r8", "r9"]
+    for t in "fghi":
+        asyncio.run(run_prompt(e, tmp_path, t, sid=sid))
+    p.replies = ["ANSWER:\nsecond summary"]
+    assert asyncio.run(e.compact_now(sid)) is True
+    msgs = e.store.list_messages(sid)
+    assert [m["text"] for m in msgs if m["type"] == "user"] == list("abcdefghi")  # every message is still there
+    assert sum(1 for m in msgs if m["type"] == "compaction") == 2
+    assert "first summary" in p.requests[-1].messages[0].text  # the second summary was built on the first
+    chat = runmod.to_chat(msgs)
+    assert "second summary" in chat[0].text and "first summary" not in "".join(c.text for c in chat)

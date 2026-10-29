@@ -160,6 +160,22 @@ class Store:
             self.db.execute("UPDATE session SET updated=? WHERE id=?", (now_ms(), sid))
         return msg
 
+    def insert_before(self, sid: str, before_id: str, msg: dict) -> dict:
+        """Insert a message just before another one (later messages and their undo snapshots move up one)."""
+        msg.setdefault("id", new_id("msg"))
+        msg.setdefault("time", {"created": now_ms()})
+        with self.lock:
+            seq = self.message_seq(sid, before_id)
+            if seq is None:
+                return self.add_message(sid, msg)
+            # two steps so the (session, seq) order never collides mid-update
+            self.db.execute("UPDATE message SET seq=-(seq+1) WHERE session_id=? AND seq>=?", (sid, seq))
+            self.db.execute("UPDATE message SET seq=-seq WHERE session_id=? AND seq<0", (sid,))
+            self.db.execute("UPDATE snapshot SET seq=seq+1 WHERE session_id=? AND seq>=?", (sid, seq))
+            self.db.execute("INSERT INTO message(id, session_id, seq, type, data, created) VALUES (?,?,?,?,?,?)",
+                            (msg["id"], sid, seq, msg.get("type", "user"), _j(msg), msg["time"].get("created", now_ms())))
+        return msg
+
     def save_message(self, sid: str, msg: dict) -> None:
         with self.lock:
             self.db.execute("UPDATE message SET data=?, type=? WHERE id=? AND session_id=?", (_j(msg), msg.get("type", "user"), msg["id"], sid))
