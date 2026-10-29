@@ -523,6 +523,8 @@ class Engine:
         session = self.store.get_session(sid)
         if not session:
             raise KeyError(sid)
+        if self.stashes.pop(sid, None) is not None:  # sending after an undo keeps the undo
+            self.publish(event("session.revert.committed", sid))
         fields: dict[str, Any] = {}
         if agent and agent != session.get("agent"):
             fields["agent"] = agent

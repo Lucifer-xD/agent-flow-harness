@@ -448,6 +448,7 @@ async function reloadCurrent(id = S.current?.id) {
 async function revertTo(messageId) {
   const t = S.current;
   if (!t) return;
+  const undone = t.messages.find((m) => m.id === messageId);
   let staged;
   try {
     staged = await api.post(`/api/sessions/${t.id}/revert`, { messageId, files: true });
@@ -463,6 +464,15 @@ async function revertTo(messageId) {
   await reloadCurrent(t.id);
   $("messages").prepend(bar);
   bar.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  // The message you undid goes back into the composer, ready to edit and send again.
+  if (undone?.type === "user" && undone.text) {
+    const input = $("input");
+    input.value = undone.text;
+    autosize();
+    renderComposerState();
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
 }
 
 function editContext() {
@@ -1345,6 +1355,7 @@ async function retryLast() {
 let restartPill = null;
 function onEvent(ev) {
   const type = ev.type || "";
+  if (type === "session.revert.committed" && ev.data?.sessionID === S.current?.id) document.querySelector(".revert-bar")?.remove();
   if (type === "afh.restarting") {
     restartPill?.remove();
     restartPill = el("div.restarting", el("span.spinner"), "Applying changes…");
