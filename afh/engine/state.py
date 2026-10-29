@@ -162,7 +162,27 @@ class TodoTool:
             text += f"\n\nNote: {len(running)} items are in progress. Keep exactly one in progress: finish it, then start the next."
         elif not running and open_todos(todos):
             text += "\n\nNote: nothing is in progress. Mark the item you are working on now as in_progress."
-        return ToolResult(text=text, metadata={"todos": todos, "counts": todo_counts(todos)})
+        auto = self._auto_goal(ctx.session_id, todos)
+        if auto:
+            text += (f"\n\nAFH set this task as the thread's goal (the user sees it): {auto['text']}\n"
+                     "When everything is done and verified, report it with goal status \"achieved\" (or \"blocked\" if you need the user). "
+                     "You may replace it with a sharper goal using goal status \"set\".")
+        return ToolResult(text=text, metadata={"todos": todos, "counts": todo_counts(todos), **({"autoGoal": auto} if auto else {})})
+
+    def _auto_goal(self, sid: str, todos: list[dict]) -> dict | None:
+        """A multi-step plan without a goal: make the user's request the goal, so the thread always shows
+        what it is working toward. Off with settings.goals.auto = false."""
+        e = self.engine
+        settings = e.settings().get("goals", {})
+        if not settings.get("auto", True) or len(todos) < 3 or e.goal(sid):
+            return None
+        request = next((m for m in reversed(e.store.list_messages(sid)) if m.get("type") == "user"), None)
+        text = " ".join(((request or {}).get("text") or "").split())
+        if len(text) < 12:
+            return None
+        if len(text) > 300:
+            text = text[:297].rsplit(" ", 1)[0] + "…"
+        return e.set_goal(sid, text, "", settings.get("autopilot", True), settings.get("maxTurns"), by="auto")
 
 
 def _todo_report(todos: list[dict], title: str) -> str:
@@ -228,19 +248,24 @@ class GoalTool:
     spec = ToolSpec(
         name="goal",
         description=(
-            "Report on the thread's goal (set by the user; see \"Goal of this thread\" in your instructions). "
-            "status \"achieved\": every done-when condition holds and you verified it - give the summary and evidence. "
-            "status \"blocked\": you cannot continue without the user - say exactly what you need. "
-            "status \"progress\": a short milestone note. Do not claim achieved for partial or unverified work."
+            "The thread's goal: what done looks like for the whole task. The user sees it above the message box. "
+            "status \"set\": start a goal - do this yourself at the start of any substantial task with a clear end state "
+            "(build a feature, fix the failing tests, make something work), not for questions or one-step changes; give `text` "
+            "(what done looks like) and `criteria` (how to verify it). "
+            "status \"achieved\": every done-when condition holds and you verified it - give `summary` and `evidence`. "
+            "status \"blocked\": you cannot continue without the user - say exactly what you need in `summary`. "
+            "status \"progress\": a short milestone note. Never claim achieved for partial or unverified work."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "status": {"type": "string", "enum": ["achieved", "blocked", "progress"]},
-                "summary": {"type": "string", "description": "What was done / what is blocking / the milestone, in one to five sentences."},
+                "status": {"type": "string", "enum": ["set", "achieved", "blocked", "progress"]},
+                "text": {"type": "string", "description": "For set: the goal, as what done looks like."},
+                "criteria": {"type": "string", "description": "For set: how to check it is done (commands, observable results)."},
+                "summary": {"type": "string", "description": "For achieved/blocked/progress: what was done, what is blocking, or the milestone, in one to five sentences."},
                 "evidence": {"type": "string", "description": "For achieved: how you verified it (commands run and their results)."},
             },
-            "required": ["status", "summary"],
+            "required": ["status"],
         },
     )
 
@@ -250,13 +275,24 @@ class GoalTool:
     async def run(self, ctx: ToolContext, input: dict) -> ToolResult:
         e = self.engine
         goal = e.goal(ctx.session_id)
-        if not goal:
-            return ToolResult(text="This thread has no goal. Only the user can set one.", is_error=True)
         status = str(input.get("status") or "").strip().lower()
         summary = str(input.get("summary") or "").strip()
         evidence = str(input.get("evidence") or "").strip()
+        if status == "set":
+            text = str(input.get("text") or summary).strip()
+            if not text:
+                return ToolResult(text="Give the goal in `text`.", is_error=True)
+            if goal and goal.get("status") in ("active", "blocked") and goal.get("text") != text and goal.get("by") != "auto":
+                return ToolResult(text=f"This thread already has an active goal: {goal['text']}\nWork toward it, report it achieved or blocked, or ask the user before replacing it.", is_error=True)
+            settings = e.settings().get("goals", {})
+            goal = e.set_goal(ctx.session_id, text, str(input.get("criteria") or ""), settings.get("autopilot", True), settings.get("maxTurns"), by="agent")
+            return ToolResult(text=("Goal set; the user sees it above the message box. Plan it with the todo tool, then work until every done-when "
+                                    "condition holds, verify, and report it with goal status \"achieved\" (or \"blocked\" if you need the user)."),
+                              metadata={"goal": goal, "set": True})
+        if not goal:
+            return ToolResult(text="This thread has no goal yet. Set one with status \"set\" first, or just answer.", is_error=True)
         if status not in ("achieved", "blocked", "progress"):
-            return ToolResult(text="status must be \"achieved\", \"blocked\" or \"progress\".", is_error=True)
+            return ToolResult(text="status must be \"set\", \"achieved\", \"blocked\" or \"progress\".", is_error=True)
         if not summary:
             return ToolResult(text="Give a summary.", is_error=True)
         if status == "achieved":

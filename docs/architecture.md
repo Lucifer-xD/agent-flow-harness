@@ -46,7 +46,8 @@ Delegates are agents defined in Settings → Delegation. The leader (`delegate` 
 
 - **Undo** rewinds the thread to just before a message and restores every file touched after it from the snapshots. The removed messages and the current file contents are stashed, so *Put it back* (`revert/clear`) restores both; *Keep* (`revert/commit`) drops the stash.
 - **Context edit** replaces the thread's messages in place; the session keeps its id.
-- **Compaction** runs before a step when the last request used about 80% of the model's context, or on `/compact`: older messages (tool calls included) are summarised into a `compaction` message that also carries the to-do list and the goal, and the last few are kept. An empty summary never replaces the history.
+- **Compaction** runs before every step when the conversation (measured by size, so an imported thread of millions of tokens counts) would use about 80% of the model's context, or on `/compact`. A history too long for one call is cut into chunks that are summarised three at a time and merged. If even that is not enough, the oldest messages are left out of the request (never out of the thread) with a note to the model.
+- Compaction details: older messages (tool calls included) are summarised into a `compaction` message that also carries the to-do list and the goal, and the last few are kept. An empty summary never replaces the history.
 
 ## Session transfer and migration
 

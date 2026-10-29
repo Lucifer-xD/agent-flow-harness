@@ -37,6 +37,7 @@
         <button class="icon-btn" id="btn-expand" title="Show sidebar (Ctrl+B)" hidden></button>
         <span class="tb-logo" id="tb-logo" hidden></span>
         <div class="tb-title" id="tb-title"></div>
+        <button class="sub-chip" id="btn-subagents" type="button" hidden></button>
         <div class="tb-actions">
           <button class="chip-btn" id="btn-worktree" title="This thread works in its own git worktree" hidden></button>
           <button class="chip-btn" id="btn-goal" title="Set a goal: the agent keeps working until it is achieved"><span class="ico" data-icon="target"></span>Goal</button>
@@ -51,6 +52,8 @@
       <section class="thread" id="thread">
         <div class="thread-inner" id="messages"></div>
       </section>
+      <nav class="msg-rail" id="msg-rail" aria-label="Your messages"></nav>
+      <div class="chat-resize" id="chat-resize" title="Drag to make the chat wider or narrower · double-click to reset"><i></i></div>
 
       <div class="composer-wrap">
         <div class="jump" id="jump" hidden><span class="ico" data-icon="arrow-down"></span></div>

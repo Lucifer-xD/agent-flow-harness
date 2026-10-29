@@ -37,6 +37,39 @@ def instruction_files(directory: str) -> list[tuple[str, str]]:
     return found
 
 
+def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> str:
+    """What AFH itself can do for the model, written from the tools this thread really has, so the
+    model uses goals, the to-do list, subagents, jobs and worktrees on its own, without being told."""
+    have = set(tools)
+    lines = ["# Your harness: Agent Flow Harness", "",
+             "You run inside AFH, which gives you more than file and shell tools. Use these on your own judgment; the user does not have to ask for them."]
+    if "goal" in have:
+        lines.append("- **Goal** (`goal` tool): when the user asks for work that changes the project and takes more than one step (add a feature, "
+                     "fix a bug, make the tests pass, build something), your FIRST tool call is `goal` with status \"set\": `text` = what done looks "
+                     "like, `criteria` = how you will verify it. Then plan it with `todo`. The user sees the goal above the message box. Finish by "
+                     "verifying and reporting it \"achieved\", or \"blocked\" with what you need. Skip goals for questions, explanations and one-line changes.")
+    if "todo" in have:
+        lines.append("- **To-do list** (`todo` tool): the user watches it live. Plan multi-step work there and keep it current, one item in progress at a time.")
+    if "subagent" in have:
+        delegates = [a for a in agents or [] if getattr(a, "kind", "") == "delegate"]
+        who = "; ".join(f"`{a.id}` ({a.name}): {a.description}" for a in delegates) or "none"
+        lines.append("- **Subagents** (`subagent` tool): hand a self-contained task to another agent; it works in its own thread (the user can watch it) and "
+                     f"reports back. Available: {who}. Use them for independent pieces of work - several `subagent` calls in ONE reply run at the same "
+                     "time - for wide research that would flood your context, or when a delegate's job fits. The subagent cannot see this conversation: "
+                     "give it a complete brief (goal, files, constraints, what to report). With `worktree: true` it works on its own git branch, so "
+                     "parallel subagents never edit the same files; merge their branches with git afterwards. Check their work before you rely on it.")
+    if "jobs" in have:
+        lines.append("- **Background jobs**: start servers and watchers with `shell` and `background: true`, then `jobs` to read output, wait for a "
+                     "line like \"ready\", and stop them when done.")
+    lines.append("- **Error checks**: after you edit files, AFH checks them (syntax, types, lint) and appends any problems to the tool result. Fix them.")
+    lines.append("- **Context**: long threads are summarised automatically and old tool outputs may be shortened. Re-run a tool if you need its full output again.")
+    lines.append("- **The user's controls**: approval modes (some actions ask the user first), undo, context editing, hooks that may block a tool or "
+                 "send you back to work, and spending limits. Respect a refusal and the message that comes with it.")
+    if agent is not None and getattr(agent, "kind", "") == "delegate":
+        lines = [l for l in lines if not l.startswith("- **Goal**")]
+    return "\n".join(lines)
+
+
 def build(*, agent_system: str, directory: str, skills_text: str = "", mcp_instructions: str = "", settings: dict | None = None, extra: str = "") -> str:
     s = settings or store.load_settings()
     parts = [agent_system.strip()]

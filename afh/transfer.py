@@ -123,12 +123,30 @@ def renumber(messages: list[dict]) -> list[dict]:
     return [dict(m, id=new_id("msg", base, i)) for i, m in enumerate(messages)]
 
 
+def usable_model(engine, ref: dict | None) -> dict | None:
+    """The imported thread's model, re-pointed at a provider this AFH has (another harness's provider
+    ids, like Zadloop's `zai-coding-cn`, mean nothing here). None = the default model."""
+    if not ref:
+        return None
+    providers, catalog = getattr(engine, "providers", None), getattr(engine, "models", None)
+    if providers is None or catalog is None:  # a store-only engine (tests): keep it as it is
+        return ref
+    wanted = str(ref["id"]).lower()
+    if ref.get("providerID") in providers and any(m.id.lower() == wanted for m in catalog.get(ref["providerID"], [])):
+        return {"id": ref["id"], "providerID": ref["providerID"]}
+    for pid, models in catalog.items():
+        if pid in providers and any(m.id.lower() == wanted for m in models):
+            mid = next(m.id for m in models if m.id.lower() == wanted)
+            return {"id": mid, "providerID": pid}
+    return None
+
+
 def import_session(engine, payload: dict, directory: str) -> dict:
     """Import an afh-session, OpenCode or Zadloop payload into `directory`; returns the new session."""
     raw_info, raw_messages = unpack(payload)
     info = clean_info(raw_info, directory)
     messages = renumber([clean_message(m) for m in raw_messages])
-    model = info.get("model") if isinstance(info.get("model"), dict) and info["model"].get("id") else None
+    model = usable_model(engine, info.get("model") if isinstance(info.get("model"), dict) and info["model"].get("id") else None)
     meta = dict(info.get("metadata") or {})
     meta.setdefault("afh", {})
     meta["afh"].setdefault("importedFrom", payload.get("app") or "export")

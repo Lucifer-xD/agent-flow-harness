@@ -5,7 +5,7 @@
 import { api } from "./api.js";
 import { ChatView, collectEdits, createThread, loadThread, permissionCard, toolText } from "./chat.js";
 import { logoNode } from "./logo.js";
-import { confirmDialog, el, ico, icon, markdown, toast, toggle } from "./ui.js";
+import { closePopover, confirmDialog, el, ico, icon, markdown, popover, toast, toggle } from "./ui.js";
 
 export const D = {
   children: new Map(), // childId -> { parent, msg, tool, title, agent, model }
@@ -115,7 +115,7 @@ export function delegationCard(p, { thread, onWatch, open }) {
   const agent = S.agents.find((a) => a.id === input.agent);
   const deleg = S.settings.delegation?.delegates.find((d) => d.id === input.agent);
   const name = deleg?.name || agent?.name || input.agent || "delegate";
-  const modelRef = deleg?.model || agent?.model;
+  const modelRef = deleg?.model || agent?.model || thread?.session?.model;
   const model = modelRef ? ctx.modelName(modelRef) || modelRef.id : "thread model";
   const status = p.state?.status || "streaming";
   const live = status === "running" || status === "streaming";
@@ -124,7 +124,7 @@ export function delegationCard(p, { thread, onWatch, open }) {
   const continued = !!input.sessionID;
 
   let stats = null;
-  if (child) {
+  if (child && child.messages.length) { // only real numbers: an unloaded child would read "0 tool calls"
     const tools = child.messages.filter((m) => m.type === "assistant").flatMap((m) => m.content).filter((x) => x.type === "tool");
     const files = collectEdits(child).length;
     const lastText = [...child.messages].reverse().flatMap((m) => (m.type === "assistant" ? [...m.content].reverse() : [])).find((x) => x.type === "text" && x.text)?.text;
@@ -137,19 +137,29 @@ export function delegationCard(p, { thread, onWatch, open }) {
   }
   const result = !live ? stripWrapper(toolText(p.state?.content)) : "";
   const waiting = live && child ? [...child.permissions.values()] : [];
-  const label = waiting.length ? "needs approval" : status === "completed" ? "done" : status === "error" ? "failed" : status === "running" ? "working" : "preparing";
-  return el(`div.deleg.${status}${open.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } },
+  const state = waiting.length ? "waiting" : status;
+  const label = waiting.length ? "Needs approval" : status === "completed" ? "Done" : status === "error" ? "Failed" : status === "running" ? "Working" : "Preparing";
+  const section = (key, title, body, byDefault = false) => {
+    const k = `${p.id}:${key}`;
+    const isOpen = open.has(k) || (byDefault && !open.has(`${k}:closed`));
+    const box = el(`div.deleg-sec${isOpen ? ".open" : ""}`);
+    box.append(el("button.deleg-sec-head", { type: "button", on: { click: () => { const o = box.classList.toggle("open"); open[o ? "add" : "delete"](k); open[o ? "delete" : "add"](`${k}:closed`); } } }, el("span.chev", { html: icon("chev") }), title),
+      el("div.deleg-sec-body", el("div", body)));
+    return box;
+  };
+  return el(`div.deleg.${state}`, { dataset: { tool: p.id } },
+    live ? el("div.deleg-progress") : null,
     el("div.deleg-head",
-      logoNode({ size: 40, working: live }),
+      el("span.deleg-avatar", logoNode({ size: 30, working: live })),
       el("div.deleg-main",
-        el("div.deleg-title", `Delegated to ${name}`, el("span.pill-tag", model), continued ? el("span.pill-tag", "continued") : null, input.background ? el("span.pill-tag", "background") : null),
-        el("div.deleg-sub", input.description || "")),
-      el(`span.deleg-status.${waiting.length ? "waiting" : status}`, label),
-      childId ? el("button.btn.sm", { type: "button", title: "Open the delegate's thread beside this one", on: { click: () => onWatch(childId) } }, ico("eye"), "Watch") : null),
+        el("div.deleg-title", el("span.deleg-name", name), el("span.deleg-model", model), continued ? el("span.deleg-tag", "continued") : null, input.background ? el("span.deleg-tag", "background") : null, input.worktree ? el("span.deleg-tag", ico("branch"), "worktree") : null),
+        el("div.deleg-sub", input.description || "Subagent task")),
+      el(`span.deleg-status.${state}`, el("i"), label),
+      childId ? el("button.btn.ghost.sm.deleg-watch", { type: "button", title: "Open the subagent's thread beside this one", on: { click: () => onWatch(childId) } }, ico("eye"), "Watch") : null),
     stats,
     waiting.length ? el("div.deleg-perms", waiting.map((perm) => permissionCard(perm, childId, (id) => child.permissions.delete(id)))) : null,
-    input.prompt ? el("details.deleg-brief", el("summary", "Brief sent to the delegate"), el("pre.tool-pre", input.prompt)) : null,
-    result ? el("div.deleg-result", el("div.tool-section-label", "Report"), el("div.md", { html: markdown(result) })) : null,
+    input.prompt ? section("brief", "What the lead asked", el("div.deleg-brief-text", input.prompt)) : null,
+    result ? section("report", "What it reported", el("div.md", { html: markdown(result) }), true) : null,
     p.state?.error ? el("div.error-card", ico("alert"), el("div", p.state.error.message || "Delegation failed")) : null);
 }
 
@@ -169,9 +179,10 @@ export async function renderWatch(body, titleBox, { onOpenAsThread }) {
     t = ensureChildThread(id, { title: info.title });
     t.loaded = false;
   }
-  const deleg = S.settings.delegation?.delegates.find((d) => d.id === (info.agent || t.session.agent));
+  const agentId = info.agent || t.session.agent;
+  const deleg = S.settings.delegation?.delegates.find((d) => d.id === agentId);
   const live = t.busy || S.busy.has(id);
-  titleBox.replaceChildren(logoNode({ size: 26, working: live }), el("span", deleg?.name || info.agent || "Delegate"),
+  titleBox.replaceChildren(logoNode({ size: 26, working: live }), el("span", deleg?.name || S.agents.find((a) => a.id === agentId)?.name || agentId || "Subagent"),
     el("span.pill-tag", ctx.modelName(deleg?.model || t.session.model) || "model"),
     el("button.btn.ghost.sm", { style: { marginLeft: "6px" }, title: "Open as its own thread", on: { click: () => onOpenAsThread(id) } }, ico("chev")));
   const root = el("div.thread-inner.watch-inner");
@@ -205,7 +216,7 @@ const COLORS = ["#ff6a2a", "#ff3d71", "#f59f00", "#2fbf71", "#22b8cf", "#4f8cff"
 export async function delegationPane(pane, c) {
   const S = c.S;
   const data = await api.get("/api/delegation");
-  const state = { leaderInstructions: data.leaderInstructions || "", delegates: (data.delegates || []).map((d) => ({ ...d })) };
+  const state = { leaderInstructions: data.leaderInstructions || "", delegates: (data.delegates || []).map((d) => ({ ...d })), builtinHelper: data.builtinHelper !== false };
   let dirty = false;
   const saveBtn = el("button.btn.primary", { disabled: true }, "Save & apply");
   const markDirty = () => { dirty = true; saveBtn.disabled = false; };
@@ -254,6 +265,8 @@ export async function delegationPane(pane, c) {
   draw();
 
   const addBtn = el("button.btn.sm", { on: { click: () => { state.delegates.push({ id: "", name: "", model: null, job: "", system: "", enabled: true, readonly: false, color: COLORS[state.delegates.length % COLORS.length] }); markDirty(); draw(); list.lastElementChild?.querySelector("input")?.focus(); } } }, ico("plus"), "Add delegate");
+  pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Built-in Helper"), el("p", "A subagent that uses the thread's own model. Every mode can hand it side tasks or run several at once — no setup needed.")),
+    toggle(state.builtinHelper, (v) => { state.builtinHelper = v; markDirty(); }))));
   pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Delegates"), el("p", `${state.delegates.length} configured`)), addBtn), list));
 
   const leaderTa = el("textarea.ta", { rows: 4, value: state.leaderInstructions, placeholder: "Always ask the Reviewer to check the Coder's work before reporting back.\nNever delegate anything that touches the payments module.", on: { input: (e) => { state.leaderInstructions = e.target.value; markDirty(); } } });
@@ -265,7 +278,7 @@ export async function delegationPane(pane, c) {
     const ids = state.delegates.map((d) => d.id || slug(d.name));
     if (new Set(ids).size !== ids.length) return toast("Two delegates have the same id — give them different names", "err");
     try {
-      await api.put("/api/delegation", { leaderInstructions: state.leaderInstructions, delegates: state.delegates.map((d) => ({ ...d, id: d.id || slug(d.name), _idLocked: undefined })) });
+      await api.put("/api/delegation", { builtinHelper: state.builtinHelper, leaderInstructions: state.leaderInstructions, delegates: state.delegates.map((d) => ({ ...d, id: d.id || slug(d.name), _idLocked: undefined })) });
       toast("Saved — applies to the next message", "ok");
       dirty = false;
       saveBtn.disabled = true;
@@ -276,3 +289,61 @@ export async function delegationPane(pane, c) {
   });
   pane.append(el("div.actions", el("span.h-muted", { style: { flex: 1, fontStyle: "normal", fontSize: "12.5px", alignSelf: "center" } }, "Changes apply to the next message in every thread."), saveBtn));
 }
+
+// ---- top bar: every subagent of the open thread ----------------------------------------
+
+/** Every `subagent` call in a thread, newest first. */
+export function subagentsOf(thread) {
+  const out = [];
+  for (const m of thread?.messages || []) {
+    if (m.type !== "assistant") continue;
+    for (const p of m.content || []) if (p.type === "tool" && (p.name || "").toLowerCase() === "subagent") out.push(p);
+  }
+  return out.reverse();
+}
+
+const isLive = (p) => ["running", "streaming", "pending"].includes(p.state?.status || "streaming");
+
+/** The chip beside the thread title: how many subagents work right now, or how many ran. */
+export function renderSubagentsChip(btn, thread) {
+  const all = subagentsOf(thread);
+  if (!all.length) { btn.hidden = true; return; }
+  const live = all.filter(isLive).length;
+  btn.hidden = false;
+  btn.className = `sub-chip${live ? " live" : ""}`;
+  btn.title = live ? `${live} subagent${live > 1 ? "s" : ""} working — click to see what they were asked and what they said` : `${all.length} subagent${all.length > 1 ? "s" : ""} in this thread`;
+  btn.replaceChildren(live ? el("span.sub-dots", el("i"), el("i"), el("i")) : ico("bot"), el("span", live ? `${live} working` : `${all.length} subagent${all.length > 1 ? "s" : ""}`));
+}
+
+export function subagentsPopover(anchor, thread, onWatch) {
+  const S = ctx.S;
+  const box = el("div.sub-pop");
+  const draw = () => {
+    const all = subagentsOf(thread);
+    const live = all.filter(isLive).length;
+    box.replaceChildren(el("div.sub-pop-head", ico("bot"), el("b", "Subagents"), el("span", live ? `${live} working · ${all.length} in this thread` : `${all.length} in this thread`)));
+    if (!all.length) box.append(el("div.empty-row", "No subagents in this thread yet."));
+    for (const p of all) {
+      const input = typeof p.state?.input === "object" ? p.state.input : {};
+      const agent = S.agents.find((a) => a.id === input.agent);
+      const deleg = S.settings.delegation?.delegates.find((d) => d.id === input.agent);
+      const name = deleg?.name || agent?.name || input.agent || "subagent";
+      const childId = childFor(p, thread);
+      const st = isLive(p) ? (p.state?.status === "running" ? "running" : "streaming") : p.state?.status;
+      const reply = !isLive(p) ? stripWrapper(toolText(p.state?.content)) : "";
+      box.append(el(`div.sub-item.${st}`,
+        el("div.sub-item-head",
+          el(`span.deleg-status.${st}`, el("i"), st === "completed" ? "Done" : st === "error" ? "Failed" : st === "running" ? "Working" : "Preparing"),
+          el("b", name), el("span.sub-desc", { title: input.description || "" }, input.description || ""),
+          childId ? el("button.btn.ghost.sm", { on: { click: () => { closeSubPop(); onWatch(childId); } } }, ico("eye"), "Watch") : null),
+        input.prompt ? el("details", el("summary", "What the lead asked"), el("div.sub-text", input.prompt)) : null,
+        reply ? el("details", el("summary", "What it replied"), el("div.sub-text.md", { html: markdown(reply) })) : isLive(p) ? el("div.sub-wait", el("span.spinner"), "Working on it…") : null));
+    }
+  };
+  draw();
+  const pop = popover(anchor, [], { header: box, width: 480 });
+  // Keep it live while open, but leave sections the user opened alone: only redraw while something works.
+  const timer = setInterval(() => { if (!pop.isConnected) return clearInterval(timer); if (subagentsOf(thread).some(isLive) && !box.querySelector("details[open]")) draw(); }, 1500);
+}
+
+const closeSubPop = () => closePopover();

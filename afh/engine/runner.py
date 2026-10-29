@@ -62,6 +62,23 @@ def prune_history(messages: list[ChatMessage], context: int, system: str = "") -
     return trimmed
 
 
+def fit_history(messages: list[ChatMessage], context: int, system: str = "") -> int:
+    """Last resort when even a compacted, pruned history is too big: leave the oldest messages out of
+    the request (never out of the thread) and tell the model so. Returns how many were left out."""
+    limit = int(context * 0.9)
+    if estimate_tokens(messages, system) <= limit or len(messages) < 3:
+        return 0
+    dropped = 0
+    while len(messages) > 2 and estimate_tokens(messages, system) > limit:
+        messages.pop(0)
+        dropped += 1
+    while messages and messages[0].role == "tool":  # a result without its call is invalid
+        messages.pop(0)
+        dropped += 1
+    messages.insert(0, ChatMessage("user", f"[{dropped} earlier messages of this conversation are not shown: it is longer than this model's context window. Ask the user if you need something from them.]"))
+    return dropped
+
+
 def _norm(path: str) -> str:
     return os.path.normcase(path).replace("\\", "/")
 
@@ -138,12 +155,12 @@ class Run:
         try:
             agent = e.agent_for(self.session)
             gate = e.gate_for(self.session, agent)
-            await e.maybe_compact(self.session, agent)
             max_steps = int((e.settings().get("agent") or {}).get("maxSteps") or MAX_STEPS)
             for step in range(max_steps):
                 if self.abort.is_set():
                     raise Interrupted()
                 e.check_budget(self.session)
+                await e.maybe_compact(self.session, agent)  # also mid-run: long tool chains can outgrow the window
                 model_ref = e.model_ref_for(self.session, agent)
                 provider, model = e.resolve_model(model_ref)
                 msg = {"id": new_id("msg"), "type": "assistant", "agent": agent.id, "model": model_ref, "content": [], "time": {"created": now_ms()}}
@@ -155,6 +172,9 @@ class Run:
                 pruned = prune_history(history, model.context, system)
                 if pruned:
                     msg["pruned"] = pruned
+                left_out = fit_history(history, model.context, system)
+                if left_out:
+                    msg["leftOut"] = left_out
                 req = ChatRequest(model=model.id, system=system, messages=history,
                                   tools=[t.spec for t in tools] if model.tools else [], variant=model_ref.get("variant") or None, max_tokens=min(model.output, 32_000),
                                   reasoning=model.reasoning)

@@ -1157,7 +1157,8 @@ def put_delegation(body: dict = Body(...)):
         delegates.append({"id": did, "name": str(d.get("name") or did)[:60], "model": d.get("model") if isinstance(d.get("model"), dict) else None,
                           "job": str(d.get("job", ""))[:4000], "system": str(d.get("system", ""))[:20000], "enabled": bool(d.get("enabled", True)),
                           "readonly": bool(d.get("readonly", False)), "color": d.get("color") or None})
-    store.save_settings({"delegation": {"leaderInstructions": str(body.get("leaderInstructions", ""))[:8000], "delegates": delegates}})
+    store.save_settings({"delegation": {"leaderInstructions": str(body.get("leaderInstructions", ""))[:8000], "delegates": delegates,
+                                        "builtinHelper": bool(body.get("builtinHelper", True))}})
     engine.publish({"type": "agent.updated", "data": {}})
     return {"ok": True}
 
