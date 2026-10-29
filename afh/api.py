@@ -777,6 +777,31 @@ def zadloop_import(body: dict = Body(...)):
     return transfer.import_session(engine, payload, body["directory"])
 
 
+@app.post("/api/import/file")
+def import_file(body: dict = Body(...)):
+    """Import any supported file the user picked: an AFH/OpenCode export (.json), or a Zadloop /
+    DeepSeek Harness session (a .zip export, a .jsonl / .jsonl.zstd log, or a session folder)."""
+    path = Path(body["path"])
+    if not path.exists():
+        raise ValueError(f"File not found: {path}")
+    if path.suffix.lower() == ".json" and not zipfile_is(path):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        payload = transfer.load_zadloop(str(path))  # zip / jsonl / zstd / folder
+    if body.get("preview"):
+        return transfer.summarize(payload)
+    return transfer.import_session(engine, payload, body["directory"])
+
+
+def zipfile_is(path: Path) -> bool:
+    import zipfile
+
+    try:
+        return path.is_file() and zipfile.is_zipfile(str(path))
+    except OSError:
+        return False
+
+
 # ---- OpenCode migration ------------------------------------------------------------------------
 
 
