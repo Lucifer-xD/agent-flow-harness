@@ -27,7 +27,7 @@
 
 | | |
 |---|---|
-| **Any model** | Paste an API key for OpenAI, Anthropic, Gemini, Kimi, Z.AI, DeepSeek, Groq, OpenRouter, Mistral, xAI, Together, Fireworks, Cerebras or Perplexity, or point AFH at any OpenAI-, Anthropic- or Gemini-compatible endpoint. Local models too (Ollama, LM Studio, vLLM, llama.cpp, Jan) with no key — AFH finds the ones running on your computer. Hide the models you don't use so the picker stays short. |
+| **Any model** | Context windows, effort levels, image/video/audio/PDF input and prices come from the open models.dev catalog (correctable by hand). Paste an API key for OpenAI, Anthropic, Gemini, Kimi, Z.AI, DeepSeek, Groq, OpenRouter, Mistral, xAI, Together, Fireworks, Cerebras or Perplexity, or point AFH at any OpenAI-, Anthropic- or Gemini-compatible endpoint. Local models too (Ollama, LM Studio, vLLM, llama.cpp, Jan) with no key — AFH finds the ones running on your computer. Hide the models you don't use so the picker stays short. |
 | **Delegate mode** | One model leads: it plans, talks to you and reviews. It hands tasks to **delegates** — other models with jobs you describe ("writes code", "reviews diffs", "writes tests"). Every delegation shows live progress, needs-your-approval prompts, a **Watch** button that opens the delegate's thread beside yours, and its report. Switch modes any time, even mid-conversation. |
 | **Goals & to-do list** | The agent sets a **goal** by itself for any multi-step task (or you set one: "all tests pass and the login page works") and plans it as a live **to-do list** you can see and edit, works through it, checks the result and reports the goal **achieved** — or **blocked** if it needs you. With **autopilot** it keeps going on its own instead of stopping to ask. |
 | **It checks its own work** | After every edit AFH checks the changed files (Python, JSON, TOML, JavaScript, TypeScript with your project's `tsc`, Go, PHP, Ruby, plus your own linters) and hands any errors straight back to the model, so it fixes them before you see them. |
@@ -35,12 +35,13 @@
 | **Many agents at once** | Every mode has a built-in **Helper** subagent (your own model), plus the delegates you configure. Independent reads, searches and **subagents run in parallel**, and the top bar shows how many are working — with what each was asked, what it replied, and **Watch**. Each thread or delegate can work in its own **git worktree** (own branch and folder) so parallel agents never collide; merge the branch back with one click. |
 | **Hooks & commands** | **Hooks** run your own commands before or after tools and when the agent finishes (format on save, block risky commands, "the tests must pass before you stop"). **Slash commands** (`/review`, `/fix-tests`, `/goal`, `/compact`, your own, or `.claude/commands/*.md` files) are one keystroke away. |
 | **Knows what it costs** | Tokens, prompt-cache hits and **cost** per step and per thread, a 30-day **Usage & cost** page, your own prices per model, and **spending limits** per thread or per day. Prompt caching on Anthropic and smarter context trimming keep long threads cheap. |
+| **Never loses work** | If AFH closes in the middle of a run — an update, a crash — it picks that thread up again by itself when it reopens. |
 | **You stay in control** | *Ask first* mode shows every file change (with a diff) and every command before it runs. *Full access* and *Read only* are one click away. **Undo** rewinds the thread **and the files on disk** to before any message. |
 | **See everything** | **Context** shows exactly what the model sees — your messages, its replies, tool inputs and outputs, system notices — and lets you edit or delete any of it. **Prompt** shows the exact system prompt the model receives, which you can copy, change or replace. |
 | **Extend it** | A **Skills store** (skills.sh) installs skills with one click. Add **MCP servers** (Chrome, Playwright, GitHub, filesystem…) from Settings. |
 | **Your own engine** | No third-party harness underneath: the agent loop, tools (read, write, edit, patch, glob, grep, list, shell, jobs, todo, goal, webfetch, websearch), permissions, undo snapshots, delegation, worktrees, hooks, error checks, compaction and MCP client are all in this repo, in plain Python. Tool calls stream live, so you watch files being written line by line. |
 | **Take it anywhere** | **Remote control**: open the same app on your phone or another computer over Wi-Fi (password-protected), optionally from outside your network through a free Cloudflare tunnel. **Export** any thread as a file and **import** it on another PC; import your old **Zadloop / DeepSeek Harness** sessions. |
-| **Feels good** | Smooth streaming, eased scrolling, a logo that flows while a model is thinking, 17 dark and light themes, your accent color. A **message rail** on the left jumps to any message of yours; drag the chat's edge to make it wider. |
+| **Feels good** | Smooth streaming, eased scrolling, a logo that flows while a model is thinking, 25 dark and light themes with a one-click dark/light switch, your accent color, a **command palette** (Ctrl+P), and an **Arabic interface** with right-to-left layout (the conversation follows each paragraph's own language). A **message rail** on the left jumps to any message of yours; drag the chat's edge to make it wider. |
 
 <p align="center">
   <img src="docs/screenshots/settings-delegation.png" width="430" alt="Delegation settings" />
@@ -53,7 +54,7 @@
 
 ## Install (no programming needed)
 
-1. **Download AFH**: open the [Releases](../../releases) page and download `AFH-Setup-1.5.0.exe`.
+1. **Download AFH**: open the [Releases](../../releases) page and download `AFH-Setup-1.6.0.exe`.
 2. **Run the installer.** Windows may show a blue *"Windows protected your PC"* screen because the app isn't code-signed yet — click **More info → Run anyway**. Pick a folder, finish, and AFH opens.
 3. **Connect a model**: on first launch AFH opens *Models & providers*. Pick a provider and paste its API key (local servers like Ollama need none). If you used OpenCode before, one click imports its keys, MCP servers and threads. Then set your **Default model**.
 4. **Open a folder** (the project you want to work on) and ask for something.
@@ -82,7 +83,7 @@ Settings → **Remote control** → set a password → turn it on. Scan the QR c
 | **Hover a message of yours** | **Undo to here** — rewinds the thread and your files. |
 | **Project menu** (sidebar) | Open folders, switch projects, **Import thread** (from an export file, OpenCode or Zadloop). |
 
-Keyboard: `Enter` send · `Shift+Enter` new line · `/` commands · `Esc` stop · `Ctrl+N` new thread · `Ctrl+K` search · `Ctrl+B` sidebar · `Ctrl+,` settings.
+Keyboard: `Enter` send · `Shift+Enter` new line · `/` commands · `Ctrl+P` command palette · `Esc` stop · `Ctrl+N` new thread · `Ctrl+K` search · `Ctrl+B` sidebar · `Ctrl+,` settings.
 
 ## Goals and the to-do list
 

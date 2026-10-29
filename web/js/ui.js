@@ -50,8 +50,24 @@ export const ICONS = {
   slash: P('<rect x="3" y="3" width="18" height="18" rx="4"/><path d="m14.5 7-5 10"/>'),
   hook: P('<path d="M18 3v8a6 6 0 0 1-12 0V9"/><path d="m3 12 3-3 3 3"/>'),
   activity: P('<path d="M3 12h4l3-8 4 16 3-8h4"/>'),
+  image: P('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-9 9"/>'),
+  video: P('<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/>'),
+  mic: P('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>'),
+  sun: P('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+  moon: P('<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>'),
+  languages: P('<path d="M4 5h9M8.5 3v2M6 5c0 4 3 7 6 8M11 5c-1 4-4 7-7 8"/><path d="m13 21 4-9 4 9M14.5 18h5"/>'),
+  command: P('<path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z"/>'),
   "git-merge": P('<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8 7.5c2 3 5 4.5 7.5 4.5"/>'),
 };
+
+const MODALITY = { image: ["image", "Reads images"], video: ["video", "Understands video"], audio: ["mic", "Understands audio"], pdf: ["file", "Reads PDFs"] };
+
+/** Small icons for what a model can take in besides text (image, video, audio, PDF). */
+export function modalityBadges(input) {
+  const kinds = (input || []).filter((k) => MODALITY[k]);
+  if (!kinds.length) return null;
+  return el("span.mods", { title: kinds.map((k) => MODALITY[k][1]).join(" · ") }, kinds.map((k) => el("span.mod", { html: icon(MODALITY[k][0]) })));
+}
 
 export function icon(name) {
   return ICONS[name] || ICONS.sparkle;
@@ -121,7 +137,9 @@ renderer.link = (href, title, text) => `<a href="${escapeHtml(href)}" target="_b
 marked.setOptions({ renderer, gfm: true, breaks: false });
 
 export function markdown(text) {
-  return DOMPurify.sanitize(marked.parse(text || ""), { ADD_ATTR: ["target", "data-copy"] });
+  const html = DOMPurify.sanitize(marked.parse(text || ""), { ADD_ATTR: ["target", "data-copy"] });
+  // Each block takes its direction from its own text: Arabic right to left, English left to right.
+  return html.replace(/<(p|ul|ol|li|h[1-6]|blockquote|table)(?=[\s>])/g, '<$1 dir="auto"');
 }
 
 document.addEventListener("click", async (e) => {
@@ -241,7 +259,7 @@ export function popover(anchor, items, opts = {}) {
       list.append(
         el(`button.pop-item${it.danger ? ".danger" : ""}`, { type: "button", on: { click: () => { if (!it.keepOpen) closePopover(); it.onSelect?.(); } } },
           it.icon ? ico(it.icon) : null,
-          el("div.pi-main", el("div.pi-title", it.title), it.sub ? el("div.pi-sub", it.sub) : null),
+          el("div.pi-main", el("div.pi-title", it.title, it.badges || null), it.sub ? el("div.pi-sub", it.sub) : null),
           it.count != null ? el("span.pi-count", String(it.count)) : null,
           it.checked ? el("span.check", { html: icon("check") }) : null,
           it.arrow ? el("span.chev", { html: icon("chev"), style: { width: "14px", height: "14px", color: "var(--text-3)" } }) : null)

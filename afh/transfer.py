@@ -160,6 +160,7 @@ def import_session(engine, payload: dict, directory: str) -> dict:
     for m in messages:
         engine.store.add_message(session["id"], m)
     engine.store.update_session(session["id"], tokens=info.get("tokens") or ZERO_TOKENS, cost=info.get("cost") or 0)
+    engine.store.touch(session["id"], idle=True)  # imported history is finished; never "resume" it
     engine.publish({"type": "session.created", "data": {"sessionID": session["id"], "title": session.get("title")}})
     return engine.store.get_session(session["id"])
 

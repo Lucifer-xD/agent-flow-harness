@@ -22,16 +22,20 @@ export function createThread(session) {
 }
 
 export async function loadThread(t) {
-  const [messages, perms] = await Promise.all([
+  const [messages, perms, fresh] = await Promise.all([
     api.get(`/api/sessions/${t.id}/messages`),
     api.get(`/api/sessions/${t.id}/permissions`).catch(() => []),
+    api.get(`/api/sessions/${t.id}`).catch(() => null),
   ]);
+  if (fresh) t.session = { ...t.session, ...fresh };
   t.messages = [];
   t.byId.clear();
   for (const m of messages) addMessage(t, m);
   t.permissions = new Map(perms.map((p) => [p.id, p]));
   const last = [...t.messages].reverse().find((m) => m.type === "assistant" || m.type === "idle");
-  t.busy = !!(last && last.type === "assistant" && !last.time?.completed && !last.finish);
+  // The server knows whether a run is going; an unfinished last message alone may be a run cut off by a restart.
+  t.busy = typeof t.session?.running === "boolean" ? t.session.running : !!(last && last.type === "assistant" && !last.time?.completed && !last.finish);
+  if (!t.busy) { t.runStart = null; t.phase = null; }
   t.loaded = true;
 }
 
@@ -422,6 +426,7 @@ function renderTool(p, openSet, thread) {
 
 // ---- view -----------------------------------------------------------------------
 
+const WINDOW = 150; // messages drawn at once; "Show earlier" adds more
 const toolIds = (root) => new Set([...root.querySelectorAll("[data-tool]")].map((n) => n.dataset.tool));
 
 /** Cards that were already on screen keep still when their message re-renders (no replayed fade-in). */
@@ -455,6 +460,7 @@ export class ChatView {
 
   mount(thread) {
     const switching = this.thread && this.thread.id !== thread.id;
+    if (switching || !this.thread) this.window = WINDOW;
     this.thread = thread;
     this.openTools.clear();
     this.stick = true;
@@ -472,7 +478,19 @@ export class ChatView {
     this.nodes.clear();
     this.root.replaceChildren();
     if (!t) return;
-    for (const m of t.messages) {
+    // Very long threads (imports run to thousands of messages) draw only the newest part.
+    const start = Math.max(0, t.messages.length - (this.window || WINDOW));
+    this.hidden = new Set(t.messages.slice(0, start).map((m) => m.id));
+    if (start > 0) {
+      this.root.append(el("div.show-earlier", el("button.btn.ghost.sm", { on: { click: () => {
+        const before = this.scroller.scrollHeight, top = this.scroller.scrollTop;
+        this.window = (this.window || WINDOW) + WINDOW;
+        this.stick = false;
+        this.renderAll(true);
+        this.scroller.scrollTop = top + (this.scroller.scrollHeight - before);
+      } } }, ico("arrow-down"), `Show earlier messages (${start})`)));
+    }
+    for (const m of t.messages.slice(start)) {
       // Only messages that weren't on screen before get the entrance animation.
       const n = this.renderMessage(m, quiet && seen.has(m.id));
       if (n) {
@@ -517,6 +535,7 @@ export class ChatView {
   rerender(id) {
     const m = this.thread.byId.get(id);
     const old = this.nodes.get(id);
+    if (!old && this.hidden?.has(id)) return; // not drawn: older than the window
     const fresh = m && this.renderMessage(m, true);
     if (fresh && old) {
       stillAnimations(fresh, toolIds(old));
@@ -596,7 +615,7 @@ export class ChatView {
       case "synthetic": {
         const n = m.metadata?.notice;
         if (!n) return null;
-        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert" };
+        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert", resume: "refresh" };
         const label = m.metadata?.label || (n === "goal" ? "Goal not achieved yet — continuing" : n === "hook" ? "A stop hook failed — continuing" : n === "todo" ? "To-do items still open — checking" : "Notice");
         return el(`div.notice.${n}`, anim, ico(icons[n] || "info"), el("span", label), m.text ? el("details", el("summary", "what the agent was told"), el("pre", m.text)) : null);
       }

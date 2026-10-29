@@ -624,3 +624,66 @@ def test_auto_goal_can_be_turned_off(home, tmp_path):
     e = make_engine(p)
     s = asyncio.run(run_prompt(e, tmp_path, "please add a parser module with tests", agent={"todoNudge": False}, goals={"auto": False}))
     assert e.goal(s["id"]) is None
+
+
+# ---- 1.6: picking up after a restart ---------------------------------------------------------------------
+
+
+def test_threads_cut_off_by_a_restart_resume_on_start(home, tmp_path):
+    e = make_engine(FakeProvider([]))
+    sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+    e.store.add_message(sid, {"type": "user", "text": "build it"})
+    e.store.add_message(sid, {"type": "assistant", "content": [{"type": "tool", "id": "c1", "name": "shell", "state": {"status": "running", "input": {"command": "x"}}}],
+                              "time": {"created": 1, "completed": 2}, "finish": "tool-calls", "model": {"providerID": "fake", "id": "m"}})
+    e.store.touch(sid)  # a run started and never finished
+    done = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"})["id"]
+    e.store.add_message(done, {"type": "user", "text": "hi"})
+    e.store.add_message(done, {"type": "assistant", "content": [{"type": "text", "text": "hello"}], "time": {"created": 1, "completed": 2}, "finish": "stop"})
+    e.store.touch(done)  # its run ended but idle was never written (killed right at the end)
+    e2 = make_engine(FakeProvider(["Picked it up, all done."]))  # a fresh process on the same database
+    e2.store = e.store
+
+    async def go():
+        e2.loop = asyncio.get_running_loop()
+        resumed = await e2.resume_interrupted()
+        for s_id in resumed:
+            await e2.runs[s_id].task
+        return resumed
+
+    assert asyncio.run(go()) == [sid]
+    msgs = e2.store.list_messages(sid)
+    assert msgs[1]["content"][0]["state"]["status"] == "error" and "restarted" in msgs[1]["content"][0]["state"]["error"]["message"]
+    assert msgs[2]["type"] == "synthetic" and msgs[2]["metadata"]["notice"] == "resume"
+    assert msgs[-1]["type"] == "assistant" and msgs[-1]["content"][0]["text"] == "Picked it up, all done."
+    assert e2.store.get_session(done)["time"].get("idle")  # a finished thread is only marked idle, not re-run
+
+
+def test_imported_threads_are_never_resumed(home, tmp_path):
+    from afh import transfer
+
+    e = make_engine(FakeProvider(["should not run"]))
+    payload = {"format": "afh-session", "info": {"title": "old"}, "messages": [{"type": "user", "text": "an old question", "time": {"created": 1000}}]}
+    transfer.import_session(e, payload, str(tmp_path))
+
+    async def go():
+        e.loop = asyncio.get_running_loop()
+        return await e.resume_interrupted()
+
+    assert asyncio.run(go()) == []
+
+
+def test_models_get_real_facts_from_models_dev(home):
+    from afh.engine import modelsdev
+
+    modelsdev._data = None
+    p = {"catalog": "zai-coding", "fetch_models": False}
+    glm = {m.id: m for m in provcfg.models_of(p, "zai-coding")}["glm-5.3"]
+    assert glm.context >= 1_000_000 and glm.variants == ["low", "high", "max"] and glm.reasoning
+    kimi = {m.id: m for m in provcfg.models_of({"catalog": "kimi", "fetch_models": False}, "kimi")}["k3.1-pro"]
+    assert kimi.context >= 1_000_000 and "image" in kimi.input and "video" in kimi.input
+    # an id the endpoint reports (custom provider) is enriched from the maker's own listing
+    custom = provcfg.models_of({"fetched": [{"id": "claude-opus-5-5", "context": 200000}]}, "my-gateway")[0]
+    assert custom.context >= 1_000_000 and "xhigh" in custom.variants
+    # the user's own correction wins
+    fixed = {m.id: m for m in provcfg.models_of({"catalog": "zai-coding", "overrides": {"glm-5.3": {"context": 123456, "variants": ["high"]}}}, "zai-coding")}["glm-5.3"]
+    assert fixed.context == 123456 and fixed.variants == ["high"]

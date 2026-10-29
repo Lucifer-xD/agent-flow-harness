@@ -56,6 +56,7 @@ $PyArgs = @(
     '--specpath', $WorkPath,
     '--paths', $Root,
     '--add-data', "$WebDir;web",
+    '--add-data', "$Root/afh/engine/data;afh/engine/data",
     # our own package + the MCP SDK (2.x: mcp, mcp_types, httpx2 are separate distributions)
     '--collect-submodules', 'afh',
     '--collect-submodules', 'mcp.client',

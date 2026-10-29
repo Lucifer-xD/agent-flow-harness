@@ -234,28 +234,62 @@ export function renderLive(body, titleBox) {
     }
   }
 
-  const follow = toggle(st.follow, (v) => (st.follow = v));
-  const head = el("div.live-head", el("span.path", { title: p.path || "" }, p.path || ""), el("span", "follow"), follow);
-  const code = el("div.live-code");
+  // The pane is built once and then patched row by row: rebuilding it every frame cost thousands of
+  // DOM nodes per frame and swapped the Follow switch out from under the user's click.
+  const v = paneFor(body);
+  v.path.textContent = p.path || "";
+  v.path.title = p.path || "";
+  v.note.textContent = note || "";
+  v.note.hidden = !note;
+  if (v.toggle.classList.contains("on") !== st.follow) setToggle(v.toggle, st.follow);
   if (lines.length > 4000) lines = lines.slice(0, 4000).concat(["… (truncated)"]);
-  const frag = document.createDocumentFragment();
-  lines.forEach((l, i) => {
-    const row = el(`div.ln-row${marks.has(i) ? "." + marks.get(i) : ""}${i === caret ? ".caret" : ""}`, el("span.ln", String(i + 1)), el("span.tx", l));
-    if (i === focus) row.id = "live-focus";
-    frag.append(row);
-  });
-  code.append(frag);
-  body.replaceChildren(el("div", head, note ? el("div.live-note", note) : null, code));
+  const rows = v.code.children;
+  for (let i = 0; i < lines.length; i++) {
+    const cls = `ln-row${marks.has(i) ? " " + marks.get(i) : ""}${i === caret ? " caret" : ""}`;
+    let row = rows[i];
+    if (!row) {
+      row = el("div", el("span.ln", String(i + 1)), el("span.tx"));
+      v.code.append(row);
+    }
+    if (row.className !== cls) row.className = cls;
+    const tx = row.lastChild;
+    if (tx.textContent !== lines[i]) tx.textContent = lines[i];
+  }
+  while (rows.length > lines.length) v.code.lastChild.remove();
   if (st.follow) {
     requestAnimationFrame(() => {
+      v.auto = true;
       if (st.kind === "write" && !finished) body.scrollTop = body.scrollHeight;
       else if (focus >= 0 && st.scrolledTo !== focus) {
-        const row = body.querySelector("#live-focus");
+        const row = rows[focus];
         if (row) { body.scrollTop = Math.max(0, row.offsetTop - body.clientHeight / 3); st.scrolledTo = focus; }
       } else if (caret >= 0) {
-        const row = body.querySelectorAll(".ln-row")[caret];
+        const row = rows[caret];
         if (row && row.offsetTop > body.scrollTop + body.clientHeight - 60) body.scrollTop = row.offsetTop - body.clientHeight + 80;
       }
+      requestAnimationFrame(() => (v.auto = false));
     });
   }
+}
+
+let pane = null;
+
+/** The pane's fixed parts, made once per drawer body: header with the Follow switch, a note, the code. */
+function paneFor(body) {
+  if (pane && pane.body === body && pane.root.isConnected) return pane;
+  const toggleEl = toggle(st.follow, (on) => { st.follow = on; if (on) st.scrolledTo = -1; });
+  const path = el("span.path");
+  const note = el("div.live-note", { hidden: true });
+  const code = el("div.live-code");
+  const root = el("div.live-root", el("div.live-head", path, el("label.live-follow", el("span", "follow"), toggleEl)), note, code);
+  body.replaceChildren(root);
+  pane = { body, root, path, note, code, toggle: toggleEl, auto: false };
+  // Scrolling up yourself means "let me read": follow switches off until you turn it back on.
+  body.addEventListener("wheel", (e) => { if (e.deltaY < 0 && st.follow) { st.follow = false; setToggle(toggleEl, false); } }, { passive: true });
+  return pane;
+}
+
+function setToggle(t, on) {
+  t.classList.toggle("on", on);
+  t.setAttribute("aria-checked", String(on));
 }
