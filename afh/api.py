@@ -412,7 +412,7 @@ async def reply_permission(sid: str, rid: str, body: dict = Body(...)):
     req = engine.pending.get(rid)
     if not req:
         raise KeyError(rid)
-    req.reply(body["decision"], body.get("message"))
+    req.reply(body["decision"], body.get("message"), body.get("answers"))
     return {"ok": True}
 
 

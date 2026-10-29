@@ -23,6 +23,7 @@ from . import prompt as promptmod
 from . import state as statemod
 from . import worktree as wtmod
 from .install import HarnessTool
+from .questions import QuestionTool
 from .jobs import JobManager, JobsTool
 from .runner import Run, to_chat
 from .sessions import Store
@@ -387,6 +388,7 @@ class Engine:
         tools += [JobsTool(), statemod.TodoTool(self), HarnessTool(self)]
         if agent.kind != "delegate":  # goals belong to the thread the user talks to
             tools.append(statemod.GoalTool(self))
+            tools.append(QuestionTool())  # delegates report to their lead instead of asking the user
         skills = self.skills_for(session["location"]["directory"])
         if skills:
             tools.append(SkillTool(skills))

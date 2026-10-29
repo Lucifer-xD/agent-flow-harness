@@ -300,6 +300,7 @@ export function describeTool(p) {
   if (name === "browser") return { icon: "eye", label: "Browser", target: pick(input, "url", "target", "key", "script", "direction") || "" };
   if (/web|fetch|browse/.test(name)) return { icon: "globe", label: name === "websearch" ? "Search web" : "Fetch", target: pick(input, "url", "query") || "" };
   if (/task|agent/.test(name)) return { icon: "bot", label: "Subagent", target: pick(input, "description", "prompt") || "" };
+  if (name === "question") return { icon: "info", label: "Asked", target: pick((input.questions || [])[0] || {}, "question") || "" };
   if (/todo/.test(name)) return { icon: "list", label: "Plan", target: "" };
   if (name === "harness") return { icon: "plug", label: (HARNESS_VERBS[input.action] || ["Harness"])[0], target: pick(input, "source", "name", "id", "url") || "" };
   if (/skill/.test(name)) return { icon: "book", label: "Skill", target: pick(input, "name", "id") || "" };
@@ -395,11 +396,30 @@ function renderGoalTool(p, openSet) {
     input.evidence ? el("details", el("summary", "How it was verified"), el("pre.tool-pre", input.evidence)) : null);
 }
 
+/** A finished `question` call: the questions with the answer the user chose. */
+function renderQuestionTool(p) {
+  const meta = p.state?.metadata || {};
+  const input = typeof p.state?.input === "object" ? p.state.input : {};
+  const questions = meta.questions || input.questions;
+  const status = p.state?.status || "streaming";
+  if (!Array.isArray(questions) || status === "streaming" || status === "running") return null;  // still open: the card below the thread handles it
+  const answers = meta.answers;
+  const dismissed = meta.dismissed || !answers;
+  return el(`div.q-recap${dismissed ? ".skipped" : ""}`, { dataset: { tool: p.id } },
+    el("div.q-recap-head", ico("info"), el("b", dismissed ? "Asked — skipped" : questions.length > 1 ? `Asked ${questions.length} questions` : "Asked a question")),
+    el("div.q-recap-list", questions.map((q, i) => {
+      const a = answers?.[i] || {};
+      const said = [...(a.selected || []), a.other ? `"${a.other}"` : null].filter(Boolean).join(", ");
+      return el("div.q-recap-row", el("span.q-recap-q", q.question), el("span.q-recap-a", said || (dismissed ? "skipped" : "—")));
+    })));
+}
+
 function renderTool(p, openSet, thread) {
   const name = (p.name || "tool").toLowerCase();
   if (name === "subagent" && hooks.delegation) return hooks.delegation(p, { thread, open: openSet });
   if (name === "todo") return renderTodoTool(p, openSet);
   if (name === "goal") { const g = renderGoalTool(p, openSet); if (g) return g; }
+  if (name === "question") { const q = renderQuestionTool(p); if (q) return q; }
   const info = describeTool(p);
   const status = p.state?.status || "streaming";
   const live = status === "streaming" || status === "running";
@@ -851,6 +871,7 @@ export function errorCard(err, { model, onRetry, onChangeModel } = {}) {
 
 /** An approval request for session `sid`; `onDone(id)` runs after the reply is accepted. */
 export function permissionCard(p, sid, onDone) {
+  if (p.action === "question" && Array.isArray(p.metadata?.questions)) return questionCard(p, sid, onDone);
   const action = p.action || "tool";
   const title = p.metadata?.title || (action === "edit" ? "Allow file changes?" : action === "shell" ? "Run this command?" : `Allow ${action}?`);
   const files = p.metadata?.files || [];
@@ -879,6 +900,61 @@ export function permissionCard(p, sid, onDone) {
       el("span.spacer"),
       feedback,
       el("button.btn.danger.sm", { on: { click: (e) => reply("reject", e.currentTarget) } }, "Reject")));
+}
+
+/** The agent paused to ask: one multiple-choice question at a time, with Back / Next / Submit. */
+export function questionCard(p, sid, onDone) {
+  const questions = p.metadata.questions;
+  const answers = questions.map(() => ({ selected: [], other: "" }));
+  let at = 0;
+  const card = el("div.approval.qcard");
+  const send = async (decision, payload) => {
+    card.querySelectorAll("button, input, textarea").forEach((b) => (b.disabled = true));
+    try {
+      await api.post(`/api/sessions/${sid}/permissions/${p.id}`, { decision, ...payload });
+      onDone?.(p.id);
+    } catch (e) {
+      toast(e.message, "err");
+      card.querySelectorAll("button, input, textarea").forEach((b) => (b.disabled = false));
+    }
+  };
+  const draw = () => {
+    const q = questions[at];
+    const a = answers[at];
+    const toggle = (label) => {
+      if (q.multiple) a.selected = a.selected.includes(label) ? a.selected.filter((x) => x !== label) : [...a.selected, label];
+      else a.selected = a.selected.includes(label) ? [] : [label];
+      draw();
+    };
+    const opts = el("div.q-opts", q.options.map((o) => {
+      const on = a.selected.includes(o.label);
+      return el(`button.q-opt${on ? ".on" : ""}`, { type: "button", on: { click: () => toggle(o.label) } },
+        el("span.q-check", on ? ico("check") : null),
+        el("span.q-opt-main", el("span.q-opt-label", o.label), o.description ? el("span.q-opt-desc", o.description) : null));
+    }));
+    const other = el("textarea.q-other", { rows: 1, placeholder: "Or type your own answer…", value: a.other,
+      on: { input: (e) => { a.other = e.target.value; e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; } } });
+    const last = at === questions.length - 1;
+    const hasAns = a.selected.length || a.other.trim();
+    card.replaceChildren(
+      el("div.approval-head", ico("info"),
+        el("div", el("div", "The agent has a question"), questions.length > 1 ? el("div.approval-sub", `Question ${at + 1} of ${questions.length}`) : null),
+        questions.length > 1 ? el("span.q-dots", questions.map((_, i) => el(`span.q-dot${i === at ? ".on" : ""}${(answers[i].selected.length || answers[i].other.trim()) ? ".done" : ""}`))) : null),
+      el("div.q-body",
+        q.header ? el("div.q-header", q.header) : null,
+        el("div.q-text", q.question),
+        q.multiple ? el("div.q-hint", "Pick any that apply") : null,
+        opts, other),
+      el("div.approval-actions",
+        at > 0 ? el("button.btn.sm", { type: "button", on: { click: () => { at--; draw(); } } }, "Back") : null,
+        el("span.spacer"),
+        el("button.btn.ghost.sm", { type: "button", title: "Skip the questions and let the agent continue", on: { click: () => send("dismiss") } }, "Skip"),
+        last
+          ? el("button.btn.primary.sm", { type: "button", disabled: !hasAns, on: { click: () => send("answer", { answers }) } }, ico("check"), "Submit")
+          : el("button.btn.primary.sm", { type: "button", on: { click: () => { at++; draw(); } } }, "Next")));
+  };
+  draw();
+  return card;
 }
 
 /** Every file edit made in a thread, for the Changes drawer when the project isn't a git repo. */
