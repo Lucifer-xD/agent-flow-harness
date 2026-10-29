@@ -737,8 +737,9 @@ export class ChatView {
     if (!this.statusBox || !this.thread) return;
     const t = this.thread;
     this.statusBox.replaceChildren();
-    // Sent but nothing streaming yet: show the mark at work with a running timer right away.
-    const streaming = t.messages.some((m) => m.type === "assistant" && m.live && m.content.length);
+    // Sent but no reply yet: show the mark at work with a running timer right away. Once the
+    // model's reply exists (even before its first word) it shows its own "Working" row, so this one goes.
+    const streaming = t.messages.some((m) => m.type === "assistant" && m.live);
     if ((t.busy || t.runStart) && !streaming && !t.error) {
       const model = this.opts.modelName(t.session.model) || "the model";
       const label = t.phase === "working" ? `${model} is working` : t.phase === "delivered" ? `Delivered · waiting for ${model}` : "Sending your message";

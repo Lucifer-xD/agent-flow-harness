@@ -714,3 +714,23 @@ def test_a_second_compaction_summarises_from_the_first_and_keeps_everything(home
     assert "first summary" in p.requests[-1].messages[0].text  # the second summary was built on the first
     chat = runmod.to_chat(msgs)
     assert "second summary" in chat[0].text and "first summary" not in "".join(c.text for c in chat)
+
+
+def test_finished_lists_and_achieved_goals_are_kept_in_history(home, tmp_path):
+    p = FakeProvider([
+        [("todo", {"todos": [{"content": "Write code", "status": "completed"}, {"content": "Test it", "status": "completed"}]})],
+        [("goal", {"status": "achieved", "summary": "Shipped"})],
+        "All done.",
+    ])
+    e = make_engine(p)
+    sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+    e.set_goal(sid, "ship it", "", autopilot=False, max_turns=5)
+    asyncio.run(run_prompt(e, tmp_path, "go", sid=sid))
+    afh = e.store.get_session(sid)["metadata"]["afh"]
+    assert [t["content"] for t in afh["todoHistory"][0]["todos"]] == ["Write code", "Test it"] and afh["todoHistory"][0]["completed"]
+    assert afh["goalHistory"][0]["text"] == "ship it" and afh["goalHistory"][0]["summary"] == "Shipped"
+    # the same finished list reported again is not stored twice
+    e.set_todos(sid, afh["todoHistory"][0]["todos"])
+    assert len(e.store.get_session(sid)["metadata"]["afh"]["todoHistory"]) == 1
+    ev = [x for x in e.events if x["type"] == "session.goal.updated" and x["data"].get("history")]
+    assert ev and ev[-1]["data"]["history"][0]["text"] == "ship it"

@@ -60,6 +60,7 @@ const AR = {
   "Open as its own thread": "افتحها كمحادثة مستقلة", "Nothing to watch.": "لا شيء للمشاهدة.", "Delegation failed": "فشل التفويض", "continued": "متابعة", "background": "في الخلفية", "worktree": "نسخة عمل",
   "Helper": "المساعد", "thread model": "نموذج المحادثة",
   // dock: goal, to-do, jobs
+  "Current goal": "الهدف الحالي", "Set a new goal": "حدّد هدفًا جديدًا", "Achieved goals": "الأهداف المُحقَّقة", "Completed lists": "القوائم المكتملة", "No achieved goals in this thread yet.": "لا توجد أهداف مُحقَّقة في هذه المحادثة بعد.", "No completed to-do lists yet.": "لا توجد قوائم مهام مكتملة بعد.", "To-do list": "قائمة المهام",
   "To-do": "المهام", "empty": "فارغة", "All done": "اكتمل كل شيء", "Add a step… (Enter)": "أضف خطوة… (Enter)", "Collapse": "طيّ", "Expand": "توسيع",
   "Mark done": "علّمها منجزة", "Mark not done": "علّمها غير منجزة", "Mark in progress": "علّمها قيد التنفيذ", "Not in progress": "ليست قيد التنفيذ", "Remove": "إزالة",
   "Double-click to edit": "انقر مرتين للتعديل", "Goal achieved · set by the agent": "تحقق الهدف · حدده الوكيل", "Goal · set by the agent": "الهدف · حدده الوكيل",

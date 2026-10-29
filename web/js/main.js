@@ -9,7 +9,7 @@ import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
 import { openSettings } from "./settings.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
-import { applyWorkEvent, jobsPopover, loadJobs, openGoalDialog, renderDock, renderJobsChip, setRedraw, syncState } from "./work.js";
+import { applyWorkEvent, goalsPopover, jobsPopover, loadJobs, openGoalDialog, renderDock, renderJobsChip, setRedraw, syncState } from "./work.js";
 import {
   ago, basename, closePopover, confirmDialog, contextRing, dayGroup, diffView, el, escapeHtml, fmtTokens,
   hydrateIcons, ico, icon, modalityBadges, popover, promptDialog, repositionPopover, toast,
@@ -1235,6 +1235,8 @@ async function localCommand(text) {
   if (name === "todo") {
     clear();
     if (!t) { toast("Start a thread first", "info"); return true; }
+    // A finished list has moved to the Goal menu; /todo starts a fresh one.
+    if (t.todos?.length && t.todos.every((x) => x.status === "completed" || x.status === "cancelled")) { t.todos = []; t.todosFromEvents = true; }
     t.showTodos = true;
     renderWork();
     setTimeout(() => document.querySelector(".todo-add")?.focus(), 50);
@@ -1475,7 +1477,11 @@ function wire() {
   $("btn-harness").addEventListener("click", () => openDrawer("harness"));
   $("btn-context").addEventListener("click", editContext);
   $("btn-live").addEventListener("click", () => openDrawer("live"));
-  $("btn-goal").addEventListener("click", editGoal);
+  $("btn-goal").addEventListener("click", () => {
+    const t = S.current;
+    if (t && (t.goal || t.goalHistory?.length || t.todoHistory?.length)) goalsPopover($("btn-goal"), t, { onEdit: editGoal, onNew: () => openGoalDialog({ thread: { ...t, goal: null, id: t.id }, onSaved: (g) => { t.goal = g; renderWork(); } }) });
+    else editGoal();
+  });
   $("btn-worktree").addEventListener("click", worktreeMenu);
   $("draft-goal").addEventListener("click", editGoal);
   $("draft-worktree").addEventListener("click", () => { S.draft.worktree = !S.draft.worktree; renderWork(); if (S.draft.worktree) toast("The new thread gets its own git worktree: a separate folder on a new branch", "info", 3500); });
