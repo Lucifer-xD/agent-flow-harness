@@ -54,10 +54,13 @@ export function openImportDialog(ctx, onImported) {
     const pickBtn = native.available() ? el("button.btn", { on: { click: async () => {
       const files = (await native.pickFiles()) || [];
       if (!files[0]) return;
-      const req = { url: "/api/sessions/import", body: { path: files[0], directory } };
+      const req = { url: "/api/import/file", body: { path: files[0], directory } };
+      previewBox.replaceChildren(el("div.empty-row", el("span.spinner"), " Reading…"));
       previewBox.replaceChildren(await preview(req), el("div.actions", el("button.btn.primary", { on: { click: () => importPayload(req, basename(files[0])) } }, "Import this thread")));
     } } }, ico("file"), "Choose a file…") : el("div.help", "Run the desktop app to pick a file; here you can paste the JSON instead.");
-    panel.append(pickBtn, el("div", { style: { margin: "12px 0 6px", color: "var(--text-3)", fontSize: "12.5px" } }, "or paste it:"), paste, previewBox,
+    panel.append(pickBtn,
+      el("div.help", { style: { margin: "8px 0 2px", color: "var(--text-3)", fontSize: "12px" } }, "An AFH or OpenCode export (.json), or a Zadloop / DeepSeek Harness session — a .zip export, a .jsonl / .jsonl.zstd log, or a session folder."),
+      el("div", { style: { margin: "12px 0 6px", color: "var(--text-3)", fontSize: "12.5px" } }, "or paste JSON:"), paste, previewBox,
       el("div.actions", el("button.btn.primary", { on: { click: async () => {
         let payload;
         try { payload = JSON.parse(paste.value); } catch { return toast("That isn't valid JSON", "err"); }
@@ -84,7 +87,7 @@ export function openImportDialog(ctx, onImported) {
   for (const [id, label, fn] of [["file", "From a file", fileTab], ["zadloop", "From Zadloop", zadTab]]) {
     tabs.append(el(`button${id === "file" ? ".on" : ""}`, { type: "button", on: { click: (e) => { tabs.querySelectorAll("button").forEach((b) => b.classList.remove("on")); e.currentTarget.classList.add("on"); fn(); } } }, label));
   }
-  body.append(el("h2", "Import a thread"), el("p.lead", directory ? `Into ${basename(directory)}. OpenCode exports and AFH files keep tool calls, diffs and reasoning; Zadloop sessions are converted.` : "Open a project folder first."), tabs, panel);
+  body.append(el("h2", "Import a thread"), el("p.lead", directory ? `Into ${basename(directory)}. AFH and OpenCode exports keep tool calls, diffs and reasoning; Zadloop / DeepSeek Harness sessions (including .zip exports) are converted.` : "Open a project folder first."), tabs, panel);
   fileTab();
   return m;
 }

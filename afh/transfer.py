@@ -11,13 +11,20 @@ import random
 import string
 import time
 from datetime import datetime, timezone
+import base64
+import io
+import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 FORMAT = "afh-session"
 VERSION = 1
 APP = "agent-flow-harness"
 DSH_HOME = Path.home() / ".dsh"
+
+# How much image data to embed when importing a Zadloop export (the rest become text markers).
+TOTAL_IMAGE_BUDGET = 12_000_000
+SINGLE_IMAGE_MAX = 3_000_000
 
 ZERO_TOKENS = {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}
 # Fields the server recomputes or rejects on import.
@@ -159,14 +166,9 @@ def summarize(payload: dict) -> dict:
 # ---- Zadloop (DeepSeek Harness, ~/.dsh) -----------------------------------------
 
 
-def read_zadloop(path: str | Path) -> list[dict]:
-    """Records of a session.v4.jsonl.zstd log, in file order (multi-frame zstd)."""
-    import zstandard
-
-    with open(path, "rb") as fh:
-        raw = zstandard.ZstdDecompressor().stream_reader(fh).read()
+def _parse_jsonl(text: str) -> list[dict]:
     records = []
-    for line in raw.decode("utf-8", errors="replace").splitlines():
+    for line in text.splitlines():
         line = line.strip()
         if not line:
             continue
@@ -175,6 +177,86 @@ def read_zadloop(path: str | Path) -> list[dict]:
         except ValueError:
             continue  # a torn trailing line from a crashed writer
     return records
+
+
+def _unzstd(data: bytes) -> str:
+    import zstandard
+
+    return zstandard.ZstdDecompressor().stream_reader(io.BytesIO(data)).read().decode("utf-8", errors="replace")
+
+
+def read_zadloop(path: str | Path) -> list[dict]:
+    """Records of a session.v4.jsonl.zstd log, in file order (multi-frame zstd)."""
+    return _parse_jsonl(_unzstd(Path(path).read_bytes()))
+
+
+MediaResolver = Callable[[str], "bytes | None"]
+
+
+def zadloop_source(source: str | Path) -> tuple[list[dict], MediaResolver | None]:
+    """Read a Zadloop session from a .zip export, a .jsonl.zstd or .jsonl file, or a session
+    folder. Returns (records, media_resolver); the resolver maps an attachmentId to image bytes."""
+    path = Path(source)
+    if path.is_dir():
+        for name in ("session.v4.jsonl.zstd", "session.v4.jsonl"):
+            if (path / name).is_file():
+                return zadloop_source(path / name)
+        raise ValueError("That folder has no session.v4.jsonl")
+    if path.suffix.lower() == ".zip" or zipfile.is_zipfile(str(path)):
+        return _zadloop_from_zip(path)
+    name = path.name.lower()
+    if name.endswith(".zstd"):
+        return read_zadloop(path), None
+    if name.endswith((".jsonl", ".json")):
+        return _parse_jsonl(path.read_text(encoding="utf-8", errors="replace")), None
+    # Unknown extension: sniff the first bytes for the zstd magic.
+    head = path.read_bytes()[:4]
+    if head[:4] == b"\x28\xb5\x2f\xfd":
+        return read_zadloop(path), None
+    return _parse_jsonl(path.read_text(encoding="utf-8", errors="replace")), None
+
+
+def _zadloop_from_zip(path: Path) -> tuple[list[dict], MediaResolver | None]:
+    z = zipfile.ZipFile(str(path))
+    names = z.namelist()
+    main = [n for n in names if n.rsplit("/", 1)[-1] in ("session.v4.jsonl", "session.v4.jsonl.zstd") and not n.startswith("subagents/")]
+    if not main:
+        raise ValueError("That zip is not a Zadloop export (no session.v4.jsonl inside)")
+    entry = min(main, key=lambda n: (n.count("/"), len(n)))  # the top-level session log
+    data = z.read(entry)
+    text = _unzstd(data) if entry.endswith(".zstd") else data.decode("utf-8", errors="replace")
+    records = _parse_jsonl(text)
+    media = {}
+    for n in names:
+        if n.startswith("media/"):
+            media[n.rsplit("/", 1)[-1].rsplit(".", 1)[0]] = n  # media/<attachmentId>.png -> attachmentId
+
+    def resolver(attachment_id: str) -> "bytes | None":
+        n = media.get(attachment_id)
+        try:
+            return z.read(n) if n else None
+        except Exception:
+            return None
+
+    return records, resolver
+
+
+def _images(content: Any, resolver: MediaResolver | None, budget: list[int]) -> tuple[list[dict], list[str]]:
+    """Image blocks of a user message → (files as data URLs within budget, text markers for the rest)."""
+    files, markers = [], []
+    for b in content or []:
+        if not isinstance(b, dict) or b.get("type") != "image":
+            continue
+        att = b.get("attachment") or {}
+        name = att.get("name") or "image.png"
+        data = resolver(att.get("attachmentId")) if (resolver and att.get("attachmentId")) else None
+        if data and len(data) <= SINGLE_IMAGE_MAX and budget[0] - len(data) >= 0:
+            budget[0] -= len(data)
+            mime = att.get("mediaType") or "image/png"
+            files.append({"uri": f"data:{mime};base64,{base64.b64encode(data).decode()}", "name": name})
+        else:
+            markers.append(f"[Image: {name}]")
+    return files, markers
 
 
 def _text(blocks: Any) -> str:
@@ -240,10 +322,11 @@ def _first_user_text(records: list[dict]) -> str:
     return ""
 
 
-def zadloop_to_opencode(path: str | Path) -> tuple[dict, list[dict]]:
-    """Convert a Zadloop log into OpenCode-shaped (info, messages)."""
-    path = Path(path)
-    records = read_zadloop(path)
+def zadloop_to_opencode(source: str | Path) -> tuple[dict, list[dict]]:
+    """Convert a Zadloop log (zip export, .jsonl, .jsonl.zstd, or a session folder) into (info, messages)."""
+    path = Path(source)
+    records, media_resolver = zadloop_source(source)
+    image_budget = [TOTAL_IMAGE_BUDGET]
     head = next((r for r in records if r.get("type") == "session"), {})
     created = head.get("createdAt") or (records[0].get("time") if records else None) or now_ms()
     results = {}  # tool callId -> tool/result record
@@ -281,7 +364,14 @@ def zadloop_to_opencode(path: str | Path) -> tuple[dict, list[dict]]:
             if data.get("id") in seen_users:
                 continue
             seen_users.add(data.get("id"))
-            messages.append({"id": mid(ms), "type": "user", "text": _text(data.get("content")), "time": {"created": ms}})
+            text = _text(data.get("content"))
+            files, markers = _images(data.get("content"), media_resolver, image_budget)
+            if markers:
+                text = (text + ("\n\n" if text else "") + "\n".join(markers)).strip()
+            msg = {"id": mid(ms), "type": "user", "text": text, "time": {"created": ms}}
+            if files:
+                msg["files"] = files
+            messages.append(msg)
         elif kind == "assistant/message":
             msg = data.get("message") or {}
             src = msg.get("source") or {}
@@ -335,7 +425,7 @@ def zadloop_to_opencode(path: str | Path) -> tuple[dict, list[dict]]:
         "cost": 0,
         "tokens": tokens,
         "time": {"created": created, "updated": updated},
-        "title": title or _first_user_text(records)[:60] or head.get("id") or path.parent.name,
+        "title": (title if title and len(title.strip()) >= 4 else None) or _first_user_text(records)[:60].strip() or (title or "").strip() or head.get("id") or path.stem,
         "metadata": {
             "afh": {
                 "importedFrom": "zadloop",
