@@ -424,8 +424,42 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .approval-sub { color: var(--text-2); font-weight: 400; font-size: 13px; }
 .approval-res { padding: 0 14px 10px; font: 12.5px var(--mono); color: var(--text-2); word-break: break-all; }
 .approval .diff { border-top: 1px solid var(--border); max-height: 300px; }
-.approval-actions { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.approval-actions { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
 .approval-actions .spacer { flex: 1; }
+
+/* The agent's question card (one question at a time, Back / Next / Submit). */
+.qcard .approval-head { justify-content: space-between; }
+.q-dots { display: flex; gap: 5px; margin-left: auto; }
+.q-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-2); transition: all 0.2s var(--ease); }
+.q-dot.done { background: var(--accent-line); }
+.q-dot.on { background: var(--accent); transform: scale(1.3); }
+.q-body { padding: 4px 14px 12px; }
+.q-header { display: inline-block; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 6px; margin-bottom: 8px; }
+.q-text { font-size: 14.5px; font-weight: 550; color: var(--text); line-height: 1.4; margin-bottom: 4px; }
+.q-hint { font-size: 12px; color: var(--text-3); margin-bottom: 8px; }
+.q-opts { display: flex; flex-direction: column; gap: 7px; margin: 10px 0; }
+.q-opt { display: flex; align-items: flex-start; gap: 10px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); cursor: pointer; transition: all 0.15s var(--ease); width: 100%; }
+.q-opt:hover { border-color: var(--accent-line); background: var(--panel-3); }
+.q-opt.on { border-color: var(--accent); background: var(--accent-soft); }
+.q-check { flex: none; width: 17px; height: 17px; margin-top: 1px; border-radius: 50%; border: 1.6px solid var(--border-2); display: grid; place-items: center; color: #fff; transition: all 0.15s var(--ease); }
+.q-opt.on .q-check { background: var(--accent); border-color: var(--accent); }
+.q-check .ico { width: 10px; height: 10px; }
+.q-opt-main { display: flex; flex-direction: column; gap: 2px; }
+.q-opt-label { font-size: 13.5px; font-weight: 550; color: var(--text); }
+.q-opt-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.35; }
+.q-other { width: 100%; margin-top: 4px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; font-size: 13px; resize: none; min-height: 34px; box-sizing: border-box; }
+.q-other:focus { outline: none; border-color: var(--accent); }
+
+/* The finished question, recapped in the thread. */
+.q-recap { margin: 10px 0; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel); overflow: hidden; }
+.q-recap.skipped { opacity: 0.75; }
+.q-recap-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--border); }
+.q-recap-head .ico { color: var(--accent); }
+.q-recap-list { display: flex; flex-direction: column; }
+.q-recap-row { display: flex; gap: 12px; padding: 8px 12px; font-size: 12.8px; }
+.q-recap-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+.q-recap-q { flex: 1; color: var(--text-2); }
+.q-recap-a { flex: none; max-width: 45%; text-align: right; color: var(--accent); font-weight: 550; }
 
 /* delegation */
 .deleg { margin: 10px 0; border-radius: var(--radius-lg); border: 1px solid var(--accent-line); background: linear-gradient(180deg, var(--accent-soft), transparent 60%), var(--panel); overflow: hidden; animation: pop-in 0.4s var(--spring) both; transition: border-color 0.3s, box-shadow 0.3s; }

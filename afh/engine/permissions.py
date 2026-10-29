@@ -89,6 +89,19 @@ class Gate:
         elif decision == "reject":
             raise PermissionDenied(message or "The user rejected this action.")
 
+    async def ask_user(self, action: str, metadata: dict) -> tuple[str, str | None, list | None]:
+        """Always wait for the user, whatever the thread's rules (questions are not permissions).
+        Returns (decision, message, answers)."""
+        req = Request(self.session_id, action, [], metadata)
+        self.pending[req.id] = req
+        self.publish(event("permission.asked", self.session_id, id=req.id, action=action, resources=[], metadata=metadata, save=["*"]))
+        try:
+            decision, message = await req.future
+        finally:
+            self.pending.pop(req.id, None)
+        self.publish(event("permission.replied", self.session_id, id=req.id, decision=decision))
+        return decision, message, req.answers
+
 
 class Request:
     def __init__(self, session_id: str, action: str, resources: list[str], metadata: dict):
@@ -97,11 +110,13 @@ class Request:
         self.action = action
         self.resources = resources
         self.metadata = metadata
+        self.answers: list | None = None  # what the user picked, for "question" requests
         self.future: asyncio.Future = asyncio.get_event_loop().create_future()
 
     def to_dict(self) -> dict:
         return {"id": self.id, "sessionID": self.session_id, "action": self.action, "resources": self.resources, "metadata": self.metadata, "save": ["*"]}
 
-    def reply(self, decision: str, message: str | None = None) -> None:
+    def reply(self, decision: str, message: str | None = None, answers: list | None = None) -> None:
         if not self.future.done():
+            self.answers = answers
             self.future.set_result((decision, message))

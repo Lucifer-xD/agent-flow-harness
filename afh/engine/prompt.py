@@ -50,6 +50,11 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
                      "verifying and reporting it \"achieved\", or \"blocked\" with what you need. Skip goals for questions, explanations and one-line changes.")
     if "todo" in have:
         lines.append("- **To-do list** (`todo` tool): the user watches it live. Plan multi-step work there and keep it current, one item in progress at a time.")
+    if "question" in have:
+        lines.append("- **Questions** (`question` tool): when you are blocked on a choice only the user can make, pause and ask with `question` "
+                     "instead of guessing or stopping - give each question 2-5 labelled options (recommended one first), set multiple where several "
+                     "can apply. The user picks in a card and you get the answers back and keep going. Use it for decisions, not for facts you can "
+                     "find in the code yourself, and not for permission to act.")
     if "subagent" in have:
         delegates = [a for a in agents or [] if getattr(a, "kind", "") == "delegate"]
         who = "; ".join(f"`{a.id}` ({a.name}): {a.description}" for a in delegates) or "none"
