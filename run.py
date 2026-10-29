@@ -19,7 +19,7 @@ import webbrowser
 
 import uvicorn
 
-from afh import api, store
+from afh import __version__, api, devapi, store
 from afh.engine.core import engine
 
 
@@ -42,10 +42,25 @@ class WindowApi:
         return list(result or [])
 
 
-def free_port() -> int:
+def free_port(preferred: int = 0) -> int:
+    """`preferred` when it is free (Settings → Developer → fixed port), otherwise any free port."""
     with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
+        try:
+            s.bind(("127.0.0.1", preferred))
+        except OSError:
+            s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def log_to_file() -> None:
+    """Keep a rotating log in ~/.afh/logs (the bug report includes the end of it)."""
+    from logging.handlers import RotatingFileHandler
+
+    folder = store.AFH_DIR / "logs"
+    folder.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(folder / "afh-backend.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logging.getLogger().addHandler(handler)
 
 
 def main() -> None:
@@ -59,8 +74,14 @@ def main() -> None:
     if sys.stderr is None:  # pythonw.exe has no console; keep a log file instead
         sys.stdout = sys.stderr = open(store.AFH_DIR / "afh.log", "w", encoding="utf-8", buffering=1)
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO, format="%(name)s: %(message)s")
+    log_to_file()
+    logging.getLogger("afh").info("AFH %s starting", __version__)
 
-    port = args.port or free_port()
+    try:
+        fixed = int((store.load_settings().get("developer") or {}).get("port") or 0)
+    except (TypeError, ValueError):
+        fixed = 0
+    port = args.port or free_port(fixed)
     token = secrets.token_urlsafe(24)
     api.ACCESS["token"] = token
     api.ACCESS["hosts"] = {f"127.0.0.1:{port}", f"localhost:{port}"}
@@ -73,6 +94,7 @@ def main() -> None:
             sys.exit(f"AFH couldn't listen on port {port}; try --port with another number.")
         time.sleep(0.05)
     engine.ready.wait(timeout=30)
+    devapi.write_discovery(port, __version__)
     try:  # resume remote control if it was left on
         from afh import remote
 
@@ -105,6 +127,7 @@ def main() -> None:
             except Exception:
                 pass
         server.should_exit = True
+        devapi.clear_discovery()
     sys.exit(0)
 
 

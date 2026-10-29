@@ -6,7 +6,9 @@ import { delegationPane } from "./delegate.js";
 import { logoNode } from "./logo.js";
 import { modelsPane } from "./settings-models.js";
 import { agentPane, commandsPane, hooksPane, usagePane } from "./settings-power.js";
+import { bugPane, developerPane, schedulesPane } from "./settings-dev.js";
 import { remotePane } from "./settings-remote.js";
+import { updatesCard } from "./updates.js";
 import { skillsPane } from "./settings-skills.js";
 import { basename, confirmDialog, copyText, el, ico, icon, modal, toast, toggle } from "./ui.js";
 
@@ -23,7 +25,10 @@ const TABS = [
   ["prompts", "Prompts & agents", "scroll"],
   ["commands", "Commands", "slash"],
   ["hooks", "Hooks", "hook"],
+  ["schedules", "Schedules", "clock"],
+  ["developer", "Developer", "code"],
   ["remote", "Remote control", "globe"],
+  ["bug", "Report a bug", "bug"],
   ["about", "About", "info"],
 ];
 const ACCENTS = ["#ff6a2a", "#ff3d71", "#f59f00", "#2fbf71", "#22b8cf", "#4f8cff", "#7c6cff", "#e64980", "#ffffff"];
@@ -102,6 +107,9 @@ const PANES = {
   hooks: (pane, ctx) => hooksPane(pane, ctx),
   commands: (pane, ctx) => commandsPane(pane, ctx),
   usage: (pane, ctx) => usagePane(pane, ctx),
+  schedules: (pane, ctx) => schedulesPane(pane, ctx),
+  developer: (pane, ctx) => developerPane(pane, ctx),
+  bug: (pane) => bugPane(pane),
 
   async general(pane, ctx) {
     const s = ctx.S.settings;
@@ -319,9 +327,10 @@ const PANES = {
         row("Engine", "AFH Engine (Python, in-process)", el("span.status-dot.active")),
         row("Models available", null, el("span", String(ctx.S.models.length))),
         row("Reload engine", "Re-reads providers, agents and reconnects MCP servers", el("button.btn.sm", { on: { click: () => guard(() => api.post("/api/restart")) } }, ico("refresh"), "Restart"))),
+      updatesCard({ card, row, settings: ctx.S.settings, save: (patch, msg) => ctx.saveSettings(patch).then(() => msg && toast(msg, "ok", 1400)).catch((e) => toast(e.message, "err")) }),
       card("Where things live", null, null, el("div.card-body",
         el("div.note", el("b", "Everything stays on this computer. "), "Settings, API keys and threads live under ~/.afh. Nothing is sent anywhere except to the model providers you configure."),
-        el("pre.h-pre", "~/.afh/settings.json       appearance, projects, personalization, delegation, prompts, agents, MCP servers\n~/.afh/providers.json      providers and API keys\n~/.afh/afh.db              threads, messages and undo snapshots\n~/.afh/skills/             installed skills\n~/.afh/worktrees/          git worktrees of threads that work on their own branch\n~/.afh/commands/           your slash commands as Markdown files (optional)\n~/.afh/personalization.md  generated instructions\n~/.afh/AGENTS.md           global instructions"))),
+        el("pre.h-pre", "~/.afh/settings.json       appearance, projects, personalization, delegation, prompts, agents, MCP servers\n~/.afh/providers.json      providers and API keys\n~/.afh/afh.db              threads, messages and undo snapshots\n~/.afh/skills/             installed skills\n~/.afh/worktrees/          git worktrees of threads that work on their own branch\n~/.afh/commands/           your slash commands as Markdown files (optional)\n~/.afh/personalization.md  generated instructions\n~/.afh/AGENTS.md           global instructions\n~/.afh/schedules.json      scheduled jobs\n~/.afh/api-keys.json       developer API keys (hashed)\n~/.afh/logs/               the backend log (goes into bug reports, keys masked)"))),
       card("Open source", "MIT licensed. Uses marked (MIT), DOMPurify (Apache-2.0/MPL-2.0), highlight.js (BSD-3), Electron (MIT), FastAPI (MIT).", null));
   },
 };

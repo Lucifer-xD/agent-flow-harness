@@ -121,10 +121,19 @@ def live_start(messages: list[dict]) -> int:
     return max((i for i, m in enumerate(messages) if m.get("type") == "compaction"), default=0)
 
 
-def to_chat(messages: list[dict]) -> list[ChatMessage]:
-    """Stored messages → provider-neutral chat history (tool results follow their call)."""
+def to_chat(messages: list[dict], vision: bool = False) -> list[ChatMessage]:
+    """Stored messages → provider-neutral chat history (tool results follow their call).
+
+    With `vision`, the newest tool screenshots (browser) follow their results as an image message;
+    older ones are left out so a long browsing session doesn't fill the context with pictures."""
     out: list[ChatMessage] = []
-    for m in messages[live_start(messages):]:
+    live = messages[live_start(messages):]
+    recent_shots: set[str] = set()
+    if vision:
+        ids = [p["id"] for m in live if m.get("type") == "assistant" for p in m.get("content", [])
+               if p.get("type") == "tool" and any(c.get("type") == "image" for c in p.get("state", {}).get("content", []))]
+        recent_shots = set(ids[-2:])
+    for m in live:
         t = m.get("type")
         if t == "user":
             out.append(ChatMessage("user", m.get("text", ""), images=[f.get("uri", "") for f in m.get("files", []) if str(f.get("uri", "")).startswith("data:")]))
@@ -150,6 +159,10 @@ def to_chat(messages: list[dict]) -> list[ChatMessage]:
                 if st.get("status") == "error" and st.get("error"):
                     body = f"Error: {st['error'].get('message', '')}\n{body}".strip()
                 out.append(ChatMessage("tool", body or "(no output)", tool_call_id=p["id"], tool_name=p["name"]))
+            shots = [c["uri"] for p in m.get("content", []) if p.get("type") == "tool" and p["id"] in recent_shots
+                     for c in p.get("state", {}).get("content", []) if c.get("type") == "image" and c.get("uri")]
+            if shots:
+                out.append(ChatMessage("user", "(Screenshot from the browser tool above.)", images=shots))
     return out
 
 
@@ -192,7 +205,7 @@ class Run:
                 self.emit("session.step.started", assistantMessageID=msg["id"], agent=agent.id, model=model_ref, started=msg["time"]["created"])
                 tools = e.tools_for(self.session, agent)
                 system = e.system_prompt_for(self.session, agent)
-                history = to_chat(store.list_messages(self.sid)[:-1])
+                history = to_chat(store.list_messages(self.sid)[:-1], vision="image" in (model.input or []))
                 pruned = prune_history(history, model.context, system)
                 if pruned:
                     msg["pruned"] = pruned
@@ -451,7 +464,7 @@ class Run:
         if result.files:
             meta["files"] = [f.to_dict() for f in result.files]
         meta["duration_ms"] = int((time.time() - started) * 1000)
-        content = [{"type": "text", "text": result.text}]
+        content = [{"type": "text", "text": result.text}] + [{"type": "image", "uri": u} for u in result.images]
         if result.is_error:
             part["state"] = {"status": "error", "input": call.input, "error": {"type": "ToolError", "message": result.text[:500]}, "content": content, "metadata": meta}
             self.emit("session.tool.failed", assistantMessageID=msg["id"], id=call.id, error=part["state"]["error"], content=content, metadata=meta, executed=True)

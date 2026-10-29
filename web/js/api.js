@@ -56,6 +56,15 @@ export const api = {
   patch: (p, b = {}) => request("PATCH", p, b),
   del: (p, b) => request("DELETE", p, b),
   q: (path, params) => path + "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v != null)),
+  /** POST raw bytes (a pasted image, recorded audio) instead of JSON. */
+  raw: async (path, blob, headers = {}) => {
+    const res = await fetch(path, { method: "POST", headers: { "content-type": blob.type || "application/octet-stream", "x-afh-token": token || "", ...headers }, body: blob });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+    return data;
+  },
+  /** A URL for <img src> and links, which can't send the token header. */
+  url: (path, params = {}) => path + "?" + new URLSearchParams({ ...params, token: token || "" }),
 };
 
 export function connectEvents(onEvent, onState) {

@@ -9,6 +9,7 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, Tray, shell, nativeImage, screen } = require("electron");
 const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 const IS_WIN = process.platform === "win32";
@@ -372,6 +373,99 @@ async function openExternal(url) {
   await shell.openExternal(parsed.href);
 }
 
+// ---- updates -----------------------------------------------------------------------------------
+//
+// electron-updater with a "generic" feed: a folder on a web server holding latest.yml and the
+// installer that `npm run dist` writes. The address is Settings → About → Updates (updates.feed in
+// ~/.afh/settings.json) or AFH_UPDATE_URL. New versions download in the background when
+// updates.auto is on; the page offers "Restart to update", and quitting installs it anyway.
+
+let autoUpdater = null;
+const update = { state: "idle", version: null, progress: 0, error: null, feed: "", current: app.getVersion() };
+const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
+
+function afhSettings() {
+  try {
+    const home = process.env.AFH_HOME || path.join(os.homedir(), ".afh");
+    return JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function updateSettings() {
+  const u = afhSettings().updates || {};
+  const feed = String(u.feed || process.env.AFH_UPDATE_URL || "").trim();
+  return { auto: u.auto !== false, feed: feed && !feed.endsWith("/") ? feed + "/" : feed };
+}
+
+const firstLine = (err) => String(err?.message || err).split(/\r?\n/)[0].slice(0, 300);
+
+function setUpdate(patch) {
+  Object.assign(update, patch);
+  sendEvent({ type: "update", update: { ...update } });
+}
+
+function initUpdater() {
+  if (!app.isPackaged) {
+    update.state = "dev"; // a development run has nothing to update
+    return;
+  }
+  try {
+    ({ autoUpdater } = require("electron-updater"));
+  } catch (err) {
+    logErr("electron-updater unavailable:", err.message);
+    update.state = "unsupported";
+    return;
+  }
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = { info: (m) => log("update:", m), warn: (m) => log("update:", m), error: (m) => logErr("update:", m), debug: () => {} };
+  autoUpdater.on("checking-for-update", () => setUpdate({ state: "checking", error: null }));
+  autoUpdater.on("update-not-available", () => setUpdate({ state: "latest", checked: Date.now() }));
+  autoUpdater.on("update-available", (info) => {
+    setUpdate({ state: "available", version: info.version, checked: Date.now() });
+    if (updateSettings().auto) autoUpdater.downloadUpdate().catch(() => {});
+  });
+  autoUpdater.on("download-progress", (p) => setUpdate({ state: "downloading", progress: Math.round(p.percent || 0) }));
+  autoUpdater.on("update-downloaded", (info) => setUpdate({ state: "ready", version: info.version, progress: 100 }));
+  autoUpdater.on("error", (err) => setUpdate({ state: "error", error: firstLine(err) }));
+  setTimeout(() => checkForUpdates(false), 20_000).unref();
+  setInterval(() => checkForUpdates(false), UPDATE_EVERY_MS).unref();
+}
+
+async function checkForUpdates(manual) {
+  if (!autoUpdater) return { ...update };
+  if (["checking", "downloading", "ready"].includes(update.state)) return { ...update };
+  const { auto, feed } = updateSettings();
+  if (!manual && !auto) return { ...update };
+  if (!feed) {
+    setUpdate({ state: "nofeed", feed: "" });
+    return { ...update };
+  }
+  update.feed = feed;
+  autoUpdater.setFeedURL({ provider: "generic", url: feed });
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (err) {
+    setUpdate({ state: "error", error: firstLine(err) });
+  }
+  return { ...update };
+}
+
+ipcMain.handle("afh:update:state", () => ({ ...update }));
+ipcMain.handle("afh:update:check", () => checkForUpdates(true));
+ipcMain.handle("afh:update:download", async () => {
+  if (autoUpdater && update.state === "available") await autoUpdater.downloadUpdate().catch(() => {});
+  return { ...update };
+});
+ipcMain.handle("afh:update:install", () => {
+  if (!autoUpdater || update.state !== "ready") return false;
+  quitting = true;
+  setImmediate(() => autoUpdater.quitAndInstall(true, true)); // silent, then start the new version
+  return true;
+});
+
 // ---- tray ------------------------------------------------------------------------------------
 
 function createTray() {
@@ -459,6 +553,7 @@ function onReady() {
   log("app ready; version", app.getVersion(), "packaged:", app.isPackaged, "userData:", app.getPath("userData"));
   Menu.setApplicationMenu(null);
   createTray();
+  initUpdater();
   if (backendUrl) createWindow();
 
   app.on("activate", () => {

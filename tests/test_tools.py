@@ -477,9 +477,10 @@ def test_registry_and_specs(monkeypatch):
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("BRAVE_API_KEY", raising=False)
     names = [t.spec.name for t in builtin_tools({})]
-    assert names == ["read", "write", "edit", "patch", "glob", "grep", "list", "shell", "webfetch"]
+    assert names == ["read", "write", "edit", "patch", "glob", "grep", "list", "shell", "webfetch", "browser"]
+    assert "browser" not in [t.spec.name for t in builtin_tools({"browser": {"enabled": False}})]
     with_key = [t.spec.name for t in builtin_tools({"web": {"braveApiKey": "b"}})]
-    assert with_key[-1] == "websearch"
+    assert "websearch" in with_key
     monkeypatch.setenv("TAVILY_API_KEY", "t")
     assert "websearch" in [t.spec.name for t in builtin_tools({})]
     specs = tool_specs(builtin_tools({}))

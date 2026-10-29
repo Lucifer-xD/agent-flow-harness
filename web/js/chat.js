@@ -277,6 +277,7 @@ export function describeTool(p) {
   if (name === "read") return { icon: "file", label: "Read", target: short(path) };
   if (/^(shell|bash|exec|command)$/.test(name)) return { icon: "terminal", label: "Run", target: pick(input, "command", "cmd") || "" };
   if (/^(grep|glob|search|find|list|ls)$/.test(name)) return { icon: "search", label: name[0].toUpperCase() + name.slice(1), target: pick(input, "pattern", "query", "path") || "" };
+  if (name === "browser") return { icon: "eye", label: "Browser", target: pick(input, "url", "target", "key", "script", "direction") || "" };
   if (/web|fetch|browse/.test(name)) return { icon: "globe", label: name === "websearch" ? "Search web" : "Fetch", target: pick(input, "url", "query") || "" };
   if (/task|agent/.test(name)) return { icon: "bot", label: "Subagent", target: pick(input, "description", "prompt") || "" };
   if (/todo/.test(name)) return { icon: "list", label: "Plan", target: "" };
@@ -383,7 +384,11 @@ function renderTool(p, openSet, thread) {
   const live = status === "streaming" || status === "running";
   const kind = kindOf(name);
   const input0 = typeof p.state?.input === "object" ? p.state.input : {};
-  const verbs = name === "shell" && input0.background ? ["Started in background", "Starting in background"]
+  const BROWSER = { open: ["Opened in browser", "Opening in browser"], screenshot: ["Took a screenshot", "Taking a screenshot"], text: ["Read the page", "Reading the page"],
+    click: ["Clicked", "Clicking"], type: ["Typed into", "Typing into"], press: ["Pressed", "Pressing"], scroll: ["Scrolled", "Scrolling"],
+    evaluate: ["Ran JavaScript", "Running JavaScript"], console: ["Read the console", "Reading the console"], close: ["Closed the browser tab", "Closing the browser tab"] };
+  const verbs = name === "browser" ? BROWSER[input0.action] || ["Used the browser", "Using the browser"]
+    : name === "shell" && input0.background ? ["Started in background", "Starting in background"]
     : name === "jobs" ? ({ stop: ["Stopped job", "Stopping job"], list: ["Listed jobs", "Listing jobs"] }[input0.action] || ["Read job output", "Waiting for job output"])
       : VERBS[name] || [p.name, p.name];
   const patches = info.edit ? toolPatches(p) : [];
@@ -420,7 +425,10 @@ function renderTool(p, openSet, thread) {
   const out = toolText(p.state?.content);
   if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output"), el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + "\n…" : out)));
   if (p.state?.error) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", p.state.error.message || JSON.stringify(p.state.error))));
-  card.append(head, el("div.tool-body", el("div", sections)));
+  // Browser screenshots stay visible under the card's header; click one to see it full size.
+  const shots = (p.state?.content || []).filter((c) => c.type === "image" && c.uri);
+  const gallery = shots.length ? el("div.tool-shots", shots.map((c) => el("img.tool-shot", { src: c.uri, alt: "Browser screenshot", loading: "lazy", on: { click: () => viewImage(c.uri) } }))) : null;
+  card.append(head, gallery, el("div.tool-body", el("div", sections)));
   return card;
 }
 
@@ -602,7 +610,9 @@ export class ChatView {
     const anim = quiet ? { style: { animation: "none" } } : {};
     switch (m.type) {
       case "user": {
-        const files = (m.files || []).map((f) => el("span.file-chip", ico("file"), el("span", f.name || basename(f.uri))));
+        const files = (m.files || []).map((f) => String(f.uri || "").startsWith("data:image/")
+          ? el("img.msg-img", { src: f.uri, alt: f.name || "", title: f.name || "", on: { click: () => viewImage(f.uri) } })
+          : el("span.file-chip", ico("file"), el("span", f.name || basename(f.uri))));
         const actions = this.opts.onRevert && !m.pending && !this.thread.busy ? el("div.msg-actions.user-actions",
           el("button.icon-btn", { title: "Undo to here — rewind the thread and the files to just before this message", html: icon("refresh"), on: { click: () => this.opts.onRevert(m.id) } }),
           el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(m.text || ""); toast("Copied", "ok", 1200); } } })) : null;
@@ -855,4 +865,12 @@ export function collectEdits(t) {
     const [additions, deletions] = countPatch(patch);
     return { file: f.file, patch, additions, deletions, status: f.status };
   });
+}
+
+/** A full-size look at an image (browser screenshots, pasted images). */
+export function viewImage(src) {
+  const box = el("div.image-view", { on: { click: () => box.remove() } }, el("img", { src, alt: "" }));
+  document.body.append(box);
+  const onKey = (e) => { if (e.key === "Escape") { box.remove(); removeEventListener("keydown", onKey); } };
+  addEventListener("keydown", onKey);
 }

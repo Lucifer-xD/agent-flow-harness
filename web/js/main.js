@@ -1,5 +1,5 @@
 import { api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
-import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread } from "./chat.js";
+import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread, viewImage } from "./chat.js";
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
 import { PRESETS, applyAppearance as applyTheme } from "./appearance.js";
 import { applyLanguage } from "./i18n.js";
@@ -9,6 +9,7 @@ import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
 import { openSettings } from "./settings.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
+import { initUpdates } from "./updates.js";
 import { applyWorkEvent, goalsPopover, jobsPopover, loadJobs, openGoalDialog, renderDock, renderJobsChip, setRedraw, syncState } from "./work.js";
 import {
   ago, basename, closePopover, confirmDialog, contextRing, dayGroup, diffView, el, escapeHtml, fmtTokens,
@@ -91,11 +92,12 @@ async function boot() {
   $("brand").prepend(logoNode({ size: 30, working: true }));
   $("tb-logo").append(logoNode({ size: 30, working: true }));
   apiHooks.onUnauthorized = () => showLogin();
+  initUpdates();
   if (native.electron()) {
     document.body.classList.add("electron");
     $("tb-brand").append(logoNode({ size: 22 }));
   }
-  for (const [id, name] of [["btn-collapse", "sidebar"], ["btn-expand", "sidebar"], ["btn-thread-menu", "more"], ["btn-attach", "paperclip"], ["btn-drawer-close", "x"]]) $(id).innerHTML = icon(name);
+  for (const [id, name] of [["btn-collapse", "sidebar"], ["btn-expand", "sidebar"], ["btn-thread-menu", "more"], ["btn-attach", "paperclip"], ["btn-mic", "mic"], ["btn-drawer-close", "x"]]) $(id).innerHTML = icon(name);
   let data;
   for (let attempt = 0; ; attempt++) {
     try {
@@ -206,11 +208,15 @@ function beep(kind = "done") {
   } catch {}
 }
 
-function notify(kind, title, body) {
+function notify(kind, title, body, onClick) {
   beep(kind);
   if (!S.settings.ui.notify || !("Notification" in window) || document.hasFocus()) return;
-  if (Notification.permission === "granted") new Notification(title, { body, silent: true });
-  else if (Notification.permission !== "denied") Notification.requestPermission();
+  const show = () => {
+    const n = new Notification(title, { body, silent: true });
+    if (onClick) n.onclick = () => { window.focus(); onClick(); };
+  };
+  if (Notification.permission === "granted") show();
+  else if (Notification.permission !== "denied") Notification.requestPermission().then((p) => p === "granted" && show());
 }
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => S.settings && applyAppearance());
 
@@ -680,7 +686,7 @@ function showPalette() {
       { group: "Thread", title: "Rename", icon: "edit", run: renameThread },
       { group: "Thread", title: "Fork thread", icon: "branch", run: () => forkThread(t.messages.at(-1)?.id) },
     ] : []),
-    ...[["general", "General"], ["appearance", "Appearance"], ["agent", "Agent"], ["delegation", "Delegation"], ["models", "Models & providers"], ["usage", "Usage & cost"], ["skills", "Skills"], ["mcp", "MCP servers"], ["prompts", "Prompts & agents"], ["commands", "Commands"], ["hooks", "Hooks"], ["remote", "Remote control"], ["about", "About"]]
+    ...[["general", "General"], ["appearance", "Appearance"], ["agent", "Agent"], ["delegation", "Delegation"], ["models", "Models & providers"], ["usage", "Usage & cost"], ["skills", "Skills"], ["mcp", "MCP servers"], ["prompts", "Prompts & agents"], ["commands", "Commands"], ["hooks", "Hooks"], ["schedules", "Schedules"], ["developer", "Developer"], ["remote", "Remote control"], ["bug", "Report a bug"], ["about", "About"]]
       .map(([id, label]) => ({ group: "Settings", title: label, icon: "settings", keywords: "settings", run: () => openSettings(id, ctx) })),
     ...S.sessions.slice(0, 80).map((s) => ({ group: "Threads", title: s.title || "New thread", sub: ago(s.time?.updated), icon: s.metadata?.afh?.goal ? "target" : "list", run: () => openThread(s.id) })),
     ...S.models.map((m) => ({ group: "Models", title: m.name, sub: providerName(m.providerID), icon: "cpu", keywords: m.id, run: () => chooseModel({ id: m.id, providerID: m.providerID }) })),
@@ -1016,10 +1022,79 @@ function renderComposerState() {
   renderWork();
 }
 
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp)$/i;
+const UPLOAD_PREFIX = /^\d{8}-\d{6}-[0-9a-f]{6}-/; // how /api/uploads names saved files
+const thumbs = new Map(); // path -> object URL of an image pasted or dropped in this window
+
 function renderAttachments() {
   const box = $("attachments");
-  box.replaceChildren(...S.draft.files.map((f, i) => el("span.file-chip", { title: f }, ico("file"), el("span", basename(f)),
-    el("button", { type: "button", html: icon("x"), on: { click: () => { S.draft.files.splice(i, 1); renderAttachments(); } } }))));
+  box.replaceChildren(...S.draft.files.map((f, i) => {
+    const src = IMAGE_FILE.test(f) ? thumbs.get(f) || api.url("/api/image", { path: f }) : null;
+    return el(src ? "span.file-chip.img-chip" : "span.file-chip", { title: f },
+      src ? el("img.chip-thumb", { src, alt: "", on: { click: () => viewImage(src) } }) : ico("file"), el("span", basename(f).replace(UPLOAD_PREFIX, "")),
+      el("button", { type: "button", html: icon("x"), on: { click: () => { S.draft.files.splice(i, 1); renderAttachments(); } } }));
+  }));
+}
+
+/** Attach dropped or pasted files. Ones with no path on disk (a screenshot in the clipboard) are saved first. */
+async function addFiles(list) {
+  for (const f of list) {
+    let path = window.afh?.pathForFile?.(f) || f.pywebviewFullPath || f.path || "";
+    if (!path) {
+      try {
+        path = (await api.raw("/api/uploads", f, { "x-filename": encodeURIComponent(f.name || "pasted.png") })).path;
+      } catch (err) {
+        toast(err.message, "err");
+        continue;
+      }
+    }
+    if (f.type?.startsWith("image/")) thumbs.set(path, URL.createObjectURL(f));
+    if (!S.draft.files.includes(path)) S.draft.files.push(path);
+  }
+  renderAttachments();
+}
+
+// ---- voice input: record with the mic button, transcribe, type the words into the composer ----
+
+const mic = { rec: null, stream: null };
+
+async function toggleMic() {
+  const btn = $("btn-mic");
+  if (mic.rec) return mic.rec.stop();
+  if (btn.classList.contains("busy")) return;
+  try {
+    mic.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch {
+    return toast("AFH can't use the microphone — check Windows Settings → Privacy → Microphone", "err", 5000);
+  }
+  const type = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg"].find((t) => window.MediaRecorder?.isTypeSupported(t)) || "";
+  const rec = new MediaRecorder(mic.stream, type ? { mimeType: type } : {});
+  const chunks = [];
+  const started = Date.now();
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  rec.onstop = async () => {
+    mic.stream.getTracks().forEach((t) => t.stop());
+    mic.rec = mic.stream = null;
+    btn.classList.remove("rec");
+    btn.title = "Speak — your words are typed here";
+    if (Date.now() - started < 600) return;
+    btn.classList.add("busy");
+    try {
+      const { text } = await api.raw("/api/transcribe", new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+      if (!text) return toast("Didn't catch any words — try again", "info");
+      const cur = $("input").value;
+      setInput(cur.trim() ? `${cur.replace(/\s*$/, "")} ${text}` : text);
+      $("input").focus();
+    } catch (err) {
+      toast(err.message, "err", 6000);
+    } finally {
+      btn.classList.remove("busy");
+    }
+  };
+  mic.rec = rec;
+  rec.start();
+  btn.classList.add("rec");
+  btn.title = "Stop and transcribe";
 }
 
 function setInput(text) {
@@ -1355,6 +1430,14 @@ async function retryLast() {
 let restartPill = null;
 function onEvent(ev) {
   const type = ev.type || "";
+  if (type === "schedule.ran") {
+    const job = ev.data?.job || {};
+    toast(`Scheduled job "${job.name}" started`, "ok", 5000);
+    notify("done", "Scheduled job started", job.name, () => openThreadIn(ev.data.sessionID, job.directory));
+    if (job.directory === project()) refreshSessionsSoon();
+    return;
+  }
+  if (type === "schedule.failed") { toast(`Scheduled job "${ev.data?.job?.name}" couldn't start: ${ev.data?.error}`, "err", 8000); return; }
   if (type === "session.revert.committed" && ev.data?.sessionID === S.current?.id) document.querySelector(".revert-bar")?.remove();
   if (type === "afh.restarting") {
     restartPill?.remove();
@@ -1435,7 +1518,14 @@ const refreshDrawerSoon = () => { clearTimeout(drawerTimer); drawerTimer = setTi
 
 // ---- wiring ------------------------------------------------------------------------
 
-export const ctx = { S, saveSettings, reloadCatalog, project, modelName, invalidateCommands, setLanguage, onReady: null, onCatalogEvent: null };
+/** Open a thread, switching to its project first when needed (Schedules, notifications). */
+async function openThreadIn(id, directory) {
+  if (directory && directory !== project()) await switchProject(directory);
+  else await loadSessions();
+  await openThread(id);
+}
+
+export const ctx = { S, saveSettings, reloadCatalog, project, modelName, invalidateCommands, setLanguage, openThread: openThreadIn, onReady: null, onCatalogEvent: null };
 window.__afh = { S, D, ctx, view, live: liveState }; // for debugging from the devtools console
 
 function toggleSidebar() {
@@ -1468,12 +1558,18 @@ function wire() {
   $("composer").addEventListener("drop", (e) => {
     e.preventDefault();
     $("composer").classList.remove("drag");
-    const paths = [...(e.dataTransfer?.files || [])].map((f) => f.pywebviewFullPath || f.path).filter(Boolean);
-    if (!paths.length) return toast("Use the paperclip to attach files", "info");
-    S.draft.files.push(...paths.filter((p) => !S.draft.files.includes(p)));
-    renderAttachments();
+    const files = [...(e.dataTransfer?.files || [])];
+    if (!files.length) return toast("Use the paperclip to attach files", "info");
+    addFiles(files);
+  });
+  ta.addEventListener("paste", (e) => {
+    const files = [...(e.clipboardData?.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    addFiles(files);
   });
   $("btn-attach").addEventListener("click", attach);
+  $("btn-mic").addEventListener("click", toggleMic);
   $("ctx-meter").addEventListener("click", contextPopover);
   $("pick-model").addEventListener("click", () => modelMenu(lastProvider && S.models.some((m) => m.providerID === lastProvider) && currentModel()?.providerID === lastProvider ? lastProvider : null));
   $("pick-agent").addEventListener("click", agentMenu);
