@@ -8,6 +8,7 @@ import difflib
 import json
 import logging
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -35,28 +36,59 @@ def used_tokens(tokens: dict) -> int:
     return int(tokens.get("input", 0) or 0) + int(cache.get("read", 0) or 0) + int(cache.get("write", 0) or 0)
 
 
-def transcript_of(messages: list[dict]) -> str:
-    """Stored messages as plain text for the summariser, tool calls included (shortened)."""
+def transcript_of(messages: list[dict], brief: bool = False) -> str:
+    """Stored messages as plain text for the summariser, tool calls included (shortened). `brief`
+    keeps the conversation but drops tool output, for histories too long to summarise in full."""
     out = []
     for m in messages:
         t = m.get("type")
         if t == "user":
-            out.append(f"[user] {m.get('text', '')}")
+            out.append(f"[user] {m.get('text', '')[:3000] if brief else m.get('text', '')}")
         elif t in ("system", "synthetic", "compaction"):
             if m.get("text"):
-                out.append(f"[{t}] {m['text'][:4000]}")
+                out.append(f"[{t}] {m['text'][:1500 if brief else 4000]}")
         elif t == "assistant":
             for p in m.get("content", []):
                 if p.get("type") == "text" and p.get("text"):
-                    out.append(f"[assistant] {p['text']}")
+                    out.append(f"[assistant] {p['text'][:2000] if brief else p['text']}")
                 elif p.get("type") == "tool":
                     st = p.get("state") or {}
                     inp = st.get("input")
-                    args = json.dumps(inp, ensure_ascii=False)[:400] if isinstance(inp, dict) else str(inp or "")[:400]
+                    args = json.dumps(inp, ensure_ascii=False)[:160 if brief else 400] if isinstance(inp, dict) else str(inp or "")[:160]
+                    if brief:
+                        out.append(f"[tool {p.get('name')}] {args}")
+                        continue
                     result = "\n".join(c.get("text", "") for c in st.get("content") or [] if c.get("type") == "text")
                     status = st.get("status", "")
                     out.append(f"[tool {p.get('name')} {status}] {args}\n  → {result[:600]}")
     return "\n\n".join(out)
+
+
+def split_chunks(text: str, size: int) -> list[str]:
+    """Cut a transcript into pieces of at most `size` characters, at line breaks where possible."""
+    chunks, start = [], 0
+    while start < len(text):
+        end = min(len(text), start + size)
+        if end < len(text):
+            cut = text.rfind("\n", start + size // 2, end)
+            end = cut if cut > start else end
+        chunks.append(text[start:end])
+        start = end
+    return chunks
+
+
+SUMMARY_PROMPT = ("Summarise this coding conversation for the assistant that will continue it: the user's requests and goal, decisions made, "
+                  "files created or changed (paths), commands that matter and their results, what is done, what is left, and any open questions. "
+                  "This summary replaces the messages, so be complete but tight (roughly 200 to 700 words, short sections); keep exact names, paths and numbers. "
+                  "Write the summary itself after the ANSWER: marker, all on following lines.")
+PART_PROMPT = ("This is part {n} of {total} of a long coding conversation, in order. Summarise this part for the assistant that will continue "
+               "the conversation: what the user asked, what was decided and built (files, paths, commands, results), problems and how they ended. "
+               "Keep exact names and numbers; be compact. Write the summary after the ANSWER: marker, all on following lines.")
+MERGE_PROMPT = ("These are summaries of consecutive parts of one long coding conversation, oldest first. Merge them into one summary for the "
+                "assistant that will continue it: the project and the user's goals, what exists now (files, features, decisions), what changed over "
+                "time where it still matters, what is left and open questions. Later parts win when they disagree. This summary replaces the whole "
+                "history, so be thorough: roughly 600 to 1500 words under the headings Project and goals, Current state, Key decisions, Files and "
+                "commands, Problems and how they ended, Next steps. Keep exact names, paths and numbers. Write the summary after the ANSWER: marker, all on following lines.")
 
 
 class Engine:
@@ -74,6 +106,7 @@ class Engine:
         self.error: str | None = None
         self.stashes: dict[str, dict] = {}  # staged undos per session
         self.jobs = JobManager(self.publish)  # background shell commands
+        self.compact_failed: dict[str, float] = {}  # session -> time of the last failed automatic compaction
 
     # ---- lifecycle ---------------------------------------------------------------------
 
@@ -217,6 +250,11 @@ class Engine:
 
     def model_ref_for(self, session: dict, agent: agentmod.AgentConfig) -> dict:
         ref = session.get("model") or agent.model or self.default_model()
+        if ref and ref.get("providerID") not in self.providers:
+            # A provider AFH doesn't have (an imported thread, a removed provider): the same model elsewhere, else the default.
+            from ..transfer import usable_model
+
+            ref = usable_model(self, ref) or (agent.model if agent.model and agent.model.get("providerID") in self.providers else None) or self.default_model()
         if not ref:
             raise RuntimeError("No model is configured. Add a provider in Settings → Models & providers.")
         return {"id": ref["id"], "providerID": ref["providerID"], **({"variant": ref["variant"]} if ref.get("variant") else {})}
@@ -226,7 +264,15 @@ class Engine:
 
         directory = session["location"]["directory"]
         skills = self.skills_for(directory)
-        extra = statemod.goal_prompt(self.goal(session["id"]))
+        names = []
+        try:
+            names = [t.spec.name for t in self.tools_for(session, agent)]
+        except Exception as err:
+            log.info("tools for prompt: %s", err)
+        extra = promptmod.harness_guide(names, agentmod.all_agents(self.settings()), agent)
+        goal_text = statemod.goal_prompt(self.goal(session["id"]))
+        if goal_text:
+            extra += "\n\n" + goal_text
         wt = self._afh(session["id"]).get("worktree")
         if wt:
             extra = (extra + "\n\n" if extra else "") + (
@@ -251,8 +297,7 @@ class Engine:
 
         tools = list(builtin_tools(self.settings()))
         tools += [JobsTool(), statemod.TodoTool(self)]
-        goal = self.goal(session["id"])
-        if goal and goal.get("status") in ("active", "blocked", "paused"):
+        if agent.kind != "delegate":  # goals belong to the thread the user talks to
             tools.append(statemod.GoalTool(self))
         skills = self.skills_for(session["location"]["directory"])
         if skills:
@@ -563,9 +608,10 @@ class Engine:
     def goal(self, sid: str) -> dict | None:
         return self._afh(sid).get("goal")
 
-    def set_goal(self, sid: str, text: str, criteria: str = "", autopilot: bool = True, max_turns: int | None = None) -> dict:
+    def set_goal(self, sid: str, text: str, criteria: str = "", autopilot: bool = True, max_turns: int | None = None, by: str = "user") -> dict:
         prev = self.goal(sid)
         goal = statemod.make_goal(text, criteria, autopilot, max_turns or self.settings().get("goals", {}).get("maxTurns", statemod.DEFAULT_GOAL_TURNS), prev)
+        goal["by"] = by
         self._patch_afh(sid, goal=goal)
         self.publish(event("session.goal.updated", sid, goal=goal))
         return goal
@@ -680,37 +726,42 @@ class Engine:
         self.update_session(session["id"], title=title)
 
     async def maybe_compact(self, session: dict, agent: agentmod.AgentConfig, force: bool = False) -> bool:
-        """When the last step used most of the window (or on /compact), summarise older messages."""
+        """Summarise older messages when the conversation no longer fits comfortably (or on /compact).
+
+        The trigger is the real size of what would be sent (an imported thread can be millions of
+        tokens before the model ever answered), not just the last step's token count."""
         msgs = self.store.list_messages(session["id"])
+        try:
+            ref = self.model_ref_for(session, agent)
+            _, model = self.resolve_model(ref)
+        except Exception:
+            return False
         if not force:
+            if len(msgs) < 8 or time.time() - self.compact_failed.get(session["id"], 0) < 600:
+                return False
             last = next((m for m in reversed(msgs) if m.get("type") == "assistant" and m.get("tokens")), None)
-            if not last:
-                return False
-            try:
-                _, model = self.resolve_model(self.model_ref_for(session, agent))
-            except Exception:
-                return False
-            if used_tokens(last["tokens"]) < model.context * 0.8 or len(msgs) < 8:
+            measured = used_tokens(last["tokens"]) if last else 0
+            from .runner import estimate_tokens
+
+            estimated = estimate_tokens(to_chat(msgs))
+            if max(measured, estimated) < model.context * 0.8:
                 return False
         keep_n = 6 if len(msgs) > 8 else max(1, len(msgs) // 2)
         keep = msgs[-keep_n:]
         old = msgs[:-keep_n]
         if not old:
             return False
-        self.publish(event("session.compaction.started", session["id"]))
-        transcript = transcript_of(old)[-160_000:]
+        self.publish(event("session.compaction.started", session["id"], messages=len(old)))
         try:
-            summary = await self._complete(self.model_ref_for(session, agent),
-                                           "Summarise this coding conversation for the assistant that will continue it: the user's requests and goal, decisions made, "
-                                           "files created or changed (paths), commands that matter and their results, what is done, what is left, and any open questions. "
-                                           "Be precise and compact; keep exact names, paths and numbers. Write the summary itself after the ANSWER: marker, all on following lines.",
-                                           transcript, 2000)
+            summary = await self.summarize_history(session["id"], ref, model, old)
         except Exception as err:
             log.info("compaction skipped: %s", err)
+            self.compact_failed[session["id"]] = time.time()
             self.publish(event("session.compaction.ended", session["id"], skipped=str(err)))
             return False
         if len(summary.strip()) < 10:  # never trade the history for an empty summary
             log.info("compaction skipped: the summary came back empty")
+            self.compact_failed[session["id"]] = time.time()
             self.publish(event("session.compaction.ended", session["id"], skipped="the model returned no summary"))
             return False
         extra = []
@@ -721,10 +772,48 @@ class Engine:
         if goal and goal.get("status") in ("active", "blocked"):
             extra.append(f"The thread's goal (still {goal['status']}): {goal['text']}")
         text = summary.strip() + ("\n\n" + "\n\n".join(extra) if extra else "")
-        compaction = {"id": new_id("msg"), "type": "compaction", "text": text, "time": {"created": now_ms()}, "metadata": {"compacted": len(old)}}
+        compaction = {"id": new_id("msg"), "type": "compaction", "text": text, "time": {"created": now_ms()},
+                      "metadata": {"compacted": len(old), "auto": not force}}
         self.store.replace_messages(session["id"], [compaction, *keep])
         self.publish(event("session.compaction.ended", session["id"], compacted=len(old)))
         return True
+
+    async def summarize_history(self, sid: str, ref: dict, model: ModelInfo, old: list[dict]) -> str:
+        """One summary of `old`, however long: a single call when it fits, otherwise the history is cut
+        into chunks that are summarised (three at a time) and the partial summaries are merged."""
+        budget = int(max(40_000, min(model.context * 0.45 * 3.6, 360_000)))  # characters per call
+        text = transcript_of(old)
+        if len(text) > budget:
+            text = transcript_of(old, brief=True)
+        if len(text) <= budget:
+            return await self._complete(ref, SUMMARY_PROMPT, text, 2500)
+        chunks = split_chunks(text, budget)
+        total = len(chunks)
+        done = 0
+        self.publish(event("session.compaction.progress", sid, done=0, total=total + 1))
+        sem = asyncio.Semaphore(3)
+
+        async def part(i: int, chunk: str) -> str:
+            nonlocal done
+            async with sem:
+                prompt = PART_PROMPT.format(n=i + 1, total=total)
+                for attempt in range(2):
+                    try:
+                        out = await self._complete(ref, prompt, chunk, 1500)
+                        if out.strip():
+                            break
+                    except Exception as err:
+                        log.info("summary part %s failed: %s", i + 1, err)
+                        out = ""
+                done += 1
+                self.publish(event("session.compaction.progress", sid, done=done, total=total + 1))
+                return out.strip() or f"(part {i + 1} could not be summarised)"
+
+        parts = await asyncio.gather(*(part(i, c) for i, c in enumerate(chunks)))
+        merged = "\n\n".join(f"## Part {i + 1} of {total}\n{p}" for i, p in enumerate(parts))[-budget:]
+        final = await self._complete(ref, MERGE_PROMPT, merged, 5000)
+        self.publish(event("session.compaction.progress", sid, done=total + 1, total=total + 1))
+        return final if final.strip() else merged
 
     async def compact_now(self, sid: str) -> bool:
         session = self.store.get_session(sid)
@@ -881,7 +970,10 @@ class SubagentTool:
         wt_note = ""
         if child is None:
             title = str(input.get("description") or f"Delegated to {agent.name}")[:80]
-            kw = dict(title=title, agent=aid, model=agent.model, parent_id=ctx.session_id, permissions=parent.get("permissions"))
+            perms = list(parent.get("permissions") or [])
+            if ctx.read_only:  # a read-only thread (Plan mode, Read only) never gets write access through a subagent
+                perms += agentmod.READONLY_RULES
+            kw = dict(title=title, agent=aid, model=agent.model or parent.get("model"), parent_id=ctx.session_id, permissions=perms)
             if input.get("worktree"):
                 try:
                     child = await e.create_worktree_session(ctx.directory, project=parent.get("project") or ctx.directory, **kw)
@@ -894,6 +986,7 @@ class SubagentTool:
         msg = {"id": new_id("msg"), "type": "user", "text": str(input.get("prompt", "")), "time": {"created": now_ms()}}
         e.store.add_message(child["id"], msg)
         e.publish(event("session.inbox.enqueued", child["id"], inboxID=msg["id"], item={"type": "user", "payload": {"text": msg["text"]}, "delivery": "steer"}))
+        e.publish(event("session.inbox.delivered", child["id"], inboxID=msg["id"]))
         run = e.start_run(child)
         if input.get("background"):
             async def notify() -> None:

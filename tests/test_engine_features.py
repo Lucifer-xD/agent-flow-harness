@@ -501,3 +501,126 @@ def test_worktree_thread_is_listed_under_its_project(home, tmp_path):
         assert report[0]["kept"] is False and not Path(wt["path"]).exists()
 
     asyncio.run(go())
+
+
+# ---- 1.5: the model drives goals and subagents; huge histories ---------------------------------------------
+
+
+def test_model_sets_its_own_goal_and_achieves_it(home, tmp_path):
+    p = FakeProvider([
+        [("goal", {"status": "set", "text": "notes.txt lists three fruits", "criteria": "the file has 3 lines"})],
+        [("write", {"path": "notes.txt", "content": "apple\nbanana\ncherry\n"})],
+        [("goal", {"status": "achieved", "summary": "Wrote notes.txt", "evidence": "read it back: 3 lines"})],
+        "Done.",
+    ])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "write a fruits file"))
+    g = e.goal(s["id"])
+    assert g["status"] == "achieved" and g["by"] == "agent" and g["text"] == "notes.txt lists three fruits"
+    assert "# Your harness: Agent Flow Harness" in p.requests[0].system and "**Goal**" in p.requests[0].system
+    assert "# Goal of this thread" in p.requests[1].system  # the goal joins the prompt as soon as it is set
+
+
+def test_goal_set_refuses_to_replace_an_active_goal(home, tmp_path):
+    p = FakeProvider([[("goal", {"status": "set", "text": "something else"})], "ok"])
+    e = make_engine(p)
+    sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+    e.set_goal(sid, "the user's goal", autopilot=False)
+    asyncio.run(run_prompt(e, tmp_path, "go", sid=sid, agent={"todoNudge": False}))
+    part = tool_results(e, sid)[0]
+    assert part["state"]["status"] == "error" and "already has an active goal" in text_of(part)
+    assert e.goal(sid)["text"] == "the user's goal"
+
+
+def test_builtin_helper_subagent_in_build_mode_uses_the_thread_model(home, tmp_path):
+    p = FakeProvider([
+        [("subagent", {"agent": "general", "description": "Count files", "prompt": "Say how many files there are."}),
+         ("subagent", {"agent": "general", "description": "Second task", "prompt": "Say hello."})],
+        "child one reports", "child two reports",  # the two helpers answer (in either order)
+        "Both helpers reported.",
+    ])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "use helpers", agent={"todoNudge": False}))
+    assert "subagent" in [t.name for t in p.requests[0].tools] and "`general` (Helper)" in p.requests[0].system
+    kids = e.store.list_sessions(parent_id=s["id"])
+    assert len(kids) == 2 and all(k["agent"] == "general" and k["model"] == {"providerID": "fake", "id": "m"} for k in kids)
+    assert all("child" in text_of(x) for x in tool_results(e, s["id"]))
+    # helpers get the harness prompt plus delegate rules, and no subagent/goal tools of their own
+    child_req = p.requests[1]
+    assert "# You are a delegate" in child_req.system and "subagent" not in [t.name for t in child_req.tools] and "goal" not in [t.name for t in child_req.tools]
+
+
+def test_helper_can_be_turned_off(home, tmp_path):
+    appstore.save_settings({"delegation": {"builtinHelper": False, "delegates": []}})
+    p = FakeProvider(["hi"])
+    e = make_engine(p)
+    asyncio.run(run_prompt(e, tmp_path, "hello"))
+    assert "subagent" not in [t.name for t in p.requests[0].tools]
+
+
+def test_imported_thread_model_is_mapped_to_a_configured_provider(home, tmp_path):
+    from afh import transfer
+
+    e = make_engine(FakeProvider([]))
+    payload = {"format": "afh-session", "info": {"title": "old", "model": {"providerID": "zai-coding-cn", "id": "M"}}, "messages": [{"type": "user", "text": "hi"}]}
+    s = transfer.import_session(e, payload, str(tmp_path))
+    assert s["model"] == {"id": "m", "providerID": "fake"}
+    payload["info"]["model"] = {"providerID": "nowhere", "id": "unknown-model"}
+    assert transfer.import_session(e, payload, str(tmp_path))["model"] is None
+    # an old thread whose provider is gone still runs, on the default model
+    sid = e.store.create_session(str(tmp_path), model={"providerID": "gone", "id": "x"})["id"]
+    assert e.model_ref_for(e.store.get_session(sid), e.agent_for(e.store.get_session(sid))) == {"id": "m", "providerID": "fake"}
+
+
+def test_huge_history_is_compacted_in_chunks_before_the_first_answer(home, tmp_path):
+    big = "word " * 2000  # ~10k characters per message
+    msgs = []
+    for i in range(80):
+        msgs.append({"type": "user", "text": f"request {i}: {big}"})
+        msgs.append({"type": "assistant", "content": [{"type": "text", "text": f"answer {i}: {big}"}], "model": {"providerID": "fake", "id": "m"}})
+    p = FakeProvider([])
+    e = make_engine(p)
+    e.models = {"fake": [ModelInfo(id="m", name="M", context=60_000, output=4096)]}  # 1.6M characters >> 60k tokens
+    sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+    for m in msgs:
+        e.store.add_message(sid, m)
+    p.replies = [f"ANSWER:\nPart summary {i}" for i in range(200)]
+
+    async def go():
+        e.loop = asyncio.get_running_loop()
+        await e.prompt(sid, "continue")
+        await e.runs[sid].task
+
+    asyncio.run(go())
+    stored = e.store.list_messages(sid)
+    assert stored[0]["type"] == "compaction" and stored[0]["text"].strip()
+    progress = [ev["data"] for ev in e.events if ev["type"] == "session.compaction.progress"]
+    assert progress and progress[-1]["done"] == progress[-1]["total"] > 2  # several parts plus the merge
+    final = p.requests[-1]
+    assert runmod.estimate_tokens(final.messages, final.system) < 60_000
+
+
+def test_fit_history_leaves_out_the_oldest_and_says_so():
+    msgs = [ChatMessage("user", "x" * 40_000) for _ in range(10)] + [ChatMessage("user", "latest")]
+    n = runmod.fit_history(msgs, context=20_000)
+    assert n > 0 and msgs[-1].text == "latest" and "earlier messages of this conversation are not shown" in msgs[0].text
+    assert runmod.estimate_tokens(msgs) <= 20_000
+
+
+def test_a_three_step_plan_without_a_goal_gets_one_from_the_request(home, tmp_path):
+    plan = {"todos": [{"content": "a", "status": "in_progress"}, {"content": "b", "status": "pending"}, {"content": "c", "status": "pending"}]}
+    p = FakeProvider([[("todo", plan)], [("goal", {"status": "set", "text": "sharper goal", "criteria": "tests pass"})], "ok"])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "please add a parser module with tests", agent={"todoNudge": False}, goals={"autopilot": False}))
+    parts = tool_results(e, s["id"])
+    assert "AFH set this task as the thread's goal" in text_of(parts[0])
+    g = e.goal(s["id"])
+    assert g["text"] == "sharper goal" and g["by"] == "agent"  # the model may replace an automatic goal
+
+
+def test_auto_goal_can_be_turned_off(home, tmp_path):
+    plan = {"todos": [{"content": "a", "status": "in_progress"}, {"content": "b", "status": "pending"}, {"content": "c", "status": "pending"}]}
+    p = FakeProvider([[("todo", plan)], "ok"])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "please add a parser module with tests", agent={"todoNudge": False}, goals={"auto": False}))
+    assert e.goal(s["id"]) is None

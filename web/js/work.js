@@ -75,7 +75,7 @@ export function renderDock(box, t, opts = {}) {
 function goalRow(t, goal, opts) {
   const st = goal.status || "active";
   const auto = goal.autopilot && st === "active";
-  const label = st === "achieved" ? "Goal achieved" : st === "blocked" ? "Goal blocked" : st === "paused" ? "Goal paused" : "Goal";
+  const label = (st === "achieved" ? "Goal achieved" : st === "blocked" ? "Goal blocked" : st === "paused" ? "Goal paused" : "Goal") + (goal.by === "agent" ? " · set by the agent" : goal.by === "auto" ? " · from your request" : "");
   const chip = auto
     ? el("button.goal-chip.auto", { type: "button", title: "Autopilot keeps the agent working until it reports the goal achieved or blocked. Click to turn it off.", on: { click: () => patchGoal(t, { autopilot: false }, "Autopilot off") } },
       el("span.pulse-dot"), goal.exhausted ? "Autopilot paused" : `Autopilot ${goal.turns || 0}/${goal.maxTurns || 10}`)

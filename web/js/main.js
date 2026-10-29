@@ -1,6 +1,6 @@
 import { api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
 import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread } from "./chat.js";
-import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderWatch, syncChildren, trackEvent } from "./delegate.js";
+import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
 import { applyAppearance as applyTheme } from "./appearance.js";
 import { openContextEditor } from "./context.js";
 import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
@@ -43,8 +43,9 @@ const view = new ChatView($("messages"), $("thread"), {
   onRetry: () => retryLast(),
   onRevert: (id) => revertTo(id),
   onChangeModel: () => modelMenu(),
-  onStatus: () => renderComposerState(),
+  onStatus: () => { renderComposerState(); renderRail(); },
   onScroll: (stick, top) => {
+    updateRailActive();
     $("jump").hidden = stick || !S.current;
     document.querySelector(".topbar").classList.toggle("scrolled", top > 4);
   },
@@ -115,6 +116,7 @@ async function boot() {
   S.migration = data.migration || {};
   S.providersConfigured = !!data.providersConfigured;
   applyAppearance();
+  applyChatWidth(S.settings.ui.chatWidth);
   initDelegate(ctx);
   initLive(ctx);
   ctx.openLive = () => { if (S.drawer !== "live") openDrawer("live"); };
@@ -463,6 +465,7 @@ async function patchSession(body) {
 
 // ---- topbar ----------------------------------------------------------------------
 
+const subChip = $("btn-subagents"); // lives inside the title, beside the thread name
 function renderTopbar() {
   const box = $("tb-title");
   box.replaceChildren();
@@ -475,6 +478,8 @@ function renderTopbar() {
   $("btn-live").hidden = !t;
   if (!t) {
     if (project()) box.append(el("span.tb-path", project()));
+    box.append(subChip);
+    renderWork();
     return;
   }
   const h = el("h1", { title: "Double-click to rename" }, t.session.title || "New thread");
@@ -490,8 +495,112 @@ function renderTopbar() {
     input.focus();
     input.select();
   });
-  box.append(h, el("span.tb-path", basename(project())));
+  box.append(h, el("span.tb-path", basename(project())), subChip);
   renderWork();
+}
+
+// ---- message rail: one line per message of yours, click to jump back to it --------------------
+
+let railIds = [];
+
+function renderRail() {
+  const rail = $("msg-rail");
+  const t = S.current;
+  const users = t ? t.messages.filter((m) => m.type === "user" && view.nodes.has(m.id)) : [];
+  if (users.length < 2) {
+    rail.classList.remove("on");
+    if (railIds.length) rail.replaceChildren();
+    railIds = [];
+    return;
+  }
+  const ids = users.map((m) => m.id);
+  if (ids.join() !== railIds.join()) {
+    const known = new Set(railIds);
+    railIds = ids;
+    rail.replaceChildren(...users.map((m, i) => {
+      const text = (m.command ? `/${m.command.name} ${m.command.args || ""}` : m.text || "").replace(/\s+/g, " ").trim();
+      const when = m.time?.created ? new Date(m.time.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+      return el(`button.rail-tick${known.has(m.id) ? "" : ".new"}`, { type: "button", dataset: { id: m.id }, style: { "--i": String(Math.min(i, 40)) }, on: { click: () => jumpTo(m.id), mouseenter: (e) => showRailTip(e.currentTarget), mouseleave: hideRailTip } },
+        el("i"),
+        el("span.rail-tip", el("span.rail-meta", el("b", `#${i + 1}`), when ? el("em", when) : null), el("span.rail-text", text.slice(0, 140) || "(attachment)")));
+    }));
+    rail.classList.add("on");
+  }
+  updateRailActive();
+}
+
+let railTip = null;
+function showRailTip(tick) {
+  hideRailTip();
+  const r = tick.getBoundingClientRect();
+  railTip = el("div.rail-float", ...[...tick.querySelector(".rail-tip").childNodes].map((n) => n.cloneNode(true)));
+  railTip.style.left = `${r.right + 12}px`;
+  railTip.style.top = `${r.top + r.height / 2}px`;
+  document.body.append(railTip);
+}
+function hideRailTip() {
+  railTip?.remove();
+  railTip = null;
+}
+
+let railFrame = 0;
+function updateRailActive() {
+  if (railFrame || !railIds.length) return;
+  railFrame = requestAnimationFrame(() => {
+    railFrame = 0;
+    const line = $("thread").getBoundingClientRect().top + 110;
+    let active = railIds[0];
+    for (const id of railIds) {
+      const n = view.nodes.get(id);
+      if (n && n.getBoundingClientRect().top <= line) active = id;
+    }
+    for (const b of $("msg-rail").children) {
+      const on = b.dataset.id === active;
+      if (on && !b.classList.contains("active")) b.scrollIntoView({ block: "nearest" });
+      b.classList.toggle("active", on);
+    }
+  });
+}
+
+function jumpTo(id) {
+  const n = view.nodes.get(id);
+  if (!n) return;
+  view.stick = false;
+  n.scrollIntoView({ behavior: document.body.classList.contains("no-anim") ? "auto" : "smooth", block: "start" });
+  n.classList.remove("flash");
+  void n.offsetWidth; // restart the highlight
+  n.classList.add("flash");
+}
+
+// ---- chat width: drag the handle at the column's edge ------------------------------------------
+
+const CHAT_W = 820;
+function applyChatWidth(w) {
+  document.documentElement.style.setProperty("--chat-w", `${Math.max(560, Math.min(2400, Number(w) || CHAT_W))}px`);
+}
+
+function wireResize() {
+  const h = $("chat-resize");
+  h.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    h.setPointerCapture(e.pointerId);
+    const box = document.querySelector(".main").getBoundingClientRect();
+    const center = box.left + box.width / 2;
+    let w = CHAT_W;
+    document.body.classList.add("resizing");
+    const move = (ev) => {
+      w = Math.round(Math.max(560, Math.min(box.width - 40, 2 * Math.abs(ev.clientX - center) + 40)));
+      applyChatWidth(w);
+    };
+    const up = () => {
+      h.removeEventListener("pointermove", move);
+      document.body.classList.remove("resizing");
+      saveSettings({ ui: { chatWidth: w } }).catch(() => {});
+    };
+    h.addEventListener("pointermove", move);
+    h.addEventListener("pointerup", up, { once: true });
+  });
+  h.addEventListener("dblclick", () => { applyChatWidth(CHAT_W); saveSettings({ ui: { chatWidth: CHAT_W } }).catch(() => {}); toast("Chat width reset", "info", 1200); });
 }
 
 // ---- goal, to-do list, background jobs, worktree ------------------------------------------
@@ -500,6 +609,7 @@ function renderWork() {
   const t = S.current;
   renderDock($("work-dock"), t, { busy: !!t && (t.busy || S.busy.has(t.id)), onEditGoal: () => editGoal(), onChanged: renderWork });
   renderJobsChip($("jobs-pill"), t);
+  renderSubagentsChip(subChip, t);
   const gb = $("btn-goal");
   gb.hidden = !t;
   const g = t?.goal;
@@ -1166,9 +1276,13 @@ function onEvent(ev) {
   }
   if (!t || !t.loaded) return;
   const result = applyEvent(t, ev);
-  if (result?.reload && S.current === t && !t.busy) { reloadCurrent(t.id); return; }
+  if (result?.reload && S.current === t) {
+    if (!t.busy) { reloadCurrent(t.id); return; }
+    t.needsReload = true; // compacted mid-run: show the summary once the run ends
+  }
+  if (t.needsReload && S.current === t && /^session\.execution\.(succeeded|failed|interrupted)$/.test(type)) { t.needsReload = false; setTimeout(() => reloadCurrent(t.id), 300); }
   if (type === "session.tool.called") registerDelegation(t, ev.data);
-  if (S.current === t && type.startsWith("session.tool.")) onLiveEvent(ev);
+  if (S.current === t && type.startsWith("session.tool.")) { onLiveEvent(ev); renderSubagentsChip(subChip, t); }
   if (!result) return;
   if (S.current === t) {
     view.update(result);
@@ -1194,7 +1308,7 @@ const refreshDrawerSoon = () => { clearTimeout(drawerTimer); drawerTimer = setTi
 // ---- wiring ------------------------------------------------------------------------
 
 export const ctx = { S, saveSettings, reloadCatalog, project, modelName, invalidateCommands, onReady: null, onCatalogEvent: null };
-window.__afh = { S, D, ctx, live: liveState }; // for debugging from the devtools console
+window.__afh = { S, D, ctx, view, live: liveState }; // for debugging from the devtools console
 
 function toggleSidebar() {
   $("app").classList.toggle(innerWidth <= 980 ? "sb-open" : "sb-hidden");
@@ -1249,6 +1363,8 @@ function wire() {
   $("draft-goal").addEventListener("click", editGoal);
   $("draft-worktree").addEventListener("click", () => { S.draft.worktree = !S.draft.worktree; renderWork(); if (S.draft.worktree) toast("The new thread gets its own git worktree: a separate folder on a new branch", "info", 3500); });
   $("jobs-pill").addEventListener("click", () => S.current && jobsPopover($("jobs-pill"), S.current));
+  subChip.addEventListener("click", () => S.current && subagentsPopover(subChip, S.current, openWatch));
+  wireResize();
   $("btn-drawer-close").addEventListener("click", closeDrawer);
   $("btn-collapse").addEventListener("click", toggleSidebar);
   $("btn-expand").addEventListener("click", toggleSidebar);

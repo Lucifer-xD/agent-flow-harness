@@ -42,6 +42,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "customCss": "",
         "sendKey": "enter",  # enter | ctrl-enter
         "liveFiles": True,  # open the Live pane while the model writes/edits a file
+        "chatWidth": 820,  # px, the conversation column (drag its edge to change)
         "sounds": True,
         "notify": True,
         "reopenLast": True,
@@ -73,7 +74,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # The agent loop: steps per run, and whether an out-of-date to-do list sends it back to work once.
     "agent": {"maxSteps": 200, "todoNudge": True},
     # Goals: autopilot keeps the agent going until it reports the goal achieved or blocked.
-    "goals": {"autopilot": True, "maxTurns": 10},
+    "goals": {"autopilot": True, "maxTurns": 10, "auto": True},
     # Error checks after edits (see engine/diagnostics.py). commands: [{name, glob, command, timeout, enabled}]
     "diagnostics": {"enabled": True, "typescript": True, "ruff": True, "commands": []},
     # Hooks: [{id, name, event: pre_tool|post_tool|stop, matcher, command, timeout, enabled}]

@@ -33,7 +33,8 @@ export async function agentPane(pane, ctx) {
     row("Steps per run", "The most model calls one message may trigger before AFH stops and waits for you", num(ag.maxSteps ?? 200, { min: 10, max: 1000, onChange: (v) => save({ agent: { maxSteps: v } }, "Saved") })),
     row("Check the to-do list before finishing", "If the agent ends its turn with open to-do items, it is asked once to finish them or update the list", toggle(ag.todoNudge !== false, (v) => save({ agent: { todoNudge: v } })))));
 
-  pane.append(card("Goals", "Set one per thread with the Goal button or /goal", null,
+  pane.append(card("Goals", "The agent sets a goal itself for multi-step work; you can also set one with the Goal button or /goal", null,
+    row("Goals for every multi-step task", "When the agent plans 3 or more steps without a goal, your request becomes the thread's goal", toggle(goals.auto !== false, (v) => save({ goals: { auto: v } }))),
     row("Autopilot by default", "New goals keep the agent working until it reports them achieved or blocked", toggle(goals.autopilot !== false, (v) => save({ goals: { autopilot: v } }))),
     row("Continuations per message", "How often autopilot may send the agent back to work before it waits for you", num(goals.maxTurns ?? 10, { min: 1, max: 100, onChange: (v) => save({ goals: { maxTurns: v } }, "Saved") }))));
 

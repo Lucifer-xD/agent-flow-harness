@@ -27,6 +27,11 @@ class AgentConfig:
                 "system": self.system if self.kind in ("custom", "delegate") else (self.system if store.load_settings().get("prompts", {}).get("agents", {}).get(self.id) else "")}
 
 
+HELPER_ID = "general"
+# Built in, so every thread can use subagents without setup: a copy of the thread's own model.
+HELPER = {"id": HELPER_ID, "name": "Helper", "model": None, "enabled": True,
+          "job": "A copy of your own model for self-contained side work: research across many files, an independent change, or one of several tasks run in parallel."}
+
 READONLY_RULES = [{"action": "edit", "resource": "*", "effect": "deny"}, {"action": "shell", "resource": "*", "effect": "deny"}]
 
 
@@ -55,9 +60,12 @@ def all_agents(settings: dict | None = None) -> list[AgentConfig]:
                                   _model_ref(cfg.get("model")), READONLY_RULES if cfg.get("readonly") else [], False, cfg.get("color"), "custom"))
     deleg = s.get("delegation", {})
     delegates = [d for d in deleg.get("delegates", []) if d.get("id") and d.get("enabled", True)]
+    if deleg.get("builtinHelper", True) and not any(d["id"] == HELPER_ID for d in delegates):
+        delegates = [*delegates, HELPER]
     for d in delegates:
-        agents.append(AgentConfig(d["id"], d.get("name") or d["id"], d.get("job", ""), "subagent",
-                                  store.DELEGATE_PROMPT.format(name=d.get("name") or d["id"], job=d.get("job", "").strip() or "general tasks", system=("\n" + d["system"].strip()) if d.get("system", "").strip() else ""),
+        rules = store.DELEGATE_PROMPT.format(name=d.get("name") or d["id"], job=d.get("job", "").strip() or "general tasks", system=("\n" + d["system"].strip()) if d.get("system", "").strip() else "")
+        # A delegate works like any agent (same tools and habits), plus the rules of being delegated to.
+        agents.append(AgentConfig(d["id"], d.get("name") or d["id"], d.get("job", ""), "subagent", base.strip() + "\n\n# You are a delegate\n\n" + rules,
                                   _model_ref(d.get("model")), READONLY_RULES if d.get("readonly") else [], False, d.get("color"), "delegate"))
     agents.append(AgentConfig(store.LEADER_ID, "Delegate", "Leads the work and delegates tasks to your delegate models.", "primary",
                               overrides.get(store.LEADER_ID) or store.leader_prompt(delegates, deleg.get("leaderInstructions", "")), None, [], False, "#ff6a2a", "leader"))

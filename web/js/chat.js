@@ -207,7 +207,10 @@ export function applyEvent(t, ev) {
       return { all: true };
     }
     case "session.compaction.started":
-      t.compacting = true;
+      t.compacting = { done: 0, total: 0, messages: d.messages };
+      return { status: true };
+    case "session.compaction.progress":
+      t.compacting = { ...(t.compacting || {}), done: d.done, total: d.total };
       return { status: true };
     case "permission.asked":
       t.permissions.set(d.id, d);
@@ -352,6 +355,9 @@ function renderTodoTool(p, openSet) {
 function renderGoalTool(p, openSet) {
   const input = typeof p.state?.input === "object" ? p.state.input : {};
   const status = p.state?.status || "streaming";
+  if (input.status === "set" && status !== "error" && input.text) {
+    return el("div.goal-note.set", { dataset: { tool: p.id } }, ico("target"), el("span", el("b", "Goal set: "), input.text, input.criteria ? el("span.goal-note-sub", ` — done when ${input.criteria}`) : null));
+  }
   if (status === "error" || !["achieved", "blocked", "progress"].includes(input.status)) return null;
   if (input.status === "progress") {
     return el("div.goal-note", { dataset: { tool: p.id } }, ico("target"), el("span", el("b", "Milestone: "), input.summary || ""));
@@ -596,8 +602,18 @@ export class ChatView {
       }
       case "assistant":
         return this.renderAssistant(m, settings, anim);
-      case "compaction":
-        return el("div.sys-note", anim, "Earlier context was compacted");
+      case "compaction": {
+        // Like Thinking: a quiet line you can open to read exactly what the model now has instead of the old messages.
+        const key = "compaction:" + m.id;
+        const n = m.metadata?.compacted;
+        const box = el(`div.think.compact-box${this.openThinks.has(key) ? ".open" : ""}`, anim);
+        box.append(
+          el("button.think-head", { type: "button", on: { click: () => { box.classList.toggle("open"); this.openThinks[box.classList.contains("open") ? "add" : "delete"](key); } } },
+            el("span.chev", { html: icon("chev") }), el("span.compact-ico", { html: icon("archive") }),
+            el("span.think-label", n ? `Compacted ${n} earlier message${n === 1 ? "" : "s"} — summary` : "Earlier context was compacted — summary")),
+          el("div.think-body", el("div", m.text ? el("div.compact-text.md", { html: markdown(m.text) }) : el("div.compact-text", "No summary was kept for this compaction."))));
+        return box;
+      }
       case "model-switched":
         return el("div.sys-note", anim, `Switched model to ${this.opts.modelName(m.model) || m.model?.id || "another model"}`);
       case "agent-switched":
@@ -710,7 +726,12 @@ export class ChatView {
       this.statusBox.append(el("div.msg.assistant.pending", { style: { animation: "none" } }, el("div.avatar", this.opts.avatar ? this.opts.avatar(true) : null),
         el("div.msg-body", el("div.pending-row", el("span.lbl", label), el("span.timer", { dataset: { start: String(t.runStart || Date.now()) } }, fmtDur(Date.now() - (t.runStart || Date.now())))))));
     }
-    if (t.compacting) this.statusBox.append(el("div.notice", el("span.spinner"), el("span", "Summarising older messages to free up context…")));
+    if (t.compacting) {
+      const c = t.compacting;
+      const what = c.messages ? `${c.messages} older messages` : "older messages";
+      this.statusBox.append(el("div.notice.compacting", el("span.spinner"), el("span", c.total > 1 ? `Summarising ${what} in ${c.total - 1} parts… ${Math.min(c.done, c.total)}/${c.total}` : `Summarising ${what} to free up context…`),
+        c.total > 1 ? el("span.compact-bar", el("i", { style: { width: `${Math.round((100 * c.done) / c.total)}%` } })) : null));
+    }
     if (t.retry) {
       const err = t.retry.error || {};
       this.statusBox.append(el("div.sys-note", { title: err.message || "" }, `Provider error — retrying${t.retry.attempt ? ` (attempt ${t.retry.attempt})` : ""}${err.message ? `: ${String(err.message).slice(0, 90)}` : ""}…`));
