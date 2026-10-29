@@ -2,10 +2,61 @@
 // OpenAI/Anthropic/Gemini-compatible endpoint, then keep only the models you use in the picker.
 
 import { api, native } from "./api.js";
-import { confirmDialog, el, fmtTokens, ico, icon, modal, modalityBadges, toast, toggle } from "./ui.js";
+import { confirmDialog, copyText, el, fmtTokens, ico, icon, modal, modalityBadges, toast, toggle } from "./ui.js";
 
 const header = (title, lead) => [el("h2", title), lead ? el("p.lead", lead) : null];
 const field = (label, input, help) => el("div.field", el("label", label), input, help ? el("div.help", help) : null);
+
+const SIGN_INS = [
+  { method: "chatgpt", provider: "chatgpt", name: "ChatGPT", sub: "Use your Plus, Pro or Team plan — no API key", icon: "sparkle" },
+  { method: "copilot", provider: "github-copilot", name: "GitHub Copilot", sub: "Claude, GPT and Gemini through your Copilot plan", icon: "github" },
+  { method: "openrouter", provider: "openrouter", name: "OpenRouter", sub: "Hundreds of models on one account; creates a key for you", icon: "globe" },
+];
+
+/** Sign-in dialog: opens the provider's page (or shows GitHub's device code) and waits for it. */
+export async function signIn(method, { onDone } = {}) {
+  const meta = SIGN_INS.find((x) => x.method === method) || { name: method };
+  const status = el("div.signin-status", el("span.spinner"), " Starting…");
+  const bodyBox = el("div.signin-body");
+  let login = null;
+  let timer = null;
+  let finished = false;
+  const dlg = modal(el("div.m-body.signin", { style: { padding: "24px" } },
+    el("h2", `Sign in to ${meta.name}`), bodyBox, status,
+    el("div.actions", el("span", { style: { flex: 1 } }), el("button.btn.ghost", { on: { click: () => dlg.close() } }, "Cancel"))),
+  { small: true, onClose: () => { clearTimeout(timer); if (login && !finished) api.del(`/api/auth/login/${login.id}`).catch(() => {}); } });
+  try {
+    login = await api.post("/api/auth/login", { method });
+  } catch (e) {
+    status.replaceChildren(el("span.err-text", e.message));
+    return;
+  }
+  const open = () => login.url && native.openExternal(login.url);
+  if (login.userCode) {
+    bodyBox.replaceChildren(el("p.lead", "Enter this code on GitHub to connect your Copilot plan:"), el("div.device-code", login.userCode),
+      el("button.btn.primary", { on: { click: async () => { await copyText(login.userCode); open(); } } }, ico("copy"), "Copy code & open GitHub"));
+    status.replaceChildren(el("span.spinner"), " Waiting for GitHub…");
+  } else if (login.url) {
+    bodyBox.replaceChildren(el("p.lead", "Finish signing in in your browser. AFH continues on its own when you are done."),
+      el("button.btn", { on: { click: open } }, ico("external"), "Open the sign-in page again"));
+    status.replaceChildren(el("span.spinner"), " Waiting for the browser…");
+    open();
+  }
+  const poll = async () => {
+    let v;
+    try { v = await api.get(`/api/auth/login/${login.id}`); } catch { v = login; }
+    if (v.status === "pending") { timer = setTimeout(poll, 1500); return; }
+    finished = true;
+    if (v.status === "done") {
+      dlg.close();
+      toast(`Signed in to ${meta.name}${v.account ? ` as ${v.account}` : ""}`, "ok");
+      onDone?.(v);
+    } else if (v.status === "error") {
+      status.replaceChildren(el("span.err-text", v.error || "Sign-in failed"));
+    }
+  };
+  if (login.status !== "pending") poll(); else timer = setTimeout(poll, 1500);
+}
 
 async function guard(fn, okMsg) {
   try {
@@ -63,6 +114,23 @@ export async function modelsPane(pane, ctx, opts = {}) {
     pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Default model"), el("p", `${S.models.length} models in the picker`)), sel)));
   }
 
+  // ---- sign in with an account instead of an API key
+  const byId = Object.fromEntries(configured.map((p) => [p.id, p]));
+  const afterSignIn = async (v) => { await ctx.reloadCatalog(); redraw({ open: v.providerID }); };
+  pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Sign in"), el("p", "Use a plan you already pay for. Anthropic does not allow Claude Pro/Max sign-in in other apps — use an API key for Claude, or Claude through Copilot."))),
+    el("div.signin-grid", SIGN_INS.map((x) => {
+      const have = byId[x.provider];
+      const signed = have && (have.signedIn || (x.method === "openrouter" && have.hasKey));
+      return el(`div.signin-tile${signed ? ".on" : ""}`,
+        el("div.st-icon", { html: icon(x.icon) }),
+        el("div.li-main", el("div.li-title", x.name), el("div.li-sub", signed ? (have.account ? `Signed in as ${have.account}` : "Connected") : x.sub)),
+        signed ? el("button.btn.ghost.sm", { on: { click: async () => {
+          if (!(await confirmDialog({ title: `Sign out of ${x.name}?`, body: "AFH forgets the sign-in and removes the provider. You can sign in again any time.", confirm: "Sign out", danger: true }))) return;
+          if (await guard(() => api.post(`/api/providers/${x.provider}/logout`), "Signed out")) { await ctx.reloadCatalog(); redraw(); }
+        } } }, "Sign out")
+          : el("button.btn.primary.sm", { on: { click: () => signIn(x.method, { onDone: afterSignIn }) } }, "Sign in"));
+    }))));
+
   // ---- configured providers with their models
   const pending = new Map(); // "pid/mid" -> hidden
   const applyBar = el("div.apply-bar", { hidden: true },
@@ -103,7 +171,8 @@ export async function modelsPane(pane, ctx, opts = {}) {
   }
 
   function providerCard(p) {
-    const how = p.catalog ? (p.hasKey ? `API key ${p.keyHint || ""}` : "no key") : `custom · ${p.kind}`;
+    const how = p.signedIn && p.login !== "openrouter" ? `signed in${p.account ? ` · ${p.account}` : ""}` : p.keyFromEnv ? "key from environment"
+      : p.catalog ? (p.hasKey ? `API key ${p.keyHint || ""}` : "no key") : `custom · ${p.kind}`;
     const shown = p.models.filter((m) => !m.hidden).length;
     const body = el("div.model-list");
     const q = el("input.inp", { placeholder: "Filter models…", style: { height: "30px", fontSize: "12.5px", width: "200px" } });
@@ -142,7 +211,8 @@ export async function modelsPane(pane, ctx, opts = {}) {
           el("button.btn.ghost.sm", { on: { click: () => bulk(false) } }, "Show all"), el("button.btn.ghost.sm", { on: { click: () => bulk(true) } }, "Hide all"),
           el("button.btn.ghost.sm", { title: "Fetch the model list again", on: { click: async () => { if (await guard(() => api.post(`/api/providers/${p.id}/refresh`), "Models refreshed")) { await ctx.reloadCatalog(); redraw({ open: p.id }); } } } }, ico("refresh")),
           testBtn,
-          el("button.btn.ghost.sm", { title: "Change the key, URL or model list", on: { click: () => showForm(p) } }, ico("edit"), "Edit"),
+          p.login && p.signedIn && p.login !== "openrouter" ? el("button.btn.ghost.sm", { title: "Sign in again", on: { click: () => signIn(p.login, { onDone: afterSignIn }) } }, ico("refresh"), "Sign in again")
+            : el("button.btn.ghost.sm", { title: "Change the key, URL or model list", on: { click: () => showForm(p) } }, ico("edit"), "Edit"),
           toggle(p.enabled !== false, async (on) => { if (await guard(() => api.post(`/api/providers/${p.id}/enabled`, { enabled: on }))) { await ctx.reloadCatalog(); redraw({ open: p.id }); } }),
           el("button.btn.ghost.sm.danger", { title: "Remove this provider and its key", on: { click: async () => {
             if (!(await confirmDialog({ title: `Remove ${p.name}?`, body: "Its key and settings are deleted from AFH. Threads that used it keep their history.", confirm: "Remove", danger: true }))) return;
@@ -176,17 +246,28 @@ export async function modelsPane(pane, ctx, opts = {}) {
 
   // ---- add a provider
   const available = catalog.filter((c) => !c.configured);
-  const search = el("input.inp", { placeholder: `Search ${available.length} providers — OpenAI, Anthropic, Gemini, Kimi, Z.AI, DeepSeek, Groq, OpenRouter, Ollama…` });
-  const results = el("div", { style: { maxHeight: "280px", overflowY: "auto", marginTop: "8px" } });
+  const search = el("input.inp", { placeholder: `Search ${available.length} providers — OpenAI, Anthropic, Gemini, Azure, Bedrock, Mistral, Kimi, DeepSeek, OpenRouter…` });
+  const results = el("div", { style: { maxHeight: "360px", overflowY: "auto", marginTop: "8px" } });
   const formBox = el("div");
-  const featured = ["openai", "anthropic", "gemini", "kimi", "zai-coding", "deepseek", "openrouter", "groq", "xai", "mistral", "ollama", "lmstudio"];
+  const featured = ["openai", "anthropic", "gemini", "chatgpt", "github-copilot", "openrouter", "kimi", "zai-coding", "deepseek", "xai", "mistral", "groq", "azure", "amazon-bedrock", "ollama", "lmstudio"];
+  const subFor = (c) => {
+    if (c.login && !c.needsKey) return "sign in with your account";
+    if (!c.needsKey) return "local server · no key needed";
+    const bits = [c.login ? "sign in or API key" : `API key${c.env?.[0] ? ` (or ${c.env[0]})` : ""}`];
+    if (c.params?.length) bits.push(`needs ${c.params.map((x) => x.label.toLowerCase()).join(", ")}`);
+    if (c.models) bits.push(`${c.models} models`);
+    return bits.join(" · ");
+  };
   const drawResults = () => {
     const needle = search.value.toLowerCase();
     const rows = available.filter((c) => !needle || `${c.name} ${c.id}`.toLowerCase().includes(needle));
     rows.sort((a, b) => (featured.indexOf(a.id) + 1 || 99) - (featured.indexOf(b.id) + 1 || 99) || a.name.localeCompare(b.name));
-    results.replaceChildren(...rows.map((c) => el("button.pop-item", { type: "button", on: { click: () => showForm(null, c) } },
-      el("div.pi-main", el("div.pi-title", c.name), el("div.pi-sub", c.needsKey ? `API key${c.env?.[0] ? ` (or env ${c.env[0]})` : ""}` : "local server · no key needed")),
-      el("span.pill-tag", c.kind))));
+    const limit = needle ? 200 : 60;
+    results.replaceChildren(...rows.slice(0, limit).map((c) => el("button.pop-item", { type: "button", on: { click: () => (c.login && !c.needsKey ? signIn(c.login, { onDone: afterSignIn }) : showForm(null, c)) } },
+      el("div.pi-main", el("div.pi-title", c.name), el("div.pi-sub", subFor(c))),
+      c.login ? el("span.pill-tag.accent", "sign in") : null,
+      el("span.pill-tag", c.kind === "openai" ? "openai-compatible" : c.kind))));
+    if (rows.length > limit) results.append(el("div.empty-row", `${rows.length - limit} more — type to search all ${rows.length}.`));
     if (!rows.length) results.append(el("div.empty-row", "No provider matches. Add it as a custom endpoint below."));
   };
   search.addEventListener("input", drawResults);
@@ -203,10 +284,12 @@ export async function modelsPane(pane, ctx, opts = {}) {
     const f = {
       id: el("input.inp", { placeholder: "my-gateway", value: existing?.id || "", disabled: !!existing }),
       name: el("input.inp", { placeholder: "My gateway", value: existing?.name || known?.name || "" }),
-      base_url: el("input.inp", { placeholder: "http://localhost:11434/v1", value: existing?.base_url || known?.base_url || "" }),
+      base_url: el("input.inp", { placeholder: known?.base_url || "http://localhost:11434/v1", value: existing?.base_url || (known?.params?.length ? "" : known?.base_url) || "" }),
       api_key: el("input.inp", { type: "password", placeholder: existing?.hasKey ? `unchanged (${existing.keyHint})` : known && !known.needsKey ? "optional" : "Paste API key", autocomplete: "off" }),
       models: el("textarea.ta", { rows: 2, placeholder: "qwen3-coder:30b, llama4:scout — optional when the endpoint lists its models", value: (existing?.models || []).filter((m) => !m.fetched).map((m) => m.id).join(", ") }),
     };
+    const paramFields = known?.params || [];
+    const paramIns = Object.fromEntries(paramFields.map((x) => [x.name, el("input.inp", { placeholder: x.default || x.name, value: existing?.params?.[x.name] || x.default || "" })]));
     let kind = existing?.kind || known?.kind || "openai";
     const seg = el("div.seg", [["openai", "OpenAI-compatible"], ["anthropic", "Anthropic"], ["gemini", "Gemini"]].map(([v, l]) => el(`button${v === kind ? ".on" : ""}`, { type: "button", on: { click: (e) => { kind = v; seg.querySelectorAll("button").forEach((b) => b.classList.remove("on")); e.currentTarget.classList.add("on"); } } }, l)));
     const title = existing ? `Edit ${existing.name}` : known ? `Connect ${known.name}` : "Custom endpoint";
@@ -216,19 +299,23 @@ export async function modelsPane(pane, ctx, opts = {}) {
         el("button.icon-btn", { html: icon("x"), on: { click: () => formBox.replaceChildren() } })),
       isCustom ? field("API format", seg) : null,
       isCustom ? el("div.grid2", field("Provider id", f.id, "lowercase, letters and dashes"), field("Display name", f.name)) : null,
+      known?.hint ? el("div.help", { style: { marginBottom: "10px" } }, known.hint) : null,
+      known?.login ? el("div.signin-inline", el("span", "Have an account?"), el("button.btn.sm.primary", { type: "button", on: { click: () => signIn(known.login, { onDone: afterSignIn }) } }, "Sign in instead"), el("span.muted", "or paste a key below")) : null,
+      paramFields.length ? el("div.grid2", paramFields.map((x) => field(x.label, paramIns[x.name], `Also read from ${x.name}.`))) : null,
       el("div.grid2", field(known && !known.customUrl ? "Base URL (advanced)" : "Base URL", f.base_url), field("API key", f.api_key, known?.env?.[0] ? `Also read from ${known.env[0]} if set in your environment.` : null)),
       field("Model ids", f.models, "Comma-separated, exactly as the endpoint names them. Leave empty to use the list the endpoint reports."),
       el("div.actions", el("button.btn.ghost", { on: { click: () => formBox.replaceChildren() } }, "Cancel"),
         el("button.btn.primary", { on: { click: async (e) => {
           e.currentTarget.disabled = true;
-          const body = { id: existing?.id || (isCustom ? f.id.value.trim() : catalogId), catalog: isCustom ? null : catalogId, kind, name: f.name.value, base_url: f.base_url.value, api_key: f.api_key.value, models: f.models.value };
+          const body = { id: existing?.id || (isCustom ? f.id.value.trim() : catalogId), catalog: isCustom ? null : catalogId, kind, name: f.name.value, base_url: f.base_url.value, api_key: f.api_key.value, models: f.models.value,
+            params: Object.fromEntries(Object.entries(paramIns).map(([k, inp]) => [k, inp.value.trim()])) };
           const out = await guard(() => api.post("/api/providers", body), existing ? "Saved" : `${body.name || body.id} added`);
           e.currentTarget.disabled = false;
           if (out) { await ctx.reloadCatalog(); redraw({ open: out.id }); }
         } } }, existing ? "Save" : "Connect")));
     formBox.append(box);
     box.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    (isCustom && !existing ? f.id : f.api_key).focus();
+    (isCustom && !existing ? f.id : paramFields.length && !existing ? Object.values(paramIns)[0] : f.api_key).focus();
   }
 
   if (opts.open === "__new__") showForm(null, null);

@@ -30,7 +30,55 @@ export const PRESETS = {
   matcha: { name: "Matcha", accent: "#4d8a2a", ...light("#f5f7ef", "#ecf0e3", "#fdfef9", "#f1f4ea", "#e5eadb", "#e1e7d5", "#ccd5bd", "#1b2213", "#56604a", "#8a947d", "#eef2e6") },
   ivory: { name: "Ivory", accent: "#9b5de5", ...light("#faf8f3", "#f2efe7", "#fffefb", "#f5f2ea", "#ebe7dc", "#e7e2d6", "#d6cfbf", "#1f1c16", "#5b564b", "#8f8a7e", "#f4f1e9") },
   mint: { name: "Mint", accent: "#1f9d5f", ...light("#f3f9f5", "#eaf3ed", "#ffffff", "#eff6f1", "#e2ece6", "#dde8e1", "#c7d6cc", "#13201a", "#4f5f56", "#86958c", "#ecf3ee") },
+  // Editor classics, tuned for AFH's surfaces.
+  catppuccin: { name: "Catppuccin Mocha", accent: "#cba6f7", ...dark("#1e1e2e", "#181825", "#232336", "#2a2a3d", "#313244", "#313244", "#45475a", "#cdd6f4", "#a6adc8", "#7f849c", "#11111b") },
+  dracula: { name: "Dracula", accent: "#bd93f9", ...dark("#282a36", "#21222c", "#2d2f3d", "#343746", "#3c3f52", "#383a4a", "#4a4d63", "#f8f8f2", "#c4c6d4", "#7d84a8", "#1e1f29") },
+  nord: { name: "Nord", accent: "#88c0d0", ...dark("#2e3440", "#292e39", "#333a47", "#3b4252", "#434c5e", "#3b4252", "#4c566a", "#eceff4", "#d8dee9", "#8e98ab", "#272c36") },
+  tokyonight: { name: "Tokyo Night", accent: "#7aa2f7", ...dark("#1a1b26", "#16161e", "#1f2030", "#24283b", "#2c3048", "#292e42", "#3b4261", "#c0caf5", "#a9b1d6", "#737aa2", "#13141c") },
+  gruvbox: { name: "Gruvbox", accent: "#fe8019", ...dark("#282828", "#1d2021", "#2e2c2b", "#32302f", "#3c3836", "#3c3836", "#504945", "#ebdbb2", "#bdae93", "#928374", "#1d2021") },
+  rosepine: { name: "Rosé Pine", accent: "#ebbcba", ...dark("#191724", "#16141f", "#1f1d2e", "#26233a", "#2e2a45", "#26233a", "#403d52", "#e0def4", "#c4c0dc", "#908caa", "#13111c") },
+  solarized: { name: "Solarized", accent: "#268bd2", ...dark("#002b36", "#00252f", "#073642", "#0a3d4a", "#0f4654", "#0d4250", "#1b5664", "#eee8d5", "#b3bdbd", "#6f8789", "#00212b") },
+  githubdark: { name: "GitHub Dark", accent: "#2f81f7", ...dark("#0d1117", "#010409", "#161b22", "#1c2128", "#262c36", "#21262d", "#30363d", "#e6edf3", "#9da7b3", "#6e7681", "#090c10") },
+  onedark: { name: "One Dark", accent: "#61afef", ...dark("#282c34", "#21252b", "#2c313a", "#323842", "#3a404b", "#333842", "#454b57", "#dcdfe4", "#abb2bf", "#7f848e", "#1e2227") },
+  monokai: { name: "Monokai", accent: "#a6e22e", ...dark("#272822", "#1f201b", "#2d2e27", "#34352d", "#3e3f37", "#3a3b33", "#4f5045", "#f8f8f2", "#cfcfc2", "#8f908a", "#1b1c17") },
+  everforest: { name: "Everforest", accent: "#a7c080", ...dark("#2d353b", "#272e33", "#323c41", "#374247", "#404c51", "#3d484d", "#4f5b58", "#d3c6aa", "#b4ab95", "#859289", "#232a2e") },
+  kanagawa: { name: "Kanagawa", accent: "#7e9cd8", ...dark("#1f1f28", "#16161d", "#252530", "#2a2a37", "#363646", "#2a2a37", "#54546d", "#dcd7ba", "#c8c093", "#727169", "#16161d") },
+  synthwave: { name: "Synthwave", accent: "#ff7edb", ...dark("#1e1631", "#191229", "#241b3a", "#2b2145", "#352a54", "#33284f", "#4a3b70", "#f4eefe", "#c6b8e3", "#8e7fb0", "#150f24") },
+  contrast: { name: "High Contrast", accent: "#ffd400", ...dark("#000000", "#000000", "#0a0a0a", "#121212", "#1e1e1e", "#5a5a5a", "#8a8a8a", "#ffffff", "#e6e6e6", "#bdbdbd", "#000000") },
+  latte: { name: "Catppuccin Latte", accent: "#8839ef", ...light("#eff1f5", "#e6e9ef", "#f7f8fb", "#e9ecf2", "#dfe3ea", "#dce0e8", "#bcc0cc", "#4c4f69", "#5c5f77", "#8c8fa1", "#e6e9ef") },
+  githublight: { name: "GitHub Light", accent: "#0969da", ...light("#ffffff", "#f6f8fa", "#ffffff", "#f6f8fa", "#eaeef2", "#d0d7de", "#afb8c1", "#1f2328", "#59636e", "#818b98", "#f6f8fa") },
+  solarizedlight: { name: "Solarized Light", accent: "#268bd2", ...light("#fdf6e3", "#f5efdc", "#fffbef", "#f3ecd7", "#eae2ca", "#e6dec6", "#d3cbb2", "#073642", "#586e75", "#8a9a9a", "#f2ebd5") },
+  rosepinedawn: { name: "Rosé Pine Dawn", accent: "#d7827e", ...light("#faf4ed", "#f2e9e1", "#fffaf3", "#f4ede8", "#ebe2da", "#e4dcd4", "#cecacd", "#575279", "#797593", "#9893a5", "#f2e9e1") },
+  gruvboxlight: { name: "Gruvbox Light", accent: "#d65d0e", ...light("#fbf1c7", "#f2e5bc", "#fdf6d8", "#f2e5bc", "#ebdbb2", "#e5d5ad", "#d5c4a1", "#3c3836", "#665c54", "#928374", "#f2e5bc") },
+  nordlight: { name: "Nord Light", accent: "#5e81ac", ...light("#eceff4", "#e5e9f0", "#f8f9fb", "#e9edf2", "#dfe4ec", "#d8dee9", "#c2cad8", "#2e3440", "#4c566a", "#7b869a", "#e5e9f0") },
+  contrastlight: { name: "High Contrast Light", accent: "#0047ff", ...light("#ffffff", "#ffffff", "#ffffff", "#f2f2f2", "#e6e6e6", "#6b6b6b", "#3d3d3d", "#000000", "#1a1a1a", "#404040", "#f2f2f2") },
 };
+
+/** How the screen changes when the theme does. */
+export const THEME_TRANSITIONS = [["circle", "Circle"], ["diamond", "Diamond"], ["wipe", "Wipe"], ["fade", "Fade"], ["blur", "Blur"], ["none", "None"]];
+/** How new messages arrive. */
+export const MESSAGE_ANIMS = [["rise", "Rise"], ["fade", "Fade"], ["slide", "Slide"], ["pop", "Pop"], ["blur", "Focus"], ["none", "None"]];
+
+/** Run `apply` (which changes the colors) with the chosen screen effect, spreading from `origin`. */
+export function themeTransition(ui, apply, origin) {
+  const style = ui.themeTransition || "circle";
+  if (!document.startViewTransition || ui.animations === false || style === "none" || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    apply();
+    return;
+  }
+  const root = document.documentElement;
+  const r = origin?.getBoundingClientRect?.();
+  const x = r ? r.left + r.width / 2 : innerWidth / 2, y = r ? r.top + r.height / 2 : innerHeight / 2;
+  const reach = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+  root.style.setProperty("--vt-x", `${x}px`);
+  root.style.setProperty("--vt-y", `${y}px`);
+  root.style.setProperty("--vt-r", `${reach}px`);
+  root.style.setProperty("--vt-d", `${reach * 1.45}px`);
+  root.dataset.vt = style;
+  root.dataset.vtDir = x > innerWidth / 2 ? "rtl" : "ltr";
+  const t = document.startViewTransition(apply);
+  t.finished.finally(() => { delete root.dataset.vt; delete root.dataset.vtDir; });
+}
 
 const hex = (c) => c.replace("#", "").match(/.{2}/g).map((x) => parseInt(x, 16) / 255);
 export function luminance(color) {
@@ -87,6 +135,7 @@ export function applyAppearance(ui) {
   root.dataset.density = ui.density || "comfortable";
   root.dataset.font = ui.font || "inter";
   root.dataset.bubbles = ui.bubbles || "bubbles";
+  root.dataset.msgAnim = ui.msgAnim || "rise";
   root.dataset.meta = ui.showMeta ? "on" : "off";
   document.body.classList.toggle("no-anim", ui.animations === false);
   document.body.classList.toggle("no-logo-anim", ui.logoAnim === false);
@@ -97,17 +146,5 @@ export function applyAppearance(ui) {
     document.head.append(styleTag);
   }
   styleTag.textContent = ui.customCss || "";
-  requestAnimationFrame(() => {
-    const cs = getComputedStyle(document.body);
-    const side = cs.getPropertyValue("--bg-side").trim() || t.bg;
-    window.afh?.window?.setTitleBarOverlay?.({ color: toHex(side, t.bg), symbolColor: t.text });
-  });
   return t;
-}
-
-function toHex(color, fallback) {
-  const m = color.match(/rgba?\(([^)]+)\)/);
-  if (!m) return /^#/.test(color) ? color : fallback;
-  const [r, g, b] = m[1].split(/[\s,]+/).map(Number);
-  return "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
 }

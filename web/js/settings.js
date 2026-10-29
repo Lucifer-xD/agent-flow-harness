@@ -1,7 +1,7 @@
 // Settings window. Big tabs live in their own modules (models, skills, delegation, remote).
 
 import { api, native } from "./api.js";
-import { PRESETS, applyAppearance } from "./appearance.js";
+import { MESSAGE_ANIMS, PRESETS, THEME_TRANSITIONS, applyAppearance, themeTransition } from "./appearance.js";
 import { delegationPane } from "./delegate.js";
 import { logoNode } from "./logo.js";
 import { modelsPane } from "./settings-models.js";
@@ -149,12 +149,13 @@ const PANES = {
       const darkGrid = el("div.preset-grid"), lightGrid = el("div.preset-grid");
       presetGrid.append(el("div.preset-group-title", ico("moon"), "Dark themes"), darkGrid, el("div.preset-group-title", ico("sun"), "Light themes"), lightGrid);
       for (const [id, p] of Object.entries(PRESETS)) {
-        (p.dark ? darkGrid : lightGrid).append(el(`button.preset${u.preset === id ? ".on" : ""}`, { type: "button", style: { background: p.bg, color: p.text, borderColor: u.preset === id ? p.accent : "transparent" }, on: { click: async () => {
+        (p.dark ? darkGrid : lightGrid).append(el(`button.preset${u.preset === id ? ".on" : ""}`, { type: "button", style: { background: p.bg, color: p.text, borderColor: u.preset === id ? p.accent : "transparent" }, on: { click: async (e) => {
           // Picking a theme also makes it your favourite for its mode, and switches to that mode.
           const patch = { preset: id, accentOverride: false, bg: p.bg, text: p.text, accent: p.accent, [p.dark ? "darkPreset" : "lightPreset"]: id };
           const nowDark = document.documentElement.dataset.theme === "dark";
           if (nowDark !== p.dark) patch.theme = p.dark ? "dark" : "light";
           Object.assign(u, patch);
+          themeTransition(u, () => applyAppearance({ ...ctx.S.settings.ui, ...patch }), e.currentTarget);
           await save(patch); drawPresets(); drawCustom();
         } } },
           el("span.preset-dot", { style: { background: p.accent } }), el("span", p.name), el("span.preset-sub", p.dark ? "dark" : "light")));
@@ -195,6 +196,16 @@ const PANES = {
       card("Motion", null, null,
         row("Animations", "Messages, panels, menus", toggle(u.animations, (v) => save({ animations: v }))),
         row("Animation speed", null, slider(0.5, 2, 0.1, u.animSpeed || 1, (v) => `${v.toFixed(1)}×`, (v) => preview({ animSpeed: v }), (v) => save({ animSpeed: v }))),
+        row("Theme switch effect", "How the screen changes when you switch light/dark or pick a theme", el("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" } },
+          seg(THEME_TRANSITIONS, u.themeTransition || "circle", (v) => { u.themeTransition = v; save({ themeTransition: v }); }),
+          el("button.btn.ghost.sm", { type: "button", title: "Try it", on: { click: (e) => {
+            const btn = e.currentTarget;
+            const root = document.documentElement;
+            const flipped = root.dataset.theme === "dark" ? "light" : "dark";
+            themeTransition(u, () => { root.dataset.theme = flipped; }, btn);
+            setTimeout(() => themeTransition(u, () => applyAppearance(ctx.S.settings.ui), btn), 1100);
+          } } }, ico("sparkle"), "Try"))),
+        row("New messages", "How messages and replies arrive in the thread", seg(MESSAGE_ANIMS, u.msgAnim || "rise", (v) => { u.msgAnim = v; save({ msgAnim: v }); })),
         row("Logo flows while a model works", null, toggle(u.logoAnim !== false, (v) => save({ logoAnim: v }))),
         el("div.row", el("div.rl", el("b", "Preview")), el("div", { style: { display: "flex", gap: "16px", alignItems: "center" } }, logoNode({ size: 64 }), logoNode({ size: 64, working: true })))),
       card("Custom CSS", "For power users: anything here is injected into the app", null, el("div.card-body",

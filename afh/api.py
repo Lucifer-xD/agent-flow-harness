@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import shlex
 from pathlib import Path
@@ -20,7 +21,7 @@ from .engine import config as provcfg
 from .engine import migrate
 from .engine import permissions as perm
 from .engine.core import engine
-from .engine.providers.catalog import KNOWN, config_from_catalog, make_provider
+from .engine.providers.catalog import STATIC_MODELS, config_from_catalog, entries as catalog_entries, make_provider
 from .engine.types import ChatMessage, ChatRequest
 
 log = logging.getLogger("afh.api")
@@ -847,7 +848,11 @@ def _provider_view(pid: str, p: dict) -> dict:
     out["id"] = pid
     out["models"] = sorted((m.to_dict() | {"overridden": m.id in (p.get("overrides") or {})} for m in provcfg.models_of(p, pid)), key=lambda m: (m["hidden"], m["name"].lower()))
     out["connected"] = pid in engine.providers
-    out["catalog"] = p.get("catalog") if p.get("catalog") in KNOWN else None
+    cat = catalog_entries().get(p.get("catalog") or "")
+    out["catalog"] = p.get("catalog") if cat else None
+    out["params"] = p.get("params") or {}
+    out["paramFields"] = (cat or {}).get("params", [])
+    out["login"] = (cat or {}).get("login")
     return out
 
 
@@ -855,7 +860,9 @@ def _provider_view(pid: str, p: dict) -> dict:
 def providers():
     configured = provcfg.load()["providers"]
     catalog = [{"id": pid, "name": k["name"], "kind": k["kind"], "base_url": k["base_url"], "docs": k.get("docs"), "needsKey": k.get("needs_key", True),
-                "env": k.get("env", []), "configured": pid in configured, "customUrl": bool(k.get("custom_url"))} for pid, k in KNOWN.items()]
+                "env": k.get("env", []), "configured": pid in configured, "customUrl": bool(k.get("custom_url")), "params": k.get("params", []),
+                "hint": k.get("hint"), "login": k.get("login"), "source": k.get("source"), "models": k.get("models_count") or len(STATIC_MODELS.get(pid, []))}
+               for pid, k in catalog_entries().items()]
     return {"catalog": catalog, "configured": sorted((_provider_view(pid, p) for pid, p in configured.items()), key=lambda p: p["name"].lower())}
 
 
@@ -880,11 +887,18 @@ async def save_provider(body: dict = Body(...)):
         raise ValueError("Provider id must be lowercase letters, numbers, - or _")
     patch: dict[str, Any] = {}
     if catalog_id:
-        if catalog_id not in KNOWN:
+        k = catalog_entries().get(catalog_id)
+        if not k:
             raise ValueError(f"Unknown provider {catalog_id}")
-        k = KNOWN[catalog_id]
         patch.update(name=body.get("name") or k["name"], kind=k["kind"], base_url=(body.get("base_url") or "").strip() or k["base_url"], headers=dict(k.get("headers", {})),
                      extra=dict(k.get("extra", {})), fetch_models=k.get("fetch_models", True), catalog=catalog_id)
+        if k.get("params"):  # account details the endpoint URL is built from (resource name, region, ...)
+            given = body.get("params") if isinstance(body.get("params"), dict) else {}
+            params = {f["name"]: str(given.get(f["name"]) or f.get("default") or "").strip() for f in k["params"]}
+            missing = [f["label"] for f in k["params"] if not params[f["name"]] and not os.environ.get(f["name"])]
+            if missing:
+                raise ValueError("Fill in " + ", ".join(missing))
+            patch["params"] = params
     else:
         base = (body.get("base_url") or "").strip()
         if not base.startswith(("http://", "https://")):
@@ -900,8 +914,6 @@ async def save_provider(body: dict = Body(...)):
         patch["models"] = _parse_models(body["models"])
     patch["enabled"] = True
     entry = provcfg.upsert(pid, patch)
-    if not entry.get("api_key") and KNOWN.get(entry.get("catalog") or "", {}).get("needs_key", True) and not entry.get("catalog") is None:
-        pass  # custom endpoints may be keyless (local servers)
     engine.reload_providers()
     try:
         await engine.refresh_models(pid)
@@ -1018,6 +1030,56 @@ def provider_enabled(pid: str, body: dict = Body(...)):
 
 @app.delete("/api/providers/{pid}")
 def delete_provider(pid: str):
+    provcfg.remove(pid)
+    engine.reload_providers()
+    engine.publish({"type": "model.updated", "data": {}})
+    return {"ok": True}
+
+
+# ---- provider sign-in (engine/auth.py) ----
+
+
+@app.post("/api/auth/login")
+async def auth_login(body: dict = Body(...)):
+    """Start a sign-in: returns the page to open (or the device code to type), then poll its status."""
+    from .engine import auth as provider_auth
+
+    async def done(pid: str) -> None:
+        engine.reload_providers()
+        try:
+            await engine.refresh_models(pid)
+        except Exception as err:
+            log.info("refresh after sign-in: %s", err)
+        engine.publish({"type": "model.updated", "data": {}})
+
+    login = await provider_auth.start(str(body.get("method") or ""), done)
+    return login.view()
+
+
+@app.get("/api/auth/login/{lid}")
+def auth_login_status(lid: str):
+    from .engine import auth as provider_auth
+
+    login = provider_auth.get(lid)
+    if not login:
+        raise KeyError(lid)
+    return login.view()
+
+
+@app.delete("/api/auth/login/{lid}")
+def auth_login_cancel(lid: str):
+    from .engine import auth as provider_auth
+
+    provider_auth.cancel(lid)
+    return {"ok": True}
+
+
+@app.post("/api/providers/{pid}/logout")
+def provider_logout(pid: str):
+    """Forget a sign-in. Subscription providers (ChatGPT, Copilot) go away; OpenRouter keeps nothing either."""
+    p = provcfg.entry(pid)
+    if not p:
+        raise KeyError(pid)
     provcfg.remove(pid)
     engine.reload_providers()
     engine.publish({"type": "model.updated", "data": {}})

@@ -120,16 +120,27 @@ def models_of(p: dict, pid: str | None = None) -> list[ModelInfo]:
 
 
 def provider_configs() -> list[ProviderConfig]:
+    from .providers.catalog import env_key, render_url
+
     out = []
     for pid, p in load()["providers"].items():
         if p.get("enabled") is False:
             continue
-        out.append(ProviderConfig(id=pid, name=p.get("name") or pid, kind=p.get("kind", "openai"), base_url=p.get("base_url", ""), api_key=p.get("api_key", ""),
-                                  headers=dict(p.get("headers") or {}), models=models_of(p, pid), fetch_models=p.get("fetch_models", True), extra=dict(p.get("extra") or {})))
+        base = render_url(p.get("base_url", ""), p.get("params"))  # ${VAR} parts come from the setup fields or the environment
+        key = p.get("api_key") or env_key(p.get("catalog"))
+        out.append(ProviderConfig(id=pid, name=p.get("name") or pid, kind=p.get("kind", "openai"), base_url=base, api_key=key,
+                                  headers=dict(p.get("headers") or {}), models=models_of(p, pid), fetch_models=p.get("fetch_models", True),
+                                  extra=dict(p.get("extra") or {}), auth=dict(p.get("auth") or {})))
     return out
 
 
 def public(p: dict) -> dict:
     """Shape for the UI: never the key itself."""
+    from .providers.catalog import env_key
+
     key = p.get("api_key") or ""
-    return {k: v for k, v in p.items() if k != "api_key"} | {"hasKey": bool(key), "keyHint": ("••••" + key[-4:]) if len(key) > 8 else ("••••" if key else "")}
+    auth = p.get("auth") or {}
+    env = "" if key else env_key(p.get("catalog"))
+    out = {k: v for k, v in p.items() if k not in ("api_key", "auth")}
+    return out | {"hasKey": bool(key or env), "keyHint": ("••••" + key[-4:]) if len(key) > 8 else ("••••" if key else ""), "keyFromEnv": bool(env),
+                  "signedIn": bool(auth), "account": auth.get("account") or ""}

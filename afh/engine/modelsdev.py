@@ -63,7 +63,7 @@ def trim(raw: dict) -> dict:
             if cost:
                 entry["cost"] = {k2: cost[k1] for k1, k2 in (("input", "input"), ("output", "output"), ("cache_read", "cacheRead"), ("cache_write", "cacheWrite")) if isinstance(cost.get(k1), (int, float))}
             models[mid] = entry
-        out[pid] = {"name": p.get("name"), "api": p.get("api"), "models": models}
+        out[pid] = {"name": p.get("name"), "api": p.get("api"), "npm": p.get("npm"), "env": list(p.get("env") or []), "doc": p.get("doc"), "models": models}
     return out
 
 
@@ -72,10 +72,12 @@ def load() -> dict:
     if _data is None:
         for path in (cache_path(), BUNDLED):
             try:
-                _data = json.loads(path.read_text(encoding="utf-8"))
-                break
+                data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
+            if data and all("env" in p for p in list(data.values())[:5]):  # older caches lack provider env/npm
+                _data = data
+                break
         _data = _data or {}
         _by_id = None
     return _data
@@ -121,7 +123,13 @@ async def refresh(force: bool = False) -> bool:
 
 
 def _providers_for(pid: str, catalog: str | None) -> list[str]:
-    return PROVIDER_MAP.get(catalog or "", []) + [p for p in PROVIDER_MAP.get(pid, []) if p not in PROVIDER_MAP.get(catalog or "", [])]
+    """models.dev ids for a provider; a catalog id AFH has no mapping for is a models.dev id itself."""
+    out: list[str] = []
+    for key in (catalog, pid):
+        for dev in PROVIDER_MAP.get(key or "") or ([key] if key and key in load() else []):
+            if dev not in out:
+                out.append(dev)
+    return out
 
 
 def lookup(pid: str, catalog: str | None, model_id: str) -> dict | None:

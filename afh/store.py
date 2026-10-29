@@ -38,6 +38,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "animations": True,
         "animSpeed": 1.0,
         "logoAnim": True,
+        "themeTransition": "circle",  # circle | diamond | wipe | fade | blur | none
+        "msgAnim": "rise",  # rise | fade | slide | pop | blur | none
         "glass": True,
         "customCss": "",
         "sendKey": "enter",  # enter | ctrl-enter
