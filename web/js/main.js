@@ -1463,7 +1463,10 @@ function onEvent(ev) {
   trackEvent(ev); // delegation children register themselves on session.created
   const sid = ev.data?.sessionID || ev.data?.session_id || (type.startsWith("session.") ? ev.data?.id : null);
   if (type === "session.execution.started" && sid) S.busy.add(sid);
-  if (/^session\.execution\.(succeeded|failed|interrupted)$/.test(type) && sid) S.busy.delete(sid);
+  if (/^session\.execution\.(succeeded|failed|interrupted)$/.test(type) && sid) {
+    S.busy.delete(sid);
+    if (S.current?.id === sid) renderComposerState();  // settle the dock/to-do spinner the moment the run ends
+  }
   if (/^session\.(created|deleted|renamed|archived|unarchived|forked|moved|execution\.(started|succeeded|failed|interrupted))$/.test(type)) {
     if (type === "session.renamed" && sid) {
       const s = S.sessions.find((x) => x.id === sid);
