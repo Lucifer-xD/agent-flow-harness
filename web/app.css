@@ -574,13 +574,15 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .modal { width: min(1040px, calc(100vw - 48px)); height: min(720px, calc(100vh - 48px)); background: var(--bg); border-radius: 20px; box-shadow: var(--shadow); display: grid; grid-template-columns: 220px 1fr; overflow: hidden; animation: modal-in 0.4s var(--spring) both; }
 .scrim.closing .modal { animation: modal-out 0.2s var(--ease) both; }
 .modal.small { width: min(520px, calc(100vw - 48px)); height: auto; max-height: calc(100vh - 48px); display: block; }
-.m-nav { background: var(--bg-side); border-right: 1px solid var(--border); padding: 18px 10px; display: flex; flex-direction: column; gap: 2px; }
+/* One row as tall as the window: without it the row grows with the page and the bottom is cut off instead of scrolling. */
+.modal:not(.small):not(.wide) { grid-template-rows: minmax(0, 1fr); }
+.m-nav { background: var(--bg-side); border-right: 1px solid var(--border); padding: 18px 10px; display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .m-nav h3 { margin: 0 10px 12px; font-size: 15px; }
 .m-nav button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; color: var(--text-2); font-size: 13.5px; text-align: left; transition: background 0.15s, color 0.15s; }
 .m-nav button:hover { background: var(--panel-2); color: var(--text); }
 .m-nav button.on { background: var(--panel-3); color: var(--text); }
 .m-nav .spacer { flex: 1; }
-.m-body { overflow-y: auto; padding: 26px 32px 40px; position: relative; }
+.m-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 26px 32px 40px; position: relative; }
 .m-close { position: absolute; top: 14px; right: 14px; }
 .m-body h2 { margin: 0 0 4px; font-size: 19px; letter-spacing: -0.015em; }
 .m-body .lead { color: var(--text-2); margin: 0 0 22px; font-size: 13.5px; }
@@ -592,7 +594,9 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .card-body { padding: 14px 16px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .row:last-child { border-bottom: 0; }
-.row .rl { min-width: 0; }
+.row { flex-wrap: wrap; }
+.row .rl { min-width: 0; flex: 1 1 240px; }
+.row > .inp, .row > .sel, .row > .inline { max-width: 100%; }
 .row .rl b { display: block; font-weight: 550; font-size: 13.5px; }
 .row .rl span { color: var(--text-3); font-size: 12.5px; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
@@ -1246,6 +1250,8 @@ body.resizing-drawer .drawer, body.resizing-drawer .app { transition: none !impo
 .update-pill { position: fixed; left: 16px; bottom: 16px; z-index: 60; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 13px; animation: rise 0.35s var(--spring) both; }
 .update-pill > .ico { width: 16px; height: 16px; color: var(--accent); }
 .update-pill.hidden { display: none; }
+.msg-body .retry-note { margin: 2px 0 10px; }
+.retry-note.live { color: var(--warn, #f59f00); }
 
 .no-anim *, .no-anim *::before, .no-anim *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 @media (prefers-reduced-motion: reduce) {
@@ -1293,6 +1299,8 @@ body.resizing-drawer .drawer, body.resizing-drawer .app { transition: none !impo
   .app.sb-open .sidebar { opacity: 1; pointer-events: auto; transform: none; }
   .suggest { grid-template-columns: 1fr; }
   .modal { grid-template-columns: 1fr; }
-  .m-nav { flex-direction: row; overflow-x: auto; padding: 10px; }
-  .m-nav h3, .m-nav .spacer { display: none; }
+  .modal:not(.small):not(.wide) { grid-template-rows: auto minmax(0, 1fr); }
+  .m-nav { flex-direction: row; align-items: center; overflow-x: auto; overflow-y: hidden; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--border); scrollbar-width: thin; }
+  .m-nav button { flex: none; white-space: nowrap; }
+  .m-nav h3, .m-nav .spacer, .m-nav .h-muted { display: none; }
 }

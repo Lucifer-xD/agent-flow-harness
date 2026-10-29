@@ -107,10 +107,19 @@ export function applyEvent(t, ev) {
       t.error = d.error || { message: "The run failed" };
       finishLive(t);
       return { status: true, all: true };
-    case "session.retry.scheduled":
-      t.retry = d;
+    case "session.retry.scheduled": {
       t.retryError = d.error || t.retryError;
-      return { status: true };
+      if (!d.assistantMessageID) { // an older engine: only the status line can show it
+        t.retry = d;
+        return { status: true };
+      }
+      // The note belongs to the reply being retried, so it stays put while the run goes on.
+      const m = assistant(t, d.assistantMessageID);
+      m.retries = [...(m.retries || []).filter((x) => x.attempt !== d.attempt), { attempt: d.attempt, error: d.error, time: ev.created || Date.now() }];
+      m.retrying = true;
+      m.content = [];
+      return { msg: m.id };
+    }
     case "session.step.started": {
       const m = assistant(t, d.assistantMessageID, d);
       m.startedAt = d.started || Date.now();
@@ -119,12 +128,14 @@ export function applyEvent(t, ev) {
     }
     case "session.step.failed": {
       const m = assistant(t, d.assistantMessageID);
+      m.retrying = false;
       if (isStop(d.error)) m.stopped = true;
       else m.error = d.error?.message;
       return { msg: m.id };
     }
     case "session.step.ended": {
       const m = assistant(t, d.assistantMessageID);
+      m.retrying = false;
       m.tokens = d.tokens;
       if (d.cost != null) m.cost = d.cost;
       m.finish = d.finish;
@@ -142,6 +153,7 @@ export function applyEvent(t, ev) {
     case "session.reasoning.started":
     case "session.text.started": {
       const m = assistant(t, d.assistantMessageID);
+      m.retrying = false;
       part(m, ev.type.includes("reasoning") ? "reasoning" : "text", d.ordinal);
       return { msg: m.id };
     }
@@ -167,6 +179,7 @@ export function applyEvent(t, ev) {
     }
     case "session.tool.input.started": {
       const m = assistant(t, d.assistantMessageID);
+      m.retrying = false;
       tool(m, d.id, d.name);
       return { msg: m.id };
     }
@@ -706,8 +719,9 @@ export class ChatView {
     const last2 = this.thread.messages[this.thread.messages.length - 1] === m;
     if (m.error && !stopped && !(last2 && this.thread.error)) parts.push(errorCard(m.error, { model: this.opts.modelName(m.model) }));
     if (stopped) parts.push(el("div.sys-note", "Stopped"));
-    if (!parts.length && !m.live) return null;
-    if (!parts.length) parts.push(el("div.think.live", el("span.think-head", el("span.think-label", "Working"))));
+    if (!parts.length && !m.live && !m.retries?.length) return null;
+    if (!parts.length && (m.live || m.retrying)) parts.push(el("div.think.live", el("span.think-head", el("span.think-label", m.retrying ? "Waiting to retry" : "Working"))));
+    if (m.retries?.length) parts.unshift(retryNote(m));
 
     // Output already includes reasoning; input is the uncached part, so add what the cache served.
     const tokens = m.tokens ? fmtTokens((m.tokens.input || 0) + (m.tokens.cache?.read || 0) + (m.tokens.cache?.write || 0) + (m.tokens.output || 0)) + " tokens" : null;
@@ -772,6 +786,18 @@ export class ChatView {
 }
 
 /** A readable error card: what went wrong, with which model, why it probably happened, and the raw details. */
+/** "Provider error — retrying…" at the top of the reply it happened in; it stays there afterwards. */
+function retryNote(m) {
+  const r = m.retries[m.retries.length - 1];
+  const message = r.error?.message ? String(r.error.message) : "";
+  const why = message ? `: ${message.slice(0, 90)}${message.length > 90 ? "…" : ""}` : "";
+  const n = m.retries.length;
+  const text = m.retrying ? `Provider error — retrying (attempt ${r.attempt + 1})${why}`
+    : m.error && !m.stopped ? `Provider error — gave up after ${n + 1} attempts${why}`
+      : `Provider error — recovered after ${n} ${n === 1 ? "retry" : "retries"}${why}`;
+  return el(`div.sys-note.retry-note${m.retrying ? ".live" : ""}`, { title: message }, text);
+}
+
 export function errorCard(err, { model, onRetry, onChangeModel } = {}) {
   const e = typeof err === "string" ? { message: err } : err || {};
   const msg = String(e.message || e.type || "Something went wrong");

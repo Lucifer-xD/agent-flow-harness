@@ -345,7 +345,11 @@ class Run:
                 retryable = err.ev.get("kind") == "network" or status in RETRYABLE
                 if retryable and attempt < 4 and not self.abort.is_set():
                     delay = min(8, 2 ** attempt)
-                    self.emit("session.retry.scheduled", attempt=attempt, error=err.to_dict(), delay=delay)
+                    # Kept on the message, so the note stays where it happened (above the retried reply).
+                    msg.setdefault("retries", []).append({"attempt": attempt, "error": err.to_dict(), "time": now_ms()})
+                    msg["content"] = []
+                    store.save_message(self.sid, msg)
+                    self.emit("session.retry.scheduled", assistantMessageID=msg["id"], attempt=attempt, error=err.to_dict(), delay=delay)
                     await asyncio.sleep(delay)
                     continue
                 msg["error"] = err.to_dict()
