@@ -185,7 +185,7 @@ class GeminiProvider:
         if usage:
             thoughts = usage.get("thoughtsTokenCount") or 0
             yield usage_event(
-                input=usage.get("promptTokenCount") or 0,
+                input=(usage.get("promptTokenCount") or 0) - (usage.get("cachedContentTokenCount") or 0),
                 output=(usage.get("candidatesTokenCount") or 0) + thoughts,  # like OpenAI, output includes reasoning
                 reasoning=thoughts, cache_read=usage.get("cachedContentTokenCount") or 0,
             )

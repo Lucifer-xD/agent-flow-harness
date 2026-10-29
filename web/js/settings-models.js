@@ -127,6 +127,28 @@ export async function modelsPane(pane, ctx, opts = {}) {
     return details;
   }
 
+  // ---- local model servers (Ollama, LM Studio, vLLM, llama.cpp, Jan)
+  const localBox = el("div");
+  const scan = async (btn) => {
+    if (btn) { btn.disabled = true; btn.replaceChildren(el("span.spinner"), " Scanning…"); }
+    let found = [];
+    try { found = await api.get("/api/providers/detect-local"); } catch (e) { toast(e.message, "err"); }
+    if (btn) { btn.disabled = false; btn.replaceChildren(ico("search"), "Scan again"); }
+    localBox.replaceChildren(...(found.length ? found.map((srv) => el("div.list-item", ico("cpu"),
+      el("div.li-main", el("div.li-title", srv.name, el("span.pill-tag", `${srv.models.length} model${srv.models.length === 1 ? "" : "s"}`), srv.configured ? el("span.pill-tag.accent", "added") : null),
+        el("div.li-sub", { title: srv.models.join(", ") }, `${srv.base_url}${srv.models.length ? " · " + srv.models.slice(0, 4).join(", ") + (srv.models.length > 4 ? "…" : "") : ""}`)),
+      srv.configured ? null : el("button.btn.sm.primary", { on: { click: async (e) => {
+        e.currentTarget.disabled = true;
+        const body = srv.catalog ? { catalog: srv.catalog, id: srv.catalog } : { id: srv.id, name: srv.name, kind: "openai", base_url: srv.base_url };
+        const out = await guard(() => api.post("/api/providers", body), `${srv.name} added with ${srv.models.length} models`);
+        if (out) { await ctx.reloadCatalog(); redraw({ open: out.id }); }
+      } } }, ico("plus"), "Add")))
+      : [el("div.empty-row", "No local model server is running. Start Ollama, LM Studio, vLLM, llama.cpp or Jan, then scan again.")]));
+  };
+  const scanBtn = el("button.btn.sm", { on: { click: (e) => scan(e.currentTarget) } }, ico("search"), "Scan");
+  pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Models on this computer"), el("p", "Finds Ollama, LM Studio, vLLM, llama.cpp and Jan servers running locally — free, private, no key")), scanBtn), localBox));
+  scan(null);
+
   // ---- add a provider
   const available = catalog.filter((c) => !c.configured);
   const search = el("input.inp", { placeholder: `Search ${available.length} providers — OpenAI, Anthropic, Gemini, Kimi, Z.AI, DeepSeek, Groq, OpenRouter, Ollama…` });

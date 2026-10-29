@@ -56,9 +56,13 @@ async def guard(request: Request, call_next):
             if ACCESS["token"] and token != ACCESS["token"] and token not in remote.state["tokens"]:
                 return JSONResponse({"error": "unauthorized"}, status_code=401)
     try:
-        return await call_next(request)
+        response = await call_next(request)
     except Exception as exc:  # every failure becomes a JSON error the UI can show
         return error_response(exc)
+    if not request.url.path.startswith("/api/"):
+        # The UI files: always revalidate (cheap on localhost), so an update is never hidden by a cached copy.
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 def error_response(exc: Exception) -> JSONResponse:
@@ -223,7 +227,7 @@ def delete_agent(agent_id: str):
 def file_read(path: str):
     """Read a file inside one of the user's project folders (for the Live pane)."""
     target = Path(path).expanduser().resolve()
-    roots = [Path(p).resolve() for p in store.load_settings().get("projects", [])]
+    roots = [Path(p).resolve() for p in store.load_settings().get("projects", [])] + [(store.AFH_DIR / "worktrees").resolve()]
     if not any(target == r or r in target.parents for r in roots):
         raise ValueError("That file is outside your project folders")
     if not target.is_file():
@@ -241,8 +245,16 @@ def list_sessions(directory: str, archived: bool = False):
 
 
 @app.post("/api/sessions")
-def create_session(body: dict = Body(...)):
-    return engine.create_session(body["directory"], title=body.get("title") or None, agent=body.get("agent"), model=model_ref(body.get("model")), mode=body.get("mode"))
+async def create_session(body: dict = Body(...)):
+    kw = dict(title=body.get("title") or None, agent=body.get("agent"), model=model_ref(body.get("model")), mode=body.get("mode"))
+    if body.get("worktree"):
+        from .engine import worktree as wtmod
+
+        try:
+            return await engine.create_worktree_session(body["directory"], name=str(body.get("worktreeName") or "")[:60] or None, **kw)
+        except wtmod.GitError as err:
+            raise ValueError(str(err)) from None
+    return engine.create_session(body["directory"], **kw)
 
 
 @app.get("/api/sessions/{sid}")
@@ -269,8 +281,7 @@ def update_session(sid: str, body: dict = Body(...)):
 
 @app.delete("/api/sessions/{sid}")
 def delete_session(sid: str):
-    engine.delete_session(sid)
-    return {"ok": True}
+    return engine.delete_session(sid)
 
 
 @app.post("/api/sessions/{sid}/fork")
@@ -298,8 +309,8 @@ async def prompt(sid: str, body: dict = Body(...)):
             entry["uri"] = f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
             entry["mime"] = mime
         files.append(entry)
-    await engine.prompt(sid, body["text"], files or None, agent=body.get("agent"), model=model_ref(body.get("model")))
-    return {"ok": True}
+    out = await engine.prompt(sid, body["text"], files or None, agent=body.get("agent"), model=model_ref(body.get("model")))
+    return {"ok": True, **({"command": out["command"]} if isinstance(out, dict) and isinstance(out.get("command"), str) else {})}
 
 
 @app.post("/api/sessions/{sid}/interrupt")
@@ -401,6 +412,272 @@ def revert_commit(sid: str):
 def revert_clear(sid: str):
     engine.revert_clear(sid)
     return {"ok": True}
+
+
+@app.post("/api/sessions/{sid}/compact")
+async def compact(sid: str):
+    session_or_404(sid)
+    return {"ok": await engine.compact_now(sid)}
+
+
+# ---- to-do list & goal ------------------------------------------------------------------------
+
+
+@app.get("/api/sessions/{sid}/todos")
+def get_todos(sid: str):
+    session_or_404(sid)
+    return engine.todos(sid)
+
+
+@app.put("/api/sessions/{sid}/todos")
+def put_todos(sid: str, body: dict = Body(...)):
+    """The user edited the list: the model is told on its next call."""
+    session_or_404(sid)
+    todos = body.get("todos")
+    if not isinstance(todos, list):
+        raise ValueError("todos must be a list")
+    return engine.set_todos(sid, todos, by="user")
+
+
+@app.get("/api/sessions/{sid}/goal")
+def get_goal(sid: str):
+    session_or_404(sid)
+    return engine.goal(sid)
+
+
+@app.put("/api/sessions/{sid}/goal")
+async def put_goal(sid: str, body: dict = Body(...)):
+    """Set (or replace) the thread's goal; `start` also sends the first message toward it."""
+    session_or_404(sid)
+    goal = engine.set_goal(sid, str(body.get("text") or ""), str(body.get("criteria") or ""), bool(body.get("autopilot", True)), body.get("maxTurns"))
+    if body.get("start") and not engine.is_running(sid):
+        text = str(body.get("message") or "").strip() or f"Work toward the goal of this thread:\n\n{goal['text']}"
+        await engine.prompt(sid, text)
+    return goal
+
+
+@app.patch("/api/sessions/{sid}/goal")
+def patch_goal(sid: str, body: dict = Body(...)):
+    session_or_404(sid)
+    if not engine.goal(sid):
+        raise KeyError("goal")
+    fields: dict[str, Any] = {}
+    if "autopilot" in body:
+        fields["autopilot"] = bool(body["autopilot"])
+        fields["exhausted"] = False
+    if "maxTurns" in body:
+        fields["maxTurns"] = max(1, min(100, int(body["maxTurns"] or 10)))
+    status = body.get("status") if body.get("status") in ("active", "achieved", "blocked", "paused") else None
+    if status == "active":
+        fields.update(turns=0, exhausted=False)
+    return engine.update_goal(sid, status=status, **fields)
+
+
+@app.delete("/api/sessions/{sid}/goal")
+def delete_goal(sid: str):
+    session_or_404(sid)
+    engine.clear_goal(sid)
+    return {"ok": True}
+
+
+# ---- background jobs ------------------------------------------------------------------------------
+
+
+@app.get("/api/sessions/{sid}/jobs")
+def session_jobs(sid: str):
+    return [j.to_dict(tail=300) for j in engine.jobs.for_session(sid)]
+
+
+@app.get("/api/jobs/{jid}")
+def job_output(jid: str, tail: int = 20000):
+    job = engine.jobs.jobs.get(jid)
+    if not job:
+        raise KeyError(jid)
+    return job.to_dict(tail=max(100, min(tail, 200_000)))
+
+
+@app.post("/api/jobs/{jid}/stop")
+async def job_stop(jid: str):
+    job = engine.jobs.jobs.get(jid)
+    if not job:
+        raise KeyError(jid)
+    await engine.jobs.stop(job)
+    return job.to_dict(tail=2000)
+
+
+@app.delete("/api/jobs/{jid}")
+def job_forget(jid: str):
+    engine.jobs.remove(jid)
+    return {"ok": True}
+
+
+# ---- worktrees --------------------------------------------------------------------------------------
+
+
+def _worktree_of(sid: str) -> dict:
+    session_or_404(sid)
+    wt = engine._afh(sid).get("worktree")
+    if not wt:
+        raise ValueError("This thread does not use a worktree")
+    return wt
+
+
+@app.post("/api/reveal")
+def reveal(body: dict = Body(...)):
+    """Open a project or worktree folder in the system file manager."""
+    import subprocess
+    import sys
+
+    target = Path(str(body.get("path") or "")).expanduser().resolve()
+    roots = [Path(p).resolve() for p in store.load_settings().get("projects", [])] + [(store.AFH_DIR / "worktrees").resolve()]
+    if not any(target == r or r in target.parents for r in roots):
+        raise ValueError("That folder is outside your projects")
+    if not target.exists():
+        raise ValueError(f"{target} does not exist")
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", str(target)])
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(target)])
+    else:
+        subprocess.Popen(["xdg-open", str(target)])
+    return {"ok": True}
+
+
+@app.get("/api/git/check")
+async def git_check(directory: str):
+    from .engine import worktree as wtmod
+
+    root = await wtmod.repo_root(directory)
+    return {"repo": bool(root), "root": root}
+
+
+@app.get("/api/sessions/{sid}/worktree")
+async def worktree_status(sid: str):
+    from .engine import worktree as wtmod
+
+    wt = _worktree_of(sid)
+    return {**wt, **await wtmod.status(wt)}
+
+
+@app.post("/api/sessions/{sid}/worktree/merge")
+async def worktree_merge(sid: str):
+    from .engine import worktree as wtmod
+
+    wt = _worktree_of(sid)
+    if engine.is_running(sid):
+        raise ValueError("Wait for the thread to finish before merging")
+    title = (session_or_404(sid).get("title") or "AFH thread").strip()
+    try:
+        return await wtmod.merge(wt, title)
+    except wtmod.GitError as err:
+        raise ValueError(str(err)) from None
+
+
+@app.post("/api/sessions/{sid}/worktree/remove")
+async def worktree_remove(sid: str, body: dict = Body(default={})):
+    from .engine import worktree as wtmod
+
+    wt = _worktree_of(sid)
+    st = await wtmod.status(wt)
+    if (st["dirty"] or (st["ahead"] and not st["merged"])) and not body.get("force"):
+        raise ValueError(f"The worktree has {len(st['dirty'])} changed file(s) and {st['ahead']} unmerged commit(s). Merge first, or remove anyway.")
+    await wtmod.remove(wt, delete_branch=True)
+    return {"ok": True}
+
+
+# ---- slash commands --------------------------------------------------------------------------------
+
+
+@app.get("/api/commands")
+def list_commands(directory: str | None = None):
+    from .engine import commands as cmdmod
+
+    return cmdmod.all_commands(directory)
+
+
+@app.put("/api/commands")
+def save_commands(body: dict = Body(...)):
+    from .engine import commands as cmdmod
+
+    out = []
+    for c in body.get("commands") or []:
+        name = str(c.get("name") or "").strip().lstrip("/").lower()
+        if not cmdmod.NAME.match(name):
+            raise ValueError(f"Command name '{name}' must be lowercase letters, numbers, - or _")
+        if any(b["name"] == name for b in cmdmod.BUILTINS):
+            raise ValueError(f"/{name} is built in")
+        if not str(c.get("prompt") or "").strip():
+            raise ValueError(f"/{name} needs a prompt")
+        out.append({"name": name, "description": str(c.get("description") or "").strip(), "prompt": str(c["prompt"]).strip()})
+    store.save_settings({"commands": out})
+    return cmdmod.all_commands(body.get("directory"))
+
+
+# ---- usage & cost ------------------------------------------------------------------------------------
+
+
+@app.get("/api/usage/summary")
+def usage_summary(days: int = 30):
+    import datetime as dt
+
+    days = max(1, min(days, 365))
+    start = int(dt.datetime.combine(dt.date.today() - dt.timedelta(days=days - 1), dt.time()).timestamp() * 1000)
+    by_day: dict[str, dict] = {}
+    by_model: dict[str, dict] = {}
+    zero = lambda: {"steps": 0, "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "cost": 0.0, "unpriced": 0}  # noqa: E731
+    for r in engine.store.usage_rows(start):
+        day = dt.date.fromtimestamp(r["created"] / 1000).isoformat()
+        key = f"{r['provider']}/{r['model']}"
+        for bucket in (by_day.setdefault(day, zero()), by_model.setdefault(key, {**zero(), "providerID": r["provider"], "id": r["model"]})):
+            bucket["steps"] += 1
+            bucket["input"] += r["input"] or 0
+            bucket["output"] += r["output"] or 0
+            bucket["cacheRead"] += r["cache_read"] or 0
+            bucket["cacheWrite"] += r["cache_write"] or 0
+            if r["cost"] is None:
+                bucket["unpriced"] += 1
+            else:
+                bucket["cost"] += r["cost"]
+    models = sorted(by_model.values(), key=lambda m: (-m["cost"], -m["steps"]))
+    for m in models:
+        ref = {"providerID": m["providerID"], "id": m["id"]}
+        m["price"] = engine.price_for(ref)
+        m["plan"] = pricing_is_plan(m["providerID"])
+        found = engine.find_model(ref)
+        m["name"] = found.name if found else m["id"]
+    total = sum(m["cost"] for m in models)
+    return {"days": [{"day": d, **v} for d, v in sorted(by_day.items())], "models": models, "total": total, "since": start,
+            "today": engine.store.cost_since(int(dt.datetime.combine(dt.date.today(), dt.time()).timestamp() * 1000)), "budget": store.load_settings().get("budget")}
+
+
+def pricing_is_plan(pid: str) -> bool:
+    from .engine import pricing
+
+    return pricing.is_plan(provcfg.entry(pid or "") or {}, pid or "")
+
+
+@app.put("/api/providers/{pid}/prices")
+def set_price(pid: str, body: dict = Body(...)):
+    """Set (or clear, with price=null) the USD-per-1M-token price of one model."""
+    from .engine import pricing
+
+    p = provcfg.entry(pid)
+    if not p:
+        raise KeyError(pid)
+    mid = str(body.get("model") or "")
+    if not mid:
+        raise ValueError("model is required")
+    prices = dict(p.get("prices") or {})
+    price = pricing.clean_price(body.get("price"))
+    if price:
+        prices[mid] = price
+    else:
+        prices.pop(mid, None)
+    patch: dict[str, Any] = {"prices": prices}
+    if "plan" in body:
+        patch["plan"] = bool(body["plan"])
+    provcfg.upsert(pid, patch)
+    return {"ok": True, "prices": prices}
 
 
 # ---- prompts ------------------------------------------------------------------------------
@@ -535,6 +812,41 @@ async def save_provider(body: dict = Body(...)):
         log.info("refresh after save: %s", err)
     engine.publish({"type": "model.updated", "data": {}})
     return _provider_view(pid, provcfg.entry(pid) or entry)
+
+
+LOCAL_SERVERS = [
+    {"catalog": "ollama", "name": "Ollama", "base_url": "http://localhost:11434/v1"},
+    {"catalog": "lmstudio", "name": "LM Studio", "base_url": "http://localhost:1234/v1"},
+    {"catalog": "vllm", "name": "vLLM", "base_url": "http://localhost:8000/v1"},
+    {"catalog": None, "id": "llamacpp", "name": "llama.cpp server", "base_url": "http://localhost:8080/v1"},
+    {"catalog": None, "id": "jan", "name": "Jan", "base_url": "http://localhost:1337/v1"},
+]
+
+
+@app.get("/api/providers/detect-local")
+async def detect_local():
+    """Look for model servers running on this computer and list their models."""
+    import httpx
+
+    configured = provcfg.load()["providers"]
+
+    async def probe(client: httpx.AsyncClient, srv: dict) -> dict | None:
+        try:
+            r = await client.get(srv["base_url"] + "/models")
+            if r.status_code >= 300:
+                return None
+            data = r.json()
+        except Exception:
+            return None
+        items = data.get("data") if isinstance(data, dict) else data
+        models = [str(m.get("id") if isinstance(m, dict) else m) for m in items or [] if (m.get("id") if isinstance(m, dict) else m)]
+        pid = srv.get("catalog") or srv["id"]
+        known = next((k for k, p in configured.items() if (p.get("base_url") or "").rstrip("/") == srv["base_url"]), None)
+        return {**srv, "id": pid, "models": models, "configured": bool(known), "providerID": known}
+
+    async with httpx.AsyncClient(timeout=1.5) as client:
+        found = await asyncio.gather(*(probe(client, s) for s in LOCAL_SERVERS))
+    return [f for f in found if f]
 
 
 @app.post("/api/providers/{pid}/test")

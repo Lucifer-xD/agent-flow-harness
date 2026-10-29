@@ -38,6 +38,8 @@
         <span class="tb-logo" id="tb-logo" hidden></span>
         <div class="tb-title" id="tb-title"></div>
         <div class="tb-actions">
+          <button class="chip-btn" id="btn-worktree" title="This thread works in its own git worktree" hidden></button>
+          <button class="chip-btn" id="btn-goal" title="Set a goal: the agent keeps working until it is achieved"><span class="ico" data-icon="target"></span>Goal</button>
           <button class="chip-btn" id="btn-live" title="Watch files being written or edited"><span class="ico" data-icon="eye"></span>Live</button>
           <button class="chip-btn" id="btn-context" title="See and edit everything the model sees"><span class="ico" data-icon="list"></span>Context</button>
           <button class="chip-btn" id="btn-harness" title="See what the model is told"><span class="ico" data-icon="scroll"></span>Prompt</button>
@@ -52,6 +54,8 @@
 
       <div class="composer-wrap">
         <div class="jump" id="jump" hidden><span class="ico" data-icon="arrow-down"></span></div>
+        <div class="work-dock" id="work-dock"></div>
+        <div class="slash-menu" id="slash-menu" hidden></div>
         <form class="composer" id="composer">
           <div class="attachments" id="attachments"></div>
           <textarea id="input" rows="1" placeholder="Ask anything…" spellcheck="true"></textarea>
@@ -60,8 +64,11 @@
               <button type="button" class="icon-btn" id="btn-attach" title="Attach files"></button>
               <button type="button" class="pill" id="pick-agent"></button>
               <button type="button" class="pill" id="pick-mode"></button>
+              <button type="button" class="pill draft-pill" id="draft-goal" title="Set a goal for the new thread" hidden></button>
+              <button type="button" class="pill draft-pill" id="draft-worktree" title="Work in a separate git worktree (own branch and folder)" hidden></button>
             </div>
             <div class="cb-right">
+              <button type="button" class="pill jobs-pill" id="jobs-pill" hidden></button>
               <span class="tps" id="tps"></span>
               <span class="ctx" id="ctx-meter" title="Context used"></span>
               <button type="button" class="pill" id="pick-model"></button>

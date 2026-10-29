@@ -57,8 +57,8 @@ def child_env() -> dict[str, str]:
     return env
 
 
-async def spawn(command: str, cwd: str, shell_pref: str | None) -> asyncio.subprocess.Process:
-    common = dict(cwd=cwd, env=child_env(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+async def spawn(command: str, cwd: str, shell_pref: str | None, *, stdin: int = subprocess.DEVNULL, env: dict[str, str] | None = None) -> asyncio.subprocess.Process:
+    common = dict(cwd=cwd, env={**child_env(), **(env or {})}, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     argv = build_argv(command, shell_pref)
     if argv is None:
         # cmd.exe: let CreateProcess receive the line verbatim; chcp keeps the output UTF-8.
@@ -127,9 +127,11 @@ class ShellTool(BaseTool):
             "Runs a command in the project folder and returns its combined stdout/stderr and exit code. On Windows "
             "the command runs in PowerShell (use PowerShell syntax: `;` to chain, `Get-ChildItem`, `$env:VAR`); on "
             "other systems in bash. Use it for builds, tests, git and package managers. Quote paths with spaces, "
-            "pass non-interactive flags, and never start commands that wait for input or run forever (servers, "
-            "watchers) - the command is killed when `timeout` seconds (default 120, max 600) elapse. Output over "
-            "30000 characters is truncated in the middle. Prefer `read`, `glob` and `grep` for looking at files."
+            "pass non-interactive flags, and never start commands that wait for input. A normal command is killed when "
+            "`timeout` seconds (default 120, max 600) elapse. For servers, watchers and anything that runs until stopped, "
+            "set `background: true`: it starts a background job, returns its first output and a job id, and you check "
+            "on it with the `jobs` tool. Output over 30000 characters is truncated in the middle. Prefer `read`, `glob` "
+            "and `grep` for looking at files."
         ),
         parameters={
             "type": "object",
@@ -137,6 +139,7 @@ class ShellTool(BaseTool):
                 "command": {"type": "string", "description": "The command line to run."},
                 "timeout": {"type": "integer", "description": f"Seconds before the command is killed (default {DEFAULT_TIMEOUT}, max {MAX_TIMEOUT})."},
                 "description": {"type": "string", "description": "One short sentence saying what the command does, shown to the user (e.g. 'Run the unit tests')."},
+                "background": {"type": "boolean", "description": "Run as a background job (servers, watchers, long builds): returns right away with a job id. Default false."},
             },
             "required": ["command"],
         },
@@ -149,7 +152,12 @@ class ShellTool(BaseTool):
             raise ToolError("Missing required parameter 'command'.")
         timeout = min(MAX_TIMEOUT, max(1, int_arg(input, "timeout", DEFAULT_TIMEOUT)))
         description = str_arg(input, "description", required=False)
-        await ctx.permissions.require("shell", [command], {"command": command, "description": description})
+        background = bool(input.get("background"))
+        await ctx.permissions.require("shell", [command], {"command": command, "description": description, **({"background": True} if background else {})})
+        if background and ctx.jobs is not None:
+            from afh.engine.jobs import START_WAIT, start_background
+
+            return await start_background(ctx, command, description, START_WAIT)
 
         shell_pref = (ctx.settings or {}).get("shell")
         started = time.monotonic()

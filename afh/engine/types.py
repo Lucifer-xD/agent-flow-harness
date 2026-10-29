@@ -45,10 +45,14 @@ class ModelInfo:
     variants: list[str] = field(default_factory=list)  # effort levels: "low", "high", "max"...
     input: list[str] = field(default_factory=lambda: ["text"])  # "text", "image"
     hidden: bool = False
+    cost: dict | None = None  # USD per 1M tokens: {"input", "output", "cacheRead", "cacheWrite"}; None = unknown
 
     def to_dict(self) -> dict:
-        return {"id": self.id, "name": self.name, "context": self.context, "output": self.output, "tools": self.tools,
-                "reasoning": self.reasoning, "variants": list(self.variants), "input": list(self.input), "hidden": self.hidden}
+        d = {"id": self.id, "name": self.name, "context": self.context, "output": self.output, "tools": self.tools,
+             "reasoning": self.reasoning, "variants": list(self.variants), "input": list(self.input), "hidden": self.hidden}
+        if self.cost:
+            d["cost"] = dict(self.cost)
+        return d
 
 
 @dataclass
@@ -111,7 +115,8 @@ class ChatRequest:
 #   {"type": "tool.start", "id": str, "name": str}
 #   {"type": "tool.delta", "id": str, "text": str}            # raw JSON argument text as it streams
 #   {"type": "tool.end", "id": str, "name": str, "input": dict | None, "raw": str}
-#   {"type": "usage", "input": int, "output": int, "reasoning": int, "cache_read": int}
+#   {"type": "usage", "input": int, "output": int, "reasoning": int, "cache_read": int, "cache_write": int}
+#       ``input`` counts only uncached prompt tokens; cache reads/writes are reported separately.
 #   {"type": "finish", "reason": "stop" | "tool_calls" | "length" | "error"}
 #   {"type": "error", "message": str, "status": int | None, "kind": str, "response": str}
 ProviderEvent = dict[str, Any]
@@ -126,6 +131,10 @@ class Provider(Protocol):
 
 
 # ---- tools -------------------------------------------------------------------------------------
+
+
+class BudgetExceeded(Exception):
+    """A spending limit (Settings → Usage & cost) stops the run before the next model call."""
 
 
 class PermissionDenied(Exception):
@@ -174,6 +183,7 @@ class ToolContext:
     emit: Callable[[str, dict], None]  # emit(event_type, data) for progress events
     settings: dict = field(default_factory=dict)  # app settings (shell preference, timeouts...)
     read_only: bool = False  # the session forbids edits and shell
+    jobs: Any = None  # the engine's JobManager (background shell commands), when available
 
 
 @dataclass

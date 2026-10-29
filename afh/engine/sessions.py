@@ -43,17 +43,22 @@ class Store:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
         self.lock = threading.RLock()
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(session)")}
+        if "project" not in cols:  # 1.4: a worktree thread lives in another folder but belongs to its project
+            self.db.execute("ALTER TABLE session ADD COLUMN project TEXT")
+        self.db.execute("CREATE INDEX IF NOT EXISTS message_created ON message(type, created)")
 
     # ---- sessions ---------------------------------------------------------------------
 
     def create_session(self, directory: str, *, title: str | None = None, agent: str | None = None, model: dict | None = None,
-                       permissions: list | None = None, metadata: dict | None = None, parent_id: str | None = None, id: str | None = None) -> dict:
+                       permissions: list | None = None, metadata: dict | None = None, parent_id: str | None = None, id: str | None = None,
+                       project: str | None = None) -> dict:
         sid = id or new_id("ses")
         t = now_ms()
         with self.lock:
             self.db.execute(
-                "INSERT INTO session(id, directory, title, parent_id, agent, model, permissions, metadata, created, updated) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (sid, directory, title, parent_id, agent, _j(model) if model else None, _j(permissions or []), _j(metadata or {}), t, t),
+                "INSERT INTO session(id, directory, title, parent_id, agent, model, permissions, metadata, created, updated, project) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (sid, directory, title, parent_id, agent, _j(model) if model else None, _j(permissions or []), _j(metadata or {}), t, t, project if project and project != directory else None),
             )
         return self.get_session(sid)
 
@@ -70,7 +75,7 @@ class Store:
         else:
             q += " AND parent_id IS NULL"
         if directory:
-            q += " AND directory=?"
+            q += " AND COALESCE(project, directory)=?"
             args.append(directory)
         if search:
             q += " AND title LIKE ?"
@@ -115,12 +120,28 @@ class Store:
         out = {
             "id": r["id"], "title": r["title"], "agent": r["agent"], "model": json.loads(r["model"]) if r["model"] else None,
             "permissions": json.loads(r["permissions"] or "[]"), "metadata": json.loads(r["metadata"] or "{}"), "archived": bool(r["archived"]),
-            "tokens": tokens, "cost": r["cost"] or 0.0, "location": {"directory": r["directory"]}, "projectID": r["directory"],
+            "tokens": tokens, "cost": r["cost"] or 0.0, "location": {"directory": r["directory"]}, "projectID": r["project"] or r["directory"],
+            "project": r["project"] or r["directory"],
             "time": {"created": r["created"], "updated": r["updated"], **({"idle": r["idle"]} if r["idle"] else {})},
         }
         if r["parent_id"]:
             out["parentID"] = r["parent_id"]
         return out
+
+    # ---- usage ------------------------------------------------------------------------
+
+    def cost_since(self, since_ms: int) -> float:
+        row = self.db.execute("SELECT COALESCE(SUM(json_extract(data, '$.cost')), 0) FROM message WHERE type='assistant' AND created>=?", (since_ms,)).fetchone()
+        return float(row[0] or 0)
+
+    def usage_rows(self, since_ms: int) -> list[dict]:
+        """One row per model step since a time, without loading the (possibly huge) messages."""
+        q = """SELECT m.created, m.session_id, json_extract(m.data, '$.model.providerID') AS provider, json_extract(m.data, '$.model.id') AS model,
+                      COALESCE(json_extract(m.data, '$.tokens.input'), 0) AS input, COALESCE(json_extract(m.data, '$.tokens.output'), 0) AS output,
+                      COALESCE(json_extract(m.data, '$.tokens.reasoning'), 0) AS reasoning, COALESCE(json_extract(m.data, '$.tokens.cache.read'), 0) AS cache_read,
+                      COALESCE(json_extract(m.data, '$.tokens.cache.write'), 0) AS cache_write, json_extract(m.data, '$.cost') AS cost
+               FROM message m WHERE m.type='assistant' AND m.created>=? AND json_extract(m.data, '$.tokens') IS NOT NULL ORDER BY m.created"""
+        return [dict(r) for r in self.db.execute(q, (since_ms,))]
 
     # ---- messages ---------------------------------------------------------------------
 

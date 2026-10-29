@@ -5,6 +5,7 @@ import { PRESETS, applyAppearance } from "./appearance.js";
 import { delegationPane } from "./delegate.js";
 import { logoNode } from "./logo.js";
 import { modelsPane } from "./settings-models.js";
+import { agentPane, commandsPane, hooksPane, usagePane } from "./settings-power.js";
 import { remotePane } from "./settings-remote.js";
 import { skillsPane } from "./settings-skills.js";
 import { basename, confirmDialog, copyText, el, ico, icon, modal, toast, toggle } from "./ui.js";
@@ -13,11 +14,15 @@ const TABS = [
   ["general", "General", "sliders"],
   ["appearance", "Appearance", "sparkle"],
   ["personalization", "Personalization", "user"],
+  ["agent", "Agent", "checklist"],
   ["delegation", "Delegation", "branch"],
   ["models", "Models & providers", "cpu"],
+  ["usage", "Usage & cost", "coin"],
   ["skills", "Skills", "book"],
   ["mcp", "MCP servers", "plug"],
   ["prompts", "Prompts & agents", "scroll"],
+  ["commands", "Commands", "slash"],
+  ["hooks", "Hooks", "hook"],
   ["remote", "Remote control", "globe"],
   ["about", "About", "info"],
 ];
@@ -93,6 +98,10 @@ const PANES = {
   models: (pane, ctx, opts) => modelsPane(pane, ctx, opts),
   skills: (pane, ctx) => skillsPane(pane, ctx),
   remote: (pane, ctx) => remotePane(pane, ctx),
+  agent: (pane, ctx) => agentPane(pane, ctx),
+  hooks: (pane, ctx) => hooksPane(pane, ctx),
+  commands: (pane, ctx) => commandsPane(pane, ctx),
+  usage: (pane, ctx) => usagePane(pane, ctx),
 
   async general(pane, ctx) {
     const s = ctx.S.settings;
@@ -114,7 +123,7 @@ const PANES = {
       card("Notifications", "When you're in another window", null,
         row("Sounds", "A short tone when a run finishes or needs your approval", toggle(s.ui.sounds !== false, ui("sounds"))),
         row("Desktop notifications", "System notification when a thread finishes or needs approval", toggle(s.ui.notify !== false, (v) => { ui("notify")(v); if (v && "Notification" in window && Notification.permission === "default") Notification.requestPermission(); }))),
-      card("Keyboard", null, null, el("div.card-body", el("pre.h-pre", "Enter / Shift+Enter   send / new line\nEsc                   stop the running thread\nCtrl+N                new thread\nCtrl+K                search threads\nCtrl+B                toggle sidebar\nCtrl+,                settings"))));
+      card("Keyboard", null, null, el("div.card-body", el("pre.h-pre", "Enter / Shift+Enter   send / new line\n/                     commands: /goal /compact /review …\nEsc                  stop the running thread\nCtrl+N                new thread\nCtrl+K                search threads\nCtrl+B                toggle sidebar\nCtrl+,                settings"))));
   },
 
   async appearance(pane, ctx) {
@@ -299,7 +308,7 @@ const PANES = {
         row("Reload engine", "Re-reads providers, agents and reconnects MCP servers", el("button.btn.sm", { on: { click: () => guard(() => api.post("/api/restart")) } }, ico("refresh"), "Restart"))),
       card("Where things live", null, null, el("div.card-body",
         el("div.note", el("b", "Everything stays on this computer. "), "Settings, API keys and threads live under ~/.afh. Nothing is sent anywhere except to the model providers you configure."),
-        el("pre.h-pre", "~/.afh/settings.json       appearance, projects, personalization, delegation, prompts, agents, MCP servers\n~/.afh/providers.json      providers and API keys\n~/.afh/afh.db              threads, messages and undo snapshots\n~/.afh/skills/             installed skills\n~/.afh/personalization.md  generated instructions\n~/.afh/AGENTS.md           global instructions"))),
+        el("pre.h-pre", "~/.afh/settings.json       appearance, projects, personalization, delegation, prompts, agents, MCP servers\n~/.afh/providers.json      providers and API keys\n~/.afh/afh.db              threads, messages and undo snapshots\n~/.afh/skills/             installed skills\n~/.afh/worktrees/          git worktrees of threads that work on their own branch\n~/.afh/commands/           your slash commands as Markdown files (optional)\n~/.afh/personalization.md  generated instructions\n~/.afh/AGENTS.md           global instructions"))),
       card("Open source", "MIT licensed. Uses marked (MIT), DOMPurify (Apache-2.0/MPL-2.0), highlight.js (BSD-3), Electron (MIT), FastAPI (MIT).", null));
   },
 };
