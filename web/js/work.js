@@ -155,20 +155,22 @@ function todoBlock(t, todos, opts) {
   wrap.append(head);
   if (isOpen) {
     const list = el("div.todo-list");
-    for (const x of todos) list.append(todoItem(t, x, todos));
+    for (const x of todos) list.append(todoItem(t, x, todos, opts.busy));
     list.append(addRow(t, todos));
     wrap.append(list);
   }
   return wrap;
 }
 
-function todoItem(t, item, todos) {
+function todoItem(t, item, todos, busy) {
   const st = item.status;
   const fresh = t.justDone?.has(item.id);
-  const mark = el(`button.todo-mark.${st}`, { type: "button", title: st === "completed" ? "Mark not done" : "Mark done", on: { click: () => {
+  // The in-progress item spins only while the thread is actually running; idle (done/stopped) it is a steady dot.
+  const inProgressMark = busy ? el("span.todo-spin") : el("span.todo-dot");
+  const mark = el(`button.todo-mark.${st}${st === "in_progress" && !busy ? ".idle" : ""}`, { type: "button", title: st === "completed" ? "Mark not done" : "Mark done", on: { click: () => {
     const next = st === "completed" ? "pending" : "completed";
     saveTodos(t, todos.map((x) => (x.id === item.id ? { ...x, status: next } : x)));
-  } } }, st === "in_progress" ? el("span.todo-spin") : st === "completed" ? ico("check") : st === "cancelled" ? ico("x") : null);
+  } } }, st === "in_progress" ? inProgressMark : st === "completed" ? ico("check") : st === "cancelled" ? ico("x") : null);
   const text = el("span.todo-text", { title: "Double-click to edit" }, st === "in_progress" && item.activeForm ? item.activeForm : item.content);
   text.addEventListener("dblclick", () => {
     const input = el("input.todo-edit", { value: item.content });

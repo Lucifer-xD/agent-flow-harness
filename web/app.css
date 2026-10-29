@@ -776,6 +776,8 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .todo-mark.cancelled { border-style: dashed; color: var(--text-3); }
 .todo-mark.in_progress { border-color: var(--accent-line); }
 .todo-spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--accent); border-right-color: var(--accent); animation: spin 0.9s linear infinite; }
+.todo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.todo-mark.in_progress.idle { border-color: var(--accent); }
 .todo-text { flex: 1; min-width: 0; cursor: text; }
 .todo-item.in_progress .todo-text { color: var(--accent); font-weight: 550; }
 .todo-item.completed .todo-text { color: var(--text-3); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-3) 60%, transparent); }
