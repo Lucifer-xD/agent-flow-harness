@@ -1,7 +1,9 @@
 import { api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
 import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread } from "./chat.js";
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
-import { applyAppearance as applyTheme } from "./appearance.js";
+import { PRESETS, applyAppearance as applyTheme } from "./appearance.js";
+import { applyLanguage } from "./i18n.js";
+import { openPalette } from "./palette.js";
 import { openContextEditor } from "./context.js";
 import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
@@ -10,7 +12,7 @@ import { exportThread, openImportDialog } from "./transfer-ui.js";
 import { applyWorkEvent, jobsPopover, loadJobs, openGoalDialog, renderDock, renderJobsChip, setRedraw, syncState } from "./work.js";
 import {
   ago, basename, closePopover, confirmDialog, contextRing, dayGroup, diffView, el, escapeHtml, fmtTokens,
-  hydrateIcons, ico, icon, popover, promptDialog, repositionPopover, toast,
+  hydrateIcons, ico, icon, modalityBadges, popover, promptDialog, repositionPopover, toast,
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -137,6 +139,51 @@ async function boot() {
 
 export function applyAppearance() {
   applyTheme(S.settings.ui);
+  renderThemeButton();
+  applyLanguage(S.settings.ui.language || "en", S.settings.ui.direction || "auto");
+  const lb = $("btn-lang");
+  if (lb) lb.replaceChildren(el("span.lang-mark", S.settings.ui.language === "ar" ? "EN" : "ع"));
+}
+
+/** Switch the interface language live (Arabic turns the layout right to left unless you chose a direction). */
+async function setLanguage(language) {
+  S.settings.ui = { ...S.settings.ui, language };
+  applyAppearance();
+  try { S.settings = await api.put("/api/settings", { ui: { language } }); } catch (err) { toast(err.message, "err"); }
+}
+
+// ---- one-click dark / light, with a circular reveal from the button ---------------------------
+
+function renderThemeButton() {
+  const b = $("btn-theme");
+  if (!b) return;
+  const dark = document.documentElement.dataset.theme === "dark";
+  b.innerHTML = icon(dark ? "sun" : "moon");
+  b.title = dark ? "Switch to light" : "Switch to dark";
+}
+
+async function toggleTheme(e) {
+  const u = S.settings.ui;
+  const dark = document.documentElement.dataset.theme === "dark";
+  const next = dark ? "light" : "dark";
+  const fav = PRESETS[next === "dark" ? u.darkPreset : u.lightPreset];
+  const patch = { theme: next };
+  if (u.preset !== "custom") {
+    if (PRESETS[u.preset]) patch[dark ? "darkPreset" : "lightPreset"] = u.preset; // remember where you came from
+    patch.preset = fav && fav.dark === (next === "dark") ? (next === "dark" ? u.darkPreset : u.lightPreset) : next === "dark" ? "sunset" : "paper";
+    const p = PRESETS[patch.preset];
+    Object.assign(patch, { accentOverride: false, bg: p.bg, text: p.text, accent: p.accent });
+  }
+  const apply = () => { S.settings.ui = { ...u, ...patch }; applyAppearance(); };
+  const r = (e?.currentTarget || $("btn-theme")).getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const root = document.documentElement;
+  root.style.setProperty("--vt-x", `${x}px`);
+  root.style.setProperty("--vt-y", `${y}px`);
+  root.style.setProperty("--vt-r", `${Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))}px`);
+  if (document.startViewTransition && u.animations !== false && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(apply);
+  else apply();
+  try { S.settings = await api.put("/api/settings", { ui: patch }); } catch (err) { toast(err.message, "err"); }
 }
 
 // ---- notifications --------------------------------------------------------------------
@@ -603,6 +650,71 @@ function wireResize() {
   h.addEventListener("dblclick", () => { applyChatWidth(CHAT_W); saveSettings({ ui: { chatWidth: CHAT_W } }).catch(() => {}); toast("Chat width reset", "info", 1200); });
 }
 
+// ---- command palette ---------------------------------------------------------------------------
+
+function showPalette() {
+  const t = S.current;
+  const items = [
+    { group: "Actions", title: "New thread", icon: "plus", sub: "Ctrl+N", run: () => { showHome(); $("input").focus(); } },
+    { group: "Actions", title: document.documentElement.dataset.theme === "dark" ? "Switch to light" : "Switch to dark", icon: "sun", keywords: "theme mode dark light", run: () => toggleTheme() },
+    { group: "Actions", title: S.settings.ui.language === "ar" ? "English interface" : "العربية — Arabic interface", icon: "languages", keywords: "language arabic rtl", run: () => setLanguage(S.settings.ui.language === "ar" ? "en" : "ar") },
+    { group: "Actions", title: "Set a goal", icon: "target", run: () => editGoal() },
+    { group: "Actions", title: "Open folder…", icon: "folder-plus", run: chooseFolder },
+    { group: "Actions", title: "Import thread…", icon: "arrow-down", run: importThread },
+    ...(t ? [
+      { group: "Thread", title: "Compact now", icon: "archive", sub: "Summarise older messages", run: () => localCommand("/compact") },
+      { group: "Thread", title: "Live", icon: "eye", run: () => openDrawer("live") },
+      { group: "Thread", title: "Changes", icon: "diff", run: () => openDrawer("changes") },
+      { group: "Thread", title: "Prompt", icon: "scroll", run: () => openDrawer("harness") },
+      { group: "Thread", title: "Context editor", icon: "edit", run: editContext },
+      { group: "Thread", title: "Rename", icon: "edit", run: renameThread },
+      { group: "Thread", title: "Fork thread", icon: "branch", run: () => forkThread(t.messages.at(-1)?.id) },
+    ] : []),
+    ...[["general", "General"], ["appearance", "Appearance"], ["agent", "Agent"], ["delegation", "Delegation"], ["models", "Models & providers"], ["usage", "Usage & cost"], ["skills", "Skills"], ["mcp", "MCP servers"], ["prompts", "Prompts & agents"], ["commands", "Commands"], ["hooks", "Hooks"], ["remote", "Remote control"], ["about", "About"]]
+      .map(([id, label]) => ({ group: "Settings", title: label, icon: "settings", keywords: "settings", run: () => openSettings(id, ctx) })),
+    ...S.sessions.slice(0, 80).map((s) => ({ group: "Threads", title: s.title || "New thread", sub: ago(s.time?.updated), icon: s.metadata?.afh?.goal ? "target" : "list", run: () => openThread(s.id) })),
+    ...S.models.map((m) => ({ group: "Models", title: m.name, sub: providerName(m.providerID), icon: "cpu", keywords: m.id, run: () => chooseModel({ id: m.id, providerID: m.providerID }) })),
+    ...Object.entries(PRESETS).map(([id, p]) => ({ group: "Themes", title: p.name, sub: p.dark ? "dark" : "light", icon: p.dark ? "moon" : "sun", keywords: "theme color", run: () => applyPreset(id) })),
+  ];
+  openPalette(items);
+}
+
+async function applyPreset(id) {
+  const p = PRESETS[id];
+  const patch = { preset: id, accentOverride: false, bg: p.bg, text: p.text, accent: p.accent, theme: p.dark ? "dark" : "light", [p.dark ? "darkPreset" : "lightPreset"]: id };
+  const apply = () => { S.settings.ui = { ...S.settings.ui, ...patch }; applyAppearance(); };
+  if (document.startViewTransition && S.settings.ui.animations !== false) document.startViewTransition(apply); else apply();
+  try { S.settings = await api.put("/api/settings", { ui: patch }); } catch (err) { toast(err.message, "err"); }
+}
+
+// ---- the side pane (Live, Watch, Changes, Prompt) can be dragged wider or narrower -------------
+
+function wireDrawerResize() {
+  const drawer = $("drawer");
+  const handle = el("div.drawer-resize", { title: "Drag to resize · double-click to reset" });
+  drawer.prepend(handle);
+  const saved = Number(S.settings.ui.drawerWidth) || 0;
+  if (saved) drawer.style.setProperty("--drawer-w", `${saved}px`);
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    document.body.classList.add("resizing-drawer");
+    const rtl = document.documentElement.dir === "rtl";
+    let w = drawer.getBoundingClientRect().width;
+    const move = (ev) => {
+      w = Math.round(Math.max(320, Math.min(innerWidth - 360, rtl ? ev.clientX : innerWidth - ev.clientX)));
+      drawer.style.setProperty("--drawer-w", `${w}px`);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", () => {
+      handle.removeEventListener("pointermove", move);
+      document.body.classList.remove("resizing-drawer");
+      saveSettings({ ui: { drawerWidth: w } }).catch(() => {});
+    }, { once: true });
+  });
+  handle.addEventListener("dblclick", () => { drawer.style.removeProperty("--drawer-w"); saveSettings({ ui: { drawerWidth: 0 } }).catch(() => {}); });
+}
+
 // ---- goal, to-do list, background jobs, worktree ------------------------------------------
 
 function renderWork() {
@@ -887,7 +999,9 @@ function renderComposerState() {
 
   renderTps();
   const hint = $("composer-hint");
-  hint.textContent = busy ? "Working… press Esc to stop, or type to queue a follow-up" : project() ? `${MODES[currentMode()].sub} · ${basename(project())} · type / for commands` : "";
+  if (busy) hint.replaceChildren(el("span", "Working… press Esc to stop, or type to queue a follow-up"));
+  else if (project()) hint.replaceChildren(el("span", MODES[currentMode()].sub), " · ", el("bdi", basename(project())), " · ", el("span", "type / for commands"));
+  else hint.replaceChildren();
   renderAttachments();
   renderWork();
 }
@@ -931,14 +1045,15 @@ function modelMenu(pid = null) {
       items.push({ title: providerName(p), sub: list.length === 1 ? list[0].name : `${list.length} models`, icon: "cpu", count: list.length, arrow: true, checked: ref?.providerID === p, onSelect: () => modelMenu(p) });
     }
     items.push({ sep: true }, { title: "Add or manage providers…", icon: "key", onSelect: () => openSettings("models", ctx) });
-    const all = S.models.map((m) => ({ title: m.name, sub: `${providerName(m.providerID)}${m.context ? ` · ${fmtTokens(m.context)} ctx` : ""}`, keywords: `${m.providerID} ${m.id}`, hidden: true, checked: ref && ref.id === m.id && ref.providerID === m.providerID, onSelect: () => chooseModel({ id: m.id, providerID: m.providerID }) }));
+    const all = S.models.map((m) => ({ title: m.name, badges: modalityBadges(m.input), sub: `${providerName(m.providerID)}${m.context ? ` · ${fmtTokens(m.context)} ctx` : ""}`, keywords: `${m.providerID} ${m.id}`, hidden: true, checked: ref && ref.id === m.id && ref.providerID === m.providerID, onSelect: () => chooseModel({ id: m.id, providerID: m.providerID }) }));
     popover(anchor, items, { search: true, placeholder: "Search all models…", width: 320, align: "right", searchItems: all });
     return;
   }
   lastProvider = pid;
   const list = byProvider.get(pid) || [];
   const items = list.map((m) => ({
-    title: m.name, sub: `${m.id}${m.context ? ` · ${fmtTokens(m.context)} context` : ""}${m.tools ? "" : " · no tools"}`, keywords: m.id,
+    title: m.name, badges: modalityBadges(m.input),
+    sub: `${m.id}${m.context ? ` · ${fmtTokens(m.context)} context` : ""}${m.variants?.length ? ` · effort ${m.variants.join("/")}` : ""}${m.tools ? "" : " · no tools"}`, keywords: m.id,
     checked: ref && ref.id === m.id && ref.providerID === pid,
     onSelect: () => chooseModel({ id: m.id, providerID: pid }),
   }));
@@ -1307,7 +1422,7 @@ const refreshDrawerSoon = () => { clearTimeout(drawerTimer); drawerTimer = setTi
 
 // ---- wiring ------------------------------------------------------------------------
 
-export const ctx = { S, saveSettings, reloadCatalog, project, modelName, invalidateCommands, onReady: null, onCatalogEvent: null };
+export const ctx = { S, saveSettings, reloadCatalog, project, modelName, invalidateCommands, setLanguage, onReady: null, onCatalogEvent: null };
 window.__afh = { S, D, ctx, view, live: liveState }; // for debugging from the devtools console
 
 function toggleSidebar() {
@@ -1353,6 +1468,8 @@ function wire() {
   $("btn-new").addEventListener("click", () => { showHome(); ta.focus(); });
   $("project-picker").addEventListener("click", projectMenu);
   $("btn-settings").addEventListener("click", () => openSettings("general", ctx));
+  $("btn-theme").addEventListener("click", toggleTheme);
+  $("btn-lang").addEventListener("click", () => setLanguage(S.settings.ui.language === "ar" ? "en" : "ar"));
   $("btn-thread-menu").addEventListener("click", threadMenu);
   $("btn-changes").addEventListener("click", () => openDrawer("changes"));
   $("btn-harness").addEventListener("click", () => openDrawer("harness"));
@@ -1365,6 +1482,7 @@ function wire() {
   $("jobs-pill").addEventListener("click", () => S.current && jobsPopover($("jobs-pill"), S.current));
   subChip.addEventListener("click", () => S.current && subagentsPopover(subChip, S.current, openWatch));
   wireResize();
+  wireDrawerResize();
   $("btn-drawer-close").addEventListener("click", closeDrawer);
   $("btn-collapse").addEventListener("click", toggleSidebar);
   $("btn-expand").addEventListener("click", toggleSidebar);
@@ -1378,6 +1496,7 @@ function wire() {
     else if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); toggleSidebar(); }
     else if (mod && e.key === ",") { e.preventDefault(); openSettings("general", ctx); }
     else if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); $("thread-search").focus(); }
+    else if (mod && e.key.toLowerCase() === "p") { e.preventDefault(); showPalette(); }
     else if (e.key === "Escape" && !overlay && S.current && (S.current.busy || S.busy.has(S.current.id))) { e.preventDefault(); interrupt(); }
   });
   setInterval(renderThreads, 60_000);

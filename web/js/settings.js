@@ -113,7 +113,11 @@ const PANES = {
       card("New threads", null, null,
         row("Default mode", "Build, Plan, Delegate or one of your agents", agentSel),
         row("Default approval mode", "Ask first shows every edit and command before it runs", seg([["ask", "Ask first"], ["full", "Full access"], ["readonly", "Read only"]], s.defaultMode, (v) => save({ defaultMode: v }))),
-        row("Reopen the last thread on start", null, toggle(s.ui.reopenLast !== false, ui("reopenLast")))),
+        row("Reopen the last thread on start", null, toggle(s.ui.reopenLast !== false, ui("reopenLast"))),
+        row("Pick up after a restart", "If AFH closes while a thread is working (an update, a crash), it continues that thread when it opens again", toggle(s.agent?.resumeOnRestart !== false, (v) => save({ agent: { resumeOnRestart: v } })))),
+      card("Language & direction", null, null,
+        row("Interface language", null, seg([["en", "English"], ["ar", "العربية"]], s.ui.language || "en", (v) => ctx.setLanguage(v))),
+        row("Layout direction", "The conversation always follows the text: Arabic paragraphs read right to left, English left to right.", seg([["auto", "Automatic"], ["ltr", "Left to right"], ["rtl", "Right to left"]], s.ui.direction || "auto", ui("direction")))),
       card("Conversation", null, null,
         row("Show thinking", "Display the model's reasoning when it shares it", toggle(s.ui.showReasoning, ui("showReasoning"))),
         row("Show model, tokens and time under replies", "Otherwise only on hover", toggle(s.ui.showMeta !== false, ui("showMeta"))),
@@ -123,7 +127,7 @@ const PANES = {
       card("Notifications", "When you're in another window", null,
         row("Sounds", "A short tone when a run finishes or needs your approval", toggle(s.ui.sounds !== false, ui("sounds"))),
         row("Desktop notifications", "System notification when a thread finishes or needs approval", toggle(s.ui.notify !== false, (v) => { ui("notify")(v); if (v && "Notification" in window && Notification.permission === "default") Notification.requestPermission(); }))),
-      card("Keyboard", null, null, el("div.card-body", el("pre.h-pre", "Enter / Shift+Enter   send / new line\n/                     commands: /goal /compact /review …\nEsc                  stop the running thread\nCtrl+N                new thread\nCtrl+K                search threads\nCtrl+B                toggle sidebar\nCtrl+,                settings"))));
+      card("Keyboard", null, null, el("div.card-body", el("pre.h-pre", "Enter / Shift+Enter   send / new line\n/                     commands: /goal /compact /review …\nCtrl+P                command palette: actions, threads, models, themes\nEsc                  stop the running thread\nCtrl+N                new thread\nCtrl+K                search threads\nCtrl+B                toggle sidebar\nCtrl+,                settings"))));
   },
 
   async appearance(pane, ctx) {
@@ -131,14 +135,23 @@ const PANES = {
     const u = s.ui;
     const save = (patch) => ctx.saveSettings({ ui: patch }).catch((e) => toast(e.message, "err"));
     const preview = (patch) => applyAppearance({ ...ctx.S.settings.ui, ...patch }); // live, before save
-    const presetGrid = el("div.preset-grid");
+    const presetGrid = el("div.preset-groups");
     const drawPresets = () => {
       presetGrid.replaceChildren();
+      const darkGrid = el("div.preset-grid"), lightGrid = el("div.preset-grid");
+      presetGrid.append(el("div.preset-group-title", ico("moon"), "Dark themes"), darkGrid, el("div.preset-group-title", ico("sun"), "Light themes"), lightGrid);
       for (const [id, p] of Object.entries(PRESETS)) {
-        presetGrid.append(el(`button.preset${u.preset === id ? ".on" : ""}`, { type: "button", style: { background: p.bg, color: p.text, borderColor: u.preset === id ? p.accent : "transparent" }, on: { click: async () => { u.preset = id; u.accentOverride = false; u.bg = p.bg; u.text = p.text; u.accent = p.accent; await save({ preset: id, accentOverride: false, bg: p.bg, text: p.text, accent: p.accent }); drawPresets(); drawCustom(); } } },
+        (p.dark ? darkGrid : lightGrid).append(el(`button.preset${u.preset === id ? ".on" : ""}`, { type: "button", style: { background: p.bg, color: p.text, borderColor: u.preset === id ? p.accent : "transparent" }, on: { click: async () => {
+          // Picking a theme also makes it your favourite for its mode, and switches to that mode.
+          const patch = { preset: id, accentOverride: false, bg: p.bg, text: p.text, accent: p.accent, [p.dark ? "darkPreset" : "lightPreset"]: id };
+          const nowDark = document.documentElement.dataset.theme === "dark";
+          if (nowDark !== p.dark) patch.theme = p.dark ? "dark" : "light";
+          Object.assign(u, patch);
+          await save(patch); drawPresets(); drawCustom();
+        } } },
           el("span.preset-dot", { style: { background: p.accent } }), el("span", p.name), el("span.preset-sub", p.dark ? "dark" : "light")));
       }
-      presetGrid.append(el(`button.preset${u.preset === "custom" ? ".on" : ""}`, { type: "button", style: { background: u.bg, color: u.text, borderColor: u.preset === "custom" ? u.accent : "transparent" }, on: { click: async () => { u.preset = "custom"; await save({ preset: "custom" }); drawPresets(); drawCustom(); } } },
+      darkGrid.append(el(`button.preset${u.preset === "custom" ? ".on" : ""}`, { type: "button", style: { background: u.bg, color: u.text, borderColor: u.preset === "custom" ? u.accent : "transparent" }, on: { click: async () => { u.preset = "custom"; await save({ preset: "custom" }); drawPresets(); drawCustom(); } } },
         el("span.preset-dot", { style: { background: u.accent } }), el("span", "Custom"), el("span.preset-sub", "your colors")));
     };
     drawPresets();

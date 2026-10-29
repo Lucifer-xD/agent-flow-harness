@@ -30,7 +30,7 @@ from afh.engine.providers.sse import (
 from afh.engine.types import ChatMessage, ChatRequest, ModelInfo, ProviderConfig, ProviderEvent
 
 DEFAULT_MAX_TOKENS = 16_384
-BUDGETS = {"low": 2048, "medium": 4096, "high": 8192, "max": 16384}
+BUDGETS = {"low": 2048, "medium": 4096, "high": 8192, "xhigh": 16384, "max": 32000}
 STOP_REASONS = {"end_turn": "stop", "stop_sequence": "stop", "tool_use": "tool_calls", "max_tokens": "length", "refusal": "stop"}
 _CACHE_LIMIT = 256
 

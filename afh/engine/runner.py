@@ -79,6 +79,24 @@ def fit_history(messages: list[ChatMessage], context: int, system: str = "") -> 
     return dropped
 
 
+def close_interrupted(msg: dict) -> bool:
+    """Mark a stored assistant message that was cut off (app quit, crash, update) as interrupted.
+    True when it was unfinished: still streaming, or a tool call still pending or running."""
+    if msg.get("type") != "assistant":
+        return False
+    open_tools = [p for p in msg.get("content", []) if p.get("type") == "tool" and p.get("state", {}).get("status") in ("streaming", "pending", "running")]
+    if msg.get("time", {}).get("completed") and not open_tools:
+        return False
+    for p in open_tools:
+        p["state"] = {"status": "error", "input": p["state"].get("input") if isinstance(p["state"].get("input"), dict) else {},
+                      "error": {"type": "aborted", "message": "Interrupted: AFH was closed or restarted"}, "content": []}
+    if not msg.get("time", {}).get("completed"):
+        msg["error"] = {"type": "aborted", "message": "Step interrupted: AFH was closed or restarted"}
+        msg["finish"] = "error"
+        msg.setdefault("time", {})["completed"] = now_ms()
+    return True
+
+
 def _norm(path: str) -> str:
     return os.path.normcase(path).replace("\\", "/")
 

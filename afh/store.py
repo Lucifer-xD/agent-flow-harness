@@ -43,6 +43,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "sendKey": "enter",  # enter | ctrl-enter
         "liveFiles": True,  # open the Live pane while the model writes/edits a file
         "chatWidth": 820,  # px, the conversation column (drag its edge to change)
+        "language": "en",  # en | ar  (the interface; the conversation follows its own text)
+        "direction": "auto",  # auto (from the language) | ltr | rtl
+        "darkPreset": "sunset",  # your favourite theme of each mode, used by the dark/light switch
+        "lightPreset": "paper",
         "sounds": True,
         "notify": True,
         "reopenLast": True,
@@ -72,7 +76,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "delegates": [],  # {id, name, model: {providerID, id, variant}, job, system, enabled, readonly, color}
     },
     # The agent loop: steps per run, and whether an out-of-date to-do list sends it back to work once.
-    "agent": {"maxSteps": 200, "todoNudge": True},
+    "agent": {"maxSteps": 200, "todoNudge": True, "resumeOnRestart": True},
     # Goals: autopilot keeps the agent going until it reports the goal achieved or blocked.
     "goals": {"autopilot": True, "maxTurns": 10, "auto": True},
     # Error checks after edits (see engine/diagnostics.py). commands: [{name, glob, command, timeout, enabled}]

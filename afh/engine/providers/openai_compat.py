@@ -73,6 +73,8 @@ class OpenAICompatProvider:
         if extra.get("thinking") == "zai":
             if req.variant and req.reasoning:
                 body["thinking"] = {"type": "enabled"}
+                # GLM-5.x takes an effort level too (low / high / max); without it every effort was the same.
+                body[extra.get("effort_param", "reasoning_effort")] = extra.get("effort_map", {}).get(req.variant, req.variant)
             elif not req.reasoning:
                 body["thinking"] = {"type": "disabled"}
         elif req.variant and req.reasoning:

@@ -46,3 +46,11 @@ def test_icons_used_exist():
         used |= set(re.findall(r"\bicon\(\"([a-z-]+)\"", m.read_text(encoding="utf-8")))
     used |= set(re.findall(r'data-icon="([a-z-]+)"', (WEB / "index.html").read_text(encoding="utf-8")))
     assert not (used - known), f"unknown icons: {sorted(used - known)}"
+
+
+def test_main_does_not_use_ctx_before_it_exists():
+    """A top-level `ctx.x = …` above `export const ctx` throws at load time and leaves the app on its boot screen."""
+    lines = (WEB / "js" / "main.js").read_text(encoding="utf-8").splitlines()
+    defined = next(i for i, l in enumerate(lines) if l.startswith("export const ctx"))
+    early = [i + 1 for i, l in enumerate(lines[:defined]) if re.match(r"^ctx\.\w+\s*=", l)]
+    assert not early, f"main.js lines {early} use ctx before line {defined + 1} defines it"

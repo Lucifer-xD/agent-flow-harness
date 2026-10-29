@@ -2,7 +2,7 @@
 // OpenAI/Anthropic/Gemini-compatible endpoint, then keep only the models you use in the picker.
 
 import { api, native } from "./api.js";
-import { confirmDialog, el, fmtTokens, ico, icon, toast, toggle } from "./ui.js";
+import { confirmDialog, el, fmtTokens, ico, icon, modal, modalityBadges, toast, toggle } from "./ui.js";
 
 const header = (title, lead) => [el("h2", title), lead ? el("p.lead", lead) : null];
 const field = (label, input, help) => el("div.field", el("label", label), input, help ? el("div.help", help) : null);
@@ -78,6 +78,30 @@ export async function modelsPane(pane, ctx, opts = {}) {
   pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Your providers"), el("p", "Toggle which models appear in the model picker")),
     el("button.btn.sm", { title: "Ask every provider for its current model list", on: { click: async () => { if (await guard(() => api.post("/api/models/refresh"), "Model lists refreshed")) { await ctx.reloadCatalog(); redraw(); } } } }, ico("refresh"), "Refresh models")), list, applyBar));
 
+  /** Hand corrections for one model: AFH uses them over models.dev and the provider's own list. */
+  function editModel(p, m) {
+    const ctxIn = el("input.inp", { type: "number", min: 1000, value: m.context || "" });
+    const outIn = el("input.inp", { type: "number", min: 256, value: m.output || "" });
+    const effIn = el("input.inp", { value: (m.variants || []).join(", "), placeholder: "low, high, max" });
+    const kinds = new Set(m.input || ["text"]);
+    const checks = el("div", { style: { display: "flex", gap: "14px", flexWrap: "wrap" } }, ["image", "video", "audio", "pdf"].map((k) => {
+      const box = el("input", { type: "checkbox", checked: kinds.has(k), on: { change: (e) => (e.target.checked ? kinds.add(k) : kinds.delete(k)) } });
+      return el("label", { style: { display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px" } }, box, k);
+    }));
+    const save = async (reset) => {
+      const body = reset ? {} : { context: Number(ctxIn.value) || null, output: Number(outIn.value) || null, variants: effIn.value.split(",").map((v) => v.trim()).filter(Boolean), input: ["text", ...[...kinds].filter((k) => k !== "text")] };
+      if (await guard(() => api.put(`/api/providers/${p.id}/models/${encodeURIComponent(m.id)}`, body), reset ? "Back to the catalog's facts" : "Saved")) { dlg.close(); await ctx.reloadCatalog(); redraw({ open: p.id }); }
+    };
+    const dlg = modal(el("div.m-body", { style: { padding: "22px 24px" } },
+      el("h2", `Edit ${m.name}`),
+      el("p.lead", "AFH reads these from models.dev and the provider. Correct them here if they are wrong; your values win."),
+      el("div.grid2", field("Context window (tokens)", ctxIn), field("Max output (tokens)", outIn)),
+      field("Effort levels", effIn, "Comma-separated, as the API names them. \"default\" (no effort sent) is always offered."),
+      field("Takes in besides text", checks),
+      el("div.actions", m.overridden ? el("button.btn.ghost", { on: { click: () => save(true) } }, "Reset") : null, el("span", { style: { flex: 1 } }),
+        el("button.btn.ghost", { on: { click: () => dlg.close() } }, "Cancel"), el("button.btn.primary", { on: { click: () => save(false) } }, "Save"))), { small: true });
+  }
+
   function providerCard(p) {
     const how = p.catalog ? (p.hasKey ? `API key ${p.keyHint || ""}` : "no key") : `custom · ${p.kind}`;
     const shown = p.models.filter((m) => !m.hidden).length;
@@ -92,8 +116,9 @@ export async function modelsPane(pane, ctx, opts = {}) {
         const key = `${p.id}/${m.id}`;
         const hidden = pending.has(key) ? pending.get(key) : m.hidden;
         body.append(el(`div.model-row${hidden ? ".hidden" : ""}`,
-          el("div.li-main", el("div.li-title", m.name, m.tools === false ? el("span.pill-tag", "no tools") : null, m.reasoning ? el("span.pill-tag", "reasoning") : null),
-            el("div.li-sub", `${m.id}${m.context ? ` · ${fmtTokens(m.context)} ctx` : ""}${m.variants?.length ? ` · effort: ${m.variants.join(", ")}` : ""}`)),
+          el("div.li-main", el("div.li-title", m.name, modalityBadges(m.input), m.tools === false ? el("span.pill-tag", "no tools") : null, m.reasoning ? el("span.pill-tag", "reasoning") : null, m.overridden ? el("span.pill-tag.accent", "edited") : null),
+            el("div.li-sub", `${m.id}${m.context ? ` · ${fmtTokens(m.context)} context` : ""}${m.output ? ` · ${fmtTokens(m.output)} out` : ""}${m.variants?.length ? ` · effort: default, ${m.variants.join(", ")}` : ""}`)),
+          el("button.icon-btn.sm", { title: "Correct this model's context, effort levels or inputs", html: icon("edit"), on: { click: () => editModel(p, m) } }),
           toggle(!hidden, (on) => { if (on === !m.hidden) pending.delete(key); else pending.set(key, !on); applyBar.hidden = !pending.size; })));
       }
     };

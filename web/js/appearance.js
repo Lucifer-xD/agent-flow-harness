@@ -15,12 +15,20 @@ export const PRESETS = {
   ember: { name: "Ember", accent: "#ff5544", ...dark("#110b0a", "#150d0c", "#1a1110", "#221615", "#2d1e1c", "#2e1f1d", "#42302d", "#f6ebe8", "#c0aaa5", "#88736e", "#0c0807") },
   graphite: { name: "Graphite", accent: "#b6f35c", ...dark("#0d0e0f", "#111213", "#16171a", "#1c1e21", "#25282c", "#26292d", "#363a40", "#ebedef", "#a9adb3", "#73787f", "#0a0a0b") },
   slate: { name: "Slate", accent: "#5aa9ff", ...dark("#0f1318", "#12171d", "#171d24", "#1d242d", "#262f3a", "#28313c", "#38434f", "#e8edf3", "#a9b4c0", "#717d8a", "#0b0e12") },
+  abyss: { name: "Abyss", accent: "#46c8ff", ...dark("#070a10", "#090d15", "#0d121c", "#121926", "#1a2333", "#1b2434", "#2a3648", "#e4ecf8", "#9fb0c8", "#66778f", "#05070b") },
+  velvet: { name: "Velvet", accent: "#ff4f8b", ...dark("#100a10", "#140c14", "#1a111a", "#211622", "#2c1e2d", "#2d1f2e", "#412e43", "#f6eaf4", "#c1a9bd", "#8a7286", "#0b070b") },
+  copper: { name: "Copper", accent: "#f2994a", ...dark("#100d0a", "#14100c", "#1a1510", "#221b15", "#2d241c", "#2e251d", "#43372b", "#f5ede4", "#c2b19f", "#8b7a68", "#0b0907") },
+  matrix: { name: "Terminal", accent: "#39e58c", ...dark("#060908", "#08100c", "#0b1410", "#0f1b15", "#16261d", "#17271e", "#22382b", "#d9f5e4", "#93b8a2", "#5c8069", "#040705") },
   mono: { name: "Mono", accent: "#ffffff", ...dark("#0c0c0d", "#101011", "#151517", "#1b1b1e", "#242428", "#252529", "#343438", "#ededf0", "#a9a9b2", "#737380", "#09090a") },
   paper: { name: "Paper", accent: "#e85a1a", ...light("#f6f3ef", "#efebe6", "#fffdfb", "#f3efea", "#e9e3dc", "#e4ddd5", "#d3cabf", "#1b1715", "#5a534d", "#8c847c", "#f1ede8") },
   snow: { name: "Snow", accent: "#3b6cff", ...light("#f4f6fa", "#eceff5", "#ffffff", "#f1f3f8", "#e6e9f0", "#e1e5ec", "#cdd3dd", "#141821", "#525968", "#8a909c", "#eef1f6") },
   sand: { name: "Sand", accent: "#c26a1b", ...light("#f7f2ea", "#efe8dd", "#fffcf7", "#f3ece2", "#e8dfd2", "#e2d8ca", "#d0c3b2", "#211a12", "#5e5446", "#928775", "#f2ebe1") },
   lilac: { name: "Lilac", accent: "#7a4dff", ...light("#f6f4fb", "#eeebf6", "#ffffff", "#f2eff9", "#e6e1f1", "#e2ddee", "#cec7e0", "#1a1625", "#575068", "#8c859d", "#efecf6") },
   dawn: { name: "Dawn", accent: "#e8436b", ...light("#fbf4f3", "#f4eae9", "#fffbfb", "#f7eeed", "#eddfde", "#e9dad9", "#d8c4c3", "#241517", "#62494c", "#977d80", "#f5ebea") },
+  peach: { name: "Peach", accent: "#f2643a", ...light("#fdf5f1", "#f7ebe5", "#fffcfa", "#faefe9", "#f1e1d9", "#eedcd3", "#dfc6ba", "#2a1912", "#6b5248", "#9d857a", "#f9eee8") },
+  arctic: { name: "Arctic", accent: "#0b8fd6", ...light("#f2f7fb", "#e8f0f6", "#ffffff", "#eef4f9", "#e0eaf2", "#dbe6ef", "#c3d3e0", "#0f1b26", "#4a5d6e", "#8193a3", "#ebf2f8") },
+  matcha: { name: "Matcha", accent: "#4d8a2a", ...light("#f5f7ef", "#ecf0e3", "#fdfef9", "#f1f4ea", "#e5eadb", "#e1e7d5", "#ccd5bd", "#1b2213", "#56604a", "#8a947d", "#eef2e6") },
+  ivory: { name: "Ivory", accent: "#9b5de5", ...light("#faf8f3", "#f2efe7", "#fffefb", "#f5f2ea", "#ebe7dc", "#e7e2d6", "#d6cfbf", "#1f1c16", "#5b564b", "#8f8a7e", "#f4f1e9") },
   mint: { name: "Mint", accent: "#1f9d5f", ...light("#f3f9f5", "#eaf3ed", "#ffffff", "#eff6f1", "#e2ece6", "#dde8e1", "#c7d6cc", "#13201a", "#4f5f56", "#86958c", "#ecf3ee") },
 };
 
@@ -44,7 +52,11 @@ export function resolveTheme(ui) {
     return { custom: true, bg, text: ui.text || (isDark ? "#f2efec" : "#1b1715"), accent: ui.accent || "#ff6a2a", dark: isDark };
   }
   let p = PRESETS[ui.preset] || PRESETS.sunset;
-  if (p.dark !== wantDark) p = wantDark ? PRESETS.sunset : PRESETS.paper; // follow-system flips to a matching preset
+  if (p.dark !== wantDark) {
+    // The other mode uses your favourite theme of that mode (remembered when you pick one).
+    const fav = PRESETS[wantDark ? ui.darkPreset : ui.lightPreset];
+    p = fav && fav.dark === wantDark ? fav : wantDark ? PRESETS.sunset : PRESETS.paper;
+  }
   return { ...p, accent: ui.accentOverride && ui.accent ? ui.accent : p.accent };
 }
 

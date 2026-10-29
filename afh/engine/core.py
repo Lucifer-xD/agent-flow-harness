@@ -121,6 +121,63 @@ class Engine:
             self.error = str(err)
         self.ready.set()
         self.publish(event("afh.ready"))
+        asyncio.ensure_future(self.resume_interrupted())
+        asyncio.ensure_future(self._refresh_catalog())
+
+    async def _refresh_catalog(self) -> None:
+        """Model facts (context, efforts, inputs, prices) from models.dev, once a day, in the background."""
+        from . import modelsdev
+
+        if await modelsdev.refresh():
+            self.reload_providers()
+            self.publish(event("model.updated"))
+
+    async def resume_interrupted(self) -> list[str]:
+        """After AFH quits mid-run (an update, a crash, closing the window), pick those threads up again:
+        close the cut-off step, tell the model what happened, and continue. Settings: agent.resumeOnRestart."""
+        from .runner import close_interrupted
+
+        resumed: list[str] = []
+        try:
+            settings = self.settings()
+            resume = (settings.get("agent") or {}).get("resumeOnRestart", True)
+            for sid in self.store.unfinished_sessions(now_ms() - 12 * 3600 * 1000):
+                if sid in self.runs:
+                    continue
+                msgs = self.store.list_messages(sid)
+                if not msgs:
+                    continue
+                last = msgs[-1]
+                cut = close_interrupted(last)
+                if cut:
+                    self.store.save_message(sid, last)
+                pending = cut or last.get("type") in ("user", "synthetic") or (last.get("type") == "assistant" and last.get("finish") == "tool-calls")
+                for child in self.store.list_sessions(parent_id=sid, limit=200):  # delegations die with their lead; it can re-delegate
+                    ms = self.store.list_messages(child["id"])
+                    if ms and close_interrupted(ms[-1]):
+                        self.store.save_message(child["id"], ms[-1])
+                    self.store.touch(child["id"], idle=True)
+                session = self.store.get_session(sid)
+                imported = ((session or {}).get("metadata") or {}).get("afh", {}).get("importedFrom")
+                if imported and (last.get("time") or {}).get("created", 0) < ((session or {}).get("time") or {}).get("created", 0):
+                    pending = False  # an import that was never run here: its history ends where the other app stopped
+                if not pending or not resume or not session:
+                    self.store.touch(sid, idle=True)
+                    continue
+                note = {"id": new_id("msg"), "type": "synthetic", "time": {"created": now_ms()},
+                        "metadata": {"notice": "resume", "label": "AFH restarted — picking up where it left off"},
+                        "text": ("AFH was closed or restarted while you were working (for example to install an update), so your last step was cut off. "
+                                 "Continue the task from where you left off: check the to-do list and the files for what is already done, redo any "
+                                 "interrupted tool call that is still needed, and keep going.")}
+                self.store.add_message(sid, note)
+                self.publish(event("session.notice", sid, kind="resume", label=note["metadata"]["label"], message=note))
+                self.start_run(session)
+                resumed.append(sid)
+        except Exception as err:  # never block startup
+            log.warning("resume after restart: %s", err)
+        if resumed:
+            log.info("resumed %d interrupted thread(s)", len(resumed))
+        return resumed
 
     async def restart(self) -> None:
         """Re-read providers, agents and MCP servers. Nothing to kill: it's all in-process."""
@@ -452,6 +509,7 @@ class Engine:
             msgs = [m for m in msgs if (self.store.message_seq(sid, m["id"]) or 0) < (seq or 10**9)]
         new = self.store.create_session(src["location"]["directory"], title=(src.get("title") or "Thread") + " (fork)", agent=src.get("agent"), model=src.get("model"),
                                         permissions=src.get("permissions"), metadata=src.get("metadata"))
+        self.store.touch(new["id"], idle=True)  # a copy, not a run that was cut off
         for m in msgs:
             copy_ = json.loads(json.dumps(m))
             copy_["id"] = new_id("msg")

@@ -179,6 +179,9 @@ def model_visibility(body: dict = Body(...)):
 
 @app.post("/api/models/refresh")
 async def models_refresh():
+    from .engine import modelsdev
+
+    await modelsdev.refresh(force=True)
     await engine.refresh_models()
     return models_payload()
 
@@ -239,9 +242,13 @@ def file_read(path: str):
 # ---- sessions ------------------------------------------------------------------
 
 
+def with_running(s: dict) -> dict:
+    return {**s, "running": engine.is_running(s["id"])}
+
+
 @app.get("/api/sessions")
 def list_sessions(directory: str, archived: bool = False):
-    return engine.store.list_sessions(directory, archived=archived, limit=200)
+    return [with_running(s) for s in engine.store.list_sessions(directory, archived=archived, limit=200)]
 
 
 @app.post("/api/sessions")
@@ -259,7 +266,7 @@ async def create_session(body: dict = Body(...)):
 
 @app.get("/api/sessions/{sid}")
 def get_session(sid: str):
-    return session_or_404(sid)
+    return with_running(session_or_404(sid))
 
 
 @app.patch("/api/sessions/{sid}")
@@ -748,7 +755,7 @@ def set_project_instructions(body: dict = Body(...)):
 def _provider_view(pid: str, p: dict) -> dict:
     out = provcfg.public(p)
     out["id"] = pid
-    out["models"] = sorted((m.to_dict() for m in provcfg.models_of(p)), key=lambda m: (m["hidden"], m["name"].lower()))
+    out["models"] = sorted((m.to_dict() | {"overridden": m.id in (p.get("overrides") or {})} for m in provcfg.models_of(p, pid)), key=lambda m: (m["hidden"], m["name"].lower()))
     out["connected"] = pid in engine.providers
     out["catalog"] = p.get("catalog") if p.get("catalog") in KNOWN else None
     return out
@@ -858,7 +865,7 @@ async def test_provider(pid: str, body: dict = Body(default={})):
     provider = engine.providers.get(pid)
     if provider is None:
         raise ValueError("Provider is disabled or misconfigured")
-    models = provcfg.models_of(p)
+    models = provcfg.models_of(p, pid)
     mid = body.get("model") or (models[0].id if models else None)
     if not mid:
         try:
@@ -879,6 +886,26 @@ async def test_provider(pid: str, body: dict = Body(default={})):
     except Exception as err:
         return {"ok": False, "error": str(err), "model": mid}
     return {"ok": True, "model": mid, "reply": "".join(text)[:80]}
+
+
+@app.put("/api/providers/{pid}/models/{mid:path}")
+def override_model(pid: str, mid: str, body: dict = Body(...)):
+    """Correct a model's facts by hand (context, output, effort levels, inputs). An empty body resets it."""
+    p = provcfg.entry(pid)
+    if not p:
+        raise KeyError(pid)
+    overrides = dict(p.get("overrides") or {})
+    clean = {k: body[k] for k in provcfg.OVERRIDABLE if k in body and body[k] not in (None, "", [])}
+    if "variants" in body and isinstance(body["variants"], list):
+        clean["variants"] = [str(v).strip().lower() for v in body["variants"] if str(v).strip()]
+    if clean:
+        overrides[mid] = clean
+    else:
+        overrides.pop(mid, None)
+    provcfg.upsert(pid, {"overrides": overrides})
+    engine.reload_providers()
+    engine.publish({"type": "model.updated", "data": {}})
+    return _provider_view(pid, provcfg.entry(pid))
 
 
 @app.post("/api/providers/{pid}/refresh")

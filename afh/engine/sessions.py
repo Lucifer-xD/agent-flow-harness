@@ -107,6 +107,11 @@ class Store:
         with self.lock:
             self.db.execute("UPDATE session SET updated=?, idle=? WHERE id=?", (t, t if idle else None, sid))
 
+    def unfinished_sessions(self, since_ms: int) -> list[str]:
+        """Threads whose last run started after `since_ms` and never finished (idle is set when a run ends)."""
+        rows = self.db.execute("SELECT id FROM session WHERE idle IS NULL AND archived=0 AND parent_id IS NULL AND updated>=? ORDER BY updated DESC", (since_ms,))
+        return [r["id"] for r in rows]
+
     def delete_session(self, sid: str) -> None:
         with self.lock:
             for child in self.list_sessions(parent_id=sid, limit=1000):

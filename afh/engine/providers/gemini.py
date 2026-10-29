@@ -27,7 +27,7 @@ from afh.engine.providers.sse import (
 from afh.engine.types import ChatMessage, ChatRequest, ModelInfo, ProviderConfig, ProviderEvent
 
 DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com"
-BUDGETS = {"low": 1024, "medium": 4096, "high": 8192, "max": 24576}
+BUDGETS = {"low": 1024, "medium": 4096, "high": 8192, "xhigh": 16384, "max": 24576}
 LEVELS = {"low": "low", "medium": "medium", "high": "high", "max": "high"}  # Gemini 3 ``thinkingLevel``
 SKIP_SIGNATURE = "skip_thought_signature_validator"
 # Finish reasons that mean the model was cut off rather than done.

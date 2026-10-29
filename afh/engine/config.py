@@ -75,16 +75,44 @@ def _model(d: dict) -> ModelInfo:
                      cost=d["cost"] if isinstance(d.get("cost"), dict) else None)
 
 
-def models_of(p: dict) -> list[ModelInfo]:
-    """Catalog models, then fetched, then manual ones win on the same id; hidden flag applied."""
+OVERRIDABLE = ("context", "output", "variants", "input", "reasoning")
+
+
+def models_of(p: dict, pid: str | None = None) -> list[ModelInfo]:
+    """The provider's models with the best facts available, best last:
+    AFH's static list < the endpoint's own list < models.dev < what the user set in Settings."""
+    from . import modelsdev
     from .providers.catalog import STATIC_MODELS
 
-    out: dict[str, ModelInfo] = {m.id: ModelInfo(**m.to_dict()) for m in STATIC_MODELS.get(p.get("catalog") or p.get("id") or "", [])}
-    for d in p.get("fetched", []) + p.get("models", []):
+    pid = pid or p.get("id") or ""
+    catalog = p.get("catalog")
+    listed = p.get("fetched") or []
+    out: dict[str, ModelInfo] = {}
+    known = modelsdev.provider_models(pid, catalog) if not listed else []
+    if known:  # models.dev's list for this provider is more accurate than AFH's own static one
+        out = {m.id: m for m in known}
+    else:
+        for m in STATIC_MODELS.get(catalog or pid, []):
+            out[m.id] = modelsdev.enrich(ModelInfo(**m.to_dict()), modelsdev.lookup(pid, catalog, m.id))
+    for d in listed + p.get("models", []):
         try:
-            out[d["id"]] = _model(d)
+            out[d["id"]] = modelsdev.enrich(_model(d), modelsdev.lookup(pid, catalog, d["id"]))
         except (KeyError, TypeError, ValueError):
             continue
+    for mid, ov in (p.get("overrides") or {}).items():
+        m = out.get(mid)
+        if m is None or not isinstance(ov, dict):
+            continue
+        if ov.get("context"):
+            m.context = int(ov["context"])
+        if ov.get("output"):
+            m.output = int(ov["output"])
+        if isinstance(ov.get("variants"), list):
+            m.variants = [str(v) for v in ov["variants"] if str(v).strip()]
+        if isinstance(ov.get("input"), list) and ov["input"]:
+            m.input = [str(v) for v in ov["input"]]
+        if isinstance(ov.get("reasoning"), bool):
+            m.reasoning = ov["reasoning"]
     hidden = set(p.get("hidden", []))
     for m in out.values():
         m.hidden = m.id in hidden
@@ -97,7 +125,7 @@ def provider_configs() -> list[ProviderConfig]:
         if p.get("enabled") is False:
             continue
         out.append(ProviderConfig(id=pid, name=p.get("name") or pid, kind=p.get("kind", "openai"), base_url=p.get("base_url", ""), api_key=p.get("api_key", ""),
-                                  headers=dict(p.get("headers") or {}), models=models_of(p), fetch_models=p.get("fetch_models", True), extra=dict(p.get("extra") or {})))
+                                  headers=dict(p.get("headers") or {}), models=models_of(p, pid), fetch_models=p.get("fetch_models", True), extra=dict(p.get("extra") or {})))
     return out
 
 

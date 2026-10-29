@@ -308,7 +308,7 @@ def test_openai_variant_effort_zai_thinking_and_temperature_knobs():
 
     zai = OpenAICompatProvider(cfg("openai", thinking="zai"))
     body = zai.build_body(ChatRequest(model="glm-5.3", system="", messages=msgs, variant="high"))
-    assert body["thinking"] == {"type": "enabled"} and "reasoning_effort" not in body
+    assert body["thinking"] == {"type": "enabled"} and body["reasoning_effort"] == "high"  # the effort level reaches GLM too
     body = zai.build_body(ChatRequest(model="glm-5.3", system="", messages=msgs, variant=None, reasoning=False))
     assert body["thinking"] == {"type": "disabled"}
     body = zai.build_body(ChatRequest(model="glm-5.3", system="", messages=msgs, variant=None))
@@ -417,7 +417,7 @@ def test_anthropic_translation_round_trip_and_thinking_replay():
     p = AnthropicProvider(cfg("anthropic"), transport=Server(stream_response(anthropic_stream())).transport)
     collect(p, ChatRequest(model="claude-sonnet-5-5", system="", messages=[ChatMessage(role="user", text="x")], variant="high"))
     body = p.build_body(ChatRequest(model="claude-sonnet-5-5", system="", messages=history, variant="max", temperature=0.5))
-    assert body["thinking"] == {"type": "enabled", "budget_tokens": 16384} and "temperature" not in body
+    assert body["thinking"] == {"type": "enabled", "budget_tokens": 32000} and "temperature" not in body
     assert body["messages"][1]["content"][0] == {"type": "thinking", "thinking": "Need to read.", "signature": "sig123"}
 
     # Two tool results in a row land in one user turn; system-role history joins the system prompt.
