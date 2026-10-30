@@ -1,6 +1,9 @@
-// Page motion: smooth scrolling (Lenis), scroll-driven timelines (GSAP ScrollTrigger) and the
-// 3D scene they steer. Each section owns one stretch of the scroll and moves the scene through it.
+// The home page: smooth scrolling (Lenis), scroll-driven timelines (GSAP ScrollTrigger) and the
+// 3D world they steer. The world tells the same story as the text: the mark comes apart as your
+// request reaches the lead core, a plan appears around it, the work spreads to agents along live
+// links, and the file being written appears in front — then the models' ring, and back to the mark.
 import { createScene } from "./scene.js";
+import { CODE } from "./code-sample.js";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const mobile = matchMedia("(max-width: 760px)").matches;
@@ -9,7 +12,9 @@ gsap.registerPlugin(ScrollTrigger);
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
-const { state } = createScene($("#scene"), { mobile, reduced });
+const scene = createScene($("#scene"), { mobile, reduced });
+const { state } = scene;
+window.afhScene = scene; // for poking at the world from the console
 // On wide screens the mark sits to the right of the headline (and of the story's text).
 const heroShift = () => (innerWidth > 1000 ? Math.min(4.6, innerWidth / 380) : 0);
 
@@ -28,10 +33,6 @@ $$('a[href^="#"]').forEach((a) => a.addEventListener("click", (e) => {
   if (lenis) lenis.scrollTo(target, { offset: 0, duration: 1.8 });
   else target.scrollIntoView({ behavior: "smooth" });
 }));
-
-// ---- nav ----
-const nav = $(".nav");
-ScrollTrigger.create({ start: 40, end: "max", onToggle: (self) => nav.classList.toggle("scrolled", self.isActive) });
 
 /** A scroll-scrubbed timeline for one stretch of the page. */
 const scrub = (trigger, start, end, opts = {}) => gsap.timeline({ defaults: { ease: "none" }, scrollTrigger: { trigger, start, end, scrub: reduced ? true : 1, ...opts } });
@@ -63,15 +64,6 @@ ScrollTrigger.create({ trigger: ".flow", start: "top 60%", once: true, onEnter: 
   tick();
 } });
 
-const CODE = [
-  ["k", "export function "], ["f", "LoginForm"], ["", "() {\n  "],
-  ["k", "const "], ["", "[email, setEmail] = "], ["f", "useState"], ["", "("], ["s", '""'], ["", ");\n  "],
-  ["k", "const "], ["", "[password, setPassword] = "], ["f", "useState"], ["", "("], ["s", '""'], ["", ");\n\n  "],
-  ["k", "async function "], ["f", "submit"], ["", "(e) {\n    e."], ["f", "preventDefault"], ["", "();\n    "],
-  ["k", "await "], ["f", "signIn"], ["", "({ email, password });\n    "], ["c", "// the server sets the session cookie\n    "],
-  ["", "router."], ["f", "push"], ["", "("], ["s", '"/dashboard"'], ["", ");\n  }\n\n  "],
-  ["k", "return "], ["", "(\n    <form onSubmit={submit}>\n      <Input label="], ["s", '"Email"'], ["", " value={email} />\n      <Input label="], ["s", '"Password"'], ["", " type="], ["s", '"password"'], ["", " />\n      <Button>Log in</Button>\n    </form>\n  );\n}"],
-];
 function streamCode(el, speed = 16) {
   if (!el) return;
   let part = 0, ch = 0, span = null;
@@ -146,7 +138,7 @@ gsap.from(".ring-stage", { autoAlpha: 0, scale: 0.7, duration: 1.4, ease: "expo.
 $$("[data-count]").forEach((el) => {
   const to = Number(el.dataset.count), suffix = el.dataset.suffix || "";
   const o = { v: 0 };
-  gsap.to(o, { v: to, duration: 1.6, ease: "power2.out", scrollTrigger: { trigger: el, start: "top 90%" }, onUpdate: () => { el.textContent = Math.round(o.v) + suffix; } });
+  gsap.to(o, { v: to, duration: 1.6, ease: "power2.out", scrollTrigger: { trigger: el, start: "top 90%" }, onUpdate: () => { el.textContent = Math.round(o.v).toLocaleString("en-US") + suffix; } });
 });
 gsap.from(".stat", { y: 50, autoAlpha: 0, stagger: 0.1, duration: 1, ease: "power3.out", scrollTrigger: { trigger: ".stats", start: "top 85%" } });
 
@@ -161,11 +153,16 @@ if (!mobile) $$(".btn-primary").forEach((b) => {
   b.addEventListener("pointerleave", () => { x(0); y(0); });
 });
 
+// a click on empty space sends a pulse out from the core
+addEventListener("pointerdown", (e) => {
+  if (e.button === 0 && !e.target.closest("a, button, input, .device, .card")) scene.burst(0.8);
+});
+
 // ---- the 3D world along the page ----
 // One track of keyframes keyed to scroll positions; every frame the scene takes the eased mix of
 // the two keyframes around the current scroll. (One owner for the scene's state, so sections
 // can't fight over it.)
-const KEYS = ["zoom", "spin", "tilt", "morph", "mark", "spread", "shiftX", "shiftY"];
+const KEYS = ["zoom", "spin", "tilt", "shiftX", "shiftY", "mark", "net", "core", "flow", "tiles", "code", "spread", "activity"];
 let track = [];
 const at = (trigger, start, end) => ScrollTrigger.create({ trigger, start, end });
 const marks = {
@@ -181,18 +178,28 @@ function buildTrack() {
   const f = marks.flow, fl = (x) => f.start + (f.end - f.start) * (x / 4.2); // positions on the story's timeline
   const ft = marks.feat;
   track = [
-    // on phones the mark floats in the space above the headline
-    [0, { zoom: 0, spin: 0, tilt: 0, morph: 0, mark: 1, spread: 0, shiftX: H, shiftY: mobile ? 7.8 : 0 }],
-    [marks.hero.end, { zoom: 3, spin: 0.7, tilt: 0.2, shiftY: 0 }],
-    [fl(1), { spread: 1, zoom: 2, spin: 1.4 }],
-    [fl(1.8), { morph: 1, mark: 0, spread: 0, spin: 2.6, tilt: 0.1, zoom: 1 }],
-    [fl(2.8), { morph: 2, spin: 3.6, tilt: 0.35, zoom: 0 }],
-    [f.end, { zoom: 2.5, spin: 4.4, tilt: 0.15 }],
-    [marks.show.end, { zoom: -3, spin: 5.2, tilt: 0.45, shiftX: 0 }],
-    [ft.start + (ft.end - ft.start) * 0.4, { zoom: -2, spin: 5.8, tilt: 0.35, morph: 2 }],
-    [ft.end, { zoom: -1, spin: 6.4, tilt: 0.3, morph: 3 }],
-    [marks.models.end, { zoom: 1.5, spin: 7.2, tilt: 0.3 }],
-    [marks.dl.end, { morph: 0, mark: 1, zoom: -3, spin: 2 * Math.PI, tilt: 0, shiftY: mobile ? 2.8 : 2.9 }],
+    // the mark; on phones it floats in the space above the headline
+    [0, { zoom: 0, spin: 0, tilt: 0, shiftX: H, shiftY: mobile ? 7.8 : 0, mark: 1, net: 0, core: 0, flow: 0, tiles: 0, code: 0, spread: 0, activity: 0.3 }],
+    // 01 · your words reach the lead: the core lights up inside the mark
+    [marks.hero.end, { zoom: 2.4, spin: 0.55, tilt: 0.12, shiftY: 0, spread: 0.5, core: 0.7, activity: 0.7 }],
+    [fl(0.55), { spread: 0, core: 1, mark: 0.55, net: 0.12, zoom: 2.2, spin: 0.9 }],
+    // 02 · a goal and a plan appear around it; the agents start to come loose
+    [fl(1.25), { tiles: 1, mark: 0, net: 0.5, flow: 0.45, spin: 1.5, tilt: 0.22, zoom: 1.4, activity: 0.5 }],
+    [fl(1.75), { tiles: 1, net: 0.6, spin: 1.85 }],
+    // 03 · the work spreads to agents along live links
+    [fl(2.3), { tiles: 0, net: 1, flow: 1, activity: 1.1, spin: 2.6, tilt: 0.32, zoom: 0.8 }],
+    [fl(2.8), { spin: 3.0 }],
+    // 04 · the file being written appears in front, fed by the links
+    [fl(3.3), { code: 1, spin: 3.25, tilt: 0.16, zoom: 1.5, activity: 0.9 }],
+    [f.end, { code: 1, spin: 3.5 }],
+    // the app: pull back, everything keeps working behind it
+    [marks.show.end, { code: 0, zoom: -3, spin: 4.4, tilt: 0.45, shiftX: 0, activity: 0.6 }],
+    [ft.start + (ft.end - ft.start) * 0.4, { zoom: -2, spin: 5.0, tilt: 0.35 }],
+    // models: the agents spread out into a ring and the particles become a galaxy of models
+    [ft.end, { zoom: -1, spin: 5.6, tilt: 0.3, net: 1.6, flow: 1.6, core: 0.8 }],
+    [marks.models.end, { zoom: 0.5, spin: 6.4, tilt: 0.38, net: 2, flow: 2, core: 0.6 }],
+    // the call to action: everything pours back into the mark
+    [marks.dl.end, { mark: 1, net: 0, core: 0, flow: 0, tiles: 0, code: 0, zoom: -3, spin: 2 * Math.PI, tilt: 0, shiftY: mobile ? 2.8 : 2.9, activity: 0.3 }],
   ];
   track.sort((p, q) => p[0] - q[0]);
   // fill in every value so each keyframe is complete (unchanged values carry forward)
@@ -211,6 +218,7 @@ gsap.ticker.add(() => {
   const t = ease(Math.min(1, Math.max(0, (y - y0) / Math.max(1, y1 - y0))));
   for (const k of KEYS) state[k] = a[k] + (b[k] - a[k]) * t;
   state.mark *= intro.mark;
+  if (intro.mark < 1) state.net *= intro.mark;
   state.spread += intro.spread;
 });
 ScrollTrigger.addEventListener("refresh", buildTrack);

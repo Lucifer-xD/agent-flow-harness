@@ -22,9 +22,26 @@ if (Test-Path $map) { Copy-Item $map $downloads -Force }  # lets the updater fet
 
 $tmp = Join-Path $env:TEMP "afh-website.tgz"
 Write-Host ("==> Packing website ({0}, {1:N0} MB installer)" -f $installer.Name, ($installer.Length / 1MB))
-$entries = @(Get-ChildItem $website -Name | Where-Object { $_ -ne "README.md" -and -not $_.StartsWith(".") })
-& (Join-Path $env:SystemRoot "System32\tar.exe") -czf $tmp -C $website @entries  # Windows tar: Git's GNU tar reads "C:" as a remote host
+# The pages link styles and scripts under /v/<stamp>/ (nginx serves the same files there), so each
+# deploy gets new addresses and nobody sees new pages with yesterday's cached CSS. The rewrite
+# happens on a staged copy of the pages; the repo keeps plain /styles.css links.
+$stamp = Get-Date -Format "yyyyMMddHHmmss"
+$stage = Join-Path $env:TEMP "afh-website-pages"
+Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory $stage | Out-Null
+foreach ($page in Get-ChildItem $website -Filter "*.html") {
+  $html = [IO.File]::ReadAllText($page.FullName)
+  $html = $html -replace '(href|src)="/((?:[\w-]+/)*[\w-]+\.(?:css|js))(?:\?v=\w+)?"', ('$1="/v/' + $stamp + '/$2"')
+  # module imports (import "/js/page.js", and the imports inside the modules) follow the same stamp
+  $html = $html -replace '"imports": \{', ('"imports": {' + "`n      ""/js/"": ""/v/$stamp/js/"",")
+  [IO.File]::WriteAllText((Join-Path $stage $page.Name), $html, (New-Object Text.UTF8Encoding $false))
+}
+$entries = @(Get-ChildItem $website -Name | Where-Object { $_ -ne "README.md" -and -not $_.StartsWith(".") -and -not $_.EndsWith(".html") })
+$pages = @(Get-ChildItem $stage -Name)
+# Windows tar: Git's GNU tar reads "C:" as a remote host
+& (Join-Path $env:SystemRoot "System32\tar.exe") -czf $tmp -C $website @entries -C $stage @pages
 if ($LASTEXITCODE -ne 0) { throw "tar failed" }
+Remove-Item $stage -Recurse -Force
 
 Write-Host "==> Uploading"
 scp @ssh -q $tmp (Join-Path $root "deploy\afh-website.nginx") "${hostname}:/tmp/"

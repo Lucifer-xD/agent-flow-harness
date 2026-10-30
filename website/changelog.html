@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changelog · Agent Flow Harness</title>
+  <meta name="description" content="Every Agent Flow Harness release, from 1.0 to today: what's new, what changed and what was fixed.">
+  <meta name="theme-color" content="#0a0807">
+  <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/pages.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body data-page="changelog" data-scene="docs">
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <header data-nav></header>
+
+  <main>
+    <section class="page-hero">
+      <p class="kicker" data-reveal>Changelog</p>
+      <h1 class="display" data-reveal style="--d:.08s">What's <span class="grad-text">new.</span></h1>
+      <p class="lead" data-reveal style="--d:.16s">Every release of AFH. The app updates itself, so you'll get each one shortly after it lands here.</p>
+    </section>
+
+    <div class="wrap section" style="padding-top:0">
+      <div class="tl">
+        <article class="panel rel latest" id="v1.8.3" data-reveal>
+          <div class="rel-head"><h2>1.8.3</h2><time datetime="2026-10-30">Oct 30, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">A home on the web</p>
+          <ul>
+            <li>This website, with the installer and the update feed.</li>
+            <li>AFH now checks <code>old.example.com</code> for updates by itself — no address to set.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.8.2" data-reveal>
+          <div class="rel-head"><h2>1.8.2</h2><time datetime="2026-10-30">Oct 30, 2026</time></div>
+          <p class="title">Real model lists everywhere</p>
+          <ul>
+            <li>When a provider publishes its own model list, that list wins — guessed models it doesn't offer are gone.</li>
+            <li>GitHub Copilot shows the models your account can really pick.</li>
+            <li>A removed provider or hidden model never stays selected: threads move to a model that exists and tell you so.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.8.1" data-reveal>
+          <div class="rel-head"><h2>1.8.1</h2><time datetime="2026-10-30">Oct 30, 2026</time></div>
+          <ul><li>ChatGPT sign-in lists exactly the models your plan has, with their reasoning levels.</li></ul>
+        </article>
+
+        <article class="panel rel major" id="v1.8.0" data-reveal>
+          <div class="rel-head"><h2>1.8.0</h2><time datetime="2026-10-30">Oct 30, 2026</time><span class="badge hot">Major</span></div>
+          <p class="title">Every provider, and sign-in</p>
+          <ul>
+            <li><b>228 providers</b> from models.dev, with context sizes, prices and reasoning levels.</li>
+            <li><b>Sign in</b> with ChatGPT (Plus, Pro, Team), GitHub Copilot or OpenRouter — no API key needed.</li>
+            <li>Window controls drawn by the app, more themes, theme-switch effects and message animations.</li>
+            <li>SDK additions.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.7.5" data-reveal>
+          <div class="rel-head"><h2>1.7.5</h2><time datetime="2026-10-29">Oct 29, 2026</time></div>
+          <ul><li>The agent can pause and ask you multiple-choice questions.</li></ul>
+        </article>
+        <article class="panel rel" id="v1.7.4" data-reveal>
+          <div class="rel-head"><h2>1.7.1 – 1.7.4</h2><time datetime="2026-10-29">Oct 29, 2026</time></div>
+          <ul>
+            <li>The agent installs skills, MCP servers, slash commands, hooks and agents by itself (1.7.3).</li>
+            <li>Dropped connections are retried; the to-do spinner stops when the thread isn't running.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel major" id="v1.7.0" data-reveal>
+          <div class="rel-head"><h2>1.7.0</h2><time datetime="2026-10-29">Oct 29, 2026</time><span class="badge hot">Major</span></div>
+          <p class="title">Eyes, ears and an API</p>
+          <ul>
+            <li><b>Browser tool</b>: the agent drives Chrome or Edge, and screenshots go to models that can see.</li>
+            <li>Paste or drop images; speak instead of typing.</li>
+            <li><b>Schedules</b> that run prompts on a timetable.</li>
+            <li>A <b>developer API</b> with Python and JavaScript SDKs.</li>
+            <li>Automatic updates and one-click bug reports (keys masked, sent nowhere).</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.6.0" data-reveal>
+          <div class="rel-head"><h2>1.6.0 – 1.6.3</h2><time datetime="2026-10-29">Oct 29, 2026</time></div>
+          <ul>
+            <li>Interrupted runs resume after a restart.</li>
+            <li>Model facts from models.dev.</li>
+            <li><b>Arabic</b> with right-to-left layout.</li>
+            <li>Light/dark switch, command palette (<kbd>Ctrl</kbd> <kbd>P</kbd>).</li>
+            <li>Compaction keeps your whole history readable.</li>
+            <li>Undo puts your message back in the box.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.5.0" data-reveal>
+          <div class="rel-head"><h2>1.5.0</h2><time datetime="2026-10-29">Oct 29, 2026</time></div>
+          <ul>
+            <li>The agent sets its own goals.</li>
+            <li>A built-in Helper subagent.</li>
+            <li>Working Zadloop imports.</li>
+            <li>A new look.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel major" id="v1.4.0" data-reveal>
+          <div class="rel-head"><h2>1.4.0</h2><time datetime="2026-10-29">Oct 29, 2026</time><span class="badge hot">Major</span></div>
+          <p class="title">Built for long jobs</p>
+          <ul>
+            <li>Goals, a live to-do list and error checks after edits.</li>
+            <li>Background jobs, hooks, slash commands and git worktrees.</li>
+            <li>Cost tracking with budgets.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel major" id="v1.3.0" data-reveal>
+          <div class="rel-head"><h2>1.3.0 – 1.3.3</h2><time datetime="2026-10-28">Oct 28, 2026</time><span class="badge hot">Major</span></div>
+          <p class="title">AFH's own engine</p>
+          <ul>
+            <li>A new agent engine written for AFH replaces OpenCode.</li>
+            <li>Code now streams into the Live pane as it's written, and config changes no longer restart anything.</li>
+            <li>Import threads from Zadloop exports; installer fixes.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.2.0" data-reveal>
+          <div class="rel-head"><h2>1.1 – 1.2.1</h2><time datetime="2026-10-28">Oct 28, 2026</time></div>
+          <ul>
+            <li>The Live file pane, an activity timeline and states before the reply starts.</li>
+            <li>AFH's own harness prompt, an Appearance tab, a two-step model picker and a custom title bar.</li>
+            <li>Tokens per second and time per reply.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel major" id="v1.0" data-reveal>
+          <div class="rel-head"><h2>1.0</h2><time datetime="2026-10-28">Oct 28, 2026</time></div>
+          <p class="title">Hello, AFH</p>
+          <ul>
+            <li>The Sunset look, Delegate mode and the desktop app.</li>
+            <li>Models, skills, prompts, context and remote control.</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer data-footer></footer>
+  <script src="/js/layout.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script type="module" src="/js/page.js"></script>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Features · Agent Flow Harness</title>
+  <meta name="description" content="Everything Agent Flow Harness does: goals and live to-do lists, helpers working in parallel, a live view of every file, rewind, approvals, hooks, 46 themes, Arabic, MCP, skills and a local API.">
+  <meta name="theme-color" content="#0a0807">
+  <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/pages.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body data-page="features" data-scene="features">
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <header data-nav></header>
+
+  <main>
+    <section class="page-hero">
+      <p class="kicker" data-reveal>Features</p>
+      <h1 class="display" data-reveal style="--d:.08s">Everything<br><span class="grad-text">AFH does.</span></h1>
+      <p class="lead" data-reveal style="--d:.16s">An agent that plans its own work, splits it across helpers and shows you every line as it lands — with the controls to steer it, stop it and rewind it.</p>
+      <div class="cta-row" data-reveal style="--d:.24s">
+        <a class="btn btn-primary" href="/download">Download for Windows</a>
+        <a class="btn btn-ghost" href="/docs">Getting started</a>
+      </div>
+    </section>
+
+    <nav class="subnav" aria-label="Feature groups">
+      <a href="#plan">Plans</a><a href="#agents">Agents</a><a href="#watch">Watch it work</a><a href="#control">Control</a><a href="#long">Long sessions</a><a href="#yours">Make it yours</a><a href="#build">Build on it</a>
+    </nav>
+
+    <div class="wrap">
+      <!-- 1 · planning -->
+      <section class="group" id="plan" data-scene='{"tiles":1,"net":0.5,"flow":0.5,"core":1,"activity":0.5}'>
+        <div class="group-head" data-reveal>
+          <span class="group-n">01</span>
+          <h2 class="h2">It plans its own work.</h2>
+          <p class="sub">Before it touches a file, the agent decides what "done" means and lays out the steps — where you can see them and change them.</p>
+        </div>
+        <div class="fgrid">
+          <article class="fcard" data-reveal>
+            <div class="ficon">◎</div>
+            <h3>Goals</h3>
+            <p>The agent sets a goal from your request and keeps working until it's met — or tells you what's in the way. Set one yourself with <code>/goal</code>. Achieved goals are kept under the Goal button.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">☰</div>
+            <h3>A to-do list you can touch</h3>
+            <p>Every step shows above the message box. Add, reorder or tick items yourself — the agent sees your edits on its next turn.</p>
+            <div class="ui">
+              <div class="ui-row"><span class="ui-dot g"></span><s>Read the auth code</s></div>
+              <div class="ui-row"><span class="ui-dot"></span><b>Add session handling</b><span class="r">now</span></div>
+              <div class="ui-row"><span class="ui-dot off"></span>Write the tests</div>
+            </div>
+          </article>
+          <article class="fcard" data-reveal>
+            <div class="ficon">?</div>
+            <h3>It asks instead of guessing</h3>
+            <p>When a choice is really yours — which library, which design — it pauses and asks you multiple-choice questions, then carries on with your answer.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">⌁</div>
+            <h3>Picks up after a restart</h3>
+            <p>Close the app mid-run, or lose power: when AFH starts again, interrupted runs resume by themselves.</p>
+          </article>
+          <article class="fcard wide" data-reveal>
+            <div class="ficon">◐</div>
+            <h3>Three ways to work</h3>
+            <p>Choose a mode in the message box — or create your own agents with their own prompts, models and tools.</p>
+            <div class="modes">
+              <div class="mode on"><b>Build</b><span>Reads, edits and runs code in your project. The default.</span></div>
+              <div class="mode"><b>Plan</b><span>Investigates and proposes a plan without changing anything.</span></div>
+              <div class="mode"><b>Delegate</b><span>Leads the work and hands tasks to your delegate models.</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- 2 · agents -->
+      <section class="group" id="agents" data-scene='{"net":1,"flow":1,"core":1,"activity":1.3}'>
+        <div class="group-head" data-reveal>
+          <span class="group-n">02</span>
+          <h2 class="h2">It splits the work.</h2>
+          <p class="sub">A lead agent hands pieces to helpers that run side by side, then checks what they bring back.</p>
+        </div>
+        <div class="fgrid">
+          <article class="fcard" data-reveal>
+            <div class="ficon">⇶</div>
+            <h3>Helpers in parallel</h3>
+            <p>The built-in Helper is a copy of your own model for self-contained side work. Add your own subagents too, and watch any of them from the top bar: what the lead asked, and what came back.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">◆</div>
+            <h3>Mix models</h3>
+            <p>Lead with your strongest model and delegate to a fast, cheap one. Each helper can use a different provider.</p>
+            <div class="ui">
+              <div class="ui-row"><span class="ui-dot"></span><b>Lead</b><span class="r">GPT-6.1 Sol</span></div>
+              <div class="ui-row"><span class="ui-dot p"></span>Helper · tests<span class="r">GLM 5.3</span></div>
+              <div class="ui-row"><span class="ui-dot p"></span>Helper · styles<span class="r">Kimi K3.1</span></div>
+            </div>
+          </article>
+          <article class="fcard" data-reveal>
+            <div class="ficon">⑂</div>
+            <h3>Git worktrees</h3>
+            <p>Give a thread its own worktree — its own branch and folder — then merge it into your base branch when you're happy. Your main checkout stays clean.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">⚡</div>
+            <h3>Fast on many files</h3>
+            <p>Reads, searches and helper tasks run in parallel, and old tool output is trimmed so long runs stay quick and cheap.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- 3 · watch -->
+      <section class="group" id="watch" data-scene='{"code":1,"net":1,"flow":1,"core":1,"activity":0.9}'>
+        <div class="group-head" data-reveal>
+          <span class="group-n">03</span>
+          <h2 class="h2">You watch it work.</h2>
+          <p class="sub">Nothing happens behind a spinner. You see the thinking, the tools and the code as they happen.</p>
+        </div>
+        <div class="fgrid">
+          <article class="fcard" data-reveal>
+            <div class="ficon">◉</div>
+            <h3>Live file pane</h3>
+            <p>Tool arguments stream as they're generated, so code appears character by character in the Live pane — not after the fact.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">⏱</div>
+            <h3>Every step on a timeline</h3>
+            <p>Thinking time, each tool call, tokens per second and how long each reply took — all in the conversation.</p>
+          </article>
+          <article class="fcard" data-reveal>
+            <div class="ficon">◳</div>
+            <h3>It checks its work in a browser</h3>
+            <p>The browser tool drives a real Chrome or Edge, and screenshots go back to models that can see — so it notices when the page looks wrong.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">✎</div>
+            <h3>Errors caught after edits</h3>
+            <p>After the agent edits a file, AFH checks it for errors and hands the results straight back, so broken code is fixed on the spot.</p>
+          </article>
+          <article class="fcard wide" data-reveal>
+            <div class="ficon">🎙</div>
+            <h3>Images and voice</h3>
+            <p>Paste or drop screenshots and files into the message box. Press the mic and speak — your words are typed in for you (with a Groq or OpenAI speech key).</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- 4 · control -->
+      <section class="group" id="control" data-scene='{"net":1,"flow":1,"core":1,"activity":0.25}'>
+        <div class="group-head" data-reveal>
+          <span class="group-n">04</span>
+          <h2 class="h2">You stay in control.</h2>
+          <p class="sub">Decide what it may do alone, stop it at any moment, and undo anything — files included.</p>
+        </div>
+        <div class="fgrid">
+          <article class="fcard" data-reveal>
+            <div class="ficon">⛨</div>
+            <h3>Three approval modes</h3>
+            <div class="ui">
+              <div class="ui-row"><span class="ui-dot"></span><b>Ask first</b><span class="r">approve edits &amp; commands</span></div>
+              <div class="ui-row"><span class="ui-dot g"></span><b>Full access</b><span class="r">works freely</span></div>
+              <div class="ui-row"><span class="ui-dot off"></span><b>Read only</b><span class="r">never edits or runs</span></div>
+            </div>
+            <p style="margin-top:12px">Reading <code>.env</code> files always asks, whatever the mode.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">↺</div>
+            <h3>Rewind anything</h3>
+            <p>"Undo to here" rewinds the thread <em>and</em> the files on disk to just before a message, and puts your message back in the box to edit and resend. Or fork the thread from any point.</p>
+          </article>
+          <article class="fcard" data-reveal>
+            <div class="ficon">⚑</div>
+            <h3>Hooks</h3>
+            <p>Run your own commands before or after any tool, or when the agent stops. Exit with code 2 to block a tool call — or to make the agent keep going.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">$</div>
+            <h3>Cost you can see</h3>
+            <p>Tokens and cost per thread, budgets that stop a run, and prompt caching on by default for Anthropic models. Subscription plans count as no cost.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- 5 · long sessions -->
+      <section class="group" id="long" data-scene='{"net":2,"flow":2,"core":0.7,"activity":0.6,"tilt":0.45}'>
+        <div class="group-head" data-reveal>
+          <span class="group-n">05</span>
+          <h2 class="h2">Built for long sessions.</h2>
+          <p class="sub">Jobs that take hours, threads with thousands of messages — AFH is made for them.</p>
+        </div>
+        <div class="fgrid">
+          <article class="fcard" data-reveal>
+            <div class="ficon">∞</div>
+            <h3>Endless threads</h3>
+            <p>When a conversation fills 40, 60 or 80% of the model's context, older parts are summarised in place. You can still read every message; the model reads the summary. Or type <code>/compact</code>.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">▶</div>
+            <h3>Background jobs</h3>
+            <p>Dev servers, watchers and long builds run in the background while the agent keeps working. See them with <code>/jobs</code>.</p>
+          </article>
+          <article class="fcard" data-reveal>
+            <div class="ficon">⏲</div>
+            <h3>Schedules</h3>
+            <p>"Every morning, update dependencies and run the tests." Run a prompt every few minutes, hourly, daily, on weekdays or weekly — each run is a new thread you can read. Jobs run while AFH is open.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">⇄</div>
+            <h3>Bring your threads</h3>
+            <p>Import threads from OpenCode or Zadloop, and your OpenCode keys, endpoints and MCP servers in one click. Export any thread as JSON or Markdown.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- 6 · make it yours -->
+      <section class="group" id="yours" data-scene='{"mark":1,"net":0,"core":0,"flow":0,"zoom":0}'>
+        <div class="group-head" data-reveal>
+          <span class="group-n">06</span>
+          <h2 class="h2">Make it yours.</h2>
+          <p class="sub">Your colours, your language, your commands — and new abilities the agent can install for itself.</p>
+        </div>
+        <div class="fgrid">
+          <article class="fcard wide" data-reveal>
+            <div class="ficon">◑</div>
+            <h3>46 themes</h3>
+            <p>29 dark and 17 light, from Sunset and Midnight to Dracula, Nord, Tokyo Night and Catppuccin — or build your own. Switch with a circle, diamond, wipe, fade or blur transition.</p>
+            <div class="swatches" aria-hidden="true">
+              <i style="background:#ff6a2a"></i><i style="background:#3b5bdb"></i><i style="background:#2f9e44"></i><i style="background:#1c7ed6"></i><i style="background:#e64980"></i><i style="background:#7048e8"></i><i style="background:#bd93f9"></i><i style="background:#88c0d0"></i><i style="background:#7aa2f7"></i><i style="background:#fabd2f"></i><i style="background:#cba6f7"></i><i style="background:#f6f1e9"></i><i style="background:#e9f5ec"></i><i style="background:#fdf6e3"></i>
+            </div>
+          </article>
+          <article class="fcard" data-reveal>
+            <div class="ficon">ع</div>
+            <h3>English &amp; Arabic</h3>
+            <p>A full Arabic interface with right-to-left layout, switchable live without a restart.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">/</div>
+            <h3>Slash commands</h3>
+            <p>Built in: <code>/goal</code> <code>/todo</code> <code>/compact</code> <code>/jobs</code> <code>/new</code> <code>/cost</code>, plus <code>/review</code>, <code>/fix-tests</code>, <code>/explain</code> and <code>/commit</code>. Add your own as Markdown files — <code>.claude/commands</code> works too.</p>
+          </article>
+          <article class="fcard" data-reveal>
+            <div class="ficon">⌘</div>
+            <h3>MCP servers &amp; skills</h3>
+            <p>Plug in local or remote MCP servers, and skills from <code>~/.afh/skills</code> or your project. Skills made for other agents work as they are.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">✦</div>
+            <h3>It extends itself</h3>
+            <p>Ask for a new ability and the agent installs it: skills, MCP servers, slash commands, hooks or custom agents.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- 7 · API -->
+      <section class="group" id="build" data-scene='{"net":1,"flow":1,"core":1,"activity":1}'>
+        <div class="group-head" data-reveal>
+          <span class="group-n">07</span>
+          <h2 class="h2">Build on it.</h2>
+          <p class="sub">Everything the app does is a local API. Start an agent from a script, a git hook or CI, and stream what it does.</p>
+        </div>
+        <div class="fgrid">
+          <article class="fcard" data-reveal>
+            <div class="ficon">{ }</div>
+            <h3>Local REST API</h3>
+            <p>Create threads, send messages, read replies and diffs, set goals and approve actions — with one key from Settings → Developer.</p>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">⟲</div>
+            <h3>Python &amp; JavaScript SDKs</h3>
+            <p>Each is a single file with no dependencies. Live events stream every token and tool call as it happens.</p>
+            <div class="chips"><a class="badge hot" href="/sdk/afh_sdk.py" download>afh_sdk.py</a><a class="badge hot" href="/sdk/afh.mjs" download>afh.mjs</a><a class="badge" href="/api">API reference →</a></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="panel band" data-reveal>
+          <div>
+            <p class="kicker">Private by design</p>
+            <h2 class="h2">Yours, on your PC.</h2>
+            <p class="sub">AFH runs and stores everything on your computer. There's no account and no telemetry.</p>
+          </div>
+          <ul class="facts">
+            <li>Threads, settings and undo history live in <span class="mono">~/.afh</span> on your PC.</li>
+            <li>API keys are stored only on this computer.</li>
+            <li>Your code goes only to the model providers you choose.</li>
+            <li>The only other calls: the update check, the model catalogue refresh, and web search or voice if you turn them on.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <section class="cta-band wrap">
+      <h2 class="display" data-reveal>Ready when<br><span class="grad-text">you are.</span></h2>
+      <p class="lead" data-reveal style="--d:.08s">Free for Windows. Install it, sign in or add a key, and give it something to build.</p>
+      <div class="cta-row" data-reveal style="--d:.16s">
+        <a class="btn btn-primary btn-big" href="/download">Download AFH</a>
+        <a class="btn btn-ghost btn-big" href="/models">See the models</a>
+      </div>
+    </section>
+  </main>
+
+  <footer data-footer></footer>
+  <script src="/js/layout.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script type="module" src="/js/page.js"></script>
+</body>
+</html>

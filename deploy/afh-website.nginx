@@ -29,8 +29,24 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
+    error_page 404 /404.html;
+
+    # clean addresses: /features serves features.html
     location / {
         try_files $uri $uri.html $uri/ =404;
+        # pages (and anything unversioned) are checked again on every visit
+        add_header Cache-Control "no-cache" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    }
+
+    # styles and scripts, versioned per deploy: the pages link /v/<stamp>/js/main.js, which is
+    # /js/main.js — a new stamp each deploy, so these can be cached for good (deploy-website.ps1)
+    location ~ ^/v/[0-9]+/((?:[\w-]+/)*[\w-]+\.(?:css|js))$ {
+        alias /var/www/afh/$1;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
     }
 
     location /downloads/ {
