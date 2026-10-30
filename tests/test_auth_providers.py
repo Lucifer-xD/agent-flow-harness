@@ -190,3 +190,45 @@ def test_chatgpt_model_list_uses_current_client_version():
     m = out[0]
     assert m.name == "GPT-6.1-Sol" and m.context == 500000 and m.variants == ["low", "high"] and "image" in m.input
     assert chatgpt_model({"slug": "x", "visibility": "hide"}) is None
+
+
+def test_copilot_list_keeps_only_pickable_chat_models():
+    from afh.engine.providers.openai_compat import OpenAICompatProvider
+
+    data = {"data": [
+        {"id": "claude-sonnet-x", "name": "Claude Sonnet X", "model_picker_enabled": True, "capabilities": {"type": "chat", "limits": {"max_context_window_tokens": 200000, "max_output_tokens": 16000}, "supports": {"tool_calls": True, "vision": True}}},
+        {"id": "text-embedding-3-small", "capabilities": {"type": "embeddings"}},
+        {"id": "gpt-old", "model_picker_enabled": False, "capabilities": {"type": "chat"}},
+        {"id": "blocked", "model_picker_enabled": True, "policy": {"state": "disabled"}, "capabilities": {"type": "chat"}},
+    ]}
+    cfg = ProviderConfig(id="github-copilot", name="c", kind="openai", base_url="https://api.githubcopilot.com")
+    out = asyncio.run(OpenAICompatProvider(cfg, transport=httpx.MockTransport(lambda r: httpx.Response(200, json=data))).list_models())
+    assert [m.id for m in out] == ["claude-sonnet-x"]
+    assert out[0].context == 200000 and out[0].output == 16000 and "image" in out[0].input and out[0].name == "Claude Sonnet X"
+
+
+def test_models_of_trusts_the_fetched_list():
+    from afh.engine import config as provcfg
+
+    p = {"id": "openai", "catalog": "openai", "fetched": [{"id": "gpt-real", "name": "GPT Real"}], "models": [{"id": "typed-by-hand"}]}
+    assert [m.id for m in provcfg.models_of(p, "openai")] == ["gpt-real", "typed-by-hand"]  # no static gpt-6.1 guesses
+    assert len(provcfg.models_of({"id": "openai", "catalog": "openai"}, "openai")) > 5  # nothing fetched yet: models.dev / catalog list
+
+
+def test_unavailable_model_falls_back():
+    from afh.engine.core import Engine
+    from afh.engine.types import ModelInfo
+
+    e = Engine.__new__(Engine)
+    e.providers = {"zai": object(), "chatgpt": object()}
+    e.models = {"zai": [ModelInfo(id="glm-5.3", name="GLM", hidden=True)], "chatgpt": [ModelInfo(id="gpt-6.1-sol", name="Sol", variants=["low", "max"])]}
+    e.settings = lambda: {"defaultModel": {"providerID": "zai", "id": "glm-5.3"}}
+    assert not e.model_available({"providerID": "zai", "id": "glm-5.3"})  # hidden
+    assert not e.model_available({"providerID": "gone", "id": "x"})  # removed provider
+    assert e.default_model() == {"id": "gpt-6.1-sol", "providerID": "chatgpt"}
+
+    class Agent:
+        model = None
+
+    ref = e.model_ref_for({"model": {"providerID": "zai", "id": "glm-5.3", "variant": "high"}}, Agent())
+    assert ref == {"id": "gpt-6.1-sol", "providerID": "chatgpt"}  # and the old model's effort level is dropped

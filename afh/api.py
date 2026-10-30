@@ -1031,6 +1031,7 @@ def provider_enabled(pid: str, body: dict = Body(...)):
 @app.delete("/api/providers/{pid}")
 def delete_provider(pid: str):
     provcfg.remove(pid)
+    _forget_default(pid)
     engine.reload_providers()
     engine.publish({"type": "model.updated", "data": {}})
     return {"ok": True}
@@ -1081,9 +1082,17 @@ def provider_logout(pid: str):
     if not p:
         raise KeyError(pid)
     provcfg.remove(pid)
+    _forget_default(pid)
     engine.reload_providers()
     engine.publish({"type": "model.updated", "data": {}})
     return {"ok": True}
+
+
+def _forget_default(pid: str) -> None:
+    """A removed provider can't stay the default model; the picker falls back to the first one left."""
+    ref = engine.settings().get("defaultModel")
+    if isinstance(ref, dict) and ref.get("providerID") == pid:
+        store.replace_setting("defaultModel", None)
 
 
 # ---- MCP servers -----------------------------------------------------------------

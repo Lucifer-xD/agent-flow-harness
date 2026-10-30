@@ -76,7 +76,7 @@ KNOWN: dict[str, dict] = {
     "github-copilot": {
         "name": "GitHub Copilot", "kind": "openai", "base_url": "https://api.githubcopilot.com",
         "env": [], "docs": "https://docs.github.com/en/copilot", "extra": {"max_tokens_param": "max_tokens"},
-        "fetch_models": False, "login": "copilot", "login_only": True, "needs_key": False,
+        "login": "copilot", "login_only": True, "needs_key": False,
     },
     "mistral": {
         "name": "Mistral", "kind": "openai", "base_url": "https://api.mistral.ai/v1",
@@ -414,15 +414,12 @@ def static_models(config: ProviderConfig) -> dict[str, ModelInfo]:
 
 
 def merge_static(config: ProviderConfig, fetched: list[ModelInfo]) -> list[ModelInfo]:
-    """Prefer hand-written metadata over guessed metadata; keep static models the server did not list."""
+    """The server's own list with hand-written metadata where we have it. Static ids the server did
+    not list are left out — they are guesses and fail when picked; only an empty answer falls back to them."""
     known = static_models(config)
-    out: list[ModelInfo] = []
-    seen: set[str] = set()
-    for m in fetched:
-        seen.add(m.id)
-        out.append(known.get(m.id, m))
-    out.extend(m for mid, m in known.items() if mid not in seen)
-    return out
+    if not fetched:
+        return list(known.values())
+    return [known.get(m.id, m) for m in fetched]
 
 
 def config_from_catalog(provider_id: str, api_key: str = "", base_url: str | None = None, params: dict | None = None) -> ProviderConfig:

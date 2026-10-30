@@ -336,12 +336,12 @@ def test_openai_list_models_parsing():
     assert by_id["deepseek-chat"].reasoning is False and by_id["deepseek-chat"].context == 128_000
     assert by_id["moonshotai/kimi-k3"].context == 262144 and by_id["moonshotai/kimi-k3"].output == 32000 and by_id["moonshotai/kimi-k3"].name == "Kimi K3"
 
-    # Static metadata wins over guesses and static-only models are kept.
+    # Static metadata wins over guesses; static-only ids the server did not list are dropped (they would fail).
     config = cfg("openai")
     config.models = [ModelInfo(id="gpt-6.1", name="My GPT", context=42), ModelInfo(id="only-static", name="Static")]
     models = run(OpenAICompatProvider(config, transport=Server(httpx.Response(200, json=data)).transport).list_models())
     by_id = {m.id: m for m in models}
-    assert by_id["gpt-6.1"].name == "My GPT" and by_id["gpt-6.1"].context == 42 and "only-static" in by_id
+    assert by_id["gpt-6.1"].name == "My GPT" and by_id["gpt-6.1"].context == 42 and "only-static" not in by_id
 
     with pytest.raises(ProviderError) as info:
         run(OpenAICompatProvider(cfg("openai"), transport=Server(httpx.Response(401, json={"error": {"message": "bad key"}})).transport).list_models())

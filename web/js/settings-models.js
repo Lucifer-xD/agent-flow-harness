@@ -105,7 +105,8 @@ export async function modelsPane(pane, ctx, opts = {}) {
 
   // ---- default model
   if (S.models.length) {
-    const def = S.settings.defaultModel || S.defaultModel;
+    const has = (r) => r && S.models.some((m) => m.id === r.id && m.providerID === r.providerID);
+    const def = [S.settings.defaultModel, S.defaultModel].find(has);  // a removed default shows what is really used
     const sel = el("select.sel", { style: { width: "340px" }, on: { change: (e) => {
       const [providerID, ...rest] = e.target.value.split("/");
       ctx.saveSettings({ defaultModel: { providerID, id: rest.join("/") } }).then(() => toast("Default model saved", "ok"));

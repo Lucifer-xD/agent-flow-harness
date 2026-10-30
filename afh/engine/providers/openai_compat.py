@@ -272,6 +272,18 @@ class OpenAICompatProvider:
                 item = {"id": item}
             if not isinstance(item, dict) or not item.get("id"):
                 continue
+            caps = item.get("capabilities") if isinstance(item.get("capabilities"), dict) else None
+            if caps is not None:  # GitHub Copilot: only chat models this account may pick
+                if caps.get("type", "chat") != "chat" or item.get("model_picker_enabled") is False or (item.get("policy") or {}).get("state") == "disabled":
+                    continue
+                limits, supports = caps.get("limits") or {}, caps.get("supports") or {}
+                model = catalog.guess_model(str(item["id"]), "openai", name=item.get("name") or "",
+                                            context=limits.get("max_context_window_tokens") or limits.get("max_prompt_tokens"), output=limits.get("max_output_tokens"))
+                model.tools = supports.get("tool_calls", True) is not False
+                if supports.get("vision"):
+                    model.input = ["text", "image"]
+                fetched.append(model)
+                continue
             mid = str(item["id"])
             context = item.get("context_length") or item.get("context_window") or (item.get("top_provider") or {}).get("context_length")
             output = item.get("max_output_tokens") or item.get("max_completion_tokens") or (item.get("top_provider") or {}).get("max_completion_tokens")

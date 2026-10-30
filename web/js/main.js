@@ -986,7 +986,17 @@ function updateChangesBadge() {
 
 // ---- composer -----------------------------------------------------------------------
 
-const currentModel = () => S.current?.session.model || S.draft.model || S.settings.defaultModel || S.defaultModel;
+/** The model the next message uses: the thread's, the draft's or the default — the first one still in the
+ *  picker. A removed provider or a hidden model never stays selected. */
+function currentModel() {
+  for (const ref of [S.current?.session.model, S.draft.model, S.settings?.defaultModel, S.defaultModel]) if (findModel(ref)) return ref;
+  return null;
+}
+/** The model this thread or draft asked for, when it is no longer available. */
+function missingModel() {
+  const ref = S.current ? S.current.session.model : S.draft.model;
+  return ref && !findModel(ref) ? ref : null;
+}
 const currentAgent = () => S.current?.session.agent || S.draft.agent || S.settings.defaultAgent || "build";
 const currentMode = () => S.current?.session.metadata?.afh?.mode || S.draft.mode || S.settings.defaultMode || "ask";
 
@@ -1002,7 +1012,9 @@ function modelName(ref) {
 function renderComposerState() {
   if (!S.settings) return;
   const ref = currentModel();
+  const gone = missingModel();
   $("pick-model").replaceChildren(ico("cpu"), el("span.lbl", modelName(ref) || "Choose model"), el("span.chev", { html: icon("chev-down") }));
+  $("pick-model").title = gone ? `${gone.id} is no longer available, so ${modelName(ref) || "no model"} is used` : "";
   const agent = S.agents.find((a) => a.id === currentAgent());
   $("pick-agent").replaceChildren(ico("bot"), el("span.lbl", agent?.name || currentAgent()), el("span.chev", { html: icon("chev-down") }));
   const mode = MODES[currentMode()] || MODES.ask;
@@ -1372,6 +1384,12 @@ async function submit(override) {
   if (!currentModel()) {
     toast("Add a provider and pick a model first", "info");
     return openSettings("models", ctx);
+  }
+  const gone = missingModel();
+  if (gone) {  // keep the thread on a model that exists, so the next run doesn't fail on it
+    const next = currentModel();
+    toast(`${gone.id} is no longer available — using ${modelName(next)}`, "info", 4000);
+    if (S.current) await patchSession({ model: next }); else S.draft.model = null;
   }
   const files = [...S.draft.files];
   ta.value = "";

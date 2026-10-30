@@ -89,10 +89,12 @@ def models_of(p: dict, pid: str | None = None) -> list[ModelInfo]:
     catalog = p.get("catalog")
     listed = p.get("fetched") or []
     out: dict[str, ModelInfo] = {}
+    # The endpoint's own list wins outright: guessed ids it did not list would fail when picked.
+    # Without one, models.dev's list for this provider, else AFH's static one.
     known = modelsdev.provider_models(pid, catalog) if not listed else []
-    if known:  # models.dev's list for this provider is more accurate than AFH's own static one
+    if known:
         out = {m.id: m for m in known}
-    else:
+    elif not listed:
         for m in STATIC_MODELS.get(catalog or pid, []):
             out[m.id] = modelsdev.enrich(ModelInfo(**m.to_dict()), modelsdev.lookup(pid, catalog, m.id))
     own_facts = catalog in SELF_DESCRIBING  # their own list already has the exact facts
