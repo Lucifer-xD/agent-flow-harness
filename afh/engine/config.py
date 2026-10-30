@@ -76,6 +76,7 @@ def _model(d: dict) -> ModelInfo:
 
 
 OVERRIDABLE = ("context", "output", "variants", "input", "reasoning")
+SELF_DESCRIBING = {"chatgpt"}  # providers whose model list carries context, effort levels and inputs
 
 
 def models_of(p: dict, pid: str | None = None) -> list[ModelInfo]:
@@ -94,9 +95,10 @@ def models_of(p: dict, pid: str | None = None) -> list[ModelInfo]:
     else:
         for m in STATIC_MODELS.get(catalog or pid, []):
             out[m.id] = modelsdev.enrich(ModelInfo(**m.to_dict()), modelsdev.lookup(pid, catalog, m.id))
+    own_facts = catalog in SELF_DESCRIBING  # their own list already has the exact facts
     for d in listed + p.get("models", []):
         try:
-            out[d["id"]] = modelsdev.enrich(_model(d), modelsdev.lookup(pid, catalog, d["id"]))
+            out[d["id"]] = _model(d) if own_facts else modelsdev.enrich(_model(d), modelsdev.lookup(pid, catalog, d["id"]))
         except (KeyError, TypeError, ValueError):
             continue
     for mid, ov in (p.get("overrides") or {}).items():
