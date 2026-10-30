@@ -1,0 +1,53 @@
+# Agent Flow Harness website (old.example.com): static pages plus the installer and the
+# auto-update feed (/downloads/latest.yml). Isolated site; other sites unchanged.
+# Installed by scripts/deploy-website.ps1 to /etc/nginx/sites-available/afh-website.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name old.example.com;
+    return 301 https://old.example.com$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name old.example.com;
+
+    ssl_certificate     /etc/nginx/ssl/legacy.crt;
+    ssl_certificate_key /etc/nginx/ssl/legacy.key;
+
+    root  /var/www/afh;
+    index index.html;
+
+    access_log /var/log/nginx/afh-website.access.log;
+    error_log  /var/log/nginx/afh-website.error.log;
+
+    client_max_body_size 16k;
+    client_body_timeout 15s;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location / {
+        try_files $uri $uri.html $uri/ =404;
+    }
+
+    location /downloads/ {
+        # latest.yml must never be stale, or apps miss a release
+        location ~ \.yml$ {
+            default_type text/yaml;
+            add_header Cache-Control "no-cache" always;
+            add_header X-Content-Type-Options "nosniff" always;
+        }
+        # installers are immutable per version (and may be fetched in byte ranges)
+        location ~ \.(exe|blockmap)$ {
+            add_header Cache-Control "public, max-age=86400" always;
+            add_header X-Content-Type-Options "nosniff" always;
+        }
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+}

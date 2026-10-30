@@ -73,10 +73,10 @@ export function updatesCard({ card, row, settings, save }) {
   };
   listeners.add(paint);
   paint(current);
-  const feed = el("input.inp", { value: u.feed || "", placeholder: "https://your-site.com/downloads/", style: { width: "320px" } });
+  const feed = el("input.inp", { value: u.feed || "", placeholder: "https://old.example.com/downloads/ (default)", style: { width: "320px" } });
   feed.addEventListener("change", () => save({ updates: { feed: feed.value.trim() } }, "Saved"));
   return card("Updates", "AFH checks for a new version every few hours, downloads it in the background and asks before restarting. Quitting also installs a downloaded update.", null,
     row("Status", null, el("div.inline", status, action)),
     row("Download updates automatically", "Off: AFH only tells you when one is available", toggle(u.auto !== false, (v) => save({ updates: { auto: v } }))),
-    row("Update address", "The web folder holding latest.yml and the installer — npm run dist writes both", feed));
+    row("Update address", "The web folder holding latest.yml and the installer. Leave empty for the AFH website", feed));
 }
