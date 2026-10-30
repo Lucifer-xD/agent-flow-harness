@@ -71,7 +71,7 @@ KNOWN: dict[str, dict] = {
     "chatgpt": {
         "name": "ChatGPT (Plus / Pro / Team)", "kind": "responses", "base_url": "https://chatgpt.com/backend-api/codex",
         "env": [], "docs": "https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan",
-        "extra": {"effort_map": {"max": "high"}}, "login": "chatgpt", "login_only": True, "needs_key": False,
+        "extra": {}, "login": "chatgpt", "login_only": True, "needs_key": False,
     },
     "github-copilot": {
         "name": "GitHub Copilot", "kind": "openai", "base_url": "https://api.githubcopilot.com",
@@ -300,11 +300,6 @@ STATIC_MODELS: dict[str, list[ModelInfo]] = {
         _m("gemini-3-flash-lite", "Gemini 3 Flash Lite", 1_000_000, 65_536, reasoning=True, variants=_LMH),
         _m("gemini-2.5-pro", "Gemini 2.5 Pro", 1_048_576, 65_536, reasoning=True, variants=_LHM),
         _m("gemini-2.5-flash", "Gemini 2.5 Flash", 1_048_576, 65_536, reasoning=True, variants=_LHM),
-    ],
-    "chatgpt": [
-        _m("gpt-6.1-codex", "GPT-6.1 Codex", 400_000, 128_000, reasoning=True, variants=_LMH),
-        _m("gpt-6.1", "GPT-6.1", 400_000, 128_000, reasoning=True, variants=_LMH),
-        _m("gpt-6.1-mini", "GPT-6.1 mini", 400_000, 128_000, reasoning=True, variants=_LMH),
     ],
     "deepseek": [
         _m("deepseek-chat", "DeepSeek Chat", 128_000, 8_192, image=False),

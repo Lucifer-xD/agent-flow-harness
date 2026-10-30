@@ -166,3 +166,27 @@ def test_401_refreshes_the_token_and_retries(monkeypatch):
     out = asyncio.run(collect())
     assert seen == ["Bearer first", "Bearer second"]
     assert [e["type"] for e in out] == ["text.delta", "finish"]
+
+
+def test_chatgpt_model_list_uses_current_client_version():
+    from afh.engine.providers.openai_responses import CODEX_CLIENT_VERSION, chatgpt_model
+
+    seen = {}
+    models = [
+        {"slug": "gpt-6.1-sol", "display_name": "GPT-6.1-Sol", "visibility": "list", "supported_in_api": True, "context_window": 500000,
+         "input_modalities": ["text", "image"], "supported_reasoning_levels": [{"effort": "low"}, {"effort": "high"}, {"effort": "ultra"}]},
+        {"slug": "codex-auto-review", "visibility": "hide", "supported_in_api": True},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"models": models})
+
+    cfg = ProviderConfig(id="chatgpt", name="c", kind="responses", base_url=auth.CHATGPT_BASE,
+                         auth={"type": "chatgpt", "access": "t", "account_id": "a", "expires": time.time() + 3600})
+    out = asyncio.run(OpenAIResponsesProvider(cfg, transport=httpx.MockTransport(handler)).list_models())
+    assert seen["params"]["client_version"] == CODEX_CLIENT_VERSION
+    assert [m.id for m in out] == ["gpt-6.1-sol"]
+    m = out[0]
+    assert m.name == "GPT-6.1-Sol" and m.context == 500000 and m.variants == ["low", "high"] and "image" in m.input
+    assert chatgpt_model({"slug": "x", "visibility": "hide"}) is None

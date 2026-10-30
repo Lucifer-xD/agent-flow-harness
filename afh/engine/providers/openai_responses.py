@@ -49,7 +49,8 @@ class OpenAIResponsesProvider:
             body["tool_choice"] = "auto"
             body["parallel_tool_calls"] = True
         if req.variant and req.reasoning:
-            body["reasoning"] = {"effort": extra.get("effort_map", {}).get(req.variant, req.variant), "summary": "auto"}
+            effort = req.variant if self.chatgpt else extra.get("effort_map", {}).get(req.variant, req.variant)  # ChatGPT lists its own levels
+            body["reasoning"] = {"effort": effort, "summary": "auto"}
             body["include"] = ["reasoning.encrypted_content"]
         if not self.chatgpt:  # the Codex backend rejects both
             if req.max_tokens:
@@ -172,17 +173,8 @@ class OpenAIResponsesProvider:
         yield {"type": "finish", "reason": finish}
 
     async def list_models(self) -> list[ModelInfo]:
-        if self.chatgpt:  # the Codex backend's own list when it answers, else AFH's
-            try:
-                base, signed = await auth.prepare(self.config)
-                async with make_client(self.headers() | signed, self._transport) as client:
-                    resp = await client.get(join_url(base, "/models"), params={"client_version": "0.60.0"})
-                items = (resp.json() or {}).get("models") if resp.status_code < 300 else None
-                fetched = [catalog.guess_model(str(m.get("slug") or m.get("id")), "openai", name=m.get("display_name") or "",
-                                               context=m.get("context_window")) for m in items or [] if isinstance(m, dict) and (m.get("slug") or m.get("id"))]
-                return catalog.merge_static(self.config, fetched)
-            except Exception:
-                return catalog.merge_static(self.config, [])
+        if self.chatgpt:
+            return await self._chatgpt_models()
         if not self.config.fetch_models:
             return catalog.merge_static(self.config, [])
         base, signed = await auth.prepare(self.config)
@@ -197,3 +189,36 @@ class OpenAIResponsesProvider:
             raise ProviderError(error_message(body, resp.status_code), resp.status_code, body[:2000])
         items = (resp.json() or {}).get("data") or []
         return catalog.merge_static(self.config, [catalog.guess_model(str(m["id"]), "openai") for m in items if isinstance(m, dict) and m.get("id")])
+
+    async def _chatgpt_models(self) -> list[ModelInfo]:
+        """The models this ChatGPT plan may use, from the Codex backend. It hides models whose
+        ``minimal_client_version`` is above the version we report, so we report a current one."""
+        base, signed = await auth.prepare(self.config)
+        url = join_url(base, "/models")
+        async with make_client(self.headers() | signed | {"accept": "application/json"}, self._transport) as client:
+            try:
+                resp = await client.get(url, params={"client_version": CODEX_CLIENT_VERSION})
+            except NETWORK_ERRORS as exc:
+                raise ProviderError(network_error(exc, url)["message"]) from exc
+        if resp.status_code >= 300:
+            body = decode_body(resp.content)
+            raise ProviderError(error_message(body, resp.status_code), resp.status_code, body[:2000])
+        out = [m for m in (chatgpt_model(item) for item in (resp.json() or {}).get("models") or []) if m]
+        if not out:
+            raise ProviderError("ChatGPT listed no models for this plan")
+        return out  # ids typed in by hand under Edit are added on top by config.models_of
+
+
+CODEX_CLIENT_VERSION = "99.0.0"
+_SKIP_EFFORTS = {"ultra"}  # "automatic task delegation" — a Codex app feature, not a plain effort level
+
+
+def chatgpt_model(item: dict) -> ModelInfo | None:
+    """One entry of the Codex ``/models`` list; ``None`` for hidden or unusable ones."""
+    if not isinstance(item, dict) or not item.get("slug") or item.get("visibility") == "hide" or item.get("supported_in_api") is False:
+        return None
+    efforts = [str(lv.get("effort")) for lv in item.get("supported_reasoning_levels") or [] if isinstance(lv, dict) and lv.get("effort") and lv.get("effort") not in _SKIP_EFFORTS]
+    inputs = [str(x) for x in item.get("input_modalities") or ["text", "image"]]
+    return ModelInfo(id=str(item["slug"]), name=item.get("display_name") or catalog.pretty_name(item["slug"]),
+                     context=int(item.get("context_window") or 272_000), output=128_000, tools=True,
+                     reasoning=bool(efforts), variants=efforts, input=inputs if "text" in inputs else ["text", *inputs])
