@@ -374,9 +374,10 @@ async function openExternal(url) {
 //
 // electron-updater with a "generic" feed: a folder on a web server holding latest.yml and the
 // installer that `npm run dist` writes. The address is Settings → About → Updates (updates.feed in
-// ~/.afh/settings.json) or AFH_UPDATE_URL. New versions download in the background when
-// updates.auto is on; the page offers "Restart to update", and quitting installs it anyway.
+// ~/.afh/settings.json), else AFH_UPDATE_URL, else the AFH website. New versions download in the
+// background when updates.auto is on; the page offers "Restart to update", and quitting installs it anyway.
 
+const DEFAULT_FEED = "https://old.example.com/downloads/";
 let autoUpdater = null;
 const update = { state: "idle", version: null, progress: 0, error: null, feed: "", current: app.getVersion() };
 const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -392,7 +393,7 @@ function afhSettings() {
 
 function updateSettings() {
   const u = afhSettings().updates || {};
-  const feed = String(u.feed || process.env.AFH_UPDATE_URL || "").trim();
+  const feed = String(u.feed || process.env.AFH_UPDATE_URL || DEFAULT_FEED).trim();
   return { auto: u.auto !== false, feed: feed && !feed.endsWith("/") ? feed + "/" : feed };
 }
 
