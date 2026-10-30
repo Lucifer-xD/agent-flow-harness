@@ -3,29 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AFH API Reference</title>
+  <title>API reference · Agent Flow Harness</title>
   <meta name="description" content="Drive Agent Flow Harness from your own scripts: the local REST API, live events, scheduled jobs, and the Python and JavaScript SDKs.">
   <meta name="theme-color" content="#0a0807">
-  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="docs.css">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/docs.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
 </head>
-<body class="docs">
-  <div class="docs-glow" aria-hidden="true"><span></span><span></span><span></span></div>
+<body class="docs" data-page="api" data-scene="docs">
+  <canvas id="scene" aria-hidden="true"></canvas>
   <div class="grain" aria-hidden="true"></div>
 
-  <header class="nav scrolled">
-    <a class="brand" href="index.html"><img src="assets/mark.svg" alt="" width="34" height="20"><span>Agent Flow Harness</span></a>
-    <nav class="nav-links">
-      <a href="index.html#flow">How it works</a>
-      <a href="index.html#features">Features</a>
-      <a href="api.html" class="active">API</a>
-    </nav>
-    <a class="btn btn-small" href="index.html#download">Download</a>
-  </header>
+  <header data-nav></header>
 
   <section class="docs-hero">
     <p class="eyebrow"><span class="dot"></span> API v1 · AFH <span data-version>1.8.3</span></p>
@@ -33,8 +31,8 @@
     <p class="lead">Everything the app does is a local HTTP API. Start an agent from a script, a git hook or CI, stream what it does live, and schedule work for later — with one key and a few lines of Python or JavaScript.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="#quickstart">Quick start</a>
-      <a class="btn btn-ghost" href="sdk/afh_sdk.py" download>Python SDK</a>
-      <a class="btn btn-ghost" href="sdk/afh.mjs" download>JavaScript SDK</a>
+      <a class="btn btn-ghost" href="/sdk/afh_sdk.py" download>Python SDK</a>
+      <a class="btn btn-ghost" href="/sdk/afh.mjs" download>JavaScript SDK</a>
     </div>
   </section>
 
@@ -292,7 +290,7 @@ console.log(result.reply);</code></pre></div>
       <!-- python -->
       <section id="python">
         <h2>Python SDK</h2>
-        <p>One file, standard library only, Python 3.9+. <a href="sdk/afh_sdk.py" download>Download afh_sdk.py</a> next to your script.</p>
+        <p>One file, standard library only, Python 3.9+. <a href="/sdk/afh_sdk.py" download>Download afh_sdk.py</a> next to your script.</p>
         <table class="ref api">
           <tr><td><code>AFH(api_key=None, url=None, timeout=60)</code></td><td>Connect. Defaults: <code>AFH_API_KEY</code>, then <code>AFH_URL</code> or the discovery file.</td></tr>
           <tr><td><code>run(prompt, *, directory, session_id, model, agent, mode="full", wait=True, timeout=1800)</code></td><td>Do a task and wait for the answer.</td></tr>
@@ -314,7 +312,7 @@ console.log(result.reply);</code></pre></div>
       <!-- javascript -->
       <section id="javascript">
         <h2>JavaScript SDK</h2>
-        <p>One ES module for Node 18+ — no packages. <a href="sdk/afh.mjs" download>Download afh.mjs</a>.</p>
+        <p>One ES module for Node 18+ — no packages. <a href="/sdk/afh.mjs" download>Download afh.mjs</a>.</p>
         <table class="ref api">
           <tr><td><code>await AFH.connect({ apiKey, url })</code></td><td>Connect. Defaults like Python.</td></tr>
           <tr><td><code>run(prompt, { directory, sessionID, model, agent, mode, wait, timeout })</code></td><td>Do a task and wait for the answer.</td></tr>
@@ -358,12 +356,11 @@ print(afh.goal(thread["id"])["status"])</code></pre></div>
     </main>
   </div>
 
-  <footer class="footer">
-    <div class="brand"><img src="assets/mark.svg" alt="" width="30" height="18"><span>Agent Flow Harness</span></div>
-    <p><a href="index.html">Home</a> · <a href="api.html">API reference</a> · <a href="index.html#download">Download</a></p>
-    <p class="fine">© 2026 Agent Flow Harness</p>
-  </footer>
+  <footer data-footer></footer>
 
-  <script src="js/docs.js"></script>
+  <script src="/js/layout.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script type="module" src="/js/page.js"></script>
+  <script src="/js/docs.js"></script>
 </body>
 </html>

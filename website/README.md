@@ -1,25 +1,38 @@
 # AFH website
 
-The download page for Agent Flow Harness and its API reference: plain HTML/CSS/JS, no build step.
-Three.js draws the 3D scene, GSAP ScrollTrigger and Lenis drive the scroll animation (all from CDNs).
+https://old.example.com — plain HTML/CSS/JS, no build step. Three.js draws the 3D world behind
+every page; GSAP (and on the home page ScrollTrigger and Lenis) drive the motion. All from CDNs.
 
-- `index.html` — the landing page with the download
-- `api.html` — the API and SDK reference (`docs.css`, `js/docs.js`)
-- `sdk/` — copies of `sdk/python/afh_sdk.py` and `sdk/js/afh.mjs` to download; copy them again
-  when the SDKs change
+## Pages
 
-Preview it:
+Clean addresses: nginx serves `/features` from `features.html`.
 
-    python -m http.server 5520 --directory website
+- `index.html` — home: the scroll story (`js/main.js`, `sections.css`)
+- `features.html`, `models.html`, `download.html`, `changelog.html`, `404.html` — `pages.css`
+- `docs.html` (getting started) and `api.html` (API reference) — `docs.css`, `js/docs.js`
 
-then open http://127.0.0.1:5520/.
+Shared by every page:
 
-## Downloads and updates
+- `js/layout.js` — the header, phone menu and footer (pages hold `<header data-nav>` and
+  `<footer data-footer>`), entrance animations (`data-reveal`), and the current release read from
+  `downloads/latest.yml` (fills `data-version`, `data-size`, `data-date`, `data-file` and the
+  `data-download` links)
+- `js/scene.js` — the 3D world; `js/page.js` steers it on every page but home. `<body data-scene>`
+  picks the starting look, and any element with `data-scene='{"net":1}'` changes it while on screen
+  (keys are listed at the top of `scene.js`)
+- `styles.css` — tokens, nav, footer, buttons
 
-The Download buttons point at `downloads/AFH-Setup-<version>.exe` (not committed: copy the
-installer from `desktop/dist/`). Copy `desktop/dist/latest.yml` there too: the app's updater reads
-it. Once the site is online, put the address of that folder
-(e.g. `https://your-site.com/downloads/`) in AFH → Settings → About → Update address, and every
-copy of AFH set to it will download new versions in the background.
+## Data
 
-When you publish a version, update the version and size shown on the landing page.
+- `data/providers.json` — the Models page's directory. Rebuild it when the provider catalogue or
+  the bundled models.dev snapshot changes: `python scripts/website-data.py`
+- `sdk/` — copies of `sdk/python/afh_sdk.py` and `sdk/js/afh.mjs`; copy them again when they change
+- `changelog.html` — add each release at the top
+
+## Preview and publish
+
+    python scripts/preview-website.py        # http://127.0.0.1:5520/, same clean URLs as nginx
+
+Publishing a release: copy `desktop/dist/AFH-Setup-<version>.exe` and `latest.yml` into
+`downloads/` (not committed), then `powershell -ExecutionPolicy Bypass -File scripts/deploy-website.ps1`.
+The app's updater reads `downloads/latest.yml`, so every installed copy picks the release up.

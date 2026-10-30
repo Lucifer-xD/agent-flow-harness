@@ -6,12 +6,15 @@
   <title>Agent Flow Harness</title>
   <meta name="description" content="Agent Flow Harness (AFH) — a desktop coding agent that runs on your machine, with your models. Goals, to-do lists, subagents and a live view of every file it writes.">
   <meta name="theme-color" content="#0a0807">
-  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+  <meta property="og:title" content="Agent Flow Harness — your agents, your machine, your flow">
+  <meta property="og:description" content="A desktop coding agent that plans, delegates and writes code with the models you choose.">
+  <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="sections.css">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/sections.css">
   <script type="importmap">
     { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -19,26 +22,17 @@
     } }
   </script>
 </head>
-<body>
+<body data-page="home">
   <canvas id="scene" aria-hidden="true"></canvas>
   <div class="grain" aria-hidden="true"></div>
 
-  <header class="nav">
-    <a class="brand" href="#top"><img src="assets/mark.svg" alt="" width="34" height="20"><span>Agent Flow Harness</span></a>
-    <nav class="nav-links">
-      <a href="#flow">How it works</a>
-      <a href="#features">Features</a>
-      <a href="#models">Models</a>
-      <a href="api.html">API</a>
-    </nav>
-    <a class="btn btn-small" href="#download">Download</a>
-  </header>
+  <header data-nav></header>
 
   <main id="top">
     <!-- 1 · hero -->
     <section class="hero" data-chapter="0">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="dot"></span> Version <span data-version>1.8.3</span> · Windows</p>
+        <a class="eyebrow eyebrow-link" href="/changelog"><span class="dot"></span> New in 1.8 · ChatGPT &amp; Copilot sign-in <span aria-hidden="true">→</span></a>
         <h1 class="display">
           <span class="line"><span>Your agents.</span></span>
           <span class="line"><span>Your machine.</span></span>
@@ -46,13 +40,13 @@
         </h1>
         <p class="lead">A desktop coding agent that plans, delegates and writes code with the models you choose — and lets you watch every line as it happens.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" data-download href="downloads/AFH-Setup-1.8.3.exe">
+          <a class="btn btn-primary" href="/download">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
             Download for Windows
           </a>
           <a class="btn btn-ghost" href="#flow">See how it works</a>
         </div>
-        <p class="fine">Free · 64-bit Windows 10/11 · <span data-size>142 MB</span></p>
+        <p class="fine">Free · Windows 10/11, 64-bit · version <span data-version>1.8.3</span></p>
       </div>
       <div class="scroll-hint" aria-hidden="true"><span></span>Scroll</div>
     </section>
@@ -90,7 +84,7 @@
             <h2>It splits the work across agents.</h2>
             <p>A lead agent hands pieces to helpers that run side by side — each in its own lane, even its own git worktree — and checks what they bring back.</p>
             <div class="mini agents-mini">
-              <div class="am lead"><span class="am-dot"></span>Lead · Kimi K3.1</div>
+              <div class="am lead"><span class="am-dot"></span>Lead · your strongest model</div>
               <div class="am"><span class="am-dot"></span>Helper · writing tests</div>
               <div class="am"><span class="am-dot"></span>Helper · styling the form</div>
               <div class="am"><span class="am-dot"></span>Reviewer · checking diffs</div>
@@ -131,7 +125,7 @@
             <div class="dv-chat">
               <div class="dv-msg you">Add a login page with email and password, and make sure the tests pass.</div>
               <div class="dv-msg ai">
-                <div class="dv-who"><img src="assets/mark.svg" alt="" width="22" height="13">Kimi K3.1 Pro <span>· build</span></div>
+                <div class="dv-who"><img src="/assets/mark.svg" alt="" width="22" height="13">GPT-6.1 Sol <span>· Build</span></div>
                 <div class="dv-think">▸ Thought for 4.2s</div>
                 <div class="dv-tool"><b>read</b> src/auth/session.ts</div>
                 <div class="dv-tool"><b>write</b> src/pages/login.tsx <span class="ok">+84</span></div>
@@ -142,7 +136,7 @@
                 <div class="dv-goal">◎ <b>Goal</b> Users can sign up and log in; all tests pass</div>
                 <div class="dv-todo"><span>To-do</span><em>3/5</em><div class="dv-bar2"><i></i></div></div>
               </div>
-              <div class="dv-input">Message Kimi…<span class="dv-send">↑</span></div>
+              <div class="dv-input">Message GPT-6.1 Sol…<span class="dv-send">↑</span></div>
             </div>
             <div class="dv-live">
               <div class="dv-live-head"><span class="live-dot"></span>Live · login.tsx</div>
@@ -173,10 +167,11 @@
         <article class="card"><div class="card-ico">∞</div><h3>Endless threads</h3><p>Huge histories are summarised in parts, in place — old messages stay readable, the model reads the summary. Runs cut off by a restart resume by themselves.</p></article>
         <article class="card"><div class="card-ico">⚑</div><h3>Hooks, commands, jobs</h3><p>Run checks before or after any tool, add your own slash commands, and let long processes like dev servers run in the background.</p></article>
         <article class="card"><div class="card-ico">$</div><h3>Cost you can see</h3><p>Tokens and cost per thread, budgets that stop a run, prompt caching on by default for Anthropic models.</p></article>
-        <article class="card"><div class="card-ico">ع</div><h3>English &amp; Arabic</h3><p>A full Arabic interface with right-to-left layout, switchable live — plus 25 themes and a one-click light/dark toggle.</p></article>
+        <article class="card"><div class="card-ico">ع</div><h3>English &amp; Arabic</h3><p>A full Arabic interface with right-to-left layout, switchable live — plus 46 themes and a one-click light/dark toggle.</p></article>
         <article class="card"><div class="card-ico">⌘</div><h3>MCP &amp; skills</h3><p>Plug in MCP servers and skills, and bring your threads over from OpenCode or Zadloop in one click.</p></article>
         <article class="card"><div class="card-ico">⌂</div><h3>Yours, locally</h3><p>Everything runs and is stored on your PC. Your keys, your providers, your files — no account needed.</p></article>
       </div>
+      <div class="section-more"><a class="btn btn-ghost" href="/features">Explore every feature <span aria-hidden="true">→</span></a></div>
     </section>
 
     <!-- 5 · models: a 3D ring of providers -->
@@ -184,23 +179,24 @@
       <div class="section-head center">
         <p class="kicker">Models</p>
         <h2 class="h2">Bring any model.<br><span class="grad-text">Mix them in one thread.</span></h2>
-        <p class="sub">19 providers built in, plus any OpenAI-compatible endpoint. Use a strong model to lead and a fast one to help — context sizes, prices and reasoning levels come straight from models.dev.</p>
+        <p class="sub">228 providers and 7,539 models, plus any OpenAI-compatible endpoint. Sign in with ChatGPT, GitHub Copilot or OpenRouter, or run models on your own PC. Use a strong model to lead and a fast one to help.</p>
       </div>
       <div class="ring-stage">
         <div class="ring">
-          <span>Anthropic</span><span>OpenAI</span><span>Google Gemini</span><span>Kimi</span><span>Moonshot AI</span><span>Z.AI · GLM</span>
+          <span>ChatGPT</span><span>Anthropic</span><span>OpenAI</span><span>Google Gemini</span><span>GitHub Copilot</span><span>Kimi</span><span>Z.AI · GLM</span>
           <span>DeepSeek</span><span>Groq</span><span>OpenRouter</span><span>Mistral</span><span>xAI</span><span>Together AI</span>
           <span>Fireworks AI</span><span>Cerebras</span><span>Perplexity</span><span>Ollama</span><span>LM Studio</span><span>vLLM</span>
         </div>
       </div>
+      <div class="section-more center"><a class="btn btn-ghost" href="/models">Browse all 228 providers <span aria-hidden="true">→</span></a></div>
     </section>
 
     <!-- 6 · numbers -->
     <section class="stats">
-      <div class="stat"><b data-count="19">0</b><span>providers built in</span></div>
-      <div class="stat"><b data-count="25">0</b><span>themes, light &amp; dark</span></div>
-      <div class="stat"><b data-count="1" data-suffix="M">0</b><span>token context on Kimi &amp; GLM</span></div>
-      <div class="stat"><b data-count="2">0</b><span>languages, LTR &amp; RTL</span></div>
+      <div class="stat"><b data-count="228">0</b><span>providers built in</span></div>
+      <div class="stat"><b data-count="7539">0</b><span>models to choose from</span></div>
+      <div class="stat"><b data-count="46">0</b><span>themes, light &amp; dark</span></div>
+      <div class="stat"><b data-count="0">0</b><span>accounts or telemetry</span></div>
     </section>
 
     <!-- 7 · download -->
@@ -208,33 +204,30 @@
       <div class="dl-card">
         <div class="dl-space" aria-hidden="true"></div>
         <h2 class="display dl-title"><span class="line"><span>Start your</span></span><span class="line grad"><span>flow.</span></span></h2>
-        <p class="lead center">Free for Windows. Install it, add an API key, and give it something to build.</p>
+        <p class="lead center">Free for Windows. Install it, sign in or add a key, and give it something to build.</p>
         <div class="cta-row center">
-          <a class="btn btn-primary btn-big" data-download href="downloads/AFH-Setup-1.8.3.exe">
+          <a class="btn btn-primary btn-big" href="/download">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
-            Download AFH <span data-version>1.8.3</span>
+            Get AFH for Windows
           </a>
+          <a class="btn btn-ghost btn-big" href="/docs">Read the guide</a>
         </div>
         <ol class="dl-steps">
-          <li><b>1</b>Run <code>AFH-Setup-<span data-version>1.8.3</span>.exe</code></li>
+          <li><b>1</b>Download and run the installer</li>
           <li><b>2</b>Add a key in Settings → Models</li>
           <li><b>3</b>Open a folder and say what you want</li>
         </ol>
-        <p class="fine center">Windows 10/11, 64-bit · <span data-size>142 MB</span> · Windows may ask before running a new app — choose "More info → Run anyway".</p>
+        <p class="fine center">Free · Windows 10/11, 64-bit · <span data-size>142 MB</span> · updates itself</p>
       </div>
     </section>
   </main>
 
-  <footer class="footer">
-    <div class="brand"><img src="assets/mark.svg" alt="" width="30" height="18"><span>Agent Flow Harness</span></div>
-    <p>Made for people who like to watch their agents work.</p>
-    <p><a href="api.html">API &amp; SDKs</a></p>
-    <p class="fine">© 2026 Agent Flow Harness</p>
-  </footer>
+  <footer data-footer></footer>
 
+  <script src="/js/layout.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
   <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="/js/main.js"></script>
 </body>
 </html>

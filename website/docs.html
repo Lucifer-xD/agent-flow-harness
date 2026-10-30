@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Getting started · Agent Flow Harness</title>
+  <meta name="description" content="Install Agent Flow Harness, connect a model, and run your first thread. Modes, goals, helpers, approvals, undo, worktrees, commands, hooks, shortcuts and more.">
+  <meta name="theme-color" content="#0a0807">
+  <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/docs.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body class="docs" data-page="docs" data-scene="docs">
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <header data-nav></header>
+
+  <section class="docs-hero">
+    <p class="eyebrow"><span class="dot"></span> Guide · AFH <span data-version>1.8.3</span></p>
+    <h1 class="display"><span class="grad-text">Getting started.</span></h1>
+    <p class="lead">From download to your first finished task in a few minutes — and everything you'll want to know after that.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="/download">Download AFH</a>
+      <a class="btn btn-ghost" href="#first-thread">Your first thread</a>
+    </div>
+  </section>
+
+  <div class="docs-layout">
+    <aside class="toc" aria-label="On this page">
+      <div class="toc-inner">
+        <p class="toc-title">Start</p>
+        <a href="#install">Install</a>
+        <a href="#providers">Connect a model</a>
+        <a href="#first-thread">Your first thread</a>
+        <p class="toc-title">Working with it</p>
+        <a href="#modes">Modes</a>
+        <a href="#goals">Goals &amp; to-dos</a>
+        <a href="#helpers">Helpers</a>
+        <a href="#live">Live pane &amp; undo</a>
+        <a href="#approvals">Approvals</a>
+        <a href="#worktrees">Worktrees</a>
+        <p class="toc-title">Make it yours</p>
+        <a href="#commands">Commands &amp; skills</a>
+        <a href="#hooks">Hooks</a>
+        <a href="#look">Themes &amp; language</a>
+        <a href="#shortcuts">Shortcuts</a>
+        <p class="toc-title">More</p>
+        <a href="#updates">Updates</a>
+        <a href="#data">Your data</a>
+        <a href="#help">Getting help</a>
+        <a href="#faq">FAQ</a>
+      </div>
+    </aside>
+
+    <main class="doc">
+      <section id="install">
+        <h2>Install</h2>
+        <ol class="steps">
+          <li><a href="/download">Download the installer</a> (Windows 10 or 11, 64-bit).</li>
+          <li>Run it. If Windows says it protected your PC, choose <b>More info → Run anyway</b> — AFH is new, so SmartScreen doesn't know it yet.</li>
+          <li>AFH opens when it's installed. Next time, find it in the Start menu.</li>
+        </ol>
+        <p class="note">AFH updates itself: new versions download in the background and install when you restart it. See <a href="#updates">Updates</a>.</p>
+      </section>
+
+      <section id="providers">
+        <h2>Connect a model</h2>
+        <p>Open <b>Settings → Models &amp; providers</b>. There are four ways in — use as many as you like.</p>
+        <div class="cards3">
+          <div class="mini"><b>Sign in</b><span><b>ChatGPT</b> uses your Plus, Pro or Team plan — no API key. <b>GitHub Copilot</b> gives you a code to enter on GitHub. <b>OpenRouter</b> creates a key for you.</span></div>
+          <div class="mini"><b>Add a provider</b><span>Search the catalogue of 228 providers, pick one and paste its API key. Keys are stored only on this computer.</span></div>
+          <div class="mini"><b>Models on this computer</b><span>Running Ollama, LM Studio, vLLM, llama.cpp or Jan? AFH finds them — no key needed.</span></div>
+        </div>
+        <h3>Custom endpoint</h3>
+        <p>For any other server, choose <b>Custom endpoint</b> and fill in the <b>API format</b> (OpenAI-compatible, Anthropic or Gemini), a <b>Base URL</b>, an <b>API key</b> if it needs one, and the <b>Model ids</b>.</p>
+        <p class="note">Claude Pro/Max plans can't be used by sign-in in other apps — use an Anthropic API key instead.</p>
+      </section>
+
+      <section id="first-thread">
+        <h2>Your first thread</h2>
+        <ol class="steps">
+          <li>Click <b>New thread</b> (<kbd>Ctrl</kbd> <kbd>N</kbd>) and choose the project folder to work in.</li>
+          <li>Pick a model in the message box, and a mode — <b>Build</b> is the default.</li>
+          <li>Say what you want, like you'd tell a teammate: <i>"Add a login page with email and password, and make sure the tests pass."</i></li>
+          <li>Press <kbd>Enter</kbd>. The agent sets a goal, makes a to-do list and starts working. Watch files appear in the <b>Live</b> pane.</li>
+          <li>Press <kbd>Esc</kbd> any time to stop it.</li>
+        </ol>
+        <p>Paste or drop screenshots and files into the message box, or press the mic and speak.</p>
+      </section>
+
+      <section id="modes">
+        <h2>Modes</h2>
+        <table class="ref">
+          <tr><th>Mode</th><th>What it does</th></tr>
+          <tr><td><b>Build</b></td><td>The default. Reads, edits and runs code in the project.</td></tr>
+          <tr><td><b>Plan</b></td><td>Investigates and proposes a plan without changing anything. Editing and commands are off.</td></tr>
+          <tr><td><b>Delegate</b></td><td>Leads the work and hands tasks to your delegate models.</td></tr>
+        </table>
+        <p>Create your own agents — with their own prompt, model and tools — from <b>Create or edit agents…</b> at the bottom of the mode menu. Each can be a main mode, a subagent, or both, and can be made read-only.</p>
+      </section>
+
+      <section id="goals">
+        <h2>Goals &amp; to-dos</h2>
+        <p>For anything bigger than a quick fix, the agent writes a <b>goal</b> — what "done" means — and a <b>to-do list</b>. Both sit right above the message box.</p>
+        <ul class="facts">
+          <li>Add, reorder or tick to-do items yourself; the agent sees your changes on its next turn.</li>
+          <li>Set a goal yourself with <code>/goal</code>, or edit the list with <code>/todo</code>.</li>
+          <li>When a choice is yours, the agent pauses and asks you multiple-choice questions.</li>
+          <li>Achieved goals and finished lists are kept in the Goal button's menu.</li>
+        </ul>
+      </section>
+
+      <section id="helpers">
+        <h2>Helpers</h2>
+        <p>The lead agent can hand self-contained tasks to helpers that run in parallel. The built-in <b>Helper</b> is a copy of your own model; set up more delegate models in <b>Settings → Delegation</b>. Watch any helper from the top bar: what it was asked and what it sent back.</p>
+      </section>
+
+      <section id="live">
+        <h2>Live pane &amp; undo</h2>
+        <p>Open <b>Live</b> in the header to watch each file as it's written, character by character.</p>
+        <p>Don't like where a turn went? Hover your message and choose <b>Undo to here</b>. The thread <i>and</i> the files on disk go back to just before that message, and your message returns to the box so you can change it and send again. Choose <b>Put it back</b> if you change your mind. <b>Fork thread from here</b> starts a copy instead.</p>
+      </section>
+
+      <section id="approvals">
+        <h2>Approvals</h2>
+        <table class="ref">
+          <tr><th>Mode</th><th>What the agent may do</th></tr>
+          <tr><td><b>Ask first</b></td><td>Asks you before editing files or running commands.</td></tr>
+          <tr><td><b>Full access</b></td><td>Edits files and runs commands freely.</td></tr>
+          <tr><td><b>Read only</b></td><td>Can read and search, never edit or run.</td></tr>
+        </table>
+        <p>Set the default in <b>Settings → General → Default approval mode</b>. When it asks, you can allow an action <b>always</b> for that thread. Reading <code>.env</code> files always asks, whatever the mode.</p>
+      </section>
+
+      <section id="worktrees">
+        <h2>Worktrees</h2>
+        <p>Turn on <b>Work in a separate git worktree</b> when starting a thread and it gets its own branch and folder. When you're happy, open the <b>Worktree</b> menu and choose <b>Merge into</b> your base branch — or remove it. Your main checkout is never touched. Needs Git.</p>
+      </section>
+
+      <section id="commands">
+        <h2>Commands &amp; skills</h2>
+        <p>Type <code>/</code> in the message box for commands. Built in: <code>/goal</code>, <code>/todo</code>, <code>/compact</code>, <code>/jobs</code>, <code>/new</code>, <code>/cost</code>, plus <code>/review</code>, <code>/fix-tests</code>, <code>/explain</code> and <code>/commit</code>.</p>
+        <p>Add your own in <b>Settings → Commands</b>, or as Markdown files in <code>~/.afh/commands</code>, <code>.afh/commands</code> or <code>.claude/commands</code> in your project. Use <code>$ARGUMENTS</code> or <code>$1</code>…<code>$9</code> for what you type after the command.</p>
+        <h3>Skills and MCP servers</h3>
+        <p>Skills are folders with a <code>SKILL.md</code> in <code>~/.afh/skills</code> or your project's <code>.afh/skills</code> — folders made for other agents (<code>.claude/skills</code>, <code>.agents/skills</code>) work too. Add MCP servers in <b>Settings → MCP servers → Add server</b>, as <b>Local (stdio)</b> or <b>Remote (HTTP)</b>.</p>
+        <p>Or just ask: the agent can install skills, MCP servers, commands, hooks and agents itself.</p>
+      </section>
+
+      <section id="hooks">
+        <h2>Hooks</h2>
+        <p>Hooks run your own commands at three moments: <code>pre_tool</code> (before a tool), <code>post_tool</code> (after it) and <code>stop</code> (when the agent finishes). Set them up in <b>Settings → Hooks</b>.</p>
+        <ul class="facts">
+          <li>Exit with code <b>2</b> from <code>pre_tool</code> to block that tool call.</li>
+          <li>Exit with code <b>2</b> from <code>stop</code> to make the agent keep going (up to 3 times a run).</li>
+          <li>Hooks get <code>AFH_EVENT</code>, <code>AFH_TOOL</code>, <code>AFH_TOOL_INPUT</code>, <code>AFH_FILES</code>, <code>AFH_SESSION_ID</code> and <code>AFH_PROJECT_DIR</code>.</li>
+        </ul>
+      </section>
+
+      <section id="look">
+        <h2>Themes &amp; language</h2>
+        <p><b>Settings → Appearance</b> has 46 themes (29 dark, 17 light) and a Custom option, plus how the switch looks: Circle, Diamond, Wipe, Fade, Blur or None. The sun/moon button in the header flips between your favourite light and dark themes.</p>
+        <p>Switch to <b>العربية</b> for a full Arabic interface with right-to-left layout — no restart needed.</p>
+      </section>
+
+      <section id="shortcuts">
+        <h2>Shortcuts</h2>
+        <table class="ref">
+          <tr><th>Keys</th><th>Action</th></tr>
+          <tr><td><kbd>Enter</kbd></td><td>Send (or <kbd>Ctrl</kbd> <kbd>Enter</kbd>, set in Settings → General)</td></tr>
+          <tr><td><kbd>Shift</kbd> <kbd>Enter</kbd></td><td>New line</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>P</kbd></td><td>Command palette: actions, threads, models, themes</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>N</kbd></td><td>New thread</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>K</kbd></td><td>Search threads</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>B</kbd></td><td>Show or hide the sidebar</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>,</kbd></td><td>Settings</td></tr>
+          <tr><td><kbd>/</kbd></td><td>Commands menu</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Stop the running thread, or close a dialog</td></tr>
+        </table>
+      </section>
+
+      <section id="updates">
+        <h2>Updates</h2>
+        <p>AFH checks this website for new versions and downloads them in the background. When one is ready you'll see <b>Restart to update</b>; otherwise it installs the next time you quit.</p>
+        <p>In <b>Settings → About → Updates</b> you can <b>Check now</b>, turn off <b>Download updates automatically</b>, or set a different <b>Update address</b>.</p>
+      </section>
+
+      <section id="data">
+        <h2>Your data</h2>
+        <p>Everything stays on your computer, in <code>%USERPROFILE%\.afh</code>. Nothing is sent anywhere except to the model providers you set up — plus the update check, the daily model-catalogue refresh, and web search or voice if you turn them on. There's no telemetry.</p>
+        <table class="ref">
+          <tr><th>File</th><th>What's in it</th></tr>
+          <tr><td><code>afh.db</code></td><td>Threads, messages and undo snapshots</td></tr>
+          <tr><td><code>providers.json</code></td><td>Your providers and API keys</td></tr>
+          <tr><td><code>settings.json</code></td><td>Appearance, projects, agents, MCP servers and more</td></tr>
+          <tr><td><code>skills/</code>, <code>commands/</code></td><td>Your skills and slash commands</td></tr>
+          <tr><td><code>schedules.json</code></td><td>Scheduled jobs</td></tr>
+          <tr><td><code>logs/</code></td><td>The app's log, for bug reports</td></tr>
+        </table>
+      </section>
+
+      <section id="help">
+        <h2>Getting help</h2>
+        <p>Something wrong? <b>Settings → Report a bug → Create report</b> saves a zip to your Downloads folder with the logs and your setup — keys masked, and sent nowhere. Share it with whoever is helping you.</p>
+        <p>Building something on top of AFH? See the <a href="/api">API reference</a>.</p>
+      </section>
+
+      <section id="faq">
+        <h2>FAQ</h2>
+        <h3>Is AFH free?</h3>
+        <p>Yes, with no account. You pay your model provider as usual — or nothing extra with a ChatGPT or Copilot plan you already have, or local models.</p>
+        <h3>Can I use it offline?</h3>
+        <p>With a model running on your PC (Ollama, LM Studio and so on), yes.</p>
+        <h3>Can I bring my OpenCode or Zadloop threads?</h3>
+        <p>Yes. <b>Settings → Models &amp; providers</b> offers a one-time <b>Import from OpenCode</b> (keys, endpoints, MCP servers and threads). For single threads, open the palette and choose <b>Import thread…</b>.</p>
+        <h3>Mac or Linux?</h3>
+        <p>Not yet — Windows only for now.</p>
+      </section>
+    </main>
+  </div>
+
+  <footer data-footer></footer>
+  <script src="/js/layout.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script type="module" src="/js/page.js"></script>
+  <script src="/js/docs.js"></script>
+</body>
+</html>
