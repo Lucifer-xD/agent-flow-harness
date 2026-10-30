@@ -15,8 +15,21 @@ const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const scene = createScene($("#scene"), { mobile, reduced });
 const { state } = scene;
 window.afhScene = scene; // for poking at the world from the console
-// On wide screens the mark sits to the right of the headline (and of the story's text).
-const heroShift = () => (innerWidth > 1000 ? Math.min(4.6, innerWidth / 380) : 0);
+/** Where the hero's stage box is with the page at the top: the mark is fitted into it. */
+const heroFit = () => {
+  const r = $("[data-stage]").getBoundingClientRect(), y = lenis ? lenis.scroll : scrollY;
+  return scene.fit({ left: r.left, top: r.top + y, width: r.width, height: r.height }, 0.94);
+};
+/** The download section's mark box, where it will be on screen when that section is centred (scroll `at`). */
+const ctaFit = (at) => {
+  const r = $("[data-cta-stage]").getBoundingClientRect(), y = lenis ? lenis.scroll : scrollY;
+  return scene.fit({ left: r.left, top: r.top + y - at, width: r.width, height: r.height }, 0.94);
+};
+/** The story's world box (beside the steps, or between heading and step on portrait screens), with the story pinned. */
+const storyFit = (name, fill) => {
+  const st = $(".flow-stage").getBoundingClientRect(), r = $("[data-world]").getBoundingClientRect();
+  return scene.fit({ left: r.left, top: r.top - st.top, width: r.width, height: r.height }, fill, name);
+};
 
 // ---- smooth scroll ----
 let lenis = null;
@@ -41,7 +54,7 @@ const scrub = (trigger, start, end, opts = {}) => gsap.timeline({ defaults: { ea
 gsap.from(".hero .display .line > span", { yPercent: 110, rotate: 4, duration: 1.3, ease: "expo.out", stagger: 0.09, delay: 0.15 });
 gsap.from([".hero .eyebrow", ".hero .lead", ".hero .cta-row", ".hero .fine"], { y: 24, opacity: 0, duration: 1.1, ease: "power3.out", stagger: 0.08, delay: 0.55 });
 scrub(".hero", "top top", "bottom top")
-  .to(".hero-copy", { y: -140, opacity: 0, filter: "blur(6px)" }, 0)
+  .to(".hero-copy", { y: -140, opacity: 0 }, 0)
   .to(".scroll-hint", { opacity: 0 }, 0);
 
 // ---- 2 · how it works: pinned, four steps, the world changes shape under each ----
@@ -114,20 +127,22 @@ if (!mobile) $$(".card").forEach((card) => {
 // ---- 5 · models: a 3D ring that turns as you scroll (and slowly on its own) ----
 const ring = $(".ring");
 const chips = $$(".ring span");
-const R = mobile ? 250 : 520;
+let R = 0; // the ring's radius follows the screen's width
+const sizeRing = () => { R = Math.round(Math.min(520, Math.max(140, innerWidth * 0.4))); };
+sizeRing();
+addEventListener("resize", sizeRing);
 const stepDeg = 360 / chips.length;
 const ringState = { scroll: 0, auto: 0 };
 gsap.ticker.add((_, dt) => {
   if (!reduced) ringState.auto += dt * 0.006;
   const rot = ringState.scroll + ringState.auto;
   ring.style.transform = `rotateX(-14deg) rotateY(${-rot}deg)`;
-  // each chip turns to face you; the ones at the back fade and blur a little
+  // each chip turns to face you; the ones at the back fade
   chips.forEach((c, i) => {
     const a = stepDeg * i;
     c.style.transform = `translate(-50%, -50%) rotateY(${a}deg) translateZ(${R}px) rotateY(${rot - a}deg) rotateX(14deg)`;
     const facing = (Math.cos(((a - rot) * Math.PI) / 180) + 1) / 2;
-    c.style.opacity = (0.18 + facing * 0.82).toFixed(3);
-    c.style.filter = facing < 0.5 ? `blur(${((0.5 - facing) * 3).toFixed(2)}px)` : "none";
+    c.style.opacity = (0.12 + facing * 0.88).toFixed(3); // (no blur: a filter per chip per frame is too slow)
   });
 });
 scrub(".models", "top bottom", "bottom top").fromTo(ringState, { scroll: 0 }, { scroll: 140 }, 0);
@@ -162,7 +177,7 @@ addEventListener("pointerdown", (e) => {
 // One track of keyframes keyed to scroll positions; every frame the scene takes the eased mix of
 // the two keyframes around the current scroll. (One owner for the scene's state, so sections
 // can't fight over it.)
-const KEYS = ["zoom", "spin", "tilt", "shiftX", "shiftY", "mark", "net", "core", "flow", "tiles", "code", "spread", "activity"];
+const KEYS = ["zoom", "spin", "tilt", "shiftX", "shiftY", "mark", "core", "net", "plan", "code", "ring", "spread", "activity"];
 let track = [];
 const at = (trigger, start, end) => ScrollTrigger.create({ trigger, start, end });
 const marks = {
@@ -173,33 +188,34 @@ const marks = {
   models: at(".models", "top bottom", "bottom top"),
   dl: at(".download", "top bottom", "center center"),
 };
+// one shape at a time (the scene blends whatever weights it gets; a keyframe names its shape)
+const only = (name, w = 1) => ({ mark: 0, core: 0, net: 0, plan: 0, code: 0, ring: 0, spread: 0, [name]: w });
 function buildTrack() {
-  const H = heroShift();
   const f = marks.flow, fl = (x) => f.start + (f.end - f.start) * (x / 4.2); // positions on the story's timeline
   const ft = marks.feat;
   track = [
-    // the mark; on phones it floats in the space above the headline
-    [0, { zoom: 0, spin: 0, tilt: 0, shiftX: H, shiftY: mobile ? 7.8 : 0, mark: 1, net: 0, core: 0, flow: 0, tiles: 0, code: 0, spread: 0, activity: 0.3 }],
-    // 01 · your words reach the lead: the core lights up inside the mark
-    [marks.hero.end, { zoom: 2.4, spin: 0.55, tilt: 0.12, shiftY: 0, spread: 0.5, core: 0.7, activity: 0.7 }],
-    [fl(0.55), { spread: 0, core: 1, mark: 0.55, net: 0.12, zoom: 2.2, spin: 0.9 }],
-    // 02 · a goal and a plan appear around it; the agents start to come loose
-    [fl(1.25), { tiles: 1, mark: 0, net: 0.5, flow: 0.45, spin: 1.5, tilt: 0.22, zoom: 1.4, activity: 0.5 }],
-    [fl(1.75), { tiles: 1, net: 0.6, spin: 1.85 }],
+    // the mark, fitted into the hero's stage box (beside the headline, or above it on portrait screens)
+    [0, { ...heroFit(), spin: 0, tilt: 0, ...only("mark"), activity: 0.3 }],
+    // 01 · your words reach the lead: the strands pour into the core
+    [marks.hero.end, { ...storyFit("core", 0.8), spin: 0.55, tilt: 0.12, mark: 0.45, core: 0.55, activity: 0.7 }],
+    [fl(0.55), { ...only("core"), ...storyFit("core", 0.8), spin: 0.9 }],
+    // 02 · the core writes a plan and starts on it
+    [fl(1.25), { ...only("plan"), ...storyFit("plan", 0.96), spin: 1.2, tilt: 0.1, activity: 0.5 }],
+    [fl(1.75), { spin: 1.4 }],
     // 03 · the work spreads to agents along live links
-    [fl(2.3), { tiles: 0, net: 1, flow: 1, activity: 1.1, spin: 2.6, tilt: 0.32, zoom: 0.8 }],
-    [fl(2.8), { spin: 3.0 }],
-    // 04 · the file being written appears in front, fed by the links
-    [fl(3.3), { code: 1, spin: 3.25, tilt: 0.16, zoom: 1.5, activity: 0.9 }],
-    [f.end, { code: 1, spin: 3.5 }],
-    // the app: pull back, everything keeps working behind it
-    [marks.show.end, { code: 0, zoom: -3, spin: 4.4, tilt: 0.45, shiftX: 0, activity: 0.6 }],
+    [fl(2.3), { ...only("net"), ...storyFit("net", 0.95), activity: 1.1, spin: 2.2, tilt: 0.32 }],
+    [fl(2.8), { spin: 2.7 }],
+    // 04 · the file is written out of the core's light
+    [fl(3.3), { ...only("code"), ...storyFit("code", 0.96), spin: 2.95, tilt: 0.1, activity: 0.9 }],
+    [f.end, { spin: 3.1 }],
+    // the app: pull back, the agents keep working behind it
+    [marks.show.end, { ...only("net"), zoom: -3, spin: 4.4, tilt: 0.45, shiftX: 0, shiftY: 0, activity: 0.6 }],
     [ft.start + (ft.end - ft.start) * 0.4, { zoom: -2, spin: 5.0, tilt: 0.35 }],
-    // models: the agents spread out into a ring and the particles become a galaxy of models
-    [ft.end, { zoom: -1, spin: 5.6, tilt: 0.3, net: 1.6, flow: 1.6, core: 0.8 }],
-    [marks.models.end, { zoom: 0.5, spin: 6.4, tilt: 0.38, net: 2, flow: 2, core: 0.6 }],
+    // models: the network opens into a galaxy of models
+    [ft.end, { net: 0.4, ring: 0.6, zoom: -1.5, spin: 5.6, tilt: 0.3 }],
+    [marks.models.end, { ...only("ring"), zoom: -0.5, spin: 6.4, tilt: 0.38 }],
     // the call to action: everything pours back into the mark
-    [marks.dl.end, { mark: 1, net: 0, core: 0, flow: 0, tiles: 0, code: 0, zoom: -3, spin: 2 * Math.PI, tilt: 0, shiftY: mobile ? 2.8 : 2.9, activity: 0.3 }],
+    [marks.dl.end, { ...only("mark"), ...ctaFit(marks.dl.end), spin: 2 * Math.PI, tilt: 0, activity: 0.3 }],
   ];
   track.sort((p, q) => p[0] - q[0]);
   // fill in every value so each keyframe is complete (unchanged values carry forward)
@@ -207,8 +223,8 @@ function buildTrack() {
   track = track.map(([y, v]) => { prev = { ...prev, ...v }; return [y, prev]; });
 }
 const ease = (x) => x * x * (3 - 2 * x);
-const intro = { mark: 0, spread: 1.4 };
-gsap.to(intro, { mark: 1, spread: 0, duration: 2.4, ease: "power3.out" });
+const intro = { k: 0 };
+gsap.to(intro, { k: 1, duration: 2.6, ease: "power3.out" }); // the light gathers out of the dark into the mark
 gsap.ticker.add(() => {
   if (!track.length) return;
   const y = lenis ? lenis.scroll : scrollY;
@@ -217,9 +233,7 @@ gsap.ticker.add(() => {
   const [y0, a] = track[i], [y1, b] = track[i + 1];
   const t = ease(Math.min(1, Math.max(0, (y - y0) / Math.max(1, y1 - y0))));
   for (const k of KEYS) state[k] = a[k] + (b[k] - a[k]) * t;
-  state.mark *= intro.mark;
-  if (intro.mark < 1) state.net *= intro.mark;
-  state.spread += intro.spread;
+  state.spread += (1 - intro.k) * 1.2;
 });
 ScrollTrigger.addEventListener("refresh", buildTrack);
 buildTrack();
