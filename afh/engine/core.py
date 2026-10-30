@@ -306,11 +306,22 @@ class Engine:
     def default_model(self) -> dict | None:
         s = self.settings()
         ref = s.get("defaultModel")
-        if ref and self.find_model(ref):
+        if ref and self.model_available(ref):
             return {"id": ref["id"], "providerID": ref["providerID"]}
         for m in self.list_models():
             return {"id": m["id"], "providerID": m["providerID"]}
         return None
+
+    def model_available(self, ref: dict | None) -> bool:
+        """The provider is set up and the model is in its picker (not hidden, not dropped from its list).
+        A provider that lists no models at all gets the benefit of the doubt."""
+        if not ref or ref.get("providerID") not in self.providers:
+            return False
+        models = self.models.get(ref["providerID"]) or []
+        if not models:
+            return True
+        m = next((m for m in models if m.id == ref.get("id")), None)
+        return m is not None and not m.hidden
 
     def find_model(self, ref: dict | None) -> ModelInfo | None:
         if not ref:
@@ -339,11 +350,19 @@ class Engine:
 
     def model_ref_for(self, session: dict, agent: agentmod.AgentConfig) -> dict:
         ref = session.get("model") or agent.model or self.default_model()
-        if ref and ref.get("providerID") not in self.providers:
-            # A provider AFH doesn't have (an imported thread, a removed provider): the same model elsewhere, else the default.
+        if ref and not self.model_available(ref):
+            # A removed provider, or a model that was hidden or dropped from its list: the same model
+            # through another provider, else the agent's model, else the default.
             from ..transfer import usable_model
 
-            ref = usable_model(self, ref) or (agent.model if agent.model and agent.model.get("providerID") in self.providers else None) or self.default_model()
+            wanted = ref
+            ref = (usable_model(self, ref) if ref.get("providerID") not in self.providers else None) \
+                or (agent.model if self.model_available(agent.model) else None) or self.default_model()
+            if ref:
+                log.info("model %s/%s is not available; using %s/%s", wanted.get("providerID"), wanted.get("id"), ref["providerID"], ref["id"])
+                m = self.find_model(ref)
+                if ref.get("variant") and m and ref["variant"] not in (m.variants or []):
+                    ref = {k: v for k, v in ref.items() if k != "variant"}  # that effort level belonged to the old model
         if not ref:
             raise RuntimeError("No model is configured. Add a provider in Settings → Models & providers.")
         return {"id": ref["id"], "providerID": ref["providerID"], **({"variant": ref["variant"]} if ref.get("variant") else {})}
