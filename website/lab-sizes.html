@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Screen sizes · Agent Flow Harness</title>
+  <meta name="robots" content="noindex">
+  <style>
+    html, body { margin: 0; background: #1b1715; color: #c2b6ac; font: 500 12px/1.4 system-ui, sans-serif; }
+    .bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 14px; background: #120e0c; }
+    .bar input { width: 70px; background: #241e1b; color: #fff; border: 1px solid #3a302b; border-radius: 6px; padding: 4px 6px; }
+    .bar button, .bar select { background: #241e1b; color: #fff; border: 1px solid #3a302b; border-radius: 6px; padding: 4px 9px; cursor: pointer; }
+    .grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px; padding: 14px; }
+    figure { margin: 0; }
+    figcaption { margin-bottom: 6px; }
+    .box { overflow: hidden; border-radius: 8px; outline: 1px solid #3a302b; }
+    iframe { border: 0; transform-origin: 0 0; display: block; background: #0a0807; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <select data-page>
+      <option>/</option><option>/features</option><option>/models</option><option>/download</option><option>/docs</option><option>/changelog</option><option>/api</option><option>/nope</option>
+    </select>
+    <select data-set><option value="phones">Phones</option><option value="screens">Tablets &amp; desktops</option></select>
+    scroll <input data-y type="number" value="0" step="400">
+    <button data-go>Scroll all</button>
+    <span>Local check page only — not part of the site.</span>
+  </div>
+  <div class="grid" data-grid></div>
+  <script>
+    const SETS = {
+      phones: [[320, 568, "iPhone SE (1st)"], [360, 780, "Android small"], [390, 844, "iPhone 14"], [430, 932, "iPhone Pro Max"], [844, 390, "Phone landscape"]],
+      screens: [[768, 1024, "iPad portrait"], [1024, 768, "iPad landscape"], [1280, 720, "Laptop"], [1920, 1080, "Full HD"], [2560, 1080, "Ultrawide"]],
+    };
+    const q = new URLSearchParams(location.search);
+    const $ = (s) => document.querySelector(s);
+    $("[data-page]").value = q.get("page") || "/";
+    $("[data-set]").value = q.get("set") || "phones";
+    $("[data-y]").value = q.get("y") || 0;
+    const reload = () => { q.set("page", $("[data-page]").value); q.set("set", $("[data-set]").value); q.set("y", $("[data-y]").value); location.search = q; };
+    $("[data-page]").onchange = $("[data-set]").onchange = reload;
+    const frames = [];
+    const scrollAll = () => frames.forEach((f) => { try { f.contentWindow.scrollTo(0, +$("[data-y]").value); } catch {} });
+    $("[data-go]").onclick = scrollAll;
+    const set = SETS[$("[data-set]").value];
+    const H = set === SETS.phones ? 520 : 300;
+    for (const [w, h, name] of set) {
+      const k = Math.min(H / h, 560 / w);
+      const fig = document.createElement("figure");
+      fig.innerHTML = `<figcaption>${name} · ${w}×${h}</figcaption><div class="box" style="width:${w * k}px;height:${h * k}px"><iframe width="${w}" height="${h}" style="transform:scale(${k})" src="${$("[data-page]").value}"></iframe></div>`;
+      $("[data-grid]").append(fig);
+      const f = fig.querySelector("iframe");
+      f.addEventListener("load", () => setTimeout(scrollAll, 600));
+      frames.push(f);
+    }
+  </script>
+</body>
+</html>

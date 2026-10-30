@@ -29,7 +29,7 @@ $stamp = Get-Date -Format "yyyyMMddHHmmss"
 $stage = Join-Path $env:TEMP "afh-website-pages"
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $stage | Out-Null
-foreach ($page in Get-ChildItem $website -Filter "*.html") {
+foreach ($page in Get-ChildItem $website -Filter "*.html" | Where-Object { -not $_.Name.StartsWith("lab") }) {  # lab*.html: local test pages only
   $html = [IO.File]::ReadAllText($page.FullName)
   $html = $html -replace '(href|src)="/((?:[\w-]+/)*[\w-]+\.(?:css|js))(?:\?v=\w+)?"', ('$1="/v/' + $stamp + '/$2"')
   # module imports (import "/js/page.js", and the imports inside the modules) follow the same stamp
@@ -49,6 +49,7 @@ if ($LASTEXITCODE -ne 0) { throw "scp failed" }
 
 Write-Host "==> Installing on the VPS"
 $remote = @"
+# (the pipe may prepend a byte-order mark; it lands in this comment instead of breaking set -e)
 set -e
 sudo mkdir -p $site.new
 sudo tar -xzf /tmp/afh-website.tgz -C $site.new

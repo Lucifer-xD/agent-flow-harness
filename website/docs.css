@@ -31,7 +31,7 @@ body.docs { font-size: 16px; }
 .doc .note { padding: 12px 16px; border: 1px solid var(--line-2); border-radius: 12px; background: rgba(255, 255, 255, 0.025); font-size: 15px; }
 
 .cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
-.mini { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); backdrop-filter: blur(12px); font-size: 14.5px; color: var(--text-2); transition: border-color 0.3s, transform 0.4s var(--ease); }
+.mini { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); font-size: 14.5px; color: var(--text-2); transition: border-color 0.3s, transform 0.4s var(--ease); }
 .mini:hover { border-color: var(--line-2); transform: translateY(-2px); }
 .mini b { font: 600 15.5px var(--display); }
 
@@ -42,7 +42,7 @@ body.docs { font-size: 16px; }
 .facts li { margin-bottom: 8px; }
 
 /* code blocks */
-.code { position: relative; margin: 10px 0 18px; border: 1px solid var(--line); border-radius: 14px; background: rgba(12, 9, 8, 0.82); backdrop-filter: blur(10px); overflow: hidden; }
+.code { position: relative; margin: 10px 0 18px; border: 1px solid var(--line); border-radius: 14px; background: rgba(12,9,8, 0.94); overflow: hidden; }
 .code[data-lang]::before { content: attr(data-lang); display: block; padding: 8px 14px; font: 500 11.5px var(--mono); color: var(--text-3); border-bottom: 1px solid var(--line); }
 .code pre { margin: 0; padding: 16px 18px; overflow-x: auto; }
 .code pre code { background: none; padding: 0; color: #eadfd6; font: 13.5px/1.65 var(--mono); white-space: pre; }
@@ -70,6 +70,15 @@ body.docs { font-size: 16px; }
 
 .ep { display: flex; align-items: center; gap: 12px; margin: 6px 0 12px; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: 12px; background: rgba(255, 255, 255, 0.03); }
 .ep code { background: none; padding: 0; font-size: 15px; color: var(--text); }
+/* phones: long names and paths may break anywhere rather than push the page sideways */
+@media (max-width: 560px) {
+  .doc :not(pre) > code { overflow-wrap: anywhere; }
+  .ep { flex-wrap: wrap; gap: 6px 10px; }
+  .ep code { font-size: 13.5px; min-width: 0; }
+  .ref { font-size: 13.5px; }
+  .ref td, .ref th { padding: 8px 6px; }
+  .ref td:first-child, .ref.eps td:nth-child(2) { white-space: normal; }
+}
 .m { display: inline-block; min-width: 54px; padding: 3px 8px; border-radius: 6px; font: 600 11.5px var(--mono); text-align: center; letter-spacing: 0.04em; }
 .m.get { color: #7ee2a8; background: rgba(61, 220, 132, 0.12); }
 .m.post { color: #ffc27a; background: rgba(255, 177, 31, 0.13); }

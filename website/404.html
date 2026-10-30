@@ -26,6 +26,7 @@
 
   <main class="lost">
     <div>
+      <div class="lost-stage" data-stage aria-hidden="true"></div>
       <p class="kicker" data-reveal>404</p>
       <h1 class="display" data-reveal style="--d:.08s">Lost the<br><span class="grad-text">thread.</span></h1>
       <p class="lead" data-reveal style="--d:.16s">This page doesn't exist — or it moved. Hold the button below and the strands will find each other again.</p>
@@ -43,8 +44,8 @@
     import { scene, tween } from "/js/page.js";
     // holding the button pulls the scattered mark back together; letting go lets it drift apart
     const mend = document.querySelector("[data-mend]");
-    const hold = () => { tween({ mark: 1, net: 0, spread: 0, dim: 1, activity: 0.8 }, 1.4); scene.burst(0.6); };
-    const drop = () => tween({ mark: 0.12, net: 0.45, spread: 2.2, dim: 0.8, activity: 0.2 }, 2.2);
+    const hold = () => { tween({ mark: 1, spread: 0, dim: 1, activity: 0.8 }, 1.4); scene.burst(0.6); };
+    const drop = () => tween({ mark: 0.6, spread: 0.6, dim: 0.8, activity: 0.2 }, 2.2);
     mend.addEventListener("pointerdown", hold);
     mend.addEventListener("pointerup", drop);
     mend.addEventListener("pointerleave", drop);

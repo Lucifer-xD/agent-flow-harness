@@ -11,12 +11,23 @@ const mobile = matchMedia("(max-width: 760px)").matches;
 const { gsap } = window;
 const wide = () => innerWidth > 1000;
 
+// Shapes are weights the world blends: a look names the one it wants and the rest go to 0.
+const SHAPES = ["mark", "core", "net", "plan", "code", "ring", "spread"];
+const shape = (o) => ({ ...Object.fromEntries(SHAPES.map((k) => [k, 0])), ...o });
+// the header's stage box (above the words on portrait screens, beside them on landscape ones): the
+// page's shape is fitted into it, where it is with the page at the top
+const framed = (name, fill = 0.92) => {
+  const el = document.querySelector("[data-stage]");
+  if (!el) return {};
+  const r = el.getBoundingClientRect();
+  return scene.fit({ left: r.left, top: r.top + scrollY, width: r.width, height: r.height }, fill, name);
+};
 const SCENES = {
-  features: () => ({ mark: 0, net: 1, core: 1, flow: 1, activity: 0.7, zoom: -1.5, tilt: 0.3, shiftX: wide() ? 3.4 : 0, shiftY: mobile ? 2.6 : 0 }),
-  models: () => ({ mark: 0, net: 2, core: 0.75, flow: 2, activity: 0.6, zoom: -2.5, tilt: 0.42, shiftY: mobile ? 1.5 : -0.4 }),
-  download: () => ({ mark: 1, net: 0, core: 0, flow: 0, activity: 0.4, zoom: mobile ? 0 : 0.6, shiftX: wide() ? 3.6 : 0, shiftY: mobile ? 6.4 : 0 }),
-  docs: () => ({ mark: 0, net: 1, core: 0.85, flow: 1, activity: 0.35, zoom: -4, tilt: 0.35, shiftX: wide() ? 5 : 0, dim: 0.55 }),
-  lost: () => ({ mark: 0.12, net: 0.45, core: 0, flow: 0, spread: 2.2, activity: 0.2, zoom: -1.5, shiftY: mobile ? 2 : 0.6, dim: 0.8 }),
+  features: () => shape({ net: 1, activity: 0.7, tilt: 0.3, ...framed("net") }),
+  models: () => shape({ ring: 1, activity: 0.6, tilt: 0.42, ...framed("ring", 1) }),
+  download: () => shape({ mark: 1, activity: 0.4, ...framed("mark", 0.94) }),
+  docs: () => shape({ net: 1, activity: 0.35, zoom: -4, tilt: 0.35, shiftX: wide() ? 5 : 0, dim: 0.55 }),
+  lost: () => shape({ mark: 0.6, spread: 0.6, activity: 0.2, ...framed("mark", 0.8), dim: 0.8 }),
 };
 
 const name = document.body.dataset.scene || "docs";
@@ -25,14 +36,17 @@ const scene = createScene(document.querySelector("#scene"), { mobile, reduced, l
 const { state } = scene;
 window.afhScene = scene; // for poking at the world from the console
 const base = () => ({ ...(SCENES[name] || SCENES.docs)() });
-Object.assign(state, base(), { mark: 0, spread: 2.2, dim: 0 });
+Object.assign(state, base(), shape({ spread: 1 }), { dim: 0 }); // the light gathers into the page's shape
 const tween = (to, duration = 1.6) => gsap.to(state, { ...to, duration: reduced ? 0.01 : duration, ease: "power3.inOut", overwrite: "auto" });
-tween({ ...base(), spread: base().spread || 0, dim: base().dim ?? 1 }, 2.4);
+tween({ ...base(), dim: base().dim ?? 1 }, 2.6);
 
 // sections that change the world while they're in view
 let current = null;
 const zones = [...document.querySelectorAll("[data-scene]:not(body)")];
-const look = (el) => ({ ...base(), ...JSON.parse(el.dataset.scene || "{}") });
+const look = (el) => {
+  const o = JSON.parse(el.dataset.scene || "{}");
+  return SHAPES.some((k) => k in o) ? { ...base(), ...shape(o) } : { ...base(), ...o };
+};
 if (zones.length) {
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) {
@@ -64,4 +78,4 @@ if (!mobile && !reduced) document.querySelectorAll(".btn-primary").forEach((b) =
   b.addEventListener("pointerleave", () => { x(0); y(0); });
 });
 
-export { scene, tween, base };
+export { scene, tween, base, shape };
