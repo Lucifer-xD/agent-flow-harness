@@ -64,10 +64,14 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
                      "give it a complete brief (goal, files, constraints, what to report). With `worktree: true` it works on its own git branch, so "
                      "parallel subagents never edit the same files; merge their branches with git afterwards. Check their work before you rely on it.")
     if "memory" in have:
-        lines.append("- **Project memory** (`memory` tool): facts kept between threads in this project (see \"Project memory\" below). "
-                     "When you learn something durable and non-obvious - how to run, build or test the project, a convention, a gotcha, how the "
-                     "user wants things done here - save it with `memory` action \"add\" so the next thread starts knowing it; fix wrong facts "
-                     "with \"replace\". Not for task progress, not for secrets, not for what AGENTS.md already says.")
+        lines.append("- **Project memory** (`memory` tool): what you know about this project from earlier threads (see \"Project memory\" "
+                     "below); every thread here starts with it, and the user sees and edits it from the Memory button. Read it before you start "
+                     "and follow it. Save to it (action \"add\") the moment you learn something the next thread would otherwise have to "
+                     "rediscover: when the user says \"remember\", \"always\", \"never\", \"from now on\" or corrects how you did something; "
+                     "when you work out how to install, run, build or test the project; when a gotcha cost you time. When a fact is wrong or "
+                     "outdated, fix it (\"replace\") or drop it (\"remove\"); \"list\" shows it as it is now. Before you finish a long task, "
+                     "ask yourself whether you learned something worth keeping. One short, specific fact per line; never task progress "
+                     "(that is the to-do list), never secrets, nothing AGENTS.md already says.")
     if "jobs" in have:
         lines.append("- **Background jobs**: start servers and watchers with `shell` and `background: true`, then `jobs` to read output, wait for a "
                      "line like \"ready\", and stop them when done.")

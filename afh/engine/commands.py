@@ -22,6 +22,8 @@ NAME = re.compile(r"^[a-z0-9][a-z0-9_:-]{0,40}$")
 BUILTINS = [
     {"name": "goal", "description": "Set the thread's goal; the agent keeps working until it is achieved", "args": "<what done looks like>", "builtin": True},
     {"name": "todo", "description": "Show the to-do list", "builtin": True},
+    {"name": "memory", "description": "See and edit what the agent knows about this project", "builtin": True},
+    {"name": "remember", "description": "Add something to the project memory", "args": "<fact>", "builtin": True},
     {"name": "compact", "description": "Summarise older messages now to free up context", "builtin": True},
     {"name": "jobs", "description": "Show background jobs (servers, watchers)", "builtin": True},
     {"name": "new", "description": "Start a new thread", "builtin": True},

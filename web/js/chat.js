@@ -348,7 +348,7 @@ const VERBS = {
   skill: ["Loaded skill", "Loading skill"], question: ["Asked", "Asking"], todowrite: ["Planned", "Planning"], todoread: ["Checked plan", "Checking plan"],
   memory: ["Updated project memory", "Updating project memory"],
 };
-const MEMORY_VERBS = { add: ["Remembered", "Remembering"], remove: ["Forgot", "Forgetting"], replace: ["Corrected memory", "Correcting memory"] };
+const MEMORY_VERBS = { add: ["Remembered", "Remembering"], remove: ["Forgot", "Forgetting"], replace: ["Corrected memory", "Correcting memory"], list: ["Checked memory", "Checking memory"] };
 const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name) ? "edit" : /^(shell|bash|execute)$/.test(name) ? "run" : /^(read|glob|grep|list|ls)$/.test(name) ? "read" : /web|fetch/.test(name) ? "web" : "other");
 
 function pathNode(target) {
