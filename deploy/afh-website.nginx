@@ -1,22 +1,22 @@
-# Agent Flow Harness website (agenflowharness.com): static pages plus the installer and the
+# Agent Flow Harness website (agentflowharness.com): static pages plus the installer and the
 # auto-update feed (/downloads/latest.yml). Isolated site; other sites unchanged.
-# Installed by scripts/deploy-website.ps1 to /etc/nginx/sites-available/afh-website.
+# Installed by scripts/deploy-website.ps1 to /etc/nginx/sites-available/afh-website; that script
+# also gets the Let's Encrypt certificate the first time (webroot /var/www/afh, renewed by certbot).
 #
-# Certificate: Let's Encrypt via certbot (webroot /var/www/afh), renewed by certbot's timer.
-# Cloudflare proxies the site in "Full" SSL mode (it connects to port 443 here), so port 80 only
-# answers Let's Encrypt's checks and sends everything else on to https.
+# old.example.com, the first home, still serves /downloads/: apps built before the move update
+# from it, and it is every app's fallback feed (desktop/main.js). Keep it.
 
 server {
     listen 80;
     listen [::]:80;
-    server_name agenflowharness.com www.agenflowharness.com old.example.com;
+    server_name agentflowharness.com www.agentflowharness.com old.example.com;
 
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/afh;
         default_type text/plain;
     }
     location / {
-        return 301 https://agenflowharness.com$request_uri;
+        return 301 https://agentflowharness.com$request_uri;
     }
 }
 
@@ -43,7 +43,7 @@ server {
         }
     }
     location / {
-        return 301 https://agenflowharness.com$request_uri;
+        return 301 https://agentflowharness.com$request_uri;
     }
 }
 
@@ -52,22 +52,22 @@ server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
-    server_name www.agenflowharness.com;
+    server_name www.agentflowharness.com;
 
-    ssl_certificate     /etc/letsencrypt/live/agenflowharness.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/agenflowharness.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/agentflowharness.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/agentflowharness.com/privkey.pem;
 
-    return 301 https://agenflowharness.com$request_uri;
+    return 301 https://agentflowharness.com$request_uri;
 }
 
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
-    server_name agenflowharness.com;
+    server_name agentflowharness.com;
 
-    ssl_certificate     /etc/letsencrypt/live/agenflowharness.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/agenflowharness.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/agentflowharness.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/agentflowharness.com/privkey.pem;
 
     root  /var/www/afh;
     index index.html;

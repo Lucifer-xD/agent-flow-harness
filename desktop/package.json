@@ -1,7 +1,7 @@
 {
   "name": "agent-flow-harness",
   "productName": "Agent Flow Harness",
-  "version": "1.8.4",
+  "version": "1.8.5",
   "description": "Desktop shell for Agent Flow Harness (AFH), an open-source desktop coding agent.",
   "main": "main.js",
   "private": true,
@@ -62,7 +62,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://agenflowharness.com/downloads/"
+        "url": "https://agentflowharness.com/downloads/"
       }
     ]
   },

@@ -1,10 +1,12 @@
-# Deploy the AFH website to the VPS (https://agenflowharness.com, proxied by Cloudflare).
+# Deploy the AFH website to the VPS (https://agentflowharness.com, proxied by Cloudflare).
 #
 #   powershell -ExecutionPolicy Bypass -File scripts/deploy-website.ps1
 #
 # Packs website/ (pages, SDKs, downloads/ with the installer and latest.yml, plus the installer's
 # .blockmap from desktop/dist), unpacks it into /var/www/afh, keeps only the current installer,
 # and installs deploy/afh-website.nginx as its own nginx site — reloaded only if `nginx -t` passes.
+# The first deploy to a new domain also gets its Let's Encrypt certificate (the domain's A record
+# must already point at the VPS); if that fails, the running nginx config is left as it was.
 # Uses this computer's SSH key for user@your-server.
 
 $ErrorActionPreference = "Continue"  # ssh/tar write progress to stderr; exit codes are checked instead
@@ -12,6 +14,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $hostname = "user@your-server"
 $ssh = @("-o", "BatchMode=yes", "-o", "ConnectTimeout=15")
 $site = "/var/www/afh"
+$domain = "agentflowharness.com"
 
 $website = Join-Path $root "website"
 $downloads = Join-Path $website "downloads"
@@ -58,6 +61,29 @@ sudo find $site.new -type f -exec chmod 644 {} +
 if [ -d $site ]; then sudo mv $site $site.old; fi
 sudo mv $site.new $site
 sudo rm -rf $site.old /tmp/afh-website.tgz
+if ! sudo test -f /etc/letsencrypt/live/$domain/fullchain.pem; then
+  echo "No certificate for $domain yet - asking Let's Encrypt"
+  printf 'server {
+  listen 80;
+  listen [::]:80;
+  server_name $domain www.$domain;
+  location ^~ /.well-known/acme-challenge/ { root $site; default_type text/plain; }
+  location / { return 404; }
+}
+' | sudo tee /etc/nginx/sites-enabled/afh-acme >/dev/null
+  sudo nginx -t && sudo systemctl reload nginx
+  got=yes
+  if ! sudo certbot certonly --webroot -w $site -d $domain -d www.$domain --non-interactive --keep-until-expiring; then
+    echo "(no certificate for www.$domain - trying $domain alone)"
+    sudo certbot certonly --webroot -w $site -d $domain --non-interactive --keep-until-expiring || got=no
+  fi
+  sudo rm -f /etc/nginx/sites-enabled/afh-acme
+  sudo systemctl reload nginx
+  if [ "`$got" = no ]; then
+    echo "Could not get a certificate for ${domain}: does its A record point at this server? The site config was not changed." >&2
+    exit 1
+  fi
+fi
 sudo install -m 644 /tmp/afh-website.nginx /etc/nginx/sites-available/afh-website
 rm -f /tmp/afh-website.nginx
 sudo ln -sf /etc/nginx/sites-available/afh-website /etc/nginx/sites-enabled/afh-website
@@ -81,4 +107,4 @@ ssh @ssh $hostname 'bash /tmp/afh-install.sh; s=$?; rm -f /tmp/afh-install.sh; e
 if ($LASTEXITCODE -ne 0) { throw "remote install failed" }
 Remove-Item $script -ErrorAction SilentlyContinue
 Remove-Item $tmp -ErrorAction SilentlyContinue
-Write-Host "Done: https://agenflowharness.com" -ForegroundColor Green
+Write-Host "Done: https://$domain" -ForegroundColor Green
