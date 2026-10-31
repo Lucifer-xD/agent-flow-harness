@@ -49,7 +49,6 @@ if ($LASTEXITCODE -ne 0) { throw "scp failed" }
 
 Write-Host "==> Installing on the VPS"
 $remote = @"
-# (the pipe may prepend a byte-order mark; it lands in this comment instead of breaking set -e)
 set -e
 sudo mkdir -p $site.new
 sudo tar -xzf /tmp/afh-website.tgz -C $site.new
@@ -73,8 +72,13 @@ else
 fi
 ls -la $site/downloads
 "@
-$remote = ($remote -replace "`r", "") + "`n# end"  # the pipe appends a CR; let it land in a comment
-$remote | ssh @ssh $hostname "bash -s"
+# Sent as a file, not piped: PowerShell's pipe would prepend a byte-order mark and CR line ends.
+$script = Join-Path $env:TEMP "afh-install.sh"
+[IO.File]::WriteAllText($script, ($remote -replace "`r", ""), (New-Object Text.UTF8Encoding $false))
+scp @ssh -q $script "${hostname}:/tmp/afh-install.sh"
+if ($LASTEXITCODE -ne 0) { throw "scp failed" }
+ssh @ssh $hostname 'bash /tmp/afh-install.sh; s=$?; rm -f /tmp/afh-install.sh; exit $s'
 if ($LASTEXITCODE -ne 0) { throw "remote install failed" }
+Remove-Item $script -ErrorAction SilentlyContinue
 Remove-Item $tmp -ErrorAction SilentlyContinue
 Write-Host "Done: https://old.example.com" -ForegroundColor Green

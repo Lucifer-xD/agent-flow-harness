@@ -197,23 +197,23 @@ function buildTrack() {
     // the mark, fitted into the hero's stage box (beside the headline, or above it on portrait screens)
     [0, { ...heroFit(), spin: 0, tilt: 0, ...only("mark"), activity: 0.3 }],
     // 01 · your words reach the lead: the strands pour into the core
-    [marks.hero.end, { ...storyFit("core", 0.8), spin: 0.55, tilt: 0.12, mark: 0.45, core: 0.55, activity: 0.7 }],
-    [fl(0.55), { ...only("core"), ...storyFit("core", 0.8), spin: 0.9 }],
+    [marks.hero.end, { ...storyFit("core", 0.85), spin: 0.3, tilt: 0.55, mark: 0.45, core: 0.55, activity: 0.7 }],
+    [fl(0.55), { ...only("core"), ...storyFit("core", 0.85), spin: 0.6, tilt: 0.62 }],
     // 02 · the core writes a plan and starts on it
-    [fl(1.25), { ...only("plan"), ...storyFit("plan", 0.96), spin: 1.2, tilt: 0.1, activity: 0.5 }],
-    [fl(1.75), { spin: 1.4 }],
+    [fl(1.25), { ...only("plan"), ...storyFit("plan", 0.96), spin: 0.25, tilt: 0.2, activity: 0.5 }],
+    [fl(1.75), { spin: 0.5 }],
     // 03 · the work spreads to agents along live links
-    [fl(2.3), { ...only("net"), ...storyFit("net", 0.95), activity: 1.1, spin: 2.2, tilt: 0.32 }],
-    [fl(2.8), { spin: 2.7 }],
+    [fl(2.3), { ...only("net"), ...storyFit("net", 0.95), activity: 1.1, spin: 0.9, tilt: 0.18 }],
+    [fl(2.8), { spin: 1.2 }],
     // 04 · the file is written out of the core's light
-    [fl(3.3), { ...only("code"), ...storyFit("code", 0.96), spin: 2.95, tilt: 0.1, activity: 0.9 }],
-    [f.end, { spin: 3.1 }],
+    [fl(3.3), { ...only("code"), ...storyFit("code", 0.96), spin: 0.2, tilt: 0.15, activity: 0.9 }],
+    [f.end, { spin: 0.45 }],
     // the app: pull back, the agents keep working behind it
-    [marks.show.end, { ...only("net"), zoom: -3, spin: 4.4, tilt: 0.45, shiftX: 0, shiftY: 0, activity: 0.6 }],
-    [ft.start + (ft.end - ft.start) * 0.4, { zoom: -2, spin: 5.0, tilt: 0.35 }],
+    [marks.show.end, { ...only("net"), zoom: -3, spin: 1.6, tilt: 0.3, shiftX: 0, shiftY: 0, activity: 0.6 }],
+    [ft.start + (ft.end - ft.start) * 0.4, { zoom: -2, spin: 2.2, tilt: 0.35 }],
     // models: the network opens into a galaxy of models
-    [ft.end, { net: 0.4, ring: 0.6, zoom: -1.5, spin: 5.6, tilt: 0.3 }],
-    [marks.models.end, { ...only("ring"), zoom: -0.5, spin: 6.4, tilt: 0.38 }],
+    [ft.end, { net: 0.4, ring: 0.6, zoom: -1.5, spin: 2.8, tilt: 0.45 }],
+    [marks.models.end, { ...only("ring"), zoom: -1.2, spin: 3.6, tilt: 0.55 }],
     // the call to action: everything pours back into the mark
     [marks.dl.end, { ...only("mark"), ...ctaFit(marks.dl.end), spin: 2 * Math.PI, tilt: 0, activity: 0.3 }],
   ];

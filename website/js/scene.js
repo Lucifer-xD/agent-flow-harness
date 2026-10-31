@@ -1,17 +1,19 @@
-// The 3D world behind every page, made of real, lit objects. It starts as AFH's mark: three glossy
-// candy-glass strands with light running inside them, joining six glossy spheres. Each strand is
-// two cables that meet in the middle, so when the page moves on, the same cables bend and stretch
-// into the links of a working team: the spheres become agents orbiting a molten core in a glass
-// bubble (with three polished gyroscope rings), and sparks of work run out along the cables and
-// results run back. The core can lay out a plan (glass cards it ticks off), write a file (a panel
-// that types itself, fed by a cable from the core) or open into a belt of 228 model tokens.
+// The 3D world behind every page is the AFH mark itself, alive. The three glossy strands of the
+// logo are six cables (each strand is two halves that meet in the middle), ending in the six dots.
+// Light runs inside them. When the page moves on, the same six cables and dots unwind into the
+// shapes of the work: your words spiral into a hexagonal hub (the harness), the cables twist into
+// a braided rope with the plan laid out along it, they fan out into six agents at work with sparks
+// of work flowing between them and the hub, one of them feeds a file that types itself, and they
+// close into a braided ring the models circle. On the 404 page the mark sags and comes apart.
 //
-// Built to stay smooth on integrated graphics: the cables are bent on the GPU (a cubic curve per
-// cable, four points as uniforms), glow comes from soft halos drawn in one pass instead of a bloom
-// pass, and the drawing size is held to a pixel budget that steps down by itself if frames run long.
+// Built to stay smooth on integrated graphics: the six cables are one mesh whose points are bent
+// on the CPU each frame (a few thousand vertices), glow comes from soft halos drawn in one pass
+// instead of a bloom pass, and the drawing size is held to a pixel budget that steps down by
+// itself if frames run long.
 //
 // The page steers it through `state` (numbers, eased by the caller):
 //   shapes   mark core net plan code ring spread — weights; the world takes their blend
+//            (core = the vortex into the hub, net = the agents, ring = the models, spread = lost)
 //   framing  zoom spin tilt shiftX shiftY        mood  activity (how busy) · dim (brightness)
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -19,81 +21,69 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { CODE, TOKEN_COLORS } from "./code-sample.js";
 
 // The logo (viewBox 240×140): each strand is two cubic segments meeting at a middle point, with a
-// depth per control point so the strands weave past each other.
+// depth per control point so the strands weave past each other. Stroke 14, dots r 15.
 const STRANDS = [
   { pts: [[46, 28], [104, 28], [108, 74], [134, 74], [160, 74], [164, 28], [194, 28]], z: [0, 0.9, 0.9, 0.55, 0.2, -0.6, 0], from: "#ffb11f", to: "#ff7a3d" },
   { pts: [[46, 70], [92, 70], [98, 58], [120, 60], [150, 63], [152, 82], [194, 70]], z: [0, -0.5, -0.5, 0, 0.5, 0.5, 0], from: "#ff7747", to: "#ff4a68" },
   { pts: [[46, 112], [108, 112], [116, 66], [146, 66], [172, 66], [170, 112], [194, 112]], z: [0, -0.9, -0.9, -0.55, -0.2, 0.6, 0], from: "#ff3d8a", to: "#e0169a" },
 ];
-const ENDS = [[0, 0], [1, 0], [2, 0], [2, 6], [1, 6], [0, 6]]; // agent k = [strand, point], round the mark
-const AGENT_COLORS = ["#ffb11f", "#ff7747", "#ff3d8a", "#e0169a", "#ff4a68", "#ff7a3d"];
 const SHAPES = ["mark", "core", "net", "plan", "code", "ring", "spread"];
 const PLAN = ["Read the auth code", "Build the login form", "Add session handling", "Write the tests", "Run them and fix"];
 const S = 1 / 30;
 const toV = ([x, y], z) => new THREE.Vector3((x - 120) * S, -(y - 70) * S, z);
-const UP = new THREE.Vector3(0, 1, 0);
+const CABLE_R = 7 * S, DOT_R = 15 * S; // the logo's own proportions
 // additive light that leaves the canvas alpha alone, so it adds onto the page's CSS background
 // instead of punching opaque black squares into it
 const ADD = { blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor };
 const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+const rnd = (a, b) => a + Math.random() * (b - a);
+const TAU = Math.PI * 2;
 
 // ---------- the cables ----------
-// A tube along a cubic curve, built in (t, angle, cap) space; the vertex shader bends it.
-function cableGeometry(seg = 140, rad = 22, cap = 6) {
-  const rows = [];
-  for (let k = 0; k < cap; k++) rows.push([0, -Math.PI / 2 + (k / cap) * (Math.PI / 2)]);
-  for (let i = 0; i <= seg; i++) rows.push([i / seg, 0]);
-  for (let k = 1; k <= cap; k++) rows.push([1, (k / cap) * (Math.PI / 2)]);
-  const pos = new Float32Array(rows.length * (rad + 1) * 3);
-  rows.forEach(([t, ph], r) => { for (let j = 0; j <= rad; j++) pos.set([t, (j / rad) * Math.PI * 2, ph], (r * (rad + 1) + j) * 3); });
-  const idx = [];
-  for (let r = 0; r < rows.length - 1; r++) for (let j = 0; j < rad; j++) {
-    const a = r * (rad + 1) + j, b = a + rad + 1;
-    idx.push(a, a + 1, b, b, a + 1, b + 1);
+// Six cables (K), each M segments long with RAD sides and rounded caps (CAP rows each end).
+// Cable k is half of strand k % 3: k < 3 runs from the left dot to the middle, k ≥ 3 from the
+// right dot to the middle — so along every cable, u = 0 is its dot and u = 1 is where it joins.
+const K = 6, M = 72, RAD = 14, CAP = 5;
+function markTable() {
+  const out = [], v = new THREE.Vector3();
+  for (let k = 0; k < K; k++) {
+    const s = STRANDS[k % 3], P = s.pts.map((p, i) => toV(p, s.z[i]));
+    const c = k < 3 ? new THREE.CubicBezierCurve3(P[0], P[1], P[2], P[3]) : new THREE.CubicBezierCurve3(P[6], P[5], P[4], P[3]);
+    const pts = new Float32Array((M + 1) * 3);
+    for (let i = 0; i <= M; i++) c.getPoint(i / M, v).toArray(pts, i * 3);
+    out.push(pts);
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  g.setIndex(idx);
-  return g;
+  return out;
 }
-
-function cableMaterial() {
-  const u = {
-    uA: { value: new THREE.Vector3() }, uB: { value: new THREE.Vector3() }, uC: { value: new THREE.Vector3() }, uD: { value: new THREE.Vector3() },
-    uRef: { value: new THREE.Vector3(0, 0, 1) }, uRadius: { value: 0.1 }, uGrow: { value: 1 },
-    uColA: { value: new THREE.Color() }, uColB: { value: new THREE.Color() },
-    uFlow: { value: 0 }, uDir: { value: 1 }, uGlow: { value: 0.2 }, uPulse: { value: 1 }, uSeed: { value: Math.random() },
-  };
-  const mat = new THREE.MeshStandardMaterial({ roughness: 0.24, metalness: 0, envMapIntensity: 0.6, emissive: 0xffffff });
-  mat.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, u);
-    sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", `#include <common>
-        uniform vec3 uA, uB, uC, uD, uRef; uniform float uRadius, uGrow; varying float vT;
-        vec3 cub(float t) { float s = 1.0 - t; return s * s * s * uA + 3.0 * s * s * t * uB + 3.0 * s * t * t * uC + t * t * t * uD; }
-        vec3 cubD(float t) { float s = 1.0 - t; return 3.0 * s * s * (uB - uA) + 6.0 * s * t * (uC - uB) + 3.0 * t * t * (uD - uC); }`)
-      .replace("#include <beginnormal_vertex>", `
-        float tt = position.x * uGrow;
-        vec3 T = normalize(cubD(clamp(tt, 0.002, 0.998)) + 1e-6);
-        vec3 N = normalize(cross(T, uRef) + 1e-6), Bn = cross(T, N);
-        vec3 ring = cos(position.y) * N + sin(position.y) * Bn;
-        vec3 objectNormal = ring * cos(position.z) + T * sin(position.z);
-        vT = tt;`)
-      .replace("#include <begin_vertex>", "vec3 transformed = cub(tt) + objectNormal * uRadius;");
-    sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", `#include <common>
-        uniform vec3 uColA, uColB; uniform float uFlow, uDir, uGlow, uPulse, uSeed; varying float vT;`)
-      .replace("vec4 diffuseColor = vec4( diffuse, opacity );", "vec3 cab = mix(uColA, uColB, vT); vec4 diffuseColor = vec4(cab, opacity);")
-      .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-        // light travelling inside the glass: soft bands plus a bright packet
-        float x = vT * 1.4 - uFlow * 0.55 * uDir + uSeed;
-        float band = 0.5 + 0.5 * sin(x * 6.2832 * 2.0);
-        float pk = fract(x);
-        float packet = pow(max(0.0, 1.0 - pk / 0.09), 2.0);
-        totalEmissiveRadiance = cab * (uGlow * (0.55 + 0.45 * band) + packet * uPulse * 2.2);`);
-  };
-  mat.customProgramCacheKey = () => "afh-cable";
-  return { mat, u };
+/** One geometry for all six cables; positions and normals are rewritten every frame. */
+function cableGeometry() {
+  const rows = [];
+  for (let c = 0; c < CAP; c++) rows.push([0, -Math.PI / 2 + (c / CAP) * (Math.PI / 2)]);
+  for (let i = 0; i <= M; i++) rows.push([i, 0]);
+  for (let c = 1; c <= CAP; c++) rows.push([M, (c / CAP) * (Math.PI / 2)]);
+  const per = rows.length * (RAD + 1), V = per * K;
+  const pos = new Float32Array(V * 3), nrm = new Float32Array(V * 3), col = new Float32Array(V * 3), aT = new Float32Array(V), aSeed = new Float32Array(V);
+  const idx = [];
+  for (let k = 0; k < K; k++) {
+    const s = STRANDS[k % 3], from = new THREE.Color(k < 3 ? s.from : s.to), mid = new THREE.Color(s.from).lerp(new THREE.Color(s.to), 0.5);
+    const base = k * per;
+    rows.forEach(([i], r) => {
+      const t = i / M, c = from.clone().lerp(mid, t);
+      for (let j = 0; j <= RAD; j++) { const v = base + r * (RAD + 1) + j; col.set([c.r, c.g, c.b], v * 3); aT[v] = t; aSeed[v] = k * 0.37; }
+    });
+    for (let r = 0; r < rows.length - 1; r++) for (let j = 0; j < RAD; j++) {
+      const a = base + r * (RAD + 1) + j, b = a + RAD + 1;
+      idx.push(a, a + 1, b, b, a + 1, b + 1);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute("normal", new THREE.BufferAttribute(nrm, 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  geo.setAttribute("aT", new THREE.BufferAttribute(aT, 1));
+  geo.setAttribute("aSeed", new THREE.BufferAttribute(aSeed, 1));
+  geo.setIndex(idx);
+  return { geo, rows, per };
 }
 
 // ---------- canvas faces for the plan cards and the code panel ----------
@@ -147,22 +137,25 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
   renderer.setClearColor(0x000000, 0);
-  // the backdrop is CSS (free): a warm haze behind the core and a pink one lower left
+  // the backdrop is CSS (free): a warm haze behind the mark and a pink one lower left
   canvas.style.background = "radial-gradient(60% 70% at 62% 46%, #2a1007 0%, rgba(42,16,7,0) 70%), radial-gradient(45% 55% at 25% 70%, #1f0716 0%, rgba(31,7,22,0) 70%), #0a0807";
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; // studio reflections on the gloss and metal
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; // studio reflections on the glass and metal
   const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 150);
   camera.position.set(0, 0, 10);
   const world = new THREE.Group();
   scene.add(world);
 
-  // lights: a warm key from above left, a pink rim from behind, and the core's own light
-  const key = new THREE.DirectionalLight(0xfff0e4, 1.1); key.position.set(-4, 6, 6); scene.add(key);
-  const rim = new THREE.DirectionalLight(0xff4a8a, 1.6); rim.position.set(5, -2, -6); scene.add(rim);
+  // lights: a warm key from above left, a pink rim from behind, and the hub's own light
+  const key = new THREE.DirectionalLight(0xfff0e4, 1.1);
+  key.position.set(-4, 6, 6);
+  const rim = new THREE.DirectionalLight(0xff4a8a, 1.6);
+  rim.position.set(5, -2, -6);
+  scene.add(key, rim);
   scene.add(new THREE.HemisphereLight(0xffe6d6, 0x140806, 0.2));
-  const coreLight = new THREE.PointLight(0xff8040, 0, 0, 2);
-  world.add(coreLight);
+  const hubLight = new THREE.PointLight(0xffa050, 0, 0, 2);
+  world.add(hubLight);
 
   // drifting dust for depth
   const D = mobile ? 600 : 1100;
@@ -172,106 +165,89 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   const dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffc9a8, size: 0.045, transparent: true, opacity: 0.5, depthWrite: false, ...ADD }));
   scene.add(dust);
 
-  // ---- the mark's geometry: half-strands (end → middle) and where things sit ----
-  const strandV = STRANDS.map((s) => s.pts.map((p, i) => toV(p, s.z[i])));
-  const halves = ENDS.map(([s, p]) => (p === 0 ? [0, 1, 2, 3] : [6, 5, 4, 3]).map((i) => strandV[s][i]));
-  const halfMidColor = ENDS.map(([s]) => new THREE.Color(STRANDS[s].from).lerp(new THREE.Color(STRANDS[s].to), 0.5));
-  const endPos = ENDS.map(([s, p]) => strandV[s][p]);
-  const markCenter = new THREE.Vector3(0.45, 0.11, 0);
-  const agentCol = AGENT_COLORS.map((c) => new THREE.Color(c));
-  const amber = new THREE.Color("#ffb11f");
-
-  // ---- cables: 0–5 core↔agent (the mark's half-strands), 6–11 agent→next agent, 12 the core's feed ----
-  const cableGeo = cableGeometry(mobile ? 100 : 140, mobile ? 16 : 22);
-  const cables = Array.from({ length: 13 }, (_, i) => {
-    const { mat, u } = cableMaterial();
-    const mesh = new THREE.Mesh(cableGeo, mat);
-    mesh.frustumCulled = false;
-    world.add(mesh);
-    return { mesh, u, A: new THREE.Vector3(), B: new THREE.Vector3(), C: new THREE.Vector3(), D: new THREE.Vector3(), i };
-  });
-
-  // ---- agents: glossy spheres, with a spinning halo while they work ----
-  const sphereGeo = new THREE.SphereGeometry(1, 56, 40);
-  const haloGeo = new THREE.TorusGeometry(1.32, 0.03, 8, 96);
-  const agents = agentCol.map((c, k) => {
-    const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: c, roughness: 0.18, metalness: 0, envMapIntensity: 0.7, emissive: c, emissiveIntensity: 0.3 });
-    const ball = new THREE.Mesh(sphereGeo, mat);
-    const haloMat = new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(1.3), transparent: true, opacity: 0, depthWrite: false });
-    const halo = new THREE.Mesh(haloGeo, haloMat);
-    halo.rotation.set(1.1 + k * 0.4, k * 0.9, 0);
-    g.add(ball, halo);
-    world.add(g);
-    return { g, ball, mat, halo, haloMat, pos: new THREE.Vector3(), hi: 0, r: 0.4 };
-  });
-
-  // ---- the core: molten inside, a glass bubble round it, three polished gyroscope rings ----
-  const core = new THREE.Group();
-  world.add(core);
-  const coreU = { uTime: { value: 0 }, uEnergy: { value: 1 } };
-  const coreMat = new THREE.MeshStandardMaterial({ color: 0x1a0602, roughness: 0.55, envMapIntensity: 0.2, emissive: 0xffffff });
-  coreMat.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, coreU);
+  // ---- the cables: candy glass with light running inside ----
+  const MARK = markTable();
+  const { geo: cableGeo, rows, per } = cableGeometry();
+  const cableU = { uFlow: { value: 0 }, uGlow: { value: 0.3 }, uPulse: { value: 1 } };
+  const cableMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.2, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.1, envMapIntensity: 0.8, emissive: 0xffffff });
+  cableMat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, cableU);
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nuniform float uTime, uEnergy; varying vec3 vObj;")
-      .replace("#include <begin_vertex>", `vec3 transformed = position;
-        vObj = position;
-        transformed += normal * (sin(position.x * 7.0 + uTime * 1.7) * sin(position.y * 6.0 - uTime * 1.3) * sin(position.z * 6.5 + uTime) * 0.035 * uEnergy);`);
+      .replace("#include <common>", "#include <common>\nattribute float aT, aSeed; varying float vT, vSeed;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvT = aT; vSeed = aSeed;");
     sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform float uTime, uEnergy; varying vec3 vObj;")
+      .replace("#include <common>", "#include <common>\nuniform float uFlow, uGlow, uPulse; varying float vT, vSeed;")
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-        vec3 q = normalize(vObj);
-        float n = sin(q.x * 4.0 + uTime * 0.8) * sin(q.y * 5.0 - uTime * 0.6) * sin(q.z * 4.5 + uTime * 0.45);
-        // cracks where a sum of waves crosses zero: a network of thin glowing seams in an ember crust
-        float w = sin(q.x * 7.0 + q.y * 3.0 + uTime * 0.9 + n * 2.0) + sin(q.y * 8.0 - q.z * 4.0 - uTime * 0.7) + sin(q.z * 6.0 + q.x * 5.0 + uTime * 0.5);
-        float cracks = 1.0 - smoothstep(0.0, 0.17, abs(w));
-        float lava = 0.5 + 0.5 * n;
-        vec3 crust = mix(vec3(0.3, 0.035, 0.008), vec3(0.85, 0.18, 0.02), lava);
-        vec3 glow = mix(vec3(1.0, 0.4, 0.06), vec3(1.0, 0.8, 0.4), lava);
-        totalEmissiveRadiance = crust * (0.22 + 0.3 * uEnergy) + glow * cracks * (1.1 + 1.3 * uEnergy);`);
+        // light travelling inside the glass towards the join: soft bands plus a bright packet
+        float x = vT * 1.4 - uFlow + vSeed;
+        float band = 0.5 + 0.5 * sin(x * 12.566);
+        float pk = fract(x);
+        float packet = pow(max(0.0, 1.0 - abs(pk - 0.5) / 0.11), 2.0);
+        totalEmissiveRadiance = vColor.rgb * (uGlow * (0.55 + 0.45 * band) + packet * uPulse * 2.2);`);
   };
-  core.add(new THREE.Mesh(sphereGeo, coreMat));
-  // the bubble: clear where you look straight through, bright at the rim, with a sharp highlight
-  const shell = new THREE.Mesh(sphereGeo, new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, ...ADD,
-    vertexShader: /* glsl */ `varying vec3 vN, vView;
-      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vView = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: /* glsl */ `varying vec3 vN, vView;
-      void main() {
-        float f = pow(1.0 - max(dot(vN, vView), 0.0), 3.0);
-        float spec = pow(max(dot(reflect(-normalize(vec3(-0.5, 0.8, 0.6)), vN), vView), 0.0), 80.0);
-        gl_FragColor = vec4(vec3(1.0, 0.78, 0.62) * f * 0.45 + vec3(1.0, 0.95, 0.9) * spec * 0.9, 1.0);
-      }`,
-  }));
-  shell.scale.setScalar(1.32);
-  shell.renderOrder = 2;
-  core.add(shell);
-  const metal = new THREE.MeshStandardMaterial({ color: 0xf0c8ae, metalness: 1, roughness: 0.24, envMapIntensity: 0.9 });
-  const gyros = [0, 1, 2].map((i) => {
-    const pivot = new THREE.Group();
-    const r = 1.62 + i * 0.2;
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.026, 14, 220), metal);
-    const bead = new THREE.Mesh(new THREE.SphereGeometry(0.07, 20, 14), new THREE.MeshBasicMaterial({ color: agentCol[i * 2].clone().lerp(new THREE.Color("#fff1e0"), 0.4) }));
-    bead.position.x = r;
-    ring.add(bead);
-    pivot.add(ring);
-    pivot.rotation.set(i * 1.05 + 0.35, i * 0.7, i * 0.4);
-    core.add(pivot);
-    return { ring, bead, speed: (0.4 + i * 0.22) * (i % 2 ? -1 : 1) };
+  cableMat.customProgramCacheKey = () => "afh-cable";
+  const cables = new THREE.Mesh(cableGeo, cableMat);
+  cables.frustumCulled = false;
+  world.add(cables);
+  const cPos = cableGeo.attributes.position.array, cNrm = cableGeo.attributes.normal.array;
+  // scratch for bending: the points of one cable, its frames and radii
+  const pts = Array.from({ length: K }, () => new Float32Array((M + 1) * 3));
+  const radii = new Float32Array(M + 1);
+  const Tn = Array.from({ length: M + 1 }, () => new THREE.Vector3()), Nn = Array.from({ length: M + 1 }, () => new THREE.Vector3()), Bn = Array.from({ length: M + 1 }, () => new THREE.Vector3());
+  const REF = new THREE.Vector3(0.13, 1, 0.09).normalize(), cosT = [], sinT = [];
+  for (let j = 0; j <= RAD; j++) { cosT.push(Math.cos((j / RAD) * TAU)); sinT.push(Math.sin((j / RAD) * TAU)); }
+  const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3();
+  /** Write cable k's tube round its points: a frame carried along the curve, so the tube never pinches. */
+  const writeCable = (k) => {
+    const P = pts[k], base = k * per;
+    for (let i = 0; i <= M; i++) {
+      const a = Math.max(0, i - 1) * 3, b = Math.min(M, i + 1) * 3;
+      Tn[i].set(P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]);
+      if (Tn[i].lengthSq() < 1e-10) Tn[i].copy(i ? Tn[i - 1] : REF); else Tn[i].normalize();
+      if (i === 0) Nn[0].crossVectors(Tn[0], REF);
+      else Nn[i].copy(Nn[i - 1]).addScaledVector(Tn[i], -Nn[i - 1].dot(Tn[i]));
+      if (Nn[i].lengthSq() < 1e-6) Nn[i].crossVectors(Tn[i], Math.abs(Tn[i].y) < 0.9 ? REF : v1.set(1, 0, 0));
+      Nn[i].normalize();
+      Bn[i].crossVectors(Tn[i], Nn[i]);
+    }
+    for (let r = 0; r < rows.length; r++) {
+      const [i, ph] = rows[r], cph = Math.cos(ph), sph = Math.sin(ph), rad = radii[i];
+      const T = Tn[i], N = Nn[i], B = Bn[i], cx = P[i * 3], cy = P[i * 3 + 1], cz = P[i * 3 + 2];
+      for (let j = 0; j <= RAD; j++) {
+        const v = (base + r * (RAD + 1) + j) * 3;
+        const nx = (N.x * cosT[j] + B.x * sinT[j]) * cph + T.x * sph, ny = (N.y * cosT[j] + B.y * sinT[j]) * cph + T.y * sph, nz = (N.z * cosT[j] + B.z * sinT[j]) * cph + T.z * sph;
+        cNrm[v] = nx; cNrm[v + 1] = ny; cNrm[v + 2] = nz;
+        cPos[v] = cx + nx * rad; cPos[v + 1] = cy + ny * rad; cPos[v + 2] = cz + nz * rad;
+      }
+    }
+  };
+
+  // ---- the dots: six glossy spheres, the agents ----
+  const dotGeo = new THREE.SphereGeometry(DOT_R, 40, 28);
+  const dots = Array.from({ length: K }, (_, k) => {
+    const s = STRANDS[k % 3], c = new THREE.Color(k < 3 ? s.from : s.to);
+    const mat = new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.18, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 0.9, emissive: c, emissiveIntensity: 0.22 });
+    const mesh = new THREE.Mesh(dotGeo, mat);
+    world.add(mesh);
+    return { mesh, mat, c, glow: c.clone().convertLinearToSRGB(), hi: 0, work: rnd(0, TAU) };
   });
 
-  // ---- sparks: beads of light riding the cables (work out, results back) ----
-  const SPARKS = 13 * 3;
-  const sparks = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }), SPARKS);
-  sparks.frustumCulled = false;
-  world.add(sparks);
-  const sparkSeed = Array.from({ length: SPARKS }, () => Math.random());
-  const sparkColor = new THREE.Color();
+  // ---- the hub: a hexagonal connector the six cables plug into — the harness ----
+  const hub = new THREE.Group();
+  world.add(hub);
+  const hubBody = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.46, 6), new THREE.MeshStandardMaterial({ color: 0x2a1f1a, roughness: 0.22, metalness: 0.85, envMapIntensity: 1.1 }));
+  const hubSeam = new THREE.Mesh(new THREE.TorusGeometry(0.57, 0.022, 8, 60), new THREE.MeshBasicMaterial({ color: new THREE.Color("#ff8a50").multiplyScalar(2), transparent: true, opacity: 0.9, depthWrite: false, ...ADD }));
+  hubSeam.rotation.x = Math.PI / 2;
+  const eyeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color("#ffb11f"), transparent: true, opacity: 0.9, depthWrite: false, ...ADD, side: THREE.DoubleSide });
+  const eyeTop = new THREE.Mesh(new THREE.CircleGeometry(0.4, 6), eyeMat), eyeBot = eyeTop.clone();
+  eyeTop.rotation.x = -Math.PI / 2; eyeTop.position.y = 0.232;
+  eyeBot.rotation.x = Math.PI / 2; eyeBot.position.y = -0.232;
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color("#fff1dc").multiplyScalar(2.2) }));
+  hub.add(hubBody, hubSeam, eyeTop, eyeBot, core);
 
   // ---- glows: soft halos round everything that gives off light, in one draw (instead of bloom) ----
-  const CABLE_GLOW = 14, GC = 1 + 6 + SPARKS + 3; // halo beads traced along each cable, and where they start
-  const GLOWS = GC + 13 * CABLE_GLOW; // core, agents, sparks, gyro beads, cables
+  const SPARKS = 18;
+  const G_DOT = 0, G_HUB = K, G_SPARK = K + 1, GLOWS = G_SPARK + SPARKS;
   const glowPos = new Float32Array(GLOWS * 3), glowCol = new Float32Array(GLOWS * 3), glowSize = new Float32Array(GLOWS);
   const glowGeo = new THREE.BufferGeometry();
   glowGeo.setAttribute("position", new THREE.BufferAttribute(glowPos, 3));
@@ -288,11 +264,11 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   }));
   glows.frustumCulled = false;
   world.add(glows);
-  const srgb = (c) => c.clone().convertLinearToSRGB();
-  const glowAgent = agentCol.map(srgb), glowCore = srgb(new THREE.Color("#ff6a2a"));
+  const glowHub = new THREE.Color("#ff8a50").convertLinearToSRGB();
   const setGlow = (i, p, size, c, k) => { glowPos[i * 3] = p.x; glowPos[i * 3 + 1] = p.y; glowPos[i * 3 + 2] = p.z; glowSize[i] = size; glowCol[i * 3] = c.r * k; glowCol[i * 3 + 1] = c.g * k; glowCol[i * 3 + 2] = c.b * k; };
+  const sparks = Array.from({ length: SPARKS }, (_, j) => ({ k: j % K, speed: 0.16 + (j % 5) * 0.025, ph: (j * 0.37) % 1, glow: dots[j % K].glow.clone().lerp(new THREE.Color(1, 0.97, 0.9), 0.45) }));
 
-  // ---- the plan: glass cards beside the core, ticked off as it works ----
+  // ---- the plan: glass cards along the rope, ticked off as the agents work ----
   const face = new THREE.Group(); // always faces the camera; plan and code live in it
   world.add(face);
   const plan = new THREE.Group();
@@ -342,29 +318,28 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   const typing = { n: 0, hold: 0, line: 0, col: 0 };
   const lineLen = lines.map((l) => l.length);
 
-  // ---- the models: a belt of glossy tokens round the core ----
+  // ---- the models: a belt of tokens circling the ring ----
+  const RC = new THREE.Vector3(0, 0.3, 0), RING_R = 2.55; // the ring's centre and radius
   const TOKENS = 228;
   const belt = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 1, 1, 2, 0.28), new THREE.MeshStandardMaterial({ roughness: 0.22, envMapIntensity: 0.65, emissive: 0x3a1206, emissiveIntensity: 1 }), TOKENS);
   belt.frustumCulled = false;
   world.add(belt);
   const tokenData = Array.from({ length: TOKENS }, (_, i) => {
-    const lane = i % 3;
-    belt.setColorAt(i, agentCol[(i * 7) % 6].clone().lerp(new THREE.Color("#fff1e0"), Math.random() * 0.35));
-    return { a: Math.random() * Math.PI * 2, r: 2.9 + lane * 0.62 + (Math.random() - 0.5) * 0.4, y: (Math.random() - 0.5) * 0.35, s: 0.07 + Math.random() * 0.07, spin: Math.random() * 6, speed: 0.22 / (1 + lane * 0.45) };
+    const lane = i % 2;
+    belt.setColorAt(i, dots[(i * 7) % K].c.clone().lerp(new THREE.Color("#fff1e0"), Math.random() * 0.35));
+    return { a: Math.random() * TAU, r: RING_R + 0.95 + lane * 0.42 + (Math.random() - 0.5) * 0.12, s: 0.08 + Math.random() * 0.08, spin: Math.random() * 6, speed: (lane ? -0.2 : 0.26), y: (Math.random() - 0.5) * 0.5 };
   });
   const tokM = new THREE.Matrix4(), tokQ = new THREE.Quaternion(), tokE = new THREE.Euler(), tokP = new THREE.Vector3(), tokS = new THREE.Vector3();
 
-  // ---- a click (or a download) sends a shock ring out from the core ----
+  // ---- a click (or a download) sends a shock ring out ----
   const shockMat = new THREE.MeshBasicMaterial({ color: new THREE.Color("#ff8a50").multiplyScalar(3), transparent: true, opacity: 0, depthWrite: false, ...ADD, side: THREE.DoubleSide });
   const shock = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 8, 160), shockMat);
   world.add(shock);
   const pulse = { t: 1, strength: 0, boost: 0 };
 
-  const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3(), v5 = new THREE.Vector3();
-
   // ---- drawing size: a pixel budget (megapixels) that steps down by itself if frames run long ----
   const BUDGET = mobile ? [1.6, 1.1, 0.8] : lite ? [1.8, 1.3, 0.9] : [2.6, 1.9, 1.4, 1.0, 0.75];
-  let level = 0, narrow = false; // narrow: a portrait screen, so the plan and code sit below the core, not beside it
+  let level = 0, narrow = false; // narrow: a portrait screen, so the plan and code sit below the cables, not beside them
   const resize = () => {
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2, Math.sqrt((BUDGET[level] * 1e6) / (innerWidth * innerHeight))));
     renderer.setSize(innerWidth, innerHeight, false);
@@ -396,37 +371,24 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
     mouse.ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   }, { passive: true });
   const ray = new THREE.Raycaster();
-  const balls = agents.map((a) => a.ball);
-
-  // where each agent is in each shape
-  const orbit = (k, t, s, v) => {
-    const m3 = k % 3, r = (2.7 + m3 * 0.5) * s, incl = (m3 - 1) * 0.55 + 0.12;
-    const a = t * (0.15 + (k % 2) * 0.06) + k * 1.0471976;
-    return v.set(Math.cos(a) * r, Math.sin(a) * r * Math.sin(incl) + Math.sin(t * 0.7 + k) * 0.18, Math.sin(a) * r * Math.cos(incl));
-  };
-  const ringPos = (k, t, v) => { const a = k * 1.0471976 + t * 0.06; return v.set(Math.cos(a) * 3.55, Math.sin(t * 0.5 + k) * 0.18, Math.sin(a) * 3.55); };
-  const lostPos = (k, t, v) => {
-    const a = k * 1.0471976 + 0.4 + Math.sin(t * 0.13 + k) * 0.35;
-    return v.set(Math.cos(a) * (3.3 + Math.sin(t * 0.3 + k * 2) * 0.5), Math.sin(t * 0.21 + k * 1.7) * 1.4, Math.sin(a) * 1.6 - 0.5);
-  };
+  const dotMeshes = dots.map((d) => d.mesh);
 
   const q = new THREE.Quaternion();
   const baseZ = () => 10.5 * Math.max(1, 1.3 / Math.min(camera.aspect, 1.3)); // keep the mark inside narrow screens
-  const clock = { last: performance.now(), t: 0, flow: 0, plan: 0 };
+  const clock = { last: performance.now(), t: 0, plan: 0, intro: 0 };
 
-  // ---- responsive framing: put the mark exactly into a box on the page ----
-  const markBox = new THREE.Box3().setFromPoints(endPos).expandByScalar(0.5);
-  const markSize = markBox.getSize(new THREE.Vector3()), markMid = markBox.getCenter(new THREE.Vector3());
-  const fitCam = new THREE.PerspectiveCamera(), fitS = new THREE.Vector3(), fitP = new THREE.Vector3(), fitMid = new THREE.Vector3();
+  // ---- responsive framing: put a shape exactly into a box on the page ----
   // how much room each shape takes (world units, as seen from the camera; cx/cy: its middle)
+  const markW = (194 - 46) * S + DOT_R * 2, markH = (112 - 28) * S + DOT_R * 2;
   const box = (name) => ({
-    mark: { w: markSize.x, h: markSize.y, cx: markMid.x, cy: markMid.y },
-    core: { w: 4.6, h: 4.6, cx: 0, cy: 0 },
-    plan: narrow ? { w: 4.8, h: 6.6, cx: 0, cy: -0.4 } : { w: 8.2, h: 4.4, cx: 0.05, cy: 0 },
-    net: { w: 8, h: 4.8, cx: 0, cy: 0 },
-    code: narrow ? { w: 4.8, h: 6.4, cx: 0, cy: -0.4 } : { w: 8.8, h: 4.6, cx: 0.4, cy: 0 },
-    ring: { w: 9.6, h: 5, cx: 0, cy: 0 },
+    mark: { w: markW, h: markH, cx: 0, cy: 0 },
+    core: { w: 8, h: 6.2, cx: 0, cy: 0 },
+    plan: narrow ? { w: 7.6, h: 10, cx: -1.2, cy: -1.3 } : { w: 10.8, h: 6, cx: 0.5, cy: 0.5 },
+    net: { w: 7.6, h: 6.4, cx: 0, cy: 0.3 },
+    code: narrow ? { w: 7.6, h: 9.6, cx: -1.2, cy: -1.2 } : { w: 11.2, h: 6, cx: 1.1, cy: 0.6 },
+    ring: { w: 8.2, h: 6.6, cx: 0, cy: 0.3 },
   })[name];
+  const fitCam = new THREE.PerspectiveCamera(), fitS = new THREE.Vector3(), fitP = new THREE.Vector3(), fitMid = new THREE.Vector3();
   /** zoom/shiftX/shiftY that make a shape (default: the mark) fill `rect` (CSS px, viewport coordinates) — on any screen. */
   const fit = (rect, fill = 1, name = "mark") => {
     const b = box(name);
@@ -445,29 +407,67 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
     }
     return { zoom: baseZ() - dist, shiftX: fitS.x, shiftY: fitS.y };
   };
-  const corePos = new THREE.Vector3();
-  const tmpCol = new THREE.Color();
 
-  /** Control points of a link from p (an agent) into the core at c, bowed sideways. */
-  const link = (p, c, k, out) => {
-    v4.subVectors(c, p);
-    const len = v4.length();
-    v5.crossVectors(v4, UP).normalize().multiplyScalar(len * 0.2 * (k % 2 ? 1 : -1)).addScaledVector(UP, len * 0.1);
-    out[0].copy(p); out[3].copy(c);
-    out[1].copy(p).addScaledVector(v4, 0.33).add(v5);
-    out[2].copy(p).addScaledVector(v4, 0.7).addScaledVector(v5, 0.6);
+  // ---- the shapes: where cable k's point u (0 = its dot, 1 = its join) is in each one ----
+  const a0 = (k) => (k * TAU) / K;
+  let t = 0; // the clock, read by the shapes
+  // the vortex: your words spiral in along the six arms to the hub at the centre
+  const shapeCore = (k, u, o) => {
+    const s = 1 - u, r = 0.2 + 3.35 * Math.pow(s, 0.9), th = a0(k) + s * 2.3 + t * 0.12;
+    return o.set(Math.cos(th) * r, -0.3 * s * s + Math.sin(th * 2 + t * 1.4) * 0.1 * s, Math.sin(th) * r);
   };
-  const tmpPts = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-  const cubic = (A, B, C, Dd, t, out) => {
-    const s = 1 - t;
-    return out.set(0, 0, 0).addScaledVector(A, s * s * s).addScaledVector(B, 3 * s * s * t).addScaledVector(C, 3 * s * t * t).addScaledVector(Dd, t * t * t);
+  // the rope: the six cables twist together from the hub on the left, then peel off one by one
+  // into a column of dots — the list the plan is read from
+  const ropeX = () => (narrow ? [-3.9, 1.5] : [-4.3, 1.3]);
+  const shapePlan = (k, u, o) => {
+    const s = 1 - u, [xh, xd] = ropeX();
+    const ph = a0(k) + s * 4.2 - t * 0.35, rho = 0.5 * smooth(s / 0.12);
+    o.set(xh + s * (xd - xh), 0.2 + rho * Math.cos(ph), rho * Math.sin(ph));
+    const peel = smooth((s - 0.55) / 0.45);
+    if (peel) o.lerp(v2.set(xd + 0.3, 0.2 + (2.5 - k) * 0.76, 0.2), peel);
+    return o;
   };
-  const setRef = (c) => {
-    v1.subVectors(c.D, c.A); v2.addVectors(c.B, c.C).multiplyScalar(0.5).sub(c.A);
-    v3.crossVectors(v1, v2);
-    if (v3.lengthSq() < 1e-6) v3.crossVectors(v1, Math.abs(v1.y) < 0.9 ? UP : v4.set(1, 0, 0));
-    if (v3.lengthSq() < 1e-8) v3.set(0, 0, 1);
-    c.u.uRef.value.copy(v3.normalize());
+  // the agents: six dots round the hub, each on an S-shaped cable like the logo's own
+  const NET = { c: new THREE.Vector3(0, 0.3, 0), r: 2.9 };
+  const CODE_C = { c: new THREE.Vector3(), r: 2.3, pull: new THREE.Vector3() };
+  const dotAt = (k, L, o) => {
+    const b = a0(k) + 0.5 + Math.sin(t * 0.18 + k) * 0.08;
+    return o.set(L.c.x + Math.cos(b) * L.r, L.c.y + Math.sin(b) * L.r * 0.78, L.c.z + (k % 2 ? 0.9 : -0.9) + Math.sin(t * 0.7 + k * 1.9) * 0.25);
+  };
+  const shapeNet = (k, u, o, L) => {
+    const s = 1 - u;
+    dotAt(k, L, v2);
+    if (L.pull && k === 1) v2.copy(L.pull); // the orange agent feeds the file
+    o.lerpVectors(L.c, v2, s);
+    v3.subVectors(v2, L.c); v4.set(-v3.y, v3.x, 0).normalize();
+    const sw = Math.sin(s * TAU) * 0.3 * (k % 2 ? 1 : -1);
+    o.addScaledVector(v4, sw);
+    o.z += Math.sin(s * Math.PI) * 0.3 * (k < 3 ? 1 : -1);
+    return o;
+  };
+  // the ring: six cables braided round a circle, the dots at the joins
+  const shapeRing = (k, u, o) => {
+    const s = 1 - u, al = a0(k) + (s * TAU) / K + t * 0.2, ph = k * Math.PI + s * Math.PI, rho = 0.32;
+    const r = RING_R + rho * Math.cos(ph);
+    return o.set(RC.x + Math.cos(al) * r, RC.y + rho * Math.sin(ph), RC.z + Math.sin(al) * r);
+  };
+  // lost: the mark sags, the dots fall and the joins drift apart
+  const lostDrift = Array.from({ length: K }, () => new THREE.Vector3(rnd(-0.5, 0.5), rnd(0.3, 0.9), rnd(-0.6, 0.6)));
+  const shapeLost = (k, u, o) => {
+    const s = 1 - u, m = MARK[k], i = Math.round(u * M) * 3;
+    o.set(m[i], m[i + 1], m[i + 2]);
+    o.y -= (1.5 + (k % 3) * 0.3) * s * s;
+    o.x += (k < 3 ? -0.5 : 0.5) * s * s;
+    o.addScaledVector(lostDrift[k], u * u);
+    o.y += Math.sin(t * 0.6 + k) * 0.08 * s;
+    return o;
+  };
+  // where the hub stands in each shape (hidden in the mark, the ring and lost — it stays near the middle)
+  const hubAt = { mark: new THREE.Vector3(0, 0, 0), core: new THREE.Vector3(0, 0, 0), plan: new THREE.Vector3(), net: NET.c, code: CODE_C.c, ring: RC, spread: new THREE.Vector3(0, -0.4, 0) };
+  const hubPos = new THREE.Vector3(), sparkP = new THREE.Vector3();
+  const pointAt = (k, u, o) => { // a point along cable k as it is now
+    const x = Math.min(M - 1e-4, Math.max(0, u * M)), i = Math.floor(x), f = x - i, P = pts[k], a = i * 3, b = a + 3;
+    return o.set(P[a] + (P[b] - P[a]) * f, P[a + 1] + (P[b + 1] - P[a + 1]) * f, P[a + 2] + (P[b + 2] - P[a + 2]) * f);
   };
 
   const frame = (now) => {
@@ -480,9 +480,9 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
     pulse.boost *= Math.pow(0.25, dt);
     const act = state.activity + pulse.boost;
     clock.t += dt;
-    clock.flow += dt * (0.5 + act * 0.8);
     clock.plan += dt * 0.55 * (0.7 + act * 0.3);
-    const t = clock.t;
+    clock.intro = Math.min(1, clock.intro + dt / 1.5);
+    t = clock.t;
     mouse.sx += (mouse.x - mouse.sx) * Math.min(1, dt * 3);
     mouse.sy += (mouse.y - mouse.sy) * Math.min(1, dt * 3);
 
@@ -507,97 +507,94 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
     const W = SHAPES.map((s) => Math.max(0, state[s]));
     const total = W.reduce((a, b) => a + b, 0) || 1;
     const [wM, wC, wN, wP, wK, wR, wS] = W.map((w) => w / total);
-    const wWork = wP + wK; // plan and code: agents step back, the core works
+    const wHub = wC + wP + wN + wK; // the hub is out
+    const wWork = wN + wK; // the agents at work
+    const mixed = 1 - (wM * wM + wC * wC + wN * wN + wP * wP + wK * wK + wR * wR + wS * wS); // 0 in one shape, up to ~0.5 between two
 
-    // the core
-    const coreScale = wC * 1.0 + wN * 0.62 + wWork * 0.55 + wR * 0.5;
-    corePos.copy(markCenter).multiplyScalar(wM + wS);
-    core.position.copy(corePos);
-    core.visible = coreScale > 0.004;
-    core.scale.setScalar(Math.max(0.001, coreScale * (1 + Math.sin(t * 2.1) * 0.012 + pulse.boost * 0.06)));
-    coreU.uTime.value = t;
-    coreU.uEnergy.value = 0.55 + act * 0.45;
-    for (const g of gyros) g.ring.rotation.z += dt * g.speed * (1 + act * 0.8);
-    coreLight.position.copy(corePos);
-    coreLight.intensity = coreScale * 38 * (0.75 + act * 0.25);
+    // the shapes' anchors for this screen
+    hubAt.plan.set(ropeX()[0], 0.2, 0);
+    if (narrow) { CODE_C.c.set(-1.2, 1.3, 0); CODE_C.r = 2.0; CODE_C.pull.set(-1.2, -2.45, 0.3); }
+    else { CODE_C.c.set(-1.6, 0.6, 0); CODE_C.r = 2.3; CODE_C.pull.set(2.25, 0.6, 0.3); }
+    hubPos.set(0, 0, 0);
+    SHAPES.forEach((s, i) => { if (W[i]) hubPos.addScaledVector(hubAt[s], W[i] / total); });
 
-    // agents: where they are, how big, and whether the pointer is on one
-    let hovered = -1;
-    if (W[0] + W[2] + W[5] > 0.3) {
-      ray.setFromCamera(mouse.ndc, camera);
-      const hit = ray.intersectObjects(balls, false)[0];
-      if (hit) hovered = balls.indexOf(hit.object);
+    // the cables: every point's place is the blend of its places in every shape
+    const taper = 0.35 * wHub; // thinner towards the hub, where the six gather
+    const grow = smooth(clock.intro * 1.1); // on load the strands draw themselves from the dots to the middle, like the app's logo
+    for (let k = 0; k < K; k++) {
+      const P = pts[k], m = MARK[k];
+      for (let i = 0; i <= M; i++) {
+        const u = i / M;
+        const p = tokP.set(0, 0, 0);
+        if (wM) p.addScaledVector(v1.set(m[i * 3], m[i * 3 + 1], m[i * 3 + 2]), wM);
+        if (wC) p.addScaledVector(shapeCore(k, u, v1), wC);
+        if (wP) p.addScaledVector(shapePlan(k, u, v1), wP);
+        if (wN) p.addScaledVector(shapeNet(k, u, v1, NET), wN);
+        if (wK) p.addScaledVector(shapeNet(k, u, v1, CODE_C), wK);
+        if (wR) p.addScaledVector(shapeRing(k, u, v1), wR);
+        if (wS) p.addScaledVector(shapeLost(k, u, v1), wS);
+        // a change of shape ripples along every cable
+        p.y += mixed * Math.sin(u * 7 + t * 2.4 + k * 1.1) * 0.6;
+        p.z += mixed * Math.cos(u * 5 + t * 1.9 + k) * 0.4;
+        P[i * 3] = p.x; P[i * 3 + 1] = p.y; P[i * 3 + 2] = p.z;
+        radii[i] = CABLE_R * (1 - taper * u * u);
+      }
+      if (grow < 1) { // not yet drawn past `grow`: the rest sits at the tip
+        const e = Math.floor(grow * M) * 3;
+        for (let i = e + 3; i < P.length; i += 3) { P[i] = P[e]; P[i + 1] = P[e + 1]; P[i + 2] = P[e + 2]; }
+      }
+      writeCable(k);
     }
-    agents.forEach((a, k) => {
-      const p = a.pos.set(0, 0, 0);
-      if (wM) p.addScaledVector(endPos[k], wM);
-      if (wC) p.addScaledVector(v1.copy(endPos[k]).normalize().multiplyScalar(0.3), wC);
-      if (wN) p.addScaledVector(orbit(k, t, 1, v1), wN);
-      if (wWork) p.addScaledVector(orbit(k, t, 0.62, v1).add(v2.set(narrow ? 0 : -1.6, narrow ? 1.6 : 0.2, -2.2)), wWork); // the team waits behind
-      if (wR) p.addScaledVector(ringPos(k, t, v1), wR);
-      if (wS) p.addScaledVector(lostPos(k, t, v1), wS);
-      a.hi += ((k === hovered ? 1 : 0) - a.hi) * Math.min(1, dt * 8);
-      a.r = 0.46 * wM + 0.27 * wN + 0.15 * wWork + 0.23 * wR + 0.36 * wS;
-      a.g.position.copy(p);
-      a.g.visible = a.r > 0.01;
-      a.g.scale.setScalar(Math.max(0.001, a.r * (1 + a.hi * 0.22 + Math.sin(t * 2 + k) * 0.02)));
-      a.mat.emissiveIntensity = 0.42 + a.hi * 0.9 + pulse.boost * 0.2 + act * 0.08;
-      a.haloMat.opacity = (wN + wR * 0.7) * (0.35 + a.hi * 0.65);
-      a.halo.visible = a.haloMat.opacity > 0.01;
-      a.halo.rotation.z += dt * (1.2 + act);
+    cableGeo.attributes.position.needsUpdate = true;
+    cableGeo.attributes.normal.needsUpdate = true;
+    cableU.uFlow.value += dt * (0.22 + act * 0.25);
+    cableU.uGlow.value = 0.26 + act * 0.1 + pulse.boost * 0.15;
+    cableU.uPulse.value = 0.7 + act * 0.5;
+
+    // the dots: on the end of their cables; busy ones pulse, the pointed-at one lights up
+    let hovered = -1;
+    ray.setFromCamera(mouse.ndc, camera);
+    const hit = ray.intersectObjects(dotMeshes, false)[0];
+    if (hit) hovered = dotMeshes.indexOf(hit.object);
+    dots.forEach((d, k) => {
+      d.hi += ((k === hovered ? 1 : 0) - d.hi) * Math.min(1, dt * 8);
+      d.mesh.position.set(pts[k][0], pts[k][1], pts[k][2]);
+      const work = wWork * (0.5 + 0.5 * Math.sin(t * 1.6 + d.work)) * act;
+      const sc = 1 + d.hi * 0.22 + work * 0.14 + pulse.boost * 0.06 + wWork * 0.08;
+      d.mesh.scale.setScalar(sc);
+      d.mat.emissiveIntensity = 0.22 + d.hi * 0.9 + work * 0.6 + pulse.boost * 0.3;
+      setGlow(G_DOT + k, d.mesh.position, 0.9 + d.hi * 0.5 + work * 0.3, d.glow, 0.16 + d.hi * 0.6 + work * 0.35 + act * 0.05 + pulse.boost * 0.1);
     });
 
-    // cables 0–5: the mark's half-strands, or links from agent k into the core
-    for (let k = 0; k < 6; k++) {
-      const c = cables[k], a = agents[k];
-      c.A.set(0, 0, 0); c.B.set(0, 0, 0); c.C.set(0, 0, 0); c.D.set(0, 0, 0);
-      const add = (pts, w) => { if (!w) return; c.A.addScaledVector(pts[0], w); c.B.addScaledVector(pts[1], w); c.C.addScaledVector(pts[2], w); c.D.addScaledVector(pts[3], w); };
-      add(halves[k], wM);
-      const rest = 1 - wM - wS;
-      if (rest > 0) { link(a.pos, corePos, k, tmpPts); add(tmpPts, rest); }
-      if (wS) { // lost: the cable has come away from the middle and hangs loose
-        const h = halves[k];
-        tmpPts[0].copy(a.pos);
-        v1.subVectors(h[3], h[0]).multiplyScalar(0.55);
-        tmpPts[3].copy(a.pos).add(v1).add(v2.set(Math.sin(t * 0.7 + k) * 0.4, -0.9 + Math.cos(t * 0.5 + k) * 0.3, Math.sin(t * 0.4 + k * 2) * 0.4));
-        tmpPts[1].copy(a.pos).addScaledVector(v1, 0.4);
-        tmpPts[2].lerpVectors(tmpPts[1], tmpPts[3], 0.6).add(v2.set(0, -0.35, 0));
-        add(tmpPts, wS);
-      }
-      const r = 0.2 * wM + 0.13 * wS + (0.06 * wN + 0.045 * wWork + 0.045 * wR) * (1 + a.hi * 0.6);
-      c.u.uRadius.value = r;
-      c.mesh.visible = r > 0.004;
-      c.u.uGrow.value = 1;
-      c.u.uColA.value.copy(agentCol[k]);
-      c.u.uColB.value.copy(halfMidColor[k]).lerp(amber, 1 - wM - wS);
-      c.u.uDir.value = wM > 0.5 ? (k < 3 ? 1 : -1) : -1;
-      c.u.uGlow.value = (0.22 + a.hi * 0.4) * (0.8 + act * 0.25);
-      c.u.uPulse.value = (0.6 + act * 0.6) * (1 + a.hi);
-      setRef(c);
-    }
-    // cables 6–11: agent k → agent k+1, grown in while the team works
-    for (let k = 0; k < 6; k++) {
-      const c = cables[6 + k], a = agents[k].pos, b = agents[(k + 1) % 6].pos;
-      v4.subVectors(b, a);
-      v5.addVectors(a, b).multiplyScalar(0.5).sub(corePos).normalize().multiplyScalar(v4.length() * 0.22);
-      c.A.copy(a); c.D.copy(b);
-      c.B.copy(a).addScaledVector(v4, 0.33).add(v5);
-      c.C.copy(a).addScaledVector(v4, 0.67).add(v5);
-      const grow = smooth((wN + wR + wWork * 0.7) * 1.15);
-      c.u.uGrow.value = grow;
-      c.u.uRadius.value = 0.03 * grow;
-      c.mesh.visible = grow > 0.01;
-      c.u.uColA.value.copy(agentCol[k]); c.u.uColB.value.copy(agentCol[(k + 1) % 6]);
-      c.u.uDir.value = 1; c.u.uGlow.value = 0.3; c.u.uPulse.value = 0.5 + act * 0.4;
-      setRef(c);
-    }
+    // the hub
+    const hv = smooth(wHub * 1.3);
+    hub.visible = hv > 0.01;
+    hub.position.copy(hubPos);
+    hub.scale.setScalar(Math.max(0.001, hv));
+    const upright = wHub ? wC / wHub : 0; // standing in the vortex; facing the page in the other shapes
+    hub.rotation.set((1 - upright) * (Math.PI / 2) + Math.sin(t * 0.5) * 0.06, t * 0.35, 0);
+    const beat = 0.75 + 0.25 * Math.sin(t * 3.2) + pulse.boost * 0.5;
+    eyeMat.opacity = (0.55 + act * 0.25) * beat;
+    core.scale.setScalar(0.85 + beat * 0.2);
+    hubSeam.material.opacity = 0.6 + act * 0.3;
+    hubLight.position.copy(hubPos);
+    hubLight.intensity = hv * 16 * (0.7 + act * 0.3) + pulse.boost * 5;
+    setGlow(G_HUB, hubPos, 2.4, glowHub, hv * (0.45 + act * 0.25 + pulse.boost * 0.3));
 
-    // the plan: cards stacked beside the core; the current one lights up and the core feeds it
+    // sparks of work running along the cables: in towards the hub (and the middle of the mark)
+    const sv = (0.35 + act * 0.45) * (1 - wS * 0.8) * grow;
+    sparks.forEach((sp, j) => {
+      const u = (sp.ph + t * sp.speed * (0.8 + act * 0.5)) % 1;
+      pointAt(sp.k, u, sparkP);
+      const vis = sv * Math.sin(u * Math.PI) * (j < 6 ? 1 : wHub * 0.7 + wM * 0.3 + wR * 0.5);
+      setGlow(G_SPARK + j, sparkP, 0.34, sp.glow, vis * 0.55);
+    });
+
+    // the plan: cards beside the rope; the current one lights up
     const pv = smooth(wP * 1.2);
     plan.visible = pv > 0.01;
     const prog = clock.plan % 7.5;
-    const nowIdx = Math.min(5, Math.max(1, Math.floor(prog) + 1));
-    const px = narrow ? 0 : 2.75, py = narrow ? -2.2 : 0;
+    const px = narrow ? -1.2 : 4.1, py = narrow ? -3.6 : 0.6;
     cards.forEach((cd) => {
       const appear = smooth(pv * 1.6 - cd.i * 0.1);
       const y = (cd.goal ? 1.45 : 1.1 - cd.i * 0.52) + (1 - appear) * -0.5;
@@ -611,10 +608,10 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
         cd.body.material.emissiveIntensity = st === "now" ? 0.05 + Math.sin(t * 5) * 0.025 : 0;
       }
     });
-    // the code: a panel that types itself
+    // the code: a panel that types itself, fed by the orange agent
     const kv = smooth(wK * 1.2);
     codePanel.visible = kv > 0.01;
-    codePanel.position.set(narrow ? 0 : 2.85 + (1 - kv) * 0.8, narrow ? -2.1 : 0, 0.4);
+    codePanel.position.set(narrow ? -1.2 : 4.3 + (1 - kv) * 0.8, narrow ? -3.6 : 0.6, 0.4);
     codePanel.rotation.y = (1 - kv) * -0.8;
     codePanel.scale.setScalar(Math.max(0.001, kv) * (narrow ? 0.7 : 1));
     if (codePanel.visible) {
@@ -629,68 +626,16 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
       codeU.uCol.value = Math.min(typing.col, lineLen[typing.line]);
       codeU.uTime.value = t;
     }
-    // the feed: a cable from the core to whatever it is working on
-    {
-      const c = cables[12];
-      const r = 0.05 * (pv + kv);
-      c.mesh.visible = r > 0.003;
-      if (c.mesh.visible) {
-        const target = v3;
-        if (pv >= kv) { // the current card's tick box
-          const s = narrow ? 0.75 : 1;
-          target.set(px + (-1.152 + (62 / 700) * 2.304) * s, py + 1.1 - nowIdx * 0.52, 0.36);
-        } else { // the caret
-          const s = narrow ? 0.7 : 1, k = 3.6 / CODE_W;
-          target.copy(codePanel.position).add(v4.set((-1.8 + (CX + codeU.uCol.value * CW) * k) * s, (CODE_H / 2 - (CY + codeU.uLine.value * LH - 8)) * k * s, 0.06));
-        }
-        target.applyQuaternion(face.quaternion);
-        c.A.copy(corePos); c.D.copy(target);
-        v4.subVectors(target, corePos);
-        c.B.copy(corePos).addScaledVector(v4, 0.35).addScaledVector(UP, 0.6);
-        c.C.copy(corePos).addScaledVector(v4, 0.75).addScaledVector(UP, 0.35);
-        c.u.uRadius.value = r; c.u.uGrow.value = 1;
-        c.u.uColA.value.copy(amber); c.u.uColB.value.set("#ff6a2a");
-        c.u.uDir.value = 1; c.u.uGlow.value = 0.4; c.u.uPulse.value = 1.4;
-        setRef(c);
-      }
-    }
-    for (const c of cables) {
-      c.u.uFlow.value = clock.flow;
-      c.u.uA.value.copy(c.A); c.u.uB.value.copy(c.B); c.u.uC.value.copy(c.C); c.u.uD.value.copy(c.D);
-    }
 
-    // sparks: three per cable; core links send work out and get results back
-    let si = 0;
-    const sparkVis = 1 - wM - wS;
-    for (const c of cables) {
-      for (let j = 0; j < 3; j++, si++) {
-        const visible = c.mesh.visible && sparkVis > 0.05 && (c.i !== 12 || j < 2);
-        if (!visible) { tokM.makeScale(0, 0, 0); sparks.setMatrixAt(si, tokM); glowSize[7 + si] = 0; continue; }
-        const back = c.i < 6 && j === 2;
-        let s = (sparkSeed[si] + clock.flow * (0.22 + sparkSeed[si] * 0.08)) % 1;
-        if (c.i < 6) s = back ? s : 1 - s; // P0 is the agent, P3 the core
-        s *= c.u.uGrow.value;
-        cubic(c.A, c.B, c.C, c.D, s, tokP);
-        const size = (c.u.uRadius.value * 1.2 + 0.012) * sparkVis * (0.8 + Math.sin(s * Math.PI) * 0.4);
-        tokM.compose(tokP, tokQ.identity(), tokS.setScalar(size));
-        sparks.setMatrixAt(si, tokM);
-        sparkColor.copy(back ? tmpCol.set("#ff7ab6") : c.i === 12 ? amber : agentCol[c.i % 6]).lerp(tmpCol.set("#fff1e0"), 0.25).multiplyScalar(1.5 + act * 0.5);
-        sparks.setColorAt(si, sparkColor);
-        setGlow(7 + si, tokP, size * 7, sparkColor.convertLinearToSRGB(), 0.18);
-      }
-    }
-    sparks.instanceMatrix.needsUpdate = true;
-    if (sparks.instanceColor) sparks.instanceColor.needsUpdate = true;
-
-    // the models' belt
+    // the belt of models
     const rv = smooth(wR * 1.15);
     belt.visible = rv > 0.01;
     if (belt.visible) {
       tokenData.forEach((d, i) => {
         const a = d.a + t * d.speed;
         const rr = d.r * (0.6 + rv * 0.4);
-        tokP.set(Math.cos(a) * rr, d.y + Math.sin(t * 0.8 + i) * 0.04, Math.sin(a) * rr).add(corePos);
-        tokE.set(d.spin + t * 0.6, d.spin * 2 + t * 0.4, 0);
+        tokP.set(RC.x + Math.cos(a) * rr, RC.y + d.y + Math.sin(t * 2 + i) * 0.02, RC.z + Math.sin(a) * rr);
+        tokE.set(d.spin, -a + d.spin * 0.3, 0);
         tokM.compose(tokP, tokQ.setFromEuler(tokE), tokS.setScalar(d.s * smooth(rv * 1.4 - (i % 12) * 0.03)));
         belt.setMatrixAt(i, tokM);
       });
@@ -702,30 +647,12 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
       pulse.t = Math.min(1, pulse.t + dt * 0.75);
       const e = 1 - Math.pow(1 - pulse.t, 3);
       shock.visible = true;
-      shock.position.copy(corePos);
+      shock.position.copy(hubPos);
       shock.scale.setScalar(0.6 + e * (5 + pulse.strength * 3));
       shock.quaternion.copy(q);
       shockMat.opacity = (1 - pulse.t) * (0.6 + pulse.strength * 0.4);
     } else shock.visible = false;
 
-    // glows
-    const live = (wN + wR + wWork * 0.6) * (0.8 + act * 0.2);
-    setGlow(0, corePos, coreScale * 6.4 * (1 + pulse.boost * 0.15), glowCore, Math.min(0.95, coreScale * 0.9) * (0.8 + act * 0.25));
-    agents.forEach((a, k) => setGlow(1 + k, a.pos, a.r * (5.2 + a.hi * 2.6), glowAgent[k], (0.55 + wM * 0.1 + live * 0.25 + a.hi * 0.5 + pulse.boost * 0.2) * (a.g.visible ? 1 : 0)));
-    // every cable glows along its length: overlapping soft beads read as one continuous halo
-    for (const c of cables) {
-      const base = GC + c.i * CABLE_GLOW;
-      if (!c.mesh.visible) { for (let j = 0; j < CABLE_GLOW; j++) glowSize[base + j] = 0; continue; }
-      const r = c.u.uRadius.value, g = c.u.uGrow.value;
-      const k = (0.1 + c.u.uGlow.value * 0.32 + pulse.boost * 0.08) * Math.min(1, r * 14);
-      for (let j = 0; j < CABLE_GLOW; j++) {
-        const s = ((j + 0.5) / CABLE_GLOW) * g;
-        cubic(c.A, c.B, c.C, c.D, s, v1);
-        tmpCol.copy(c.u.uColA.value).lerp(c.u.uColB.value, s).convertLinearToSRGB();
-        setGlow(base + j, v1, r * 7 + 0.22, tmpCol, k);
-      }
-    }
-    gyros.forEach((g, i) => { g.bead.getWorldPosition(v1); world.worldToLocal(v1); setGlow(7 + SPARKS + i, v1, 0.55 * coreScale, glowAgent[i * 2], core.visible ? 0.6 : 0); });
     glowGeo.attributes.position.needsUpdate = true;
     glowGeo.attributes.aCol.needsUpdate = true;
     glowGeo.attributes.aSize.needsUpdate = true;
@@ -734,12 +661,12 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   };
   requestAnimationFrame(frame);
 
-  /** Send a shock ring out from the core and make every cable busy for a moment. */
+  /** Send a shock ring out from the hub and make everything busy for a moment. */
   const burst = (strength = 1) => {
     pulse.t = 0;
     pulse.strength = strength;
     pulse.boost = Math.min(3, pulse.boost + strength * 1.6);
   };
   const setLevel = (n) => { level = n; applyQuality(); };
-  return { state, burst, fit, three: { renderer, scene, camera, typing, setLevel, render: () => renderer.render(scene, camera), quality: () => [`${BUDGET[level]} MP`, `${renderer.getPixelRatio().toFixed(2)}x`] } }; // three: for the console
+  return { state, burst, fit, three: { renderer, scene, camera, typing, clock, frame, setLevel, cables: K, render: () => renderer.render(scene, camera), quality: () => [`${BUDGET[level]} MP`, `${renderer.getPixelRatio().toFixed(2)}x`, `${K} cables · ${cableGeo.attributes.position.count} verts`] } }; // three: for the console
 }
