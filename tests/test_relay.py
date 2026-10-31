@@ -106,3 +106,42 @@ def test_a_removed_computer_is_refused(relay):
     with pytest.raises(Exception):
         with computer.websocket_connect("/relay/agent", headers={"authorization": "Bearer afhc_nope"}):
             pass
+
+
+def test_a_computer_is_linked_from_the_website(relay):
+    computer = TestClient(relay.app)
+    start = computer.post("/relay/api/link/start", json={"name": "  Work   PC "}).json()
+    assert start["url"].endswith("/account?link=" + start["code"]) and len(start["code"]) == 9
+    assert computer.get("/relay/api/link/poll", params={"poll": start["poll"]}).status_code == 202
+
+    site = TestClient(relay.app)
+    assert site.get(f"/relay/api/link/{start['code'].lower()}").json()["name"] == "Work PC"
+    assert site.post(f"/relay/api/link/{start['code']}/approve").status_code == 401  # signed in first
+    site.post("/relay/api/signup", json={"email": "d@example.com", "password": "correct horse"})
+    assert site.post(f"/relay/api/link/{start['code']}/approve").json()["computer"]["name"] == "Work PC"
+    assert site.post(f"/relay/api/link/{start['code']}/approve").status_code == 410  # only once
+
+    got = computer.get("/relay/api/link/poll", params={"poll": start["poll"]}).json()
+    assert got["email"] == "d@example.com" and got["computer"]["token"].startswith("afhc_")
+    assert computer.get("/relay/api/link/poll", params={"poll": start["poll"]}).status_code == 410  # handed out once
+    assert [c["name"] for c in site.get("/relay/api/me").json()["computers"]] == ["Work PC"]
+
+    # cancelling in the browser tells the computer
+    again = computer.post("/relay/api/link/start", json={}).json()
+    site.post(f"/relay/api/link/{again['code']}/deny")
+    assert computer.get("/relay/api/link/poll", params={"poll": again["poll"]}).status_code == 410
+
+
+def test_the_phone_app_signs_in_with_a_token(relay):
+    app = TestClient(relay.app)
+    app.post("/relay/api/signup", json={"email": "e@example.com", "password": "correct horse"})
+    app.cookies.clear()
+    r = app.post("/relay/api/signin", json={"email": "e@example.com", "password": "correct horse", "kind": "app"},
+                 headers={"origin": "https://localhost"})
+    assert r.headers["access-control-allow-origin"] == "https://localhost" and "set-cookie" not in r.headers
+    token = r.json()["token"]
+    assert app.get("/relay/api/me").status_code == 401
+    assert app.get("/relay/api/me", headers={"authorization": f"Bearer {token}"}).json()["user"]["email"] == "e@example.com"
+    # other sites get no CORS grant
+    r = app.get("/relay/api/health", headers={"origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in r.headers

@@ -1,15 +1,18 @@
 {
   "name": "afh-mobile",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "private": true,
-  "description": "AFH Remote for Android and iPhone: reach AFH on your computer through your AFH account.",
+  "description": "AFH for Android and iPhone: follow and steer AFH on your computers through your AFH account.",
   "scripts": {
-    "sync": "cap sync"
+    "vendor": "node scripts/vendor.mjs",
+    "sync": "node scripts/vendor.mjs && cap sync"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",
+    "@capacitor/browser": "^6.0.6",
     "@capacitor/core": "^6.2.1",
-    "@capacitor/ios": "^6.2.1"
+    "@capacitor/ios": "^6.2.1",
+    "@ionic/core": "^8.4.1"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.2.1"

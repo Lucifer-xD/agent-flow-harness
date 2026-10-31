@@ -256,8 +256,9 @@ def with_running(s: dict) -> dict:
 
 
 @app.get("/api/sessions")
-def list_sessions(directory: str, archived: bool = False):
-    return [with_running(s) for s in engine.store.list_sessions(directory, archived=archived, limit=200)]
+def list_sessions(directory: str = "", archived: bool = False, limit: int = 200):
+    # no directory: the newest threads across every project (the phone app's home list)
+    return [with_running(s) for s in engine.store.list_sessions(directory or None, archived=archived, limit=max(1, min(limit, 500)))]
 
 
 @app.post("/api/sessions")
@@ -1444,12 +1445,15 @@ def cloud_status():
     return cloud.status()
 
 
-@app.post("/api/cloud/signin")
-def cloud_signin(body: dict = Body(...)):
-    email, password = str(body.get("email") or "").strip(), str(body.get("password") or "")
-    if not email or not password:
-        raise ValueError("Enter your email and password")
-    return cloud.sign_in(email, password, create=bool(body.get("create")), name=str(body.get("name") or ""))
+@app.post("/api/cloud/link")
+def cloud_link(body: dict = Body(default={})):
+    # signing in happens on the website; this only starts it and returns the page to open
+    return cloud.link_start(str(body.get("name") or ""))
+
+
+@app.post("/api/cloud/link/cancel")
+def cloud_link_cancel():
+    return cloud.link_cancel()
 
 
 @app.post("/api/cloud/signout")

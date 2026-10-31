@@ -8,3 +8,4 @@ android/app/release/
 *.jks
 *.keystore
 keystore.properties
+/www/vendor/

@@ -117,7 +117,7 @@ async function boot() {
   apiHooks.onUnauthorized = () => showLogin();
   if (BASE) { // opened through the AFH account (phone app): a way back to the list of computers
     document.body.classList.add("via-relay");
-    $("btn-settings").before(el("a.icon-btn.sb-mini", { href: "/m/", title: "Your computers" }, ico("cpu")));
+    $("btn-settings").before(el("a.icon-btn.sb-mini", { href: "/account", title: "Your computers" }, ico("cpu")));
   }
   initUpdates();
   if (native.electron()) {

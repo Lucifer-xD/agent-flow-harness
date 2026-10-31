@@ -22,7 +22,7 @@
     menu.id = "menu";
     menu.innerHTML = `<nav aria-label="Menu">${[["", "Home"], ...LINKS, ["download", "Download"]].map(([id, label], i) =>
       `<a href="/${id}" style="--i:${i}"${page === (id || "home") ? ' class="active"' : ""}>${label}</a>`).join("")}</nav>
-      <p class="menu-foot">AFH <span data-version>1.9.0</span> · Windows 10/11</p>`;
+      <p class="menu-foot">AFH <span data-version>1.9.1</span> · Windows 10/11</p>`;
     nav.after(menu);
     const burger = nav.querySelector(".burger");
     const toggle = (open) => {
@@ -45,10 +45,10 @@
         <div class="footer-brand">
           <a class="brand" href="/">${MARK}<span>Agent Flow Harness</span></a>
           <p>A desktop coding agent that plans, delegates and writes code with the models you choose.</p>
-          <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.9.0</span> · <span data-date>Oct 31, 2026</span></a>
+          <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.9.1</span> · <span data-date>Oct 31, 2026</span></a>
         </div>
         <nav class="footer-cols" aria-label="Footer">
-          <div><h4>Product</h4><a href="/features">Features</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a></div>
+          <div><h4>Product</h4><a href="/features">Features</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a><a href="/account">Account</a></div>
           <div><h4>Learn</h4><a href="/docs">Getting started</a><a href="/docs#providers">Add a provider</a><a href="/docs#shortcuts">Shortcuts</a><a href="/docs#faq">FAQ</a></div>
           <div><h4>Developers</h4><a href="/api">API reference</a><a href="/sdk/afh_sdk.py" download>Python SDK</a><a href="/sdk/afh.mjs" download>JavaScript SDK</a><a href="/api#events">Live events</a></div>
         </nav>
