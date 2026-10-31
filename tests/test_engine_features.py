@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from afh import store as appstore
+from afh.engine import memory as memmod
 from afh.engine import commands as cmdmod
 from afh.engine import config as provcfg
 from afh.engine import pricing
@@ -759,6 +760,7 @@ def test_project_memory_is_written_by_the_tool_and_read_by_the_next_thread(home,
         [("memory", {"action": "add", "text": "The API needs the dev server on port 4000"})],
         [("memory", {"action": "replace", "old": "port 4000", "text": "The API needs the dev server on port 4100"})],
         [("memory", {"action": "remove", "old": "no such fact"})],
+        [("memory", {"action": "list"})],
         "Noted.",
     ])
     e = make_engine(p)
@@ -771,10 +773,13 @@ def test_project_memory_is_written_by_the_tool_and_read_by_the_next_thread(home,
     assert parts[0]["state"]["metadata"]["count"] == 1 and "every later thread" in text_of(parts[0])
     assert parts[3]["state"]["status"] == "error" and "No fact matches" in text_of(parts[3])
     assert "port 4100" in p.requests[3].system and "port 4000" not in p.requests[3].system  # the prompt follows the file step by step
+    assert parts[4]["state"]["status"] == "completed" and text_of(parts[4]).splitlines() == ["- Run the tests with `pytest -q`", "- The API needs the dev server on port 4100"]
     # a fresh thread in the same project starts knowing it; the user's edits are kept, notes outside the list too
     e.save_memory(str(tmp_path), "# My notes\n\nKeep it simple.\n\n- Run the tests with `pytest -q`\n", by="user")
     s2 = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")
     prompt = e.system_prompt_for(s2, e.agent_for(s2))
-    assert "- Run the tests with `pytest -q`" in prompt and "port 4100" not in prompt and "Keep it simple" not in prompt
+    assert "- Run the tests with `pytest -q`" in prompt and "port 4100" not in prompt
+    assert "The user's notes:\n# My notes\n\nKeep it simple." in prompt  # notes outside the list reach the model too
+    assert "Facts AFH learned" not in memmod.notes(memmod.render(["x"]))  # the file's own header is not a note
     e.set_memory_facts(str(tmp_path), ["Run the tests with `pytest -q`", "Lint with ruff"])
     assert (tmp_path / ".afh" / "memory.md").read_text(encoding="utf-8") == "# My notes\n\nKeep it simple.\n\n- Run the tests with `pytest -q`\n- Lint with ruff\n"

@@ -848,7 +848,8 @@ def set_project_instructions(body: dict = Body(...)):
 
 def memory_payload(directory: str) -> dict:
     text = engine.read_memory(directory)
-    return {"text": text, "facts": len(memmod.facts(text)), "path": str(memmod.path_for(directory))}
+    return {"text": text, "facts": len(memmod.facts(text)), "items": memmod.facts(text), "notes": memmod.notes(text),
+            "path": str(memmod.path_for(directory))}
 
 
 @app.get("/api/projects/memory")
@@ -862,7 +863,11 @@ def set_memory(body: dict = Body(...)):
     directory = str(body["directory"])
     if not Path(directory).is_dir():
         raise ValueError("Project folder not found")
-    engine.save_memory(directory, body.get("text", ""), by="user")
+    if isinstance(body.get("facts"), list):  # the Memory dialog's list: facts change, the user's notes stay
+        items = [" ".join(str(f).split()) for f in body["facts"]]
+        engine.set_memory_facts(directory, [f for f in items if f], by="user")
+    else:
+        engine.save_memory(directory, body.get("text", ""), by="user")
     return memory_payload(directory)
 
 

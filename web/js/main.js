@@ -293,52 +293,159 @@ function renderProjectPicker() {
   refreshMemory();
 }
 
-// ---- project memory: facts the agent keeps between threads (<project>/.afh/memory.md) ----
+// ---- Memory: what the agent knows about the project, kept between threads (<project>/.afh/memory.md) ----
+// The thread bar's Memory button opens it: add facts, edit or forget them, or edit the whole file as
+// text. The agent reads it in every thread (on every step, so edits apply at once) and adds to it with
+// its `memory` tool; its changes land here live.
 
-let memory = { text: "", facts: 0, path: "" };
-let memoryEditor = null; // { ta, loaded } while the editor is open
+const NO_MEMORY = { text: "", facts: 0, items: [], notes: "", path: "" };
+let memory = { ...NO_MEMORY };
+let memoryView = null; // { render, fresh } while the Memory dialog is open
+
 function showMemoryCount() {
-  const n = $("memory-count");
+  const btn = $("btn-memory"), n = $("memory-count"), pill = $("draft-memory");
+  const title = memory.facts ? `Memory: ${memory.facts} thing${memory.facts === 1 ? "" : "s"} the agent knows about this project` : "Memory: what the agent knows about this project";
+  btn.hidden = !project() || !S.current;
   n.textContent = memory.facts ? String(memory.facts) : "";
   n.hidden = !memory.facts;
+  btn.title = title;
+  pill.hidden = !project() || !!S.current;
+  pill.title = title;
+  pill.replaceChildren(...[ico("book"), el("span.lbl", "Memory"), memory.facts ? el("span.mem-n", String(memory.facts)) : null].filter(Boolean));
 }
 async function refreshMemory() {
-  const btn = $("btn-memory");
-  btn.hidden = !project();
-  if (!project()) return;
-  try { memory = await api.get(api.q("/api/projects/memory", { directory: project() })); } catch { memory = { text: "", facts: 0, path: "" }; }
+  if (!project()) { memory = { ...NO_MEMORY }; showMemoryCount(); return; }
+  const dir = project();
+  let next;
+  try { next = await api.get(api.q("/api/projects/memory", { directory: dir })); } catch { next = { ...NO_MEMORY }; }
+  if (dir !== project()) return; // switched projects while loading
+  if (memoryView) memoryView.fresh = new Set((next.items || []).filter((f) => !memory.items.includes(f)));
+  memory = next;
   showMemoryCount();
+  memoryView?.render();
 }
+async function saveMemory(body, done) {
+  try {
+    const next = await api.put("/api/projects/memory", { directory: project(), ...body });
+    if (memoryView) memoryView.fresh = new Set();
+    memory = next;
+    showMemoryCount();
+    memoryView?.render();
+    if (done) toast(done, "ok", 1400);
+    return true;
+  } catch (e) {
+    toast(e.message, "err");
+    return false;
+  }
+}
+const memoryLines = (text) => text.split(/\r?\n/).map((s) => s.replace(/^\s*[-*•]\s+/, "").trim()).filter(Boolean);
+async function rememberFacts(lines) {
+  if (!project()) { toast("Open a project folder first", "info"); return false; }
+  if (!memory.path) await refreshMemory();
+  const have = new Set(memory.items.map((f) => f.toLowerCase()));
+  const fresh = lines.filter((l) => !have.has(l.toLowerCase()));
+  if (!fresh.length) { toast("Already in memory", "info", 1400); return true; }
+  return saveMemory({ facts: [...memory.items, ...fresh] }, fresh.length > 1 ? `Remembered ${fresh.length} things` : "Remembered");
+}
+
 function openMemory() {
-  if (!project() || memoryEditor) return;
-  const ta = el("textarea.ta.code.memory-ta", { value: memory.text, placeholder: "# Project memory\n\n- Run the tests with `pnpm test`\n- The API needs the dev server on port 4000\n- The user prefers British spelling" });
-  const save = async () => {
-    try {
-      memory = await api.put("/api/projects/memory", { directory: project(), text: ta.value });
-      memoryEditor.loaded = memory.text;
-      showMemoryCount();
-      toast("Saved — applies to the next message", "ok", 1600);
-    } catch (e) { toast(e.message, "err"); }
+  if (!project() || memoryView) return;
+  // editing: the fact being edited (by its text, so the agent changing the list meanwhile is harmless);
+  // draft: what is typed in it so far, kept across redraws
+  let mode = "list", editing = null, draft = "", loaded = "";
+  const growTa = (ta) => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight + 2, 140) + "px"; };
+  const addBox = el("textarea.inp", { rows: 1, placeholder: "Something the agent should always know here… e.g. “Run the tests with pnpm test”" });
+  const add = async () => {
+    const lines = memoryLines(addBox.value);
+    if (lines.length && await rememberFacts(lines)) { addBox.value = ""; growTa(addBox); addBox.focus(); }
+  };
+  addBox.addEventListener("input", () => growTa(addBox));
+  addBox.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); add(); } });
+  const ta = el("textarea.ta.code.memory-ta", { placeholder: "# Project memory\n\n- Run the tests with `pnpm test`\n- The API needs the dev server on port 4000\n- Use British spelling in the UI" });
+  const saveText = async () => {
+    const before = loaded;
+    loaded = ta.value; // our own save is not "the agent changed it"
+    if (!await saveMemory({ text: ta.value }, "Saved — the agent sees it from its next step")) loaded = before;
+  };
+  const body = el("div.mem-body");
+  const toggle = el("button.btn.ghost.sm", { on: { click: () => { mode = mode === "list" ? "text" : "list"; editing = null; if (mode === "text") { ta.value = memory.text; loaded = ta.value; } render(); } } });
+
+  const edit = (f) => { editing = f; draft = f; render(); };
+  const stopEditing = () => { editing = null; render(); };
+  const setItem = async (f, value) => {
+    const lines = memoryLines(value);
+    const items = [...memory.items];
+    const i = items.indexOf(f);
+    if (i < 0) items.push(...lines); else items.splice(i, 1, ...lines);
+    editing = null;
+    await saveMemory({ facts: items }, lines.length ? "Updated" : "Forgotten");
+  };
+  const forget = (f) => saveMemory({ facts: memory.items.filter((x) => x !== f) }, "Forgotten");
+  const row = (f) => {
+    if (f === editing) {
+      const inp = el("textarea.inp.mem-edit", { value: draft, rows: 1 });
+      inp.addEventListener("input", () => { draft = inp.value; growTa(inp); });
+      inp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); setItem(f, inp.value); }
+        if (e.key === "Escape") { e.stopPropagation(); stopEditing(); }
+      });
+      return el("div.mem-row.editing", el("span.mem-dot"), inp,
+        el("div.mem-acts", { style: { opacity: 1 } },
+          el("button.icon-btn", { title: "Save (Enter)", on: { click: () => setItem(f, inp.value) } }, ico("check")),
+          el("button.icon-btn", { title: "Cancel (Esc)", on: { click: stopEditing } }, ico("x"))));
+    }
+    const fresh = memoryView?.fresh?.has(f);
+    return el(`div.mem-row${fresh ? ".fresh" : ""}`,
+      el("span.mem-dot"),
+      el("div.mem-text", { title: "Click to edit", on: { click: () => edit(f) } }, f, fresh ? el("span.mem-by", "new") : null),
+      el("div.mem-acts",
+        el("button.icon-btn", { title: "Edit", on: { click: () => edit(f) } }, ico("edit")),
+        el("button.icon-btn", { title: "Forget", on: { click: () => forget(f) } }, ico("trash"))));
+  };
+  const render = () => {
+    toggle.replaceChildren(ico(mode === "list" ? "file" : "list"), mode === "list" ? "Edit as text" : "Back to list");
+    if (mode === "text") {
+      body.replaceChildren(ta, el("div.mem-foot",
+        el("span.h-muted", "Lines starting with “- ” are facts; anything else is a note the agent reads too."),
+        el("button.btn.primary.sm", { on: { click: saveText } }, ico("check"), "Save")));
+      return;
+    }
+    if (editing !== null && !memory.items.includes(editing)) editing = null; // the agent changed or removed it meanwhile
+    const list = memory.items.length
+      ? el("div.mem-list", memory.items.map(row))
+      : el("div.mem-empty", "Nothing remembered yet.", el("br"), "Add something above, or tell the agent “remember …” in any thread — it also saves what it learns on its own.");
+    const hadFocus = body.contains(document.activeElement) && document.activeElement === addBox;
+    body.replaceChildren(...[el("div.mem-add", addBox, el("button.btn.primary", { on: { click: add } }, ico("plus"), "Add")), list,
+      memory.notes ? el("div.mem-notes", el("div.mem-notes-h", "Your notes"), el("pre", memory.notes)) : null].filter(Boolean));
+    const inp = body.querySelector(".mem-edit");
+    if (inp) { growTa(inp); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    else if (hadFocus) addBox.focus();
   };
   const m = modal(el("div.memory-dialog",
-    el("h3", "Project memory"),
-    el("div.help", { style: { color: "var(--text-2)", margin: "4px 0 10px" } },
-      "What the agent has learned about this project — how to run it, conventions, your preferences. Every thread here reads it before starting. Fix anything that is wrong; one fact per line, starting with “- ”."),
-    el("div.h-muted", { style: { fontSize: "12px", marginBottom: "8px" } }, memory.path || ""),
-    ta,
-    el("div.actions", el("button.btn.ghost", { on: { click: () => m.close() } }, "Close"), el("button.btn.primary", { on: { click: save } }, ico("check"), "Save"))),
-    { onClose: () => { memoryEditor = null; } });
-  memoryEditor = { ta, loaded: memory.text };
-  ta.focus();
+    el("div.mem-head",
+      el("div.grow",
+        el("h3", ico("book"), "Memory"),
+        el("div.mem-sub", `What the agent knows about ${basename(project())}: how to run it, its conventions, how you like things done. Every thread here reads it, the agent adds what it learns, and your changes apply from its next step.`),
+        el("div.mem-path", memory.path || "")),
+      toggle),
+    body,
+    el("div.actions", el("button.btn.ghost", { on: { click: () => m.close() } }, "Close"))),
+    { small: true, onClose: () => { memoryView = null; } });
+  memoryView = { fresh: new Set(), render: () => {
+    if (mode === "text") {
+      if (ta.value === loaded) { ta.value = memory.text; loaded = ta.value; }
+      else if (memory.text !== loaded) toast("The agent just changed the memory; save or go back to the list to see it", "info", 4000);
+      return;
+    }
+    render();
+  } };
+  render();
+  refreshMemory();
+  addBox.focus();
 }
 function onMemoryEvent(d) {
   if (!d || d.directory !== project()) return;
-  memory = { text: d.text || "", facts: d.facts || 0, path: memory.path };
-  showMemoryCount();
-  if (memoryEditor && d.by !== "user") {
-    if (memoryEditor.ta.value === memoryEditor.loaded) { memoryEditor.ta.value = memory.text; memoryEditor.loaded = memory.text; }
-    else toast("The agent just changed the project memory; close and reopen to see it", "ok", 4000);
-  }
+  refreshMemory();
 }
 
 async function chooseFolder() {
@@ -820,6 +927,7 @@ function renderWork() {
   dg.classList.toggle("on", !!S.draft.goal);
   dg.replaceChildren(ico("target"), el("span.lbl", S.draft.goal ? "Goal set" : "Goal"));
   dg.title = S.draft.goal ? `Goal: ${S.draft.goal.text} — click to edit` : "Set a goal for the new thread";
+  showMemoryCount();
   dw.hidden = !!t || !project() || !S.gitRepo;
   dw.classList.toggle("on", !!S.draft.worktree);
   dw.replaceChildren(ico("branch"), el("span.lbl", S.draft.worktree ? "Worktree" : "Worktree"));
@@ -1366,6 +1474,7 @@ function pickSlash(c) {
   closeSlash();
   if (RUN_NOW.has(c.name)) { setInput(`/${c.name}`); submit(); return; }
   if (c.name === "goal") { setInput(""); editGoal(); return; }
+  if (c.name === "memory") { setInput(""); openMemory(); return; }
   setInput(`/${c.name} `);
   $("input").focus();
 }
@@ -1396,6 +1505,12 @@ async function localCommand(text) {
   const clear = () => { $("input").value = ""; autosize(); renderComposerState(); };
   if (name === "new") { clear(); showHome(); return true; }
   if (name === "goal" && !args) { clear(); editGoal(); return true; }
+  if (name === "memory") { clear(); openMemory(); return true; }
+  if (name === "remember") {
+    if (!args) { clear(); openMemory(); return true; }
+    if (await rememberFacts(memoryLines(args))) clear();
+    return true;
+  }
   if (name === "todo") {
     clear();
     if (!t) { toast("Start a thread first", "info"); return true; }
@@ -1682,6 +1797,7 @@ function wire() {
   });
   $("btn-worktree").addEventListener("click", worktreeMenu);
   $("draft-goal").addEventListener("click", editGoal);
+  $("draft-memory").addEventListener("click", openMemory);
   $("draft-worktree").addEventListener("click", () => { S.draft.worktree = !S.draft.worktree; renderWork(); if (S.draft.worktree) toast("The new thread gets its own git worktree: a separate folder on a new branch", "info", 3500); });
   $("jobs-pill").addEventListener("click", () => S.current && jobsPopover($("jobs-pill"), S.current));
   subChip.addEventListener("click", () => S.current && subagentsPopover(subChip, S.current, openWatch));

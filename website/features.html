@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Features · Agent Flow Harness</title>
-  <meta name="description" content="Everything Agent Flow Harness does: goals and live to-do lists, helpers working in parallel, a live view of every file, rewind, approvals, hooks, 46 themes, Arabic, MCP, skills and a local API.">
+  <meta name="description" content="Everything Agent Flow Harness does: goals and live to-do lists, a project memory it keeps between threads, helpers working in parallel, a live view of every file, rewind, approvals, hooks, 46 themes, Arabic, MCP, skills and a local API.">
   <meta name="theme-color" content="#0a0807">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -73,6 +73,16 @@
             <div class="ficon">⌁</div>
             <h3>Picks up after a restart</h3>
             <p>Close the app mid-run, or lose power: when AFH starts again, interrupted runs resume by themselves.</p>
+          </article>
+          <article class="fcard wide" data-reveal>
+            <div class="ficon">❖</div>
+            <h3>It remembers your project</h3>
+            <p>How to run it, how to test it, the gotcha that cost an hour, the way you like things done: the agent saves what it learns to the project's memory, and every new thread starts knowing it. Open <b>Memory</b> beside the Goal button to add, edit or forget anything — or just say “remember…”, or type <code>/remember</code>. Your changes reach the agent on its very next step.</p>
+            <div class="ui">
+              <div class="ui-row"><span class="ui-dot"></span>Run the tests with <code>pnpm test</code></div>
+              <div class="ui-row"><span class="ui-dot"></span>The API needs the dev server on port 4000</div>
+              <div class="ui-row"><span class="ui-dot g"></span><b>Use British spelling in the UI</b><span class="r">new</span></div>
+            </div>
           </article>
           <article class="fcard wide" data-reveal>
             <div class="ficon">◐</div>
@@ -250,7 +260,7 @@
           <article class="fcard" data-reveal style="--d:.06s">
             <div class="ficon">/</div>
             <h3>Slash commands</h3>
-            <p>Built in: <code>/goal</code> <code>/todo</code> <code>/compact</code> <code>/jobs</code> <code>/new</code> <code>/cost</code>, plus <code>/review</code>, <code>/fix-tests</code>, <code>/explain</code> and <code>/commit</code>. Add your own as Markdown files — <code>.claude/commands</code> works too.</p>
+            <p>Built in: <code>/goal</code> <code>/todo</code> <code>/memory</code> <code>/remember</code> <code>/compact</code> <code>/jobs</code> <code>/new</code> <code>/cost</code>, plus <code>/review</code>, <code>/fix-tests</code>, <code>/explain</code> and <code>/commit</code>. Add your own as Markdown files — <code>.claude/commands</code> works too.</p>
           </article>
           <article class="fcard" data-reveal>
             <div class="ficon">⌘</div>

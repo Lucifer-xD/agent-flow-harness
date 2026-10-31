@@ -24,7 +24,6 @@
       </div>
       <button class="new-thread" id="btn-new" title="New thread (Ctrl+N)"><span class="ico" data-icon="plus"></span>New thread<kbd>Ctrl N</kbd></button>
       <button class="project-picker" id="project-picker"></button>
-      <button class="sb-memory" id="btn-memory" title="Project memory: what the agent remembers about this project" hidden><span class="ico" data-icon="book"></span><span class="sbm-label">Project memory</span><span class="sbm-count" id="memory-count" hidden></span></button>
       <div class="sb-search"><span class="ico" data-icon="search"></span><input id="thread-search" placeholder="Search threads" /></div>
       <nav class="threads" id="threads"></nav>
       <div class="sb-foot">
@@ -44,6 +43,7 @@
         <div class="tb-actions">
           <button class="chip-btn" id="btn-worktree" title="This thread works in its own git worktree" hidden></button>
           <button class="chip-btn" id="btn-goal" title="Set a goal: the agent keeps working until it is achieved"><span class="ico" data-icon="target"></span>Goal</button>
+          <button class="chip-btn" id="btn-memory" title="Memory: what the agent knows about this project" hidden><span class="ico" data-icon="book"></span>Memory<span class="badge" id="memory-count" hidden></span></button>
           <button class="chip-btn" id="btn-live" title="Watch files being written or edited"><span class="ico" data-icon="eye"></span>Live</button>
           <button class="chip-btn" id="btn-context" title="See and edit everything the model sees"><span class="ico" data-icon="list"></span>Context</button>
           <button class="chip-btn" id="btn-harness" title="See what the model is told"><span class="ico" data-icon="scroll"></span>Prompt</button>
@@ -72,6 +72,7 @@
               <button type="button" class="pill" id="pick-agent"></button>
               <button type="button" class="pill" id="pick-mode"></button>
               <button type="button" class="pill draft-pill" id="draft-goal" title="Set a goal for the new thread" hidden></button>
+              <button type="button" class="pill draft-pill" id="draft-memory" title="Memory: what the agent knows about this project" hidden></button>
               <button type="button" class="pill draft-pill" id="draft-worktree" title="Work in a separate git worktree (own branch and folder)" hidden></button>
             </div>
             <div class="cb-right">

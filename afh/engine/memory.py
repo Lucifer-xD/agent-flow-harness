@@ -33,16 +33,36 @@ def render(items: list[str]) -> str:
     return HEADER + "".join(f"- {f}\n" for f in items)
 
 
+def notes(text: str) -> str:
+    """Whatever the user wrote outside the bullet list (minus the file's own header): the model reads it too."""
+    body = text.replace(HEADER.strip(), "", 1)
+    lines = [line for line in body.splitlines() if not line.startswith("- ")]
+    return "\n".join(lines).strip()
+
+
+def show(text: str) -> str:
+    """The memory as the `memory` tool's list action returns it."""
+    items, extra = facts(text), notes(text)
+    out = "\n".join(f"- {f}" for f in items) or "(no facts yet)"
+    return out + (f"\n\nThe user's notes:\n{extra}" if extra else "")
+
+
 def prompt_section(project: str, text: str) -> str:
     """The memory as the model sees it in its system prompt."""
-    items = facts(text)
+    items, extra = facts(text), notes(text)
     where = str(path_for(project))
-    if not items:
+    if not items and not extra:
         return (f"# Project memory\n\nNothing remembered about this project yet ({where}). When you learn something durable and "
                 "non-obvious about it - how to run or test it, a convention, something the user wants done a certain way - "
                 "save it with the `memory` tool so later threads start knowing it.")
-    return (f"# Project memory\n\nWhat earlier threads learned about this project ({where}; the user can edit it). Trust it, "
-            "but if a fact turns out wrong, fix it with the `memory` tool.\n\n" + "".join(f"- {f}\n" for f in items)).rstrip()
+    out = (f"# Project memory\n\nWhat you and the user saved about this project in earlier threads ({where}; the user can "
+           "see and edit it at any time, and changes reach you on your next step). Follow it: it is how things are done here. "
+           "If a fact turns out wrong or outdated, fix it with the `memory` tool.\n\n")
+    if items:
+        out += "".join(f"- {f}\n" for f in items)
+    if extra:
+        out += ("\n" if items else "") + "The user's notes:\n" + extra + "\n"
+    return out.rstrip()
 
 
 class MemoryTool:
@@ -54,12 +74,13 @@ class MemoryTool:
             "conventions and gotchas, the user's preferences about how work is done here. Not for task progress, not for what is "
             "already in AGENTS.md or obvious from the code, never for secrets. "
             "action \"add\": remember one fact (`text`, one sentence). action \"replace\": fix a fact (`old` is the wrong one, `text` the "
-            "correct one). action \"remove\": forget a fact (`old`). Each fact is one line; keep them short and specific."
+            "correct one). action \"remove\": forget a fact (`old`). action \"list\": read the memory as it is now. "
+            "Each fact is one line; keep them short and specific, and replace an outdated fact instead of adding a second one."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["add", "replace", "remove"]},
+                "action": {"type": "string", "enum": ["add", "replace", "remove", "list"]},
                 "text": {"type": "string", "description": "For add/replace: the fact, one short sentence."},
                 "old": {"type": "string", "description": "For replace/remove: the existing fact (or a distinctive part of it)."},
             },
@@ -76,9 +97,12 @@ class MemoryTool:
         action = str(input.get("action") or "").strip().lower()
         text = " ".join(str(input.get("text") or "").split())
         old = " ".join(str(input.get("old") or "").split())
-        items = facts(e.read_memory(project))
+        current = e.read_memory(project)
+        items = facts(current)
+        if action == "list":
+            return ToolResult(text=show(current), metadata={"count": len(items), "action": action})
         if action not in ("add", "replace", "remove"):
-            return ToolResult(text='action must be "add", "replace" or "remove".', is_error=True)
+            return ToolResult(text='action must be "add", "replace", "remove" or "list".', is_error=True)
         if action in ("add", "replace") and not text:
             return ToolResult(text="Give the fact in `text`.", is_error=True)
         if len(text) > MAX_FACT_LEN:
