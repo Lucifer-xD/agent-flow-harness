@@ -134,7 +134,7 @@ DEFAULT_SYSTEM_PROMPT = """You are a coding agent running inside Agent Flow Harn
 - Explain decisions when they matter; keep routine steps short. Reference files as `path:line`.
 - When done, summarize what changed, what you verified, and anything left open. Report failures honestly.
 
-Project instructions (AGENTS.md), personalization, loaded skills and the environment description follow this prompt; they take precedence where they are more specific."""
+Project instructions (AGENTS.md), the project memory, personalization, loaded skills and the environment description follow this prompt; they take precedence where they are more specific."""
 
 PLAN_RULES = """
 

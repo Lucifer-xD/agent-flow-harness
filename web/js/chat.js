@@ -302,6 +302,7 @@ export function describeTool(p) {
   if (/task|agent/.test(name)) return { icon: "bot", label: "Subagent", target: pick(input, "description", "prompt") || "" };
   if (name === "question") return { icon: "info", label: "Asked", target: pick((input.questions || [])[0] || {}, "question") || "" };
   if (/todo/.test(name)) return { icon: "list", label: "Plan", target: "" };
+  if (name === "memory") return { icon: "book", label: "Memory", target: pick(input, "text", "old") || "" };
   if (name === "harness") return { icon: "plug", label: (HARNESS_VERBS[input.action] || ["Harness"])[0], target: pick(input, "source", "name", "id", "url") || "" };
   if (/skill/.test(name)) return { icon: "book", label: "Skill", target: pick(input, "name", "id") || "" };
   const first = Object.values(input).find((v) => typeof v === "string") || "";
@@ -345,7 +346,9 @@ const VERBS = {
   shell: ["Ran", "Running"], bash: ["Ran", "Running"], execute: ["Ran code", "Running code"], read: ["Read", "Reading"], glob: ["Found files", "Finding files"],
   grep: ["Searched", "Searching"], list: ["Listed", "Listing"], ls: ["Listed", "Listing"], webfetch: ["Fetched", "Fetching"], websearch: ["Searched the web", "Searching the web"],
   skill: ["Loaded skill", "Loading skill"], question: ["Asked", "Asking"], todowrite: ["Planned", "Planning"], todoread: ["Checked plan", "Checking plan"],
+  memory: ["Updated project memory", "Updating project memory"],
 };
+const MEMORY_VERBS = { add: ["Remembered", "Remembering"], remove: ["Forgot", "Forgetting"], replace: ["Corrected memory", "Correcting memory"] };
 const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name) ? "edit" : /^(shell|bash|execute)$/.test(name) ? "run" : /^(read|glob|grep|list|ls)$/.test(name) ? "read" : /web|fetch/.test(name) ? "web" : "other");
 
 function pathNode(target) {
@@ -432,6 +435,7 @@ function renderTool(p, openSet, thread) {
     : name === "shell" && input0.background ? ["Started in background", "Starting in background"]
     : name === "jobs" ? ({ stop: ["Stopped job", "Stopping job"], list: ["Listed jobs", "Listing jobs"] }[input0.action] || ["Read job output", "Waiting for job output"])
       : name === "harness" ? HARNESS_VERBS[input0.action] || ["Changed AFH setup", "Changing AFH setup"]
+      : name === "memory" ? MEMORY_VERBS[input0.action] || VERBS.memory
       : VERBS[name] || [p.name, p.name];
   const patches = info.edit ? toolPatches(p) : [];
   const meta = p.state?.metadata || {};

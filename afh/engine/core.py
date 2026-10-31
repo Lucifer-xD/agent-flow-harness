@@ -17,6 +17,7 @@ from . import agents as agentmod
 from . import commands as cmdmod
 from . import config as provcfg
 from . import hooks as hookmod
+from . import memory as memmod
 from . import permissions as perm
 from . import pricing
 from . import prompt as promptmod
@@ -381,6 +382,8 @@ class Engine:
         goal_text = statemod.goal_prompt(self.goal(session["id"]))
         if goal_text:
             extra += "\n\n" + goal_text
+        mem_project = session.get("project") or directory
+        extra += "\n\n" + memmod.prompt_section(mem_project, self.read_memory(mem_project))
         wt = self._afh(session["id"]).get("worktree")
         if wt:
             extra = (extra + "\n\n" if extra else "") + (
@@ -404,7 +407,7 @@ class Engine:
         from .tools.registry import builtin_tools
 
         tools = list(builtin_tools(self.settings()))
-        tools += [JobsTool(), statemod.TodoTool(self), HarnessTool(self)]
+        tools += [JobsTool(), statemod.TodoTool(self), HarnessTool(self), memmod.MemoryTool(self)]
         if agent.kind != "delegate":  # goals belong to the thread the user talks to
             tools.append(statemod.GoalTool(self))
             tools.append(QuestionTool())  # delegates report to their lead instead of asking the user
@@ -728,6 +731,27 @@ class Engine:
 
     def goal(self, sid: str) -> dict | None:
         return self._afh(sid).get("goal")
+
+    # ---- project memory: facts kept between threads, in <project>/.afh/memory.md ------------------
+
+    def memory_project(self, sid: str) -> str:
+        """The project a thread's memory belongs to: the original folder, also for worktree threads."""
+        s = self.store.get_session(sid) or {}
+        return s.get("project") or (s.get("location") or {}).get("directory") or ""
+
+    def read_memory(self, project: str) -> str:
+        return appstore.read_text(memmod.path_for(project)) if project else ""
+
+    def save_memory(self, project: str, text: str, by: str = "user") -> str:
+        """The whole file, as the user edited it."""
+        appstore.write_text_with_backup(memmod.path_for(project), text)
+        self.publish(event("project.memory.updated", None, directory=project, text=text, facts=len(memmod.facts(text)), by=by))
+        return text
+
+    def set_memory_facts(self, project: str, items: list[str], by: str = "agent") -> str:
+        text = memmod.write(project, items, self.read_memory(project))
+        self.publish(event("project.memory.updated", None, directory=project, text=text, facts=len(items), by=by))
+        return text
 
     def set_goal(self, sid: str, text: str, criteria: str = "", autopilot: bool = True, max_turns: int | None = None, by: str = "user") -> dict:
         prev = self.goal(sid)

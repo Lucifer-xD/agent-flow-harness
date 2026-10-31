@@ -194,6 +194,13 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .project-picker { margin: 6px 12px 2px; display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 9px; color: var(--text-2); font-size: 13px; transition: background 0.2s; text-align: left; }
 .project-picker:hover { background: var(--panel-2); color: var(--text); }
 .project-picker .pp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; color: var(--text); }
+/* project memory: the facts the agent keeps between threads, one click from the project */
+.sb-memory { margin: 0 12px 4px; display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 9px; color: var(--text-3); font-size: 12.5px; transition: background 0.2s, color 0.2s; text-align: left; }
+.sb-memory:hover { background: var(--panel-2); color: var(--text); }
+.sb-memory .sbm-label { flex: 1; }
+.sb-memory .sbm-count { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.memory-dialog { width: min(680px, 92vw); }
+.memory-ta { min-height: 280px; width: 100%; box-sizing: border-box; }
 .sb-search { margin: 6px 12px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 9px; border: 1px solid transparent; color: var(--text-3); transition: border-color 0.2s, background 0.2s; }
 .sb-search:focus-within { border-color: var(--border-2); background: var(--panel); }
 .sb-search input { flex: 1; background: none; border: 0; outline: 0; padding: 7px 0; font-size: 13px; min-width: 0; }
