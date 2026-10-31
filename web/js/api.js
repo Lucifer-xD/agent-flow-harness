@@ -1,5 +1,10 @@
 // Talks to AFH's Python backend. The per-launch token arrives in the URL hash.
 
+// older Android WebViews (before Chrome 86) lack replaceChildren
+for (const proto of [Element.prototype, Document.prototype, DocumentFragment.prototype]) {
+  if (!proto.replaceChildren) proto.replaceChildren = function (...nodes) { while (this.lastChild) this.removeChild(this.lastChild); this.append(...nodes); };
+}
+
 /** Opened from the phone app, AFH lives under /r/<computer>/ on agentflowharness.com; locally it's "". */
 export const BASE = location.pathname.match(/^\/r\/[\w-]+/)?.[0] || "";
 

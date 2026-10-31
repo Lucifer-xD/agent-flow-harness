@@ -8,3 +8,5 @@ website/downloads/*.exe
 website/downloads/*.yml
 website/downloads/*.blockmap
 backups/
+website/downloads/*.apk
+website/downloads/*.ipa
