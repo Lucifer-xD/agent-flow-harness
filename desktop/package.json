@@ -62,7 +62,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://old.example.com/downloads/"
+        "url": "https://agenflowharness.com/downloads/"
       }
     ]
   },

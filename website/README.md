@@ -1,6 +1,6 @@
 # AFH website
 
-https://old.example.com — plain HTML/CSS/JS, no build step. Three.js draws the 3D world behind
+https://agenflowharness.com — plain HTML/CSS/JS, no build step. Three.js draws the 3D world behind
 every page; GSAP (and on the home page ScrollTrigger and Lenis) drive the motion. All from CDNs.
 
 ## Pages

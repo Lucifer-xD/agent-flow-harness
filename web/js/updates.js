@@ -73,7 +73,7 @@ export function updatesCard({ card, row, settings, save }) {
   };
   listeners.add(paint);
   paint(current);
-  const feed = el("input.inp", { value: u.feed || "", placeholder: "https://old.example.com/downloads/ (default)", style: { width: "320px" } });
+  const feed = el("input.inp", { value: u.feed || "", placeholder: "https://agenflowharness.com/downloads/ (default)", style: { width: "320px" } });
   feed.addEventListener("change", () => save({ updates: { feed: feed.value.trim() } }, "Saved"));
   return card("Updates", "AFH checks for a new version every few hours, downloads it in the background and asks before restarting. Quitting also installs a downloaded update.", null,
     row("Status", null, el("div.inline", status, action)),
