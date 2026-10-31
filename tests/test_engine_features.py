@@ -783,3 +783,33 @@ def test_project_memory_is_written_by_the_tool_and_read_by_the_next_thread(home,
     assert "Facts AFH learned" not in memmod.notes(memmod.render(["x"]))  # the file's own header is not a note
     e.set_memory_facts(str(tmp_path), ["Run the tests with `pytest -q`", "Lint with ruff"])
     assert (tmp_path / ".afh" / "memory.md").read_text(encoding="utf-8") == "# My notes\n\nKeep it simple.\n\n- Run the tests with `pytest -q`\n- Lint with ruff\n"
+
+
+@pytest.mark.skipif(not shutil.which("git"), reason="git not installed")
+def test_project_memory_is_kept_out_of_git_and_may_hold_credentials(home, tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "app").mkdir(parents=True)
+    g = lambda *a: subprocess.run(["git", *a], cwd=repo, check=True, capture_output=True, text=True)  # noqa: E731
+    g("init", "-q")
+    e = make_engine(FakeProvider(["ok"]))
+    # a project at the repo root, and one in a subfolder of a repo: both files are ignored, locally
+    for project, rel in ((repo, "/.afh/memory.md"), (repo / "app", "/app/.afh/memory.md")):
+        e.set_memory_facts(str(project), ["Deploy token: tok_123"])
+        assert rel in (repo / ".git" / "info" / "exclude").read_text(encoding="utf-8").splitlines()
+    assert ".afh" not in g("status", "--porcelain", "--untracked-files=all").stdout
+    assert not (repo / ".gitignore").exists()  # the project's own ignore file is left alone
+    e.set_memory_facts(str(repo), ["Deploy token: tok_123", "Login: admin"])  # writing again adds no duplicate line
+    assert (repo / ".git" / "info" / "exclude").read_text(encoding="utf-8").splitlines().count("/.afh/memory.md") == 1
+    assert memmod.keep_out_of_git(str(repo)) is False
+    # a file committed before is still tracked: the app says so
+    g("add", "-f", ".afh/memory.md")
+    assert memmod.keep_out_of_git(str(repo)) is True
+    # outside git nothing happens, and the model is told credentials are fine to keep and use
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    e.set_memory_facts(str(plain), ["API key: k-1"])
+    assert memmod.keep_out_of_git(str(plain)) is False
+    s = e.create_session(str(plain), model={"providerID": "fake", "id": "m"}, mode="full")
+    prompt = e.system_prompt_for(s, e.agent_for(s))
+    assert "- API key: k-1" in prompt and "saved for you to use" in prompt and "safe for access tokens" in prompt
+    assert "never secrets" not in prompt

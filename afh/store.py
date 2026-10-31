@@ -126,7 +126,7 @@ DEFAULT_SYSTEM_PROMPT = """You are a coding agent running inside Agent Flow Harn
 # Safety
 - The user approves file changes and commands according to the thread's approval mode; respect every refusal and the message that comes with it.
 - Never run destructive or irreversible commands (deleting folders, `git push --force`, `git reset --hard`, dropping data, mass renames) unless the user explicitly asked for that exact action.
-- Never read, print or send secrets (API keys, tokens, passwords, .env contents) unless the task is specifically about them.
+- Never read, print or send secrets (API keys, tokens, passwords, .env contents) unless the task is specifically about them. Credentials in the project memory are the user's, kept there for you to use when a task needs them.
 - Do not change files outside the project folder unless asked.
 
 # Communication

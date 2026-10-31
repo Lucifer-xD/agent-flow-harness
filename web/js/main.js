@@ -426,8 +426,10 @@ function openMemory() {
       el("div.grow",
         el("h3", ico("book"), "Memory"),
         el("div.mem-sub", `What the agent knows about ${basename(project())}: how to run it, its conventions, how you like things done. Every thread here reads it, the agent adds what it learns, and your changes apply from its next step.`),
-        el("div.mem-path", memory.path || "")),
+        el("div.mem-path", memory.path || ""),
+        el("div.mem-private", ico("shield-check"), "Private to this computer and kept out of git — tokens and logins are fine here. It's sent only to your model provider, as part of the prompt.")),
       toggle),
+    memory.inGit ? el("div.mem-warn", ico("alert"), "This file was committed to git before, so git still tracks it. Run ", el("code", "git rm --cached .afh/memory.md"), " in the project before saving credentials here.") : null,
     body,
     el("div.actions", el("button.btn.ghost", { on: { click: () => m.close() } }, "Close"))),
     { small: true, onClose: () => { memoryView = null; } });

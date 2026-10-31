@@ -5,6 +5,8 @@ it from the sidebar."""
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,6 +24,47 @@ HEADER = "# Project memory\n\nFacts AFH learned about this project. Edit freely;
 
 def path_for(project: str) -> Path:
     return Path(project) / MEMORY_FILE
+
+
+def _git(project: str, *args: str) -> subprocess.CompletedProcess | None:
+    from .tools.shell import CREATE_NO_WINDOW, child_env
+
+    try:
+        return subprocess.run(["git", "-C", project, *args], capture_output=True, text=True, timeout=8, env=child_env(),
+                              stdin=subprocess.DEVNULL, **({"creationflags": CREATE_NO_WINDOW} if sys.platform == "win32" else {}))
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def keep_out_of_git(project: str) -> bool:
+    """The memory may hold tokens and credentials, so git must never pick the file up. In a git
+    repository this adds it to .git/info/exclude (a local-only ignore: the project's own .gitignore
+    is left alone). Returns True when the file is already tracked by git, which an ignore can't undo."""
+    if not project or not path_for(project).is_file():
+        return False
+    r = _git(project, "rev-parse", "--show-toplevel", "--git-path", "info/exclude")
+    if not r or r.returncode != 0:
+        return False  # not a git repository (or no git): nothing to keep it out of
+    lines = r.stdout.strip().splitlines()
+    if len(lines) < 2:
+        return False
+    top, exclude = Path(lines[0]), Path(lines[1])
+    if not exclude.is_absolute():
+        exclude = Path(project) / exclude
+    try:
+        rel = path_for(project).resolve().relative_to(top.resolve()).as_posix()
+    except ValueError:
+        return False
+    try:
+        current = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+        if f"/{rel}" not in current.splitlines():
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            sep = "" if not current or current.endswith("\n") else "\n"
+            exclude.write_text(current + sep + f"# AFH project memory (may hold credentials): never commit it\n/{rel}\n", encoding="utf-8")
+    except OSError:
+        pass
+    t = _git(project, "ls-files", "--error-unmatch", "--", MEMORY_FILE.as_posix())  # relative to the project folder
+    return bool(t and t.returncode == 0)
 
 
 def facts(text: str) -> list[str]:
@@ -57,7 +100,8 @@ def prompt_section(project: str, text: str) -> str:
                 "save it with the `memory` tool so later threads start knowing it.")
     out = (f"# Project memory\n\nWhat you and the user saved about this project in earlier threads ({where}; the user can "
            "see and edit it at any time, and changes reach you on your next step). Follow it: it is how things are done here. "
-           "If a fact turns out wrong or outdated, fix it with the `memory` tool.\n\n")
+           "If a fact turns out wrong or outdated, fix it with the `memory` tool. Tokens, keys and credentials kept here are "
+           "the user's, saved for you to use: use them when a task needs them, without asking again.\n\n")
     if items:
         out += "".join(f"- {f}\n" for f in items)
     if extra:
@@ -72,7 +116,11 @@ class MemoryTool:
             "The project's memory: facts kept between threads, shown to every agent working in this project and editable by the user. "
             "Use it for things that are durable, non-obvious and worth knowing next time - how to run, build or test the project, "
             "conventions and gotchas, the user's preferences about how work is done here. Not for task progress, not for what is "
-            "already in AGENTS.md or obvious from the code, never for secrets. "
+            "already in AGENTS.md or obvious from the code. "
+            "It is a private, local file: it stays on this computer and AFH keeps it out of git, so it is the right place for "
+            "access tokens, API keys, logins and other credentials you or the user want available in later threads. "
+            "When you use a stored credential, pass it where it is needed (a command, a header, an environment variable); "
+            "don't write it into project files, commits or anything shared. "
             "action \"add\": remember one fact (`text`, one sentence). action \"replace\": fix a fact (`old` is the wrong one, `text` the "
             "correct one). action \"remove\": forget a fact (`old`). action \"list\": read the memory as it is now. "
             "Each fact is one line; keep them short and specific, and replace an outdated fact instead of adding a second one."
