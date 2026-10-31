@@ -63,6 +63,11 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
                      "time - for wide research that would flood your context, or when a delegate's job fits. The subagent cannot see this conversation: "
                      "give it a complete brief (goal, files, constraints, what to report). With `worktree: true` it works on its own git branch, so "
                      "parallel subagents never edit the same files; merge their branches with git afterwards. Check their work before you rely on it.")
+    if "memory" in have:
+        lines.append("- **Project memory** (`memory` tool): facts kept between threads in this project (see \"Project memory\" below). "
+                     "When you learn something durable and non-obvious - how to run, build or test the project, a convention, a gotcha, how the "
+                     "user wants things done here - save it with `memory` action \"add\" so the next thread starts knowing it; fix wrong facts "
+                     "with \"replace\". Not for task progress, not for secrets, not for what AGENTS.md already says.")
     if "jobs" in have:
         lines.append("- **Background jobs**: start servers and watchers with `shell` and `background: true`, then `jobs` to read output, wait for a "
                      "line like \"ready\", and stop them when done.")

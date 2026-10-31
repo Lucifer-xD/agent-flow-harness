@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__, devapi, remote, skills_store, store, transfer
 from .engine import agents as agentmod
+from .engine import memory as memmod
 from .engine import config as provcfg
 from .engine import migrate
 from .engine import permissions as perm
@@ -437,6 +438,8 @@ def harness(sid: str):
         "agentPrompt": agent.system,
         "globalInstructions": store.read_text(store.GLOBAL_AGENTS_MD),
         "projectInstructions": store.read_text(Path(directory) / "AGENTS.md"),
+        "memory": engine.read_memory(engine.memory_project(sid)),
+        "memoryPath": str(memmod.path_for(engine.memory_project(sid))),
         "personalization": store.read_text(store.PERSONALIZATION_PATH),
         "systemMessages": system_messages,
         "permissions": session.get("permissions"),
@@ -838,6 +841,29 @@ def set_project_instructions(body: dict = Body(...)):
         raise ValueError("Project folder not found")
     store.write_text_with_backup(directory / "AGENTS.md", body.get("text", ""))
     return {"ok": True}
+
+
+# ---- project memory ---------------------------------------------------------------------------
+
+
+def memory_payload(directory: str) -> dict:
+    text = engine.read_memory(directory)
+    return {"text": text, "facts": len(memmod.facts(text)), "path": str(memmod.path_for(directory))}
+
+
+@app.get("/api/projects/memory")
+def get_memory(directory: str):
+    """The facts the agent keeps about a project (<project>/.afh/memory.md)."""
+    return memory_payload(directory)
+
+
+@app.put("/api/projects/memory")
+def set_memory(body: dict = Body(...)):
+    directory = str(body["directory"])
+    if not Path(directory).is_dir():
+        raise ValueError("Project folder not found")
+    engine.save_memory(directory, body.get("text", ""), by="user")
+    return memory_payload(directory)
 
 
 # ---- providers -----------------------------------------------------------------------------

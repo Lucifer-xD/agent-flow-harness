@@ -13,7 +13,7 @@ import { initUpdates } from "./updates.js";
 import { applyWorkEvent, goalsPopover, jobsPopover, loadJobs, openGoalDialog, renderDock, renderJobsChip, setRedraw, syncState } from "./work.js";
 import {
   ago, basename, closePopover, confirmDialog, contextRing, dayGroup, diffView, el, escapeHtml, fmtTokens,
-  hydrateIcons, ico, icon, modalityBadges, popover, promptDialog, repositionPopover, toast,
+  hydrateIcons, ico, icon, modal, modalityBadges, popover, promptDialog, repositionPopover, toast,
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -290,6 +290,55 @@ function renderProjectPicker() {
   const btn = $("project-picker");
   btn.replaceChildren(ico("folder"), el("span.pp-name", project() ? basename(project()) : "Choose a project folder"), el("span.ico", { html: icon("chev-down") }));
   btn.title = project() || "";
+  refreshMemory();
+}
+
+// ---- project memory: facts the agent keeps between threads (<project>/.afh/memory.md) ----
+
+let memory = { text: "", facts: 0, path: "" };
+let memoryEditor = null; // { ta, loaded } while the editor is open
+function showMemoryCount() {
+  const n = $("memory-count");
+  n.textContent = memory.facts ? String(memory.facts) : "";
+  n.hidden = !memory.facts;
+}
+async function refreshMemory() {
+  const btn = $("btn-memory");
+  btn.hidden = !project();
+  if (!project()) return;
+  try { memory = await api.get(api.q("/api/projects/memory", { directory: project() })); } catch { memory = { text: "", facts: 0, path: "" }; }
+  showMemoryCount();
+}
+function openMemory() {
+  if (!project() || memoryEditor) return;
+  const ta = el("textarea.ta.code.memory-ta", { value: memory.text, placeholder: "# Project memory\n\n- Run the tests with `pnpm test`\n- The API needs the dev server on port 4000\n- The user prefers British spelling" });
+  const save = async () => {
+    try {
+      memory = await api.put("/api/projects/memory", { directory: project(), text: ta.value });
+      memoryEditor.loaded = memory.text;
+      showMemoryCount();
+      toast("Saved — applies to the next message", "ok", 1600);
+    } catch (e) { toast(e.message, "err"); }
+  };
+  const m = modal(el("div.memory-dialog",
+    el("h3", "Project memory"),
+    el("div.help", { style: { color: "var(--text-2)", margin: "4px 0 10px" } },
+      "What the agent has learned about this project — how to run it, conventions, your preferences. Every thread here reads it before starting. Fix anything that is wrong; one fact per line, starting with “- ”."),
+    el("div.h-muted", { style: { fontSize: "12px", marginBottom: "8px" } }, memory.path || ""),
+    ta,
+    el("div.actions", el("button.btn.ghost", { on: { click: () => m.close() } }, "Close"), el("button.btn.primary", { on: { click: save } }, ico("check"), "Save"))),
+    { onClose: () => { memoryEditor = null; } });
+  memoryEditor = { ta, loaded: memory.text };
+  ta.focus();
+}
+function onMemoryEvent(d) {
+  if (!d || d.directory !== project()) return;
+  memory = { text: d.text || "", facts: d.facts || 0, path: memory.path };
+  showMemoryCount();
+  if (memoryEditor && d.by !== "user") {
+    if (memoryEditor.ta.value === memoryEditor.loaded) { memoryEditor.ta.value = memory.text; memoryEditor.loaded = memory.text; }
+    else toast("The agent just changed the project memory; close and reopen to see it", "ok", 4000);
+  }
 }
 
 async function chooseFolder() {
@@ -960,13 +1009,14 @@ function renderHarness(h) {
   const pre = (text, empty) => (text && text.trim() ? el("pre.h-pre", text) : el("div.h-muted", empty));
   const edit = (tab) => el("button.btn.ghost.sm", { on: { click: () => openSettings("prompts", ctx, { agent: h.agent }) } }, ico("edit"), "Edit");
   const out = [
-    el("div.note", "Assembled in this order: the mode's system prompt → AGENTS.md files → personalization → skills → MCP instructions → date & environment. This is the full text the model receives."),
+    el("div.note", "Assembled in this order: the mode's system prompt → goal & project memory → AGENTS.md files → personalization → skills → MCP instructions → date & environment. This is the full text the model receives."),
     sec("Agent · model", el("div", el("span.tag", h.agent), h.model ? el("span.tag", `${h.model.providerID}/${h.model.id}${h.model.variant && h.model.variant !== "default" ? "#" + h.model.variant : ""}`) : el("span.tag", "default model"))),
     sec("System prompt (exactly as sent)", pre(h.systemPrompt, "Empty."), edit()),
     sec("Tools available", el("div", (h.tools || []).map((t) => el("span.tag", t)))),
     sec("Personalization", pre(h.personalization, "Nothing set."), el("button.btn.ghost.sm", { on: { click: () => openSettings("personalization", ctx) } }, ico("edit"), "Edit")),
     sec("Global AGENTS.md", pre(h.globalInstructions, "Empty."), edit()),
     sec("Project AGENTS.md", pre(h.projectInstructions, "No AGENTS.md in this project."), edit()),
+    sec("Project memory", pre(h.memory, "Nothing remembered yet."), el("button.btn.ghost.sm", { on: { click: openMemory } }, ico("edit"), "Edit")),
   ];
   const msgs = h.systemMessages || [];
   out.push(sec(`Injected instructions (${msgs.length})`, msgs.length
@@ -1465,6 +1515,7 @@ async function retryLast() {
 let restartPill = null;
 function onEvent(ev) {
   const type = ev.type || "";
+  if (type === "project.memory.updated") return onMemoryEvent(ev.data);
   if (type === "schedule.ran") {
     const job = ev.data?.job || {};
     toast(`Scheduled job "${job.name}" started`, "ok", 5000);
@@ -1616,6 +1667,7 @@ function wire() {
   $("btn-new").addEventListener("click", () => { showHome(); ta.focus(); });
   $("project-picker").addEventListener("click", projectMenu);
   $("btn-settings").addEventListener("click", () => openSettings("general", ctx));
+  $("btn-memory").addEventListener("click", openMemory);
   $("btn-theme").addEventListener("click", toggleTheme);
   $("btn-lang").addEventListener("click", () => setLanguage(S.settings.ui.language === "ar" ? "en" : "ar"));
   $("btn-thread-menu").addEventListener("click", threadMenu);

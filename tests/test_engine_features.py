@@ -748,3 +748,33 @@ def test_sending_after_an_undo_keeps_the_undo(home, tmp_path):
     assert sid not in e.stashes
     e.revert_clear(sid)  # nothing left to put back
     assert [m["text"] for m in e.store.list_messages(sid) if m["type"] == "user"] == ["first, edited"]
+
+
+# ---- project memory: facts kept between threads -------------------------------------------------------
+
+
+def test_project_memory_is_written_by_the_tool_and_read_by_the_next_thread(home, tmp_path):
+    p = FakeProvider([
+        [("memory", {"action": "add", "text": "Run the tests with `pytest -q`"})],
+        [("memory", {"action": "add", "text": "The API needs the dev server on port 4000"})],
+        [("memory", {"action": "replace", "old": "port 4000", "text": "The API needs the dev server on port 4100"})],
+        [("memory", {"action": "remove", "old": "no such fact"})],
+        "Noted.",
+    ])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "remember how this runs"))
+    sid = s["id"]
+    assert "# Project memory" in p.requests[0].system and "Nothing remembered" in p.requests[0].system and "**Project memory**" in p.requests[0].system
+    text = (tmp_path / ".afh" / "memory.md").read_text(encoding="utf-8")
+    assert text.splitlines()[-2:] == ["- Run the tests with `pytest -q`", "- The API needs the dev server on port 4100"]
+    parts = tool_results(e, sid)
+    assert parts[0]["state"]["metadata"]["count"] == 1 and "every later thread" in text_of(parts[0])
+    assert parts[3]["state"]["status"] == "error" and "No fact matches" in text_of(parts[3])
+    assert "port 4100" in p.requests[3].system and "port 4000" not in p.requests[3].system  # the prompt follows the file step by step
+    # a fresh thread in the same project starts knowing it; the user's edits are kept, notes outside the list too
+    e.save_memory(str(tmp_path), "# My notes\n\nKeep it simple.\n\n- Run the tests with `pytest -q`\n", by="user")
+    s2 = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")
+    prompt = e.system_prompt_for(s2, e.agent_for(s2))
+    assert "- Run the tests with `pytest -q`" in prompt and "port 4100" not in prompt and "Keep it simple" not in prompt
+    e.set_memory_facts(str(tmp_path), ["Run the tests with `pytest -q`", "Lint with ruff"])
+    assert (tmp_path / ".afh" / "memory.md").read_text(encoding="utf-8") == "# My notes\n\nKeep it simple.\n\n- Run the tests with `pytest -q`\n- Lint with ruff\n"
