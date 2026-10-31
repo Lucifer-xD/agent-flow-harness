@@ -1,4 +1,4 @@
-# Deploy the AFH website to the VPS (https://old.example.com, proxied by Cloudflare).
+# Deploy the AFH website to the VPS (https://agenflowharness.com, proxied by Cloudflare).
 #
 #   powershell -ExecutionPolicy Bypass -File scripts/deploy-website.ps1
 #
@@ -81,4 +81,4 @@ ssh @ssh $hostname 'bash /tmp/afh-install.sh; s=$?; rm -f /tmp/afh-install.sh; e
 if ($LASTEXITCODE -ne 0) { throw "remote install failed" }
 Remove-Item $script -ErrorAction SilentlyContinue
 Remove-Item $tmp -ErrorAction SilentlyContinue
-Write-Host "Done: https://old.example.com" -ForegroundColor Green
+Write-Host "Done: https://agenflowharness.com" -ForegroundColor Green

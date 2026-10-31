@@ -377,7 +377,7 @@ async function openExternal(url) {
 // ~/.afh/settings.json), else AFH_UPDATE_URL, else the AFH website. New versions download in the
 // background when updates.auto is on; the page offers "Restart to update", and quitting installs it anyway.
 
-const DEFAULT_FEED = "https://old.example.com/downloads/";
+const DEFAULT_FEED = "https://agenflowharness.com/downloads/";
 let autoUpdater = null;
 const update = { state: "idle", version: null, progress: 0, error: null, feed: "", current: app.getVersion() };
 const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
