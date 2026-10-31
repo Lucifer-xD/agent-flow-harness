@@ -1,0 +1,63 @@
+# Builds the iPhone app (mobile/, Capacitor) on a Mac and uploads an unsigned AFH-Remote-<version>.ipa.
+# Install it with AltStore or Sideloadly, which sign it with your own Apple ID; a TestFlight or App
+# Store build needs an Apple Developer account and signing secrets instead of CODE_SIGNING_ALLOWED=NO.
+name: iOS app
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["mobile-v*"]
+
+jobs:
+  ipa:
+    runs-on: macos-14
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Create the Xcode project
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          BUILD=$(echo "$VERSION" | awk -F. '{ printf "%d%02d%02d", $1, $2, $3 }')
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          npx cap add ios
+          cp resources/ios/AppIcon-512@2x.png ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
+          cp resources/ios/splash-2732x2732*.png ios/App/App/Assets.xcassets/Splash.imageset/
+          sed -i '' -e "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $VERSION;/" -e "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $BUILD;/" ios/App/App.xcodeproj/project.pbxproj
+          PLIST=ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'AFH uses the microphone for the voice button in the message box.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName AFH" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string AFH" "$PLIST"
+          npx cap sync ios
+
+      - name: Build
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -n 30
+          test -d "$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app"
+
+      - name: Package the .ipa
+        run: |
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "AFH-Remote-$VERSION.ipa" Payload)
+          ls -la "$RUNNER_TEMP/ipa"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AFH-Remote-ios
+          path: ${{ runner.temp }}/ipa/AFH-Remote-*.ipa
+          if-no-files-found: error

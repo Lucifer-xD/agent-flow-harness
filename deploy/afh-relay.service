@@ -1,0 +1,22 @@
+# AFH relay: accounts and remote access for the phone apps (relay/app.py), behind nginx at
+# agentflowharness.com/relay/, /r/ and /m/. Installed by scripts/deploy-relay.ps1.
+[Unit]
+Description=AFH relay (accounts and remote access)
+After=network.target
+
+[Service]
+User=afh-relay
+Group=afh-relay
+WorkingDirectory=/opt/afh-relay
+Environment=AFH_RELAY_DB=/var/lib/afh-relay/relay.db
+ExecStart=/opt/afh-relay/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8840 --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/afh-relay
+
+[Install]
+WantedBy=multi-user.target

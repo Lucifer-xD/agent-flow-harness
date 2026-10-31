@@ -85,6 +85,7 @@ def main() -> None:
     token = secrets.token_urlsafe(24)
     api.ACCESS["token"] = token
     api.ACCESS["hosts"] = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    api.ACCESS["port"] = port
 
     server = uvicorn.Server(uvicorn.Config(api.app, host="127.0.0.1", port=port, log_level="warning"))
     serving = threading.Thread(target=server.run, daemon=True, name="afh-server")
@@ -101,6 +102,12 @@ def main() -> None:
         remote.apply(remote.settings())
     except Exception as exc:
         logging.getLogger("afh").warning("remote control not started: %s", exc)
+    try:  # reconnect to the AFH account for the phone apps if it was left on
+        from afh import cloud
+
+        cloud.start()
+    except Exception as exc:
+        logging.getLogger("afh").warning("AFH account connection not started: %s", exc)
 
     url = f"http://127.0.0.1:{port}/#token={token}"
     try:

@@ -1,4 +1,4 @@
-import { api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
+import { BASE, api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
 import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread, viewImage } from "./chat.js";
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
 import { PRESETS, applyAppearance as applyTheme, themeTransition } from "./appearance.js";
@@ -115,6 +115,10 @@ async function boot() {
   $("brand").prepend(logoNode({ size: 30, working: true }));
   $("tb-logo").append(logoNode({ size: 30, working: true }));
   apiHooks.onUnauthorized = () => showLogin();
+  if (BASE) { // opened through the AFH account (phone app): a way back to the list of computers
+    document.body.classList.add("via-relay");
+    $("btn-settings").before(el("a.icon-btn.sb-mini", { href: "/m/", title: "Your computers" }, ico("cpu")));
+  }
   initUpdates();
   if (native.electron()) {
     document.body.classList.add("electron");

@@ -6,6 +6,12 @@
 # old.example.com, the first home, still serves /downloads/: apps built before the move update
 # from it, and it is every app's fallback feed (desktop/main.js). Keep it.
 
+# WebSocket upgrades for the relay (its own name, so it can't clash with another site's map)
+map $http_upgrade $afh_connection {
+    default upgrade;
+    ""      close;
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -113,6 +119,65 @@ server {
             add_header Cache-Control "public, max-age=86400" always;
             add_header X-Content-Type-Options "nosniff" always;
         }
+    }
+
+    # AFH accounts and remote access for the phone apps: relay/app.py on 127.0.0.1:8840
+    # (afh-relay.service, scripts/deploy-relay.ps1). /relay/ is the account API and the computers'
+    # WebSocket, /r/<computer>/ is AFH on that computer, /m/ is the phone sign-in and computer list.
+    location ^~ /relay/ {
+        proxy_pass http://127.0.0.1:8840;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $afh_connection;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1d;
+        proxy_send_timeout 1d;
+        client_max_body_size 25m;
+        client_body_timeout 120s;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+    location ^~ /r/ {
+        proxy_pass http://127.0.0.1:8840;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $afh_connection;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1d;
+        proxy_send_timeout 1d;
+        client_max_body_size 25m;
+        client_body_timeout 120s;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+    location = /m { return 301 /m/; }
+    location ^~ /m/ {
+        proxy_pass http://127.0.0.1:8840;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $afh_connection;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1d;
+        proxy_send_timeout 1d;
+        client_max_body_size 25m;
+        client_body_timeout 120s;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header X-Content-Type-Options "nosniff" always;
     }
 
     location ~ /\. {
