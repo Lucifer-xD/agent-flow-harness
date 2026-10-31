@@ -23,10 +23,10 @@ const framed = (name, fill = 0.92) => {
   return scene.fit({ left: r.left, top: r.top + scrollY, width: r.width, height: r.height }, fill, name);
 };
 const SCENES = {
-  features: () => shape({ net: 1, activity: 0.7, tilt: 0.3, ...framed("net") }),
-  models: () => shape({ ring: 1, activity: 0.6, tilt: 0.42, ...framed("ring", 1) }),
+  features: () => shape({ net: 1, activity: 0.7, tilt: 0.18, ...framed("net") }),
+  models: () => shape({ ring: 1, activity: 0.6, tilt: 0.55, ...framed("ring", 1) }),
   download: () => shape({ mark: 1, activity: 0.4, ...framed("mark", 0.94) }),
-  docs: () => shape({ net: 1, activity: 0.35, zoom: -4, tilt: 0.35, shiftX: wide() ? 5 : 0, dim: 0.55 }),
+  docs: () => shape({ net: 1, activity: 0.35, zoom: -5, tilt: 0.2, shiftX: wide() ? 5 : 0, shiftY: wide() ? 0 : 4, dim: 0.4 }),
   lost: () => shape({ mark: 0.6, spread: 0.6, activity: 0.2, ...framed("mark", 0.8), dim: 0.8 }),
 };
 

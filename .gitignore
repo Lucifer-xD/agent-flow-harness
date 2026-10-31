@@ -7,3 +7,4 @@ web/dev/
 website/downloads/*.exe
 website/downloads/*.yml
 website/downloads/*.blockmap
+backups/

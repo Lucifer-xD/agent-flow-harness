@@ -172,9 +172,12 @@ main, footer { position: relative; z-index: 2; }
 .page-hero.staged { padding-top: 92px; }
 @media (min-aspect-ratio: 6/5) and (min-width: 560px) {
   .page-hero.staged { padding-top: 170px; }
-  .page-hero.staged:not(.center) > :not(.page-stage) { max-width: min(600px, 54%); }
+  .page-hero.staged > :not(.page-stage) { max-width: min(600px, 54%); }
   .page-stage { position: absolute; margin: 0; top: 14svh; height: 76svh; right: 0; left: calc(min(600px, 54%) + 3%); }
-  .page-hero.center .page-stage { left: 0; top: 38svh; height: 62svh; }
+  /* a centred header goes side by side too, so a tall shape never stands behind the words */
+  .page-hero.center.staged { text-align: left; }
+  .page-hero.center.staged .lead { margin-left: 0; margin-right: 0; }
+  .page-hero.center.staged .cta-row { justify-content: flex-start; }
 }
 @media (min-aspect-ratio: 6/5) and (max-height: 560px) {
   .page-hero.staged { padding-top: 96px; }

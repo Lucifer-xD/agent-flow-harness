@@ -31,10 +31,10 @@
 <body>
   <canvas id="scene"></canvas>
   <div class="hud" data-hud>starting…</div>
-  <div class="note">The 3D world on its own. Pick a stage to watch the world move into it; click empty space for a pulse; hover an agent. Local preview only — not part of the site.</div>
+  <div class="note">The mark, alive, on its own. Pick a stage to watch the same six cables and dots move into it; click empty space for a pulse; hover a dot. Local preview only — not part of the site.</div>
   <nav class="bar">
-    <button data-shape="mark" class="on">Mark</button>
-    <button data-shape="core">Core</button>
+    <button data-shape="mark" class="on">Logo</button>
+    <button data-shape="core">Flow</button>
     <button data-shape="plan">Plan</button>
     <button data-shape="net">Agents</button>
     <button data-shape="code">Code</button>
@@ -53,8 +53,8 @@
     const { state } = scene;
     const SHAPES = ["mark", "core", "net", "plan", "code", "ring", "spread"];
     const LOOKS = {
-      mark: { zoom: 0, spin: 0, tilt: 0 }, core: { zoom: 2.2, spin: 0.6, tilt: 0.12 }, plan: { zoom: 1.2, spin: 0.25, tilt: 0.08 },
-      net: { zoom: 0.6, spin: 1.2, tilt: 0.3 }, code: { zoom: 1.2, spin: 0.2, tilt: 0.08 }, ring: { zoom: -1.2, spin: 0.4, tilt: 0.42 }, spread: { zoom: -0.5, spin: 0, tilt: 0 },
+      mark: { zoom: 0, spin: 0, tilt: 0, shiftX: 0, shiftY: 0 }, core: { zoom: -0.8, spin: 0.3, tilt: 0.6, shiftX: 0, shiftY: -0.2 }, plan: { zoom: -1.2, spin: 0.25, tilt: 0.2, shiftX: -0.2, shiftY: -0.4 },
+      net: { zoom: -0.6, spin: 0.35, tilt: 0.18, shiftX: 0, shiftY: -0.3 }, code: { zoom: -1.4, spin: 0.2, tilt: 0.15, shiftX: -0.6, shiftY: -0.5 }, ring: { zoom: -1.2, spin: 0.4, tilt: 0.55, shiftX: 0, shiftY: -0.3 }, spread: { zoom: -0.5, spin: 0, tilt: 0, shiftX: 0, shiftY: 0 },
     };
     let busy = false;
     const go = (name, duration = 2.2) => {
