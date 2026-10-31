@@ -1,6 +1,6 @@
 // Settings tabs for scheduled jobs and developer access (API keys, the local API, the SDKs).
 
-import { api, native } from "./api.js";
+import { BASE, api, native } from "./api.js";
 import { ago, basename, confirmDialog, copyText, el, ico, toast, toggle } from "./ui.js";
 
 const header = (title, lead) => [el("h2", title), lead ? el("p.lead", lead) : null];
@@ -149,7 +149,7 @@ export async function developerPane(pane, ctx) {
     row("Address right now", "Changes every start unless you fix a port. Scripts find it in the discovery file.", el("code.mono", location.origin)),
     row("Discovery file", "Written while AFH runs: {url, version, pid}", el("code.mono", { title: info.discovery }, info.discovery)),
     row("Fixed port", "Optional, for tools that need a stable address (empty = random)", portInput),
-    row("Interactive reference", "Every endpoint with its fields, generated from this version", el("button.btn.ghost.sm", { on: { click: () => window.open(`/api/docs?token=${encodeURIComponent(sessionStorage.getItem("afh-token") || "")}`, "_blank") } }, ico("book"), "Open"))));
+    row("Interactive reference", "Every endpoint with its fields, generated from this version", el("button.btn.ghost.sm", { on: { click: () => window.open(`${BASE}/api/docs?token=${encodeURIComponent(sessionStorage.getItem("afh-token") || "")}`, "_blank") } }, ico("book"), "Open"))));
 
   const py = `# copy sdk/python/afh_sdk.py next to your script\nfrom afh_sdk import AFH\nafh = AFH()   # reads AFH_API_KEY and finds the app\nout = afh.run("Add a /health endpoint with a test", directory=r"C:\\code\\api")\nprint(out["reply"])`;
   const js = `import { AFH } from "./afh.mjs";\nconst afh = await AFH.connect();\nconst out = await afh.run("Add a /health endpoint with a test", { directory: "C:/code/api" });\nconsole.log(out.reply);`;

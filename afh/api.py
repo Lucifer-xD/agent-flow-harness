@@ -15,7 +15,7 @@ from fastapi import Body, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, devapi, remote, skills_store, store, transfer
+from . import __version__, cloud, devapi, remote, skills_store, store, transfer
 from .engine import agents as agentmod
 from .engine import memory as memmod
 from .engine import config as provcfg
@@ -33,7 +33,7 @@ app = FastAPI(title="Agent Flow Harness API", version=__version__, docs_url="/ap
 
 # The API can run commands (MCP servers, shell) and write files, so only the AFH window may call it:
 # a per-launch token blocks other local pages, and the Host check blocks DNS rebinding.
-ACCESS = {"token": None, "hosts": set()}
+ACCESS = {"token": None, "hosts": set(), "port": None}
 PUBLIC_PATHS = {"/api/remote/login", "/api/remote/ping"}
 IDENT = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 
@@ -1434,6 +1434,32 @@ def remote_update(body: dict = Body(...)):
 def remote_disconnect_all():
     remote.state["tokens"].clear()
     return {"ok": True}
+
+
+# ---- AFH account (remote access from the phone apps, through agentflowharness.com) ----------------
+
+
+@app.get("/api/cloud")
+def cloud_status():
+    return cloud.status()
+
+
+@app.post("/api/cloud/signin")
+def cloud_signin(body: dict = Body(...)):
+    email, password = str(body.get("email") or "").strip(), str(body.get("password") or "")
+    if not email or not password:
+        raise ValueError("Enter your email and password")
+    return cloud.sign_in(email, password, create=bool(body.get("create")), name=str(body.get("name") or ""))
+
+
+@app.post("/api/cloud/signout")
+def cloud_signout():
+    return cloud.sign_out()
+
+
+@app.put("/api/cloud")
+def cloud_update(body: dict = Body(...)):
+    return cloud.set_enabled(bool(body.get("enabled")))
 
 
 # ---- events -----------------------------------------------------------------------

@@ -1,5 +1,8 @@
 // Talks to AFH's Python backend. The per-launch token arrives in the URL hash.
 
+/** Opened from the phone app, AFH lives under /r/<computer>/ on agentflowharness.com; locally it's "". */
+export const BASE = location.pathname.match(/^\/r\/[\w-]+/)?.[0] || "";
+
 const fromHash = new URLSearchParams(location.hash.slice(1)).get("token");
 let token = fromHash;
 try {
@@ -9,7 +12,7 @@ try {
 if (fromHash) history.replaceState(null, "", location.pathname);
 
 async function request(method, path, body, retries = 6) {
-  const res = await fetch(path, {
+  const res = await fetch(BASE + path, {
     method,
     headers: { "content-type": "application/json", "x-afh-token": token || "" },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -26,7 +29,8 @@ async function request(method, path, body, retries = 6) {
     await new Promise((r) => setTimeout(r, 1500));
     return request(method, path, body, retries - 1);
   }
-  if (res.status === 401 && hooks.onUnauthorized) hooks.onUnauthorized(data);
+  if (res.status === 401 && BASE) location.href = "/m/"; // the AFH account sign-in ran out
+  else if (res.status === 401 && hooks.onUnauthorized) hooks.onUnauthorized(data);
   if (!res.ok) throw new Error(data?.error || `${res.status} ${res.statusText}`);
   return data;
 }
@@ -42,7 +46,7 @@ export function setToken(t) {
 
 /** Remote devices sign in with the password set in Settings → Remote control. */
 export async function remoteLogin(password) {
-  const res = await fetch("/api/remote/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password }) });
+  const res = await fetch(BASE + "/api/remote/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password }) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Sign-in failed");
   setToken(data.token);
@@ -58,19 +62,19 @@ export const api = {
   q: (path, params) => path + "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v != null)),
   /** POST raw bytes (a pasted image, recorded audio) instead of JSON. */
   raw: async (path, blob, headers = {}) => {
-    const res = await fetch(path, { method: "POST", headers: { "content-type": blob.type || "application/octet-stream", "x-afh-token": token || "", ...headers }, body: blob });
+    const res = await fetch(BASE + path, { method: "POST", headers: { "content-type": blob.type || "application/octet-stream", "x-afh-token": token || "", ...headers }, body: blob });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
     return data;
   },
   /** A URL for <img src> and links, which can't send the token header. */
-  url: (path, params = {}) => path + "?" + new URLSearchParams({ ...params, token: token || "" }),
+  url: (path, params = {}) => BASE + path + "?" + new URLSearchParams({ ...params, token: token || "" }),
 };
 
 export function connectEvents(onEvent, onState) {
   let es;
   const open = () => {
-    es = new EventSource(`/api/events?token=${encodeURIComponent(token || "")}`);
+    es = new EventSource(`${BASE}/api/events?token=${encodeURIComponent(token || "")}`);
     es.onopen = () => onState("open");
     es.onerror = () => onState("error");
     es.onmessage = (m) => {

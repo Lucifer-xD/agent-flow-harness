@@ -674,6 +674,7 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 14px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .card-head h3 { margin: 0; font-size: 14px; }
+.m-body .sub-h { margin: 22px 0 10px; font-size: 13px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
 .card-head p { margin: 2px 0 0; color: var(--text-3); font-size: 12.5px; }
 .card-body { padding: 14px 16px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 16px; border-bottom: 1px solid var(--border); }

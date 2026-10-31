@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0807">
+  <title>{{title}}</title>
+  <link rel="icon" href="/m/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/m/m.css">
+</head>
+<body>
+  <header class="top">
+    <img src="/m/mark.svg" alt="" class="mark">
+    <span class="title">AFH Remote</span>
+  </header>
+  <main>
+    <section class="card notice">
+      <h1>{{title}}</h1>
+      <p>{{text}}</p>
+      <div class="row">
+        <a class="btn" href="/m/">Your computers</a>
+        <button class="ghost" type="button" onclick="location.reload()">Try again</button>
+      </div>
+      <p class="hint" id="auto"></p>
+    </section>
+  </main>
+  <script>
+    // an offline computer usually comes back on its own: look again every few seconds
+    if (document.title.includes("offline")) {
+      let n = 10;
+      const tick = () => { document.getElementById("auto").textContent = `Checking again in ${n}s`; if (n-- <= 0) location.reload(); else setTimeout(tick, 1000); };
+      tick();
+    }
+  </script>
+</body>
+</html>

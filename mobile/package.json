@@ -1,0 +1,17 @@
+{
+  "name": "afh-mobile",
+  "version": "1.9.0",
+  "private": true,
+  "description": "AFH Remote for Android and iPhone: reach AFH on your computer through your AFH account.",
+  "scripts": {
+    "sync": "cap sync"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/ios": "^6.2.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.1"
+  }
+}
