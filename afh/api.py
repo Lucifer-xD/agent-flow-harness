@@ -849,7 +849,7 @@ def set_project_instructions(body: dict = Body(...)):
 def memory_payload(directory: str) -> dict:
     text = engine.read_memory(directory)
     return {"text": text, "facts": len(memmod.facts(text)), "items": memmod.facts(text), "notes": memmod.notes(text),
-            "path": str(memmod.path_for(directory))}
+            "path": str(memmod.path_for(directory)), "inGit": memmod.keep_out_of_git(directory)}
 
 
 @app.get("/api/projects/memory")

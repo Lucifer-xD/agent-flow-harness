@@ -71,7 +71,10 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
                      "when you work out how to install, run, build or test the project; when a gotcha cost you time. When a fact is wrong or "
                      "outdated, fix it (\"replace\") or drop it (\"remove\"); \"list\" shows it as it is now. Before you finish a long task, "
                      "ask yourself whether you learned something worth keeping. One short, specific fact per line; never task progress "
-                     "(that is the to-do list), never secrets, nothing AGENTS.md already says.")
+                     "(that is the to-do list), nothing AGENTS.md already says. The memory is private and local - it stays on this "
+                     "computer and AFH keeps it out of git - so it is safe for access tokens, API keys, logins and other credentials: "
+                     "save them when the user gives them to you or you will need them again, and use the ones stored there when a task "
+                     "calls for them. Keep them out of project files, commits and anything shared.")
     if "jobs" in have:
         lines.append("- **Background jobs**: start servers and watchers with `shell` and `background: true`, then `jobs` to read output, wait for a "
                      "line like \"ready\", and stop them when done.")

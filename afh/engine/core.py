@@ -745,11 +745,13 @@ class Engine:
     def save_memory(self, project: str, text: str, by: str = "user") -> str:
         """The whole file, as the user edited it."""
         appstore.write_text_with_backup(memmod.path_for(project), text)
+        memmod.keep_out_of_git(project)
         self.publish(event("project.memory.updated", None, directory=project, text=text, facts=len(memmod.facts(text)), by=by))
         return text
 
     def set_memory_facts(self, project: str, items: list[str], by: str = "agent") -> str:
         text = memmod.write(project, items, self.read_memory(project))
+        memmod.keep_out_of_git(project)
         self.publish(event("project.memory.updated", None, directory=project, text=text, facts=len(items), by=by))
         return text
 

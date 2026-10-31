@@ -207,6 +207,10 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .memory-dialog .mem-sub { color: var(--text-2); font-size: 13px; line-height: 1.5; margin-top: 4px; }
 .memory-dialog .mem-path { color: var(--text-3); font-size: 11.5px; font-family: var(--mono, monospace); margin-top: 4px; word-break: break-all; }
 .memory-dialog .mem-head .grow { flex: 1; min-width: 0; }
+.memory-dialog .mem-private { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--text-3); }
+.memory-dialog .mem-private .ico { width: 13px; height: 13px; color: var(--good, #3fb950); flex: none; }
+.memory-dialog .mem-warn { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-radius: 10px; font-size: 12.5px; background: color-mix(in srgb, var(--bad, #e5534b) 12%, transparent); color: var(--text); }
+.memory-dialog .mem-warn .ico { width: 15px; height: 15px; color: var(--bad, #e5534b); }
 .mem-add { display: flex; gap: 8px; align-items: flex-end; }
 .mem-add textarea { flex: 1; resize: none; min-height: 38px; max-height: 140px; line-height: 1.45; padding: 9px 12px; }
 .mem-list { display: flex; flex-direction: column; gap: 2px; max-height: min(46vh, 420px); overflow: auto; margin: 0 -6px; padding: 0 6px; }
