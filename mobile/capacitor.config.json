@@ -3,15 +3,12 @@
   "appName": "AFH",
   "webDir": "www",
   "backgroundColor": "#0a0807",
-  "server": {
-    "url": "https://agentflowharness.com/m/",
-    "errorPath": "error.html"
-  },
   "android": {
     "allowMixedContent": false
   },
   "ios": {
     "contentInset": "never",
-    "scrollEnabled": true
-  }
+    "scrollEnabled": false
+  },
+  "plugins": {}
 }

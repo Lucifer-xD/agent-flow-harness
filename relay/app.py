@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 from fastapi import Body, FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
 log = logging.getLogger("afh.relay")
@@ -44,6 +45,11 @@ FORWARD_RESPONSE = {"content-type", "cache-control", "content-disposition", "con
 BLOCKED = ("api/cloud", "api/remote")
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+# The Android and iPhone apps run their own pages (https://localhost, capacitor://localhost) and call
+# the API with a bearer token; no cookies cross origins, so nothing here works for other sites.
+APP_ORIGINS = ["https://localhost", "capacitor://localhost", "ionic://localhost"] + (["http://localhost", "http://localhost:5173"] if DEV else [])
+app.add_middleware(CORSMiddleware, allow_origins=APP_ORIGINS, allow_credentials=False, allow_methods=["*"],
+                   allow_headers=["authorization", "content-type", "last-event-id", "accept"], max_age=86400)
 
 
 # ---- storage --------------------------------------------------------------------------------
@@ -151,8 +157,8 @@ def current_user(request: Request) -> sqlite3.Row | None:
 
 
 def signed_in(user: sqlite3.Row, token: str, kind: str) -> JSONResponse:
-    res = JSONResponse({"user": {"id": user["id"], "email": user["email"]}, **({"token": token} if kind == "desktop" else {})})
-    if kind == "web":  # the phone keeps it in an HttpOnly cookie, out of reach of page scripts
+    res = JSONResponse({"user": {"id": user["id"], "email": user["email"]}, **({"token": token} if kind != "web" else {})})
+    if kind == "web":  # the website keeps it in an HttpOnly cookie, out of reach of page scripts
         res.set_cookie(COOKIE, token, max_age=SESSION_DAYS * 86400, httponly=True, secure=not DEV, samesite="lax", path="/")
     return res
 
@@ -160,7 +166,7 @@ def signed_in(user: sqlite3.Row, token: str, kind: str) -> JSONResponse:
 def credentials(body: dict) -> tuple[str, str, str]:
     email = str(body.get("email") or "").strip().lower()
     password = str(body.get("password") or "")
-    kind = "desktop" if body.get("kind") == "desktop" else "web"
+    kind = body.get("kind") if body.get("kind") in ("desktop", "app") else "web"
     return email, password, kind
 
 
@@ -324,6 +330,86 @@ async def forget_computer(request: Request):
     return {"ok": True}
 
 
+# ---- linking a computer from the website -----------------------------------------------------------
+# The desktop app never asks for the password: it starts a link, opens the website, the user signs in
+# (or creates the account) there and approves, and the app picks up its computer token.
+
+PAIRINGS: dict[str, dict] = {}
+PAIR_SECONDS = 15 * 60
+PAIR_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def pairing(code: str) -> dict | None:
+    now = time.time()
+    for k in [k for k, v in PAIRINGS.items() if now - v["created"] > PAIR_SECONDS]:
+        PAIRINGS.pop(k, None)
+    return PAIRINGS.get(code.strip().upper())
+
+
+@app.post("/relay/api/link/start")
+def link_start(request: Request, body: dict = Body(default={})):
+    if limited("link:" + client_ip(request), 30, 3600):
+        return err("Too many sign-in attempts from here - try again later", 429)
+    code = "-".join("".join(secrets.choice(PAIR_ALPHABET) for _ in range(4)) for _ in range(2))
+    poll = secrets.token_urlsafe(24)
+    name = " ".join(str(body.get("name") or "My computer").split())[:60] or "My computer"
+    PAIRINGS[code] = {"poll": poll, "name": name, "created": time.time(), "state": "waiting", "result": None}
+    base = str(request.base_url).rstrip("/") if DEV else "https://" + (request.headers.get("host") or "agentflowharness.com")
+    return {"code": code, "poll": poll, "url": f"{base}/account?link={code}", "expires": PAIR_SECONDS}
+
+
+@app.get("/relay/api/link/poll")
+def link_poll(poll: str):
+    for code, p in list(PAIRINGS.items()):
+        if hmac.compare_digest(p["poll"], poll):
+            if time.time() - p["created"] > PAIR_SECONDS:
+                PAIRINGS.pop(code, None)
+                return err("The sign-in link expired - start again", 410)
+            if p["state"] == "denied":
+                PAIRINGS.pop(code, None)
+                return err("Sign-in was cancelled in the browser", 410)
+            if p["state"] == "approved":
+                PAIRINGS.pop(code, None)  # the computer token is handed out once
+                return p["result"]
+            return JSONResponse({"waiting": True}, status_code=202)
+    return err("Unknown or expired sign-in - start again", 410)
+
+
+@app.get("/relay/api/link/{code}")
+def link_info(code: str, request: Request):
+    p = pairing(code)
+    if not p or p["state"] != "waiting":
+        return err("This link has expired. Start again from AFH on your computer.", 410)
+    return {"name": p["name"], "expires": int(p["created"] + PAIR_SECONDS)}
+
+
+@app.post("/relay/api/link/{code}/approve")
+def link_approve(code: str, request: Request):
+    user = current_user(request)
+    if not user:
+        return err("Sign in first", 401)
+    p = pairing(code)
+    if not p or p["state"] != "waiting":
+        return err("This link has expired. Start again from AFH on your computer.", 410)
+    with db() as con:
+        if con.execute("SELECT COUNT(*) FROM computers WHERE user_id = ?", (user["id"],)).fetchone()[0] >= 20:
+            return err("This account already has 20 computers - remove one first")
+        cid = "c_" + secrets.token_hex(6)
+        token = "afhc_" + secrets.token_urlsafe(32)
+        con.execute("INSERT INTO computers (id, user_id, name, token, created) VALUES (?,?,?,?,?)", (cid, user["id"], p["name"], digest(token), time.time()))
+    p.update(state="approved", result={"email": user["email"], "computer": {"id": cid, "name": p["name"], "token": token}})
+    log.info("computer linked %s", cid)
+    return {"ok": True, "computer": {"id": cid, "name": p["name"]}}
+
+
+@app.post("/relay/api/link/{code}/deny")
+def link_deny(code: str):
+    p = pairing(code)
+    if p and p["state"] == "waiting":
+        p["state"] = "denied"
+    return {"ok": True}
+
+
 @app.get("/relay/api/health")
 def health():
     return {"ok": True, "online": len(LINKS)}
@@ -426,7 +512,7 @@ async def proxy(cid: str, path: str, request: Request):
     navigating = request.method == "GET" and not path.startswith("api/") and "text/html" in (request.headers.get("accept") or "")
     user = current_user(request)
     if not user:
-        return RedirectResponse("/m/", status_code=303) if navigating else err("Sign in again", 401)
+        return RedirectResponse("/account", status_code=303) if navigating else err("Sign in again", 401)
     with db() as con:
         comp = owned(con, user, cid)
     if not comp:
@@ -483,17 +569,13 @@ async def proxy(cid: str, path: str, request: Request):
     return StreamingResponse(stream(), status_code=int(first.get("status") or 502), headers=out_headers)
 
 
-# ---- the phone pages (also what the Android and iPhone apps show) -------------------------------
+# ---- assets for the notice pages; accounts themselves live on the website (/account) ------------
 
 
 @app.get("/m")
-def mobile_root():
-    return RedirectResponse("/m/", status_code=307)
-
-
 @app.get("/m/")
 def mobile_index():
-    return FileResponse(STATIC / "m" / "index.html", headers={"Cache-Control": "no-cache"})
+    return RedirectResponse("/account", status_code=301)
 
 
 @app.get("/m/{name}")

@@ -34,7 +34,7 @@ async function request(method, path, body, retries = 6) {
     await new Promise((r) => setTimeout(r, 1500));
     return request(method, path, body, retries - 1);
   }
-  if (res.status === 401 && BASE) location.href = "/m/"; // the AFH account sign-in ran out
+  if (res.status === 401 && BASE) location.href = "/account"; // the AFH account sign-in ran out
   else if (res.status === 401 && hooks.onUnauthorized) hooks.onUnauthorized(data);
   if (!res.ok) throw new Error(data?.error || `${res.status} ${res.statusText}`);
   return data;

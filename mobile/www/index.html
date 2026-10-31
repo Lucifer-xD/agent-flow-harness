@@ -1,5 +1,23 @@
 <!doctype html>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AFH</title>
-<script>location.replace("https://agentflowharness.com/m/");</script>
+<html lang="en" class="ion-palette-dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0908">
+  <title>AFH</title>
+  <link rel="stylesheet" href="vendor/ionic.bundle.css">
+  <link rel="stylesheet" href="vendor/dark.css">
+  <link rel="stylesheet" href="app.css">
+  <script>window.Ionic = { config: { innerHTMLTemplatesEnabled: false, swipeBackEnabled: true } };</script>
+  <script type="module" src="vendor/ionic/ionic.esm.js"></script>
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/purify.min.js"></script>
+</head>
+<body>
+  <ion-app>
+    <ion-nav id="nav"></ion-nav>
+  </ion-app>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

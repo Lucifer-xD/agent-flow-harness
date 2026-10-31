@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import platform
+import threading
 import time
 
 import httpx
@@ -28,6 +29,8 @@ LOCAL_ONLY = ("/api/cloud", "/api/remote")
 PASS_HEADERS = {"content-type", "accept", "last-event-id", "accept-language", "range"}
 
 state: dict = {"task": None, "status": "off", "error": None, "since": None}
+# a sign-in waiting for the user in their browser: {code, url, expires, error}
+link: dict = {"pending": None, "error": None, "stop": None}
 
 
 def load() -> dict:
@@ -55,7 +58,8 @@ def status() -> dict:
     comp = cfg.get("computer") or {}
     return {"signedIn": bool(comp.get("token")), "email": cfg.get("email") or "", "computer": {"id": comp.get("id"), "name": comp.get("name")} if comp else None,
             "enabled": bool(cfg.get("enabled")), "state": state["status"], "error": state["error"], "since": state["since"],
-            "relay": relay_url(cfg), "phoneUrl": relay_url(cfg) + "/m/"}
+            "relay": relay_url(cfg), "accountUrl": relay_url(cfg) + "/account",
+            "link": link["pending"], "linkError": link["error"]}
 
 
 def _error(r: httpx.Response) -> str:
@@ -65,30 +69,62 @@ def _error(r: httpx.Response) -> str:
         return f"The AFH server answered {r.status_code}"
 
 
-def sign_in(email: str, password: str, create: bool = False, name: str = "") -> dict:
-    """Sign in (or create the account), add this computer to it and connect. The account
-    password is used once here and never stored; the computer keeps only its own token."""
+def link_start(name: str = "") -> dict:
+    """Begin signing in through the website: AFH never sees the password. The relay hands back a
+    short code and a page on agentflowharness.com; the user signs in (or creates the account)
+    there and approves this computer, and a background poll picks up the computer's token."""
+    link_cancel()
     base = relay_url(load())
     name = name.strip() or platform.node() or "My computer"
-    with httpx.Client(timeout=20) as client:
-        try:
-            r = client.post(f"{base}/relay/api/{'signup' if create else 'signin'}", json={"email": email, "password": password, "kind": "desktop"})
-        except httpx.HTTPError as exc:
-            raise ValueError(f"Couldn't reach {base}: {exc}") from exc
-        if r.status_code >= 400:
-            raise ValueError(_error(r))
-        session = r.json()
-        auth = {"authorization": f"Bearer {session['token']}"}
-        r = client.post(f"{base}/relay/api/computers", json={"name": name}, headers=auth)
-        if r.status_code >= 400:
-            raise ValueError(_error(r))
-        comp = r.json()
-        client.post(f"{base}/relay/api/signout", headers=auth)  # the computer's own token is all it needs from here
-    cfg = load()
-    cfg.update(email=session["user"]["email"], computer=comp, enabled=True)
-    save(cfg)
-    restart()
+    try:
+        r = httpx.post(f"{base}/relay/api/link/start", json={"name": name}, timeout=20)
+    except httpx.HTTPError as exc:
+        raise ValueError(f"Couldn't reach {base}: {exc}") from exc
+    if r.status_code >= 400:
+        raise ValueError(_error(r))
+    got = r.json()
+    stop_ev = threading.Event()
+    link.update(pending={"code": got["code"], "url": got["url"], "expires": time.time() + got.get("expires", 900)}, error=None, stop=stop_ev)
+    threading.Thread(target=_link_poll, args=(base, got["poll"], stop_ev), name="afh-cloud-link", daemon=True).start()
     return status()
+
+
+def link_cancel() -> dict:
+    if link["stop"]:
+        link["stop"].set()
+    link.update(pending=None, stop=None)
+    return status()
+
+
+def _link_poll(base: str, poll: str, stop_ev: threading.Event) -> None:
+    misses = 0
+    while not stop_ev.wait(2):
+        try:
+            r = httpx.get(f"{base}/relay/api/link/poll", params={"poll": poll}, timeout=15)
+        except httpx.HTTPError:
+            misses += 1
+            if misses < 30:
+                continue
+            r = None
+        if stop_ev.is_set():
+            return
+        if r is not None and r.status_code == 202:
+            misses = 0
+            continue
+        link.update(pending=None, stop=None)
+        if r is None or r.status_code >= 400:
+            link["error"] = _error(r) if r is not None else f"Lost touch with {base}"
+            return
+        got = r.json()
+        cfg = load()
+        cfg.update(email=got["email"], computer=got["computer"], enabled=True)
+        save(cfg)
+        link["error"] = None
+        try:
+            restart()
+        except RuntimeError as exc:
+            state.update(status="retrying", error=str(exc))
+        return
 
 
 def sign_out() -> dict:

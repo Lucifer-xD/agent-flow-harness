@@ -25,7 +25,9 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
 
       - name: Install
-        run: npm ci
+        run: |
+          npm ci
+          node scripts/vendor.mjs
 
       - name: Create the Xcode project
         run: |
@@ -37,7 +39,7 @@ jobs:
           cp resources/ios/splash-2732x2732*.png ios/App/App/Assets.xcassets/Splash.imageset/
           sed -i '' -e "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $VERSION;/" -e "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $BUILD;/" ios/App/App.xcodeproj/project.pbxproj
           PLIST=ios/App/App/Info.plist
-          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'AFH uses the microphone for the voice button in the message box.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :UIUserInterfaceStyle string Dark" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName AFH" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string AFH" "$PLIST"
           npx cap sync ios
