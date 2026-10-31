@@ -1,6 +1,14 @@
 // AFH Remote: sign in, see your computers, open one. The same page runs in the Android and iPhone apps.
 "use strict";
 
+// older Android WebViews (before Chrome 86) lack replaceChildren
+for (const proto of [Element.prototype, Document.prototype, DocumentFragment.prototype]) {
+  if (!proto.replaceChildren) proto.replaceChildren = function (...nodes) { while (this.lastChild) this.removeChild(this.lastChild); this.append(...nodes); };
+}
+
+// AFH's own interface needs a current web engine (2021 or later); say so instead of a blank screen
+const MODERN = (() => { try { new Function("let a; a ??= 1; class X { #p = 1; static { } }"); return true; } catch { return false; } })();
+
 const view = document.getElementById("view");
 const accountBtn = document.getElementById("btn-account");
 let me = null;
@@ -126,6 +134,8 @@ function render() {
   accountBtn.classList.remove("hidden");
   const list = me.computers;
   show(
+    MODERN ? null : el("div.error", { style: "margin:0 0 16px" },
+      "This phone's web engine is too old to show AFH. Update “Android System WebView” and Chrome from the Play Store (or update iOS), then open the app again."),
     el("h1", {}, "Your computers"),
     list.length ? el("p", {}, "Tap a computer that's online to open AFH on it.") : null,
     list.length

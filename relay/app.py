@@ -32,6 +32,7 @@ log = logging.getLogger("afh.relay")
 DB_PATH = Path(os.environ.get("AFH_RELAY_DB", "/var/lib/afh-relay/relay.db"))
 STATIC = Path(__file__).parent / "static"
 COOKIE = "afh_s"
+DEV = os.environ.get("AFH_RELAY_DEV") == "1"  # local testing over plain http (an emulator can't keep Secure cookies there)
 SESSION_DAYS = 90
 MAX_BODY = 25 * 1024 * 1024
 FIRST_BYTE_TIMEOUT = 90  # seconds for the computer to start answering
@@ -152,7 +153,7 @@ def current_user(request: Request) -> sqlite3.Row | None:
 def signed_in(user: sqlite3.Row, token: str, kind: str) -> JSONResponse:
     res = JSONResponse({"user": {"id": user["id"], "email": user["email"]}, **({"token": token} if kind == "desktop" else {})})
     if kind == "web":  # the phone keeps it in an HttpOnly cookie, out of reach of page scripts
-        res.set_cookie(COOKIE, token, max_age=SESSION_DAYS * 86400, httponly=True, secure=True, samesite="lax", path="/")
+        res.set_cookie(COOKIE, token, max_age=SESSION_DAYS * 86400, httponly=True, secure=not DEV, samesite="lax", path="/")
     return res
 
 
