@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'ai.dart';
 import 'screens/onboarding.dart';
 import 'screens/home.dart';
 import 'store.dart';
 import 'theme.dart';
 
-const appVersion = '1.10.1';
+const appVersion = '1.10.2';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await Settings.i.load();
+  await loadProviders();
   await Chats.i.load();
   pickPalette();
   runApp(const AfhApp());

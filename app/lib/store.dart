@@ -25,6 +25,7 @@ class Settings extends ChangeNotifier {
   late SharedPreferences _p;
   final Map<String, String> keys = {}; // provider id → API key
   final Map<String, List<String>> models = {}; // provider id → models fetched with the key
+  final Map<String, Map<String, dynamic>> auth = {}; // provider id → sign-in tokens (ChatGPT, Copilot)
   String? relayToken;
   String? relayEmail;
 
@@ -34,6 +35,7 @@ class Settings extends ChangeNotifier {
       final all = await _secure.readAll();
       for (final e in all.entries) {
         if (e.key.startsWith('key.')) keys[e.key.substring(4)] = e.value;
+        if (e.key.startsWith('auth.')) auth[e.key.substring(5)] = jsonDecode(e.value) as Map<String, dynamic>;
       }
       relayToken = all['relay.token'];
     } catch (_) {
@@ -93,6 +95,26 @@ class Settings extends ChangeNotifier {
     }
     await _saveModels();
     notifyListeners();
+  }
+
+  /// Sign-in tokens; null signs out (and forgets the models it could use).
+  Future<void> setAuth(String provider, Map<String, dynamic>? value, {bool quiet = false}) async {
+    if (value == null) {
+      auth.remove(provider);
+      models.remove(provider);
+      await _secure.delete(key: 'auth.$provider');
+      await _saveModels();
+    } else {
+      auth[provider] = value;
+      await _secure.write(key: 'auth.$provider', value: jsonEncode(value));
+    }
+    if (!quiet) notifyListeners(); // a token refresh mid-reply needn't rebuild the screen
+  }
+
+  /// Fields a provider's address is built from (Azure resource name, Cloudflare account id…).
+  String? param(String provider, String name) => _p.getString('param.$provider.$name');
+  void setParam(String provider, String name, String? value) {
+    value == null || value.isEmpty ? _p.remove('param.$provider.$name') : _p.setString('param.$provider.$name', value);
   }
 
   Future<void> setModels(String provider, List<String> list) async {
