@@ -111,6 +111,20 @@ class Settings extends ChangeNotifier {
     if (!quiet) notifyListeners(); // a token refresh mid-reply needn't rebuild the screen
   }
 
+  /// Whether the model may use tools (web search, location, reminders…).
+  bool get tools => _p.getBool('tools') ?? true;
+  set tools(bool v) {
+    _p.setBool('tools', v);
+    notifyListeners();
+  }
+
+  /// Things the user asked the assistant to remember, added to every chat.
+  List<String> get memory => _p.getStringList('memory') ?? const [];
+  set memory(List<String> v) {
+    _p.setStringList('memory', v);
+    notifyListeners();
+  }
+
   /// Fields a provider's address is built from (Azure resource name, Cloudflare account id…).
   String? param(String provider, String name) => _p.getString('param.$provider.$name');
   void setParam(String provider, String name, String? value) {
@@ -140,13 +154,18 @@ class Settings extends ChangeNotifier {
 }
 
 class Msg {
-  Msg({required this.role, this.text = '', this.reasoning = '', this.model, DateTime? at, this.error}) : at = at ?? DateTime.now();
+  Msg({required this.role, this.text = '', this.reasoning = '', this.model, DateTime? at, this.error, List<String>? images, List<ToolStep>? steps})
+    : at = at ?? DateTime.now(),
+      images = images ?? [],
+      steps = steps ?? [];
   final String role; // user | assistant
   String text;
   String reasoning;
   String? model;
   DateTime at;
   String? error;
+  final List<String> images; // photos sent with a user message: files in the app's own folder
+  final List<ToolStep> steps; // what the assistant did on the way to its answer (searched the web…)
 
   Map<String, dynamic> toJson() => {
     'role': role,
@@ -155,6 +174,8 @@ class Msg {
     if (model != null) 'model': model,
     'at': at.millisecondsSinceEpoch,
     if (error != null) 'error': error,
+    if (images.isNotEmpty) 'images': images,
+    if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
   };
   factory Msg.fromJson(Map<String, dynamic> j) => Msg(
     role: j['role'] as String,
@@ -163,7 +184,22 @@ class Msg {
     model: j['model'] as String?,
     at: DateTime.fromMillisecondsSinceEpoch(j['at'] as int? ?? 0),
     error: j['error'] as String?,
+    images: List<String>.from(j['images'] as List? ?? const []),
+    steps: [for (final s in (j['steps'] as List? ?? const [])) ToolStep.fromJson(Map<String, dynamic>.from(s as Map))],
   );
+}
+
+/// One tool the model used while answering.
+class ToolStep {
+  ToolStep({required this.tool, required this.label, this.detail = '', this.state = 'running'});
+  final String tool;
+  String label; // "Searched the web for …"
+  String detail; // a short summary of what came back
+  String state; // running | done | error
+
+  Map<String, dynamic> toJson() => {'tool': tool, 'label': label, if (detail.isNotEmpty) 'detail': detail, 'state': state == 'running' ? 'error' : state};
+  factory ToolStep.fromJson(Map<String, dynamic> j) =>
+      ToolStep(tool: j['tool'] as String? ?? '', label: j['label'] as String? ?? '', detail: j['detail'] as String? ?? '', state: j['state'] as String? ?? 'done');
 }
 
 class Chat {
@@ -227,6 +263,14 @@ class Chats extends ChangeNotifier {
     _sort();
   }
 
+  /// Copies a picked photo into the app's own folder so the chat keeps it.
+  Future<String> keepImage(String from) async {
+    final dir = Directory('${_dir.path}/images');
+    await dir.create(recursive: true);
+    final ext = from.contains('.') ? from.split('.').last.toLowerCase() : 'jpg';
+    return (await File(from).copy('${dir.path}/${newId()}.${ext.length > 4 ? 'jpg' : ext}')).path;
+  }
+
   void _sort() => all.sort((a, b) => a.pinned != b.pinned ? (a.pinned ? -1 : 1) : b.updated.compareTo(a.updated));
 
   Chat create(String provider, String model) {
@@ -260,6 +304,13 @@ class Chats extends ChangeNotifier {
     _pending.remove(c.id)?.cancel();
     final f = File('${_dir.path}/${c.id}.json');
     if (f.existsSync()) f.deleteSync();
+    for (final m in c.messages) {
+      for (final img in m.images) {
+        try {
+          File(img).deleteSync();
+        } catch (_) {}
+      }
+    }
     notifyListeners();
   }
 

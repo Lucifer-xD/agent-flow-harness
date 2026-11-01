@@ -1,15 +1,23 @@
 // The home screen: a chat with a model. Replies stream in as they're written, thinking folds away,
-// and every reply can be copied or tried again. "Run on PC" sends the message to AFH on one of the
+// the tools the model used show as steps, and every reply can be copied or tried again. Photos can go
+// along with a message, and the mic dictates it. "Run on PC" sends the message to AFH on one of the
 // user's computers instead, as a new thread there.
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../ai.dart';
 import '../remote.dart';
 import '../store.dart';
 import '../theme.dart';
+import '../tools.dart';
 import '../widgets/common.dart';
 import '../widgets/composer.dart';
 import '../widgets/logo.dart';
@@ -39,6 +47,10 @@ class _ChatScreenState extends State<ChatScreen> {
   final _focus = FocusNode();
   final _scroll = ScrollController();
   bool _frame = false;
+  final List<String> _attached = []; // photos picked for the next message
+  final _speech = SpeechToText();
+  bool _listening = false;
+  String _before = ''; // the text in the box when dictation started
 
   bool get _busy => _run != null || _starting;
 
@@ -98,14 +110,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _send([String? text]) async {
     final t = (text ?? _input.text).trim();
-    if (t.isEmpty || _busy) return;
-    if (_target != null) return _runOnPc(t);
+    if ((t.isEmpty && _attached.isEmpty) || _busy) return;
+    if (_listening) await _dictate();
+    if (_target != null) return t.isEmpty ? null : _runOnPc(t);
     if (!await _ensureReady()) return;
     HapticFeedback.lightImpact();
     _input.clear();
-    if (_chat.title.isEmpty) _chat.title = titleFrom(t);
+    if (_chat.title.isEmpty) _chat.title = titleFrom(t.isEmpty ? 'Photo' : t);
     final first = _chat.messages.isEmpty;
-    _chat.messages.add(Msg(role: 'user', text: t));
+    final images = [for (final a in _attached) await Chats.i.keepImage(a)];
+    setState(() => _attached.clear());
+    _chat.messages.add(Msg(role: 'user', text: t, images: images));
     if (first) widget.onStarted?.call(_chat);
     await _reply();
   }
@@ -162,7 +177,13 @@ class _ChatScreenState extends State<ChatScreen> {
     final history = [..._chat.messages];
     _chat.messages.add(m);
     _chat.updated = DateTime.now();
-    final run = Run(_provider, _chat.model, history, system: Settings.i.system);
+    final run = Run(
+      _provider,
+      _chat.model,
+      history,
+      system: Settings.i.system,
+      env: ToolEnv(confirm: (title, text, action) async => mounted && await confirm(context, title: title, text: text, action: action)),
+    );
     setState(() {
       _run = run;
       _live = m;
@@ -172,12 +193,16 @@ class _ChatScreenState extends State<ChatScreen> {
       await for (final d in run.start()) {
         m.text += d.text;
         m.reasoning += d.reasoning;
+        if (d.step != null && !m.steps.contains(d.step)) m.steps.add(d.step!);
         _redraw();
       }
-      if (m.text.isEmpty && m.reasoning.isEmpty && !run.cancelled) m.error = 'The model sent an empty reply.';
+      if (m.text.isEmpty && m.reasoning.isEmpty && m.steps.isEmpty && !run.cancelled) m.error = 'The model sent an empty reply.';
     } on AiError catch (e) {
       m.error = e.message;
       HapticFeedback.heavyImpact();
+    }
+    for (final s in m.steps.where((s) => s.state == 'running')) {
+      s.state = 'error'; // stopped mid-tool
     }
     if (!mounted) return;
     setState(() {
@@ -197,6 +222,77 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() {});
     });
     WidgetsBinding.instance.scheduleFrame();
+  }
+
+  Future<void> _attach() async {
+    FocusScope.of(context).unfocus();
+    final v = await showActions<String>(
+      context,
+      actions: const [
+        SheetAction(LucideIcons.camera, 'Take a photo', 'camera'),
+        SheetAction(LucideIcons.image, 'Photo library', 'photos'),
+        SheetAction(LucideIcons.paperclip, 'A text file', 'file'),
+      ],
+    );
+    if (v == null) return;
+    try {
+      final picker = ImagePicker();
+      if (v == 'camera') {
+        final x = await picker.pickImage(source: ImageSource.camera, maxWidth: 2048, imageQuality: 85);
+        if (x != null) setState(() => _attached.add(x.path));
+      } else if (v == 'photos') {
+        final xs = await picker.pickMultiImage(maxWidth: 2048, imageQuality: 85, limit: 4);
+        setState(() => _attached.addAll(xs.take(4 - _attached.length).map((x) => x.path)));
+      } else {
+        final f = (await FilePicker.pickFiles()).firstOrNull;
+        final path = f?.path;
+        if (f == null || path == null) return;
+        if (const {'png', 'jpg', 'jpeg', 'webp', 'gif'}.contains((f.extension ?? '').toLowerCase())) {
+          setState(() => _attached.add(path));
+          return;
+        }
+        final bytes = await File(path).readAsBytes();
+        if (bytes.length > 400000) throw const FormatException('too big');
+        final body = utf8.decode(bytes); // throws on binary files
+        _input.text += '${_input.text.isEmpty ? '' : '\n\n'}File ${f.name}:\n```\n$body\n```\n';
+        _input.selection = TextSelection.collapsed(offset: _input.text.length);
+      }
+    } on FormatException {
+      if (mounted) showToast(context, 'Only photos and text files up to 400 KB can go along.', error: true);
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't open that. Check that AFH may use your photos and camera in Settings.", error: true);
+    }
+  }
+
+  /// Dictation: the words appear in the box as you speak; tap again to stop.
+  Future<void> _dictate() async {
+    if (_listening) {
+      await _speech.stop();
+      if (mounted) setState(() => _listening = false);
+      return;
+    }
+    final ok = await _speech.initialize(
+      onStatus: (s) {
+        if ((s == 'done' || s == 'notListening') && mounted) setState(() => _listening = false);
+      },
+      onError: (_) {
+        if (mounted) setState(() => _listening = false);
+      },
+    );
+    if (!ok) {
+      if (mounted) showToast(context, "Voice typing isn't available. Allow the microphone and speech recognition for AFH in Settings.", error: true);
+      return;
+    }
+    HapticFeedback.selectionClick();
+    _before = _input.text.trim();
+    setState(() => _listening = true);
+    await _speech.listen(
+      onResult: (r) {
+        _input.text = [_before, r.recognizedWords].where((s) => s.isNotEmpty).join(' ');
+        _input.selection = TextSelection.collapsed(offset: _input.text.length);
+      },
+      listenOptions: SpeechListenOptions(partialResults: true, listenMode: ListenMode.dictation, pauseFor: const Duration(seconds: 4)),
+    );
   }
 
   void _stop() {
@@ -287,8 +383,20 @@ class _ChatScreenState extends State<ChatScreen> {
               onSend: () => _send(),
               onStop: _stop,
               bottom: safeBottom(context),
-              hint: _target != null ? 'Ask AFH on ${_target!.computer.name}' : 'Message AFH',
+              hint: _listening ? 'Listening…' : (_target != null ? 'Ask AFH on ${_target!.computer.name}' : 'Message AFH'),
+              attached: _attached.isNotEmpty && _target == null,
+              top: _attached.isEmpty ? null : _Attachments(paths: _attached, onRemove: (p) => setState(() => _attached.remove(p))),
               tools: [
+                if (_target == null)
+                  IconBtn(LucideIcons.plus, tooltip: 'Add a photo or file', size: 34, iconSize: 19, color: Afh.text2, onTap: _busy ? null : _attach),
+                IconBtn(
+                  _listening ? LucideIcons.micOff : LucideIcons.mic,
+                  tooltip: _listening ? 'Stop dictating' : 'Dictate',
+                  size: 34,
+                  iconSize: 18,
+                  color: _listening ? Afh.bad : Afh.text2,
+                  onTap: _dictate,
+                ),
                 if (empty)
                   ComposerChip(
                     icon: LucideIcons.squareTerminal,
@@ -396,9 +504,9 @@ class _Pill extends StatelessWidget {
 }
 
 const _chatIdeas = [
-  (LucideIcons.lightbulb, 'Explain how vaccines train the immune system'),
-  (LucideIcons.mail, 'Write a friendly follow-up email after an interview'),
-  (LucideIcons.plane, 'Plan a relaxed three-day trip to Lisbon'),
+  (LucideIcons.globe, "What are today's top tech headlines?"),
+  (LucideIcons.cloudSun, "What's the weather like here this week?"),
+  (LucideIcons.bell, 'Remind me to drink water in 30 minutes'),
 ];
 const _pcIdeas = [
   (LucideIcons.wrench, 'Fix the failing tests in this project'),
@@ -673,7 +781,36 @@ class _UserBubble extends StatelessWidget {
               bottomRight: Radius.circular(6),
             ),
           ),
-          child: Text(msg.text, style: TextStyle(fontSize: 15.5, height: 1.45, color: Afh.text)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (msg.images.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(bottom: msg.text.isEmpty ? 0 : 8),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      for (final img in msg.images)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(img),
+                            width: msg.images.length == 1 ? 200 : 96,
+                            height: msg.images.length == 1 ? 200 : 96,
+                            fit: BoxFit.cover,
+                            cacheWidth: 400,
+                            errorBuilder: (_, _, _) => Container(width: 96, height: 96, color: Afh.surface2, child: Icon(LucideIcons.imageOff, color: Afh.text3)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              if (msg.text.isNotEmpty) Text(msg.text, style: TextStyle(fontSize: 15.5, height: 1.45, color: Afh.text)),
+            ],
+          ),
         ),
       ),
     );
@@ -719,7 +856,9 @@ class _ReplyState extends State<_Reply> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (m.reasoning.trim().isNotEmpty) _thoughts(m),
-          if (thinking && m.reasoning.trim().isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 8, horizontal: 2), child: TypingDots()),
+          if (m.steps.isNotEmpty) _Steps(steps: m.steps, live: widget.live),
+          if (thinking && m.reasoning.trim().isEmpty && (m.steps.isEmpty || m.steps.last.state != 'running'))
+            const Padding(padding: EdgeInsets.symmetric(vertical: 8, horizontal: 2), child: TypingDots()),
           if (m.text.isNotEmpty) Md(m.text),
           if (m.error != null) _error(m.error!),
           if (!widget.live && m.text.isNotEmpty)
@@ -874,6 +1013,141 @@ class _Act extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Photos waiting to go with the next message, above the message box.
+class _Attachments extends StatelessWidget {
+  const _Attachments({required this.paths, required this.onRemove});
+  final List<String> paths;
+  final ValueChanged<String> onRemove;
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 78,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(bottom: 8),
+        children: [
+          for (final p in paths)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(File(p), width: 70, height: 70, fit: BoxFit.cover, cacheWidth: 200),
+                  ),
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Pressable(
+                      onTap: () => onRemove(p),
+                      child: Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(color: Afh.text, shape: BoxShape.circle, border: Border.all(color: Afh.bg, width: 2)),
+                        child: Icon(LucideIcons.x, size: 12, color: Afh.bg),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What the model did on the way to its answer: one quiet line per tool, the latest one live.
+class _Steps extends StatefulWidget {
+  const _Steps({required this.steps, required this.live});
+  final List<ToolStep> steps;
+  final bool live;
+  @override
+  State<_Steps> createState() => _StepsState();
+}
+
+class _StepsState extends State<_Steps> {
+  final Set<ToolStep> _open = {};
+
+  static IconData _icon(String tool) => switch (tool) {
+    'web_search' => LucideIcons.search,
+    'read_webpage' => LucideIcons.globe,
+    'get_weather' => LucideIcons.cloudSun,
+    'get_location' => LucideIcons.mapPin,
+    'get_device_info' => LucideIcons.smartphone,
+    'calculate' => LucideIcons.calculator,
+    'read_clipboard' || 'copy_to_clipboard' => LucideIcons.clipboard,
+    'open_link' => LucideIcons.externalLink,
+    'open_maps' => LucideIcons.map,
+    'start_call' => LucideIcons.phone,
+    'draft_text_message' => LucideIcons.messageSquare,
+    'draft_email' => LucideIcons.mail,
+    'find_contact' => LucideIcons.contact,
+    'set_reminder' => LucideIcons.bell,
+    'add_calendar_event' => LucideIcons.calendarPlus,
+    'remember' || 'forget' => LucideIcons.brain,
+    'list_computers' || 'run_on_computer' || 'read_computer_thread' => LucideIcons.monitor,
+    _ => LucideIcons.wrench,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final s in widget.steps)
+            Pressable(
+              onTap: s.detail.isEmpty ? null : () => setState(() => _open.contains(s) ? _open.remove(s) : _open.add(s)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(padding: const EdgeInsets.only(top: 1), child: Icon(_icon(s.tool), size: 15, color: s.state == 'error' ? Afh.bad : Afh.text3)),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            s.label,
+                            maxLines: _open.contains(s) ? 3 : 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13.5, color: Afh.text2, height: 1.35),
+                          ),
+                          if (_open.contains(s) || s.state == 'error')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                s.detail,
+                                maxLines: _open.contains(s) ? 6 : 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12.5, color: s.state == 'error' ? Afh.bad : Afh.text3, height: 1.35),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (s.state == 'running')
+                      SizedBox.square(dimension: 13, child: CircularProgressIndicator(strokeWidth: 1.6, color: Afh.accent))
+                    else if (s.state == 'done')
+                      Icon(LucideIcons.check, size: 14, color: Afh.good)
+                    else
+                      Icon(LucideIcons.x, size: 14, color: Afh.bad),
+                  ],
+                ),
+              ),
+            ).animate().fadeIn(duration: 200.ms),
+        ],
       ),
     );
   }

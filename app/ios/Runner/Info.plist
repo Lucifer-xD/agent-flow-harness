@@ -68,5 +68,30 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>AFH uses your location when you ask about the weather or places near you.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>AFH looks up a contact when you ask it to call, text or email someone.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo to show the AI.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pick photos to show the AI.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dictate messages to AFH with your voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Turn what you say into the text of your message.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Add events to your calendar when you ask AFH to.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Add events to your calendar when you ask AFH to.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Add events to your calendar when you ask AFH to.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>sms</string>
+		<string>mailto</string>
+		<string>maps</string>
+	</array>
 </dict>
 </plist>

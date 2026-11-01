@@ -105,6 +105,20 @@ class SettingsScreen extends StatelessWidget {
                       if (v != null) s.system = v.trim();
                     },
                   ),
+                  Tile(
+                    icon: LucideIcons.wandSparkles,
+                    title: 'Tools',
+                    subtitle: s.tools ? 'Web search, weather, location, reminders, calendar, contacts, your PC…' : 'Off: models only chat',
+                    trailing: Switch.adaptive(value: s.tools, onChanged: (v) => s.tools = v),
+                    onTap: () => s.tools = !s.tools,
+                  ),
+                  Tile(
+                    icon: LucideIcons.brain,
+                    title: 'Memory',
+                    subtitle: s.memory.isEmpty ? 'Ask "remember that…" in any chat' : '${s.memory.length} thing${s.memory.length == 1 ? '' : 's'} remembered',
+                    chevron: true,
+                    onTap: () => _go(context, const MemoryScreen()),
+                  ),
                 ],
               ).enter(n++),
               if (a.signedIn) ...[
@@ -484,6 +498,65 @@ class _Swatch extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// What the assistant was asked to remember; it's added to every chat.
+class MemoryScreen extends StatelessWidget {
+  const MemoryScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Memory'),
+        actions: [
+          IconBtn(
+            LucideIcons.plus,
+            tooltip: 'Add',
+            onTap: () async {
+              final v = await promptText(context, title: 'Remember', hint: "e.g. I live in Cairo and I'm vegetarian");
+              if (v != null && v.trim().isNotEmpty) Settings.i.memory = [...Settings.i.memory, v.trim()];
+            },
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: ListenableBuilder(
+        listenable: Settings.i,
+        builder: (context, _) {
+          final m = Settings.i.memory;
+          if (m.isEmpty) {
+            return const EmptyState(
+              icon: LucideIcons.brain,
+              title: 'Nothing remembered yet',
+              text: 'Tell AFH "remember that…" in a chat, or add something with +. It goes along with every chat on this phone.',
+            );
+          }
+          return ListView(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 30 + MediaQuery.paddingOf(context).bottom),
+            children: [
+              Group(
+                inset: 16,
+                children: [
+                  for (final f in m)
+                    Tile(
+                      title: f,
+                      trailing: IconBtn(
+                        LucideIcons.x,
+                        tooltip: 'Forget',
+                        size: 36,
+                        iconSize: 16,
+                        color: Afh.text3,
+                        onTap: () => Settings.i.memory = [...m]..remove(f),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }

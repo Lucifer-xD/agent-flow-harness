@@ -4,13 +4,16 @@
 // sign-in), Anthropic messages and Gemini.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
+import 'remote.dart' show ApiError;
 import 'signin.dart';
 import 'store.dart';
+import 'tools.dart';
 
 enum Wire { openai, anthropic, gemini, responses }
 
@@ -192,9 +195,10 @@ class AiError implements Exception {
 
 /// One piece of a streamed reply.
 class Delta {
-  const Delta({this.text = '', this.reasoning = ''});
+  const Delta({this.text = '', this.reasoning = '', this.step});
   final String text;
   final String reasoning;
+  final ToolStep? step; // a tool started or finished
 }
 
 /// Address and headers for one request; signed-in providers refresh their token first.
@@ -307,56 +311,160 @@ Future<List<String>> fetchModels(Provider p) async {
 }
 
 /// A reply being streamed. Call [cancel] to stop it.
+///
+/// With tools on, it loops: the model answers or asks for tools, the phone runs them (each shows as a
+/// ToolStep) and sends the results back, until the model answers in plain text.
 class Run {
-  Run(this.provider, this.model, this.history, {this.system = ''});
+  Run(this.provider, this.model, this.history, {this.system = '', this.env});
   final Provider provider;
   final String model;
   final List<Msg> history; // already ends with the user's message
   final String system;
+  final ToolEnv? env; // null: no tools
   final _client = http.Client();
   bool _cancelled = false;
   bool get cancelled => _cancelled;
+  static const _maxRounds = 12;
 
   void cancel() {
     _cancelled = true;
     _client.close();
   }
 
-  http.Request _request(String base, Map<String, String> headers, List<Msg> msgs) {
+  List<Tool> _tools = const [];
+  final List<Map<String, dynamic>> _items = []; // the conversation in this wire's own shape
+
+  String get _system => [system.trim(), if (env != null) toolContext()].where((s) => s.isNotEmpty).join('\n\n');
+
+  // ---- the conversation ----
+
+  Future<void> _build(List<Msg> msgs) async {
+    // photos: only the last few go along, base64 is heavy
+    final withImages = <Msg>{};
+    var budget = 4;
+    for (final m in msgs.reversed) {
+      if (m.images.isNotEmpty && budget > 0) {
+        withImages.add(m);
+        budget -= m.images.length;
+      }
+    }
+    if (provider.wire == Wire.openai && _system.isNotEmpty) _items.add({'role': 'system', 'content': _system});
+    for (final m in msgs) {
+      final imgs = withImages.contains(m) ? await _images(m) : const <(String, String)>[];
+      final text = m.text.isEmpty && imgs.isNotEmpty ? 'What do you see?' : m.text;
+      switch (provider.wire) {
+        case Wire.openai:
+          _items.add({
+            'role': m.role,
+            'content': imgs.isEmpty
+                ? text
+                : [
+                    {'type': 'text', 'text': text},
+                    for (final (mime, b64) in imgs)
+                      {
+                        'type': 'image_url',
+                        'image_url': {'url': 'data:$mime;base64,$b64'},
+                      },
+                  ],
+          });
+        case Wire.responses:
+          _items.add(
+            m.role == 'user'
+                ? {
+                    'role': 'user',
+                    'content': [
+                      {'type': 'input_text', 'text': text},
+                      for (final (mime, b64) in imgs) {'type': 'input_image', 'image_url': 'data:$mime;base64,$b64'},
+                    ],
+                  }
+                : {
+                    'type': 'message',
+                    'role': 'assistant',
+                    'content': [
+                      {'type': 'output_text', 'text': text},
+                    ],
+                  },
+          );
+        case Wire.anthropic:
+          _items.add({
+            'role': m.role,
+            'content': [
+              for (final (mime, b64) in imgs)
+                {
+                  'type': 'image',
+                  'source': {'type': 'base64', 'media_type': mime, 'data': b64},
+                },
+              {'type': 'text', 'text': text},
+            ],
+          });
+        case Wire.gemini:
+          _items.add({
+            'role': m.role == 'assistant' ? 'model' : 'user',
+            'parts': [
+              for (final (mime, b64) in imgs)
+                {
+                  'inline_data': {'mime_type': mime, 'data': b64},
+                },
+              {'text': text},
+            ],
+          });
+      }
+    }
+  }
+
+  Future<List<(String, String)>> _images(Msg m) async {
+    final out = <(String, String)>[];
+    for (final path in m.images) {
+      try {
+        final bytes = await File(path).readAsBytes();
+        final mime = switch (path.split('.').last.toLowerCase()) {
+          'png' => 'image/png',
+          'webp' => 'image/webp',
+          'gif' => 'image/gif',
+          _ => 'image/jpeg',
+        };
+        out.add((mime, base64Encode(bytes)));
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  List<dynamic> _toolSpecs() => switch (provider.wire) {
+    Wire.openai => [
+      for (final t in _tools)
+        {
+          'type': 'function',
+          'function': {'name': t.name, 'description': t.description, 'parameters': t.schema},
+        },
+    ],
+    Wire.responses => [
+      for (final t in _tools) {'type': 'function', 'name': t.name, 'description': t.description, 'parameters': t.schema, 'strict': false},
+    ],
+    Wire.anthropic => [
+      for (final t in _tools) {'name': t.name, 'description': t.description, 'input_schema': t.schema},
+    ],
+    Wire.gemini => [
+      {
+        'functionDeclarations': [
+          for (final t in _tools) {'name': t.name, 'description': t.description, if (t.properties.isNotEmpty) 'parameters': t.schema},
+        ],
+      },
+    ],
+  };
+
+  http.Request _request(String base, Map<String, String> headers, int round) {
+    final tools = _tools.isEmpty ? null : _toolSpecs();
     final http.Request req;
     switch (provider.wire) {
       case Wire.openai:
-        req = http.Request('POST', Uri.parse('$base/chat/completions'))
-          ..body = jsonEncode({
-            'model': model,
-            'stream': true,
-            'messages': [
-              if (system.isNotEmpty) {'role': 'system', 'content': system},
-              for (final m in msgs) {'role': m.role, 'content': m.text},
-            ],
-          });
+        req = http.Request('POST', Uri.parse('$base/chat/completions'))..body = jsonEncode({'model': model, 'stream': true, 'messages': _items, 'tools': ?tools});
       case Wire.responses:
         req = http.Request('POST', Uri.parse('$base/responses'))
           ..body = jsonEncode({
             'model': model,
-            'instructions': system.isNotEmpty ? system : 'You are a helpful assistant.',
-            'input': [
-              for (final m in msgs)
-                m.role == 'user'
-                    ? {
-                        'role': 'user',
-                        'content': [
-                          {'type': 'input_text', 'text': m.text},
-                        ],
-                      }
-                    : {
-                        'type': 'message',
-                        'role': 'assistant',
-                        'content': [
-                          {'type': 'output_text', 'text': m.text},
-                        ],
-                      },
-            ],
+            'instructions': _system.isNotEmpty ? _system : 'You are a helpful assistant.',
+            'input': _items,
+            'tools': ?tools,
             'stream': true,
             'store': false,
           });
@@ -366,87 +474,99 @@ class Run {
             'model': model,
             'stream': true,
             'max_tokens': 8192,
-            if (system.isNotEmpty) 'system': system,
-            'messages': [
-              for (final m in msgs) {'role': m.role, 'content': m.text},
-            ],
+            if (_system.isNotEmpty) 'system': _system,
+            'messages': _items,
+            'tools': ?tools,
           });
       case Wire.gemini:
         req = http.Request('POST', Uri.parse('$base/models/$model:streamGenerateContent?alt=sse'))
           ..body = jsonEncode({
-            if (system.isNotEmpty)
+            if (_system.isNotEmpty)
               'systemInstruction': {
                 'parts': [
-                  {'text': system},
+                  {'text': _system},
                 ],
               },
-            'contents': [
-              for (final m in msgs)
-                {
-                  'role': m.role == 'assistant' ? 'model' : 'user',
-                  'parts': [
-                    {'text': m.text},
-                  ],
-                },
-            ],
+            'contents': _items,
+            'tools': ?tools,
           });
     }
     req.headers.addAll(headers);
     req.headers['accept'] = 'text/event-stream';
-    if (provider.id == 'github-copilot') req.headers['x-initiator'] = 'user';
+    // Copilot: only the user's own turn counts as a premium request
+    if (provider.id == 'github-copilot') req.headers['x-initiator'] = round == 0 ? 'user' : 'agent';
     return req;
   }
 
+  // ---- the loop ----
+
   Stream<Delta> start() async* {
     final p = provider;
-    final msgs = history.where((m) => m.text.trim().isNotEmpty && m.error == null).toList();
-    http.StreamedResponse? res;
-    for (var attempt = 0; attempt < 2; attempt++) {
-      final String base;
-      final Map<String, String> headers;
-      try {
-        (base, headers) = await _prepare(p, force: attempt > 0);
-      } on AiError {
-        rethrow;
-      } catch (_) {
-        throw AiError('Couldn\'t reach ${p.name}. Check your connection.');
-      }
-      if (base.isEmpty) throw AiError('Set up ${p.name} first in Settings → Providers.');
-      try {
-        res = await _client.send(_request(base, headers, msgs)).timeout(const Duration(seconds: 60));
-      } catch (e) {
-        if (_cancelled) return;
-        throw AiError(e is TimeoutException ? '${p.name} didn\'t answer in time.' : 'Couldn\'t reach ${p.name}. Check your connection.');
-      }
-      if (res.statusCode == 401 && p.signedIn && attempt == 0) {
-        await res.stream.drain<void>(); // a revoked token: refresh once and try again
-        continue;
-      }
-      break;
-    }
-    if (res!.statusCode != 200) {
-      final body = await res.stream.bytesToString();
-      throw AiError(_errorText(res.statusCode, body));
-    }
+    final msgs = history.where((m) => (m.text.trim().isNotEmpty || m.images.isNotEmpty) && m.error == null).toList();
+    _tools = env != null && Settings.i.tools ? phoneTools() : const [];
+    await _build(msgs);
+    var wroteText = false;
     try {
-      var parts = 0;
-      await for (final line in res.stream.transform(utf8.decoder).transform(const LineSplitter())) {
-        if (!line.startsWith('data:')) continue;
-        final data = line.substring(5).trim();
-        if (data.isEmpty || data == '[DONE]') continue;
-        Map<String, dynamic> j;
-        try {
-          j = jsonDecode(data) as Map<String, dynamic>;
-        } catch (_) {
-          continue;
+      for (var round = 0; round < _maxRounds; round++) {
+        final res = await _send(round);
+        if (res == null) return; // cancelled
+        final turn = _Turn();
+        var gap = wroteText; // a new round's text starts a new paragraph
+        await for (final line in res.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+          if (!line.startsWith('data:')) continue;
+          final data = line.substring(5).trim();
+          if (data.isEmpty || data == '[DONE]') continue;
+          Map<String, dynamic> j;
+          try {
+            j = jsonDecode(data) as Map<String, dynamic>;
+          } catch (_) {
+            continue;
+          }
+          final d = _parse(j, turn);
+          if (d == null) continue;
+          if (d.text.isNotEmpty) {
+            turn.text.write(d.text);
+            if (gap) {
+              gap = false;
+              yield const Delta(text: '\n\n');
+            }
+            wroteText = true;
+          }
+          yield d;
         }
-        if (p.wire == Wire.responses && j['type'] == 'response.reasoning_summary_part.added' && ++parts > 1) {
-          yield const Delta(reasoning: '\n\n');
-          continue;
+        if (turn.calls.isEmpty || _cancelled) return;
+        // run the tools the model asked for, then hand it the results
+        final results = <String>[];
+        for (final c in turn.calls) {
+          final tool = _tools.where((t) => t.name == c.name).firstOrNull;
+          Map<String, dynamic> args;
+          try {
+            args = c.args ?? (c.raw.trim().isEmpty ? <String, dynamic>{} : Map<String, dynamic>.from(jsonDecode(c.raw) as Map));
+          } catch (_) {
+            args = {};
+          }
+          final step = ToolStep(tool: c.name, label: tool?.label(args) ?? c.name);
+          yield Delta(step: step);
+          String out;
+          try {
+            if (tool == null) throw ToolError('There is no tool called ${c.name}.');
+            out = await tool.run(args, env!);
+            step.state = 'done';
+            step.detail = _summary(out);
+          } catch (e) {
+            final why = e is ToolError ? e.message : (e is AiError ? e.message : (e is ApiError ? e.message : 'Something went wrong: $e'));
+            out = 'Error: $why';
+            step.state = 'error';
+            step.detail = why;
+          }
+          if (_cancelled) return;
+          yield Delta(step: step);
+          c.args = args;
+          results.add(out);
         }
-        final d = _parse(p.wire, j);
-        if (d != null) yield d;
+        _append(turn, results);
       }
+      yield const Delta(text: '\n\n_(Stopped after many tool steps.)_');
     } catch (e) {
       if (_cancelled) return;
       if (e is AiError) rethrow;
@@ -456,13 +576,140 @@ class Run {
     }
   }
 
-  Delta? _parse(Wire wire, Map<String, dynamic> j) {
-    switch (wire) {
+  static String _summary(String out) {
+    final first = out.trim().split('\n').firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+    return first.length > 90 ? '${first.substring(0, 88)}…' : first;
+  }
+
+  /// Sends one round; on a 401 from a signed-in provider refreshes once, and drops the tools when
+  /// the model turns out not to support them.
+  Future<http.StreamedResponse?> _send(int round) async {
+    final p = provider;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final String base;
+      final Map<String, String> headers;
+      try {
+        (base, headers) = await _prepare(p, force: attempt > 0 && p.signedIn);
+      } on AiError {
+        rethrow;
+      } catch (_) {
+        throw AiError('Couldn\'t reach ${p.name}. Check your connection.');
+      }
+      if (base.isEmpty) throw AiError('Set up ${p.name} first in Settings → Providers.');
+      final http.StreamedResponse res;
+      try {
+        res = await _client.send(_request(base, headers, round)).timeout(const Duration(seconds: 90));
+      } catch (e) {
+        if (_cancelled) return null;
+        throw AiError(e is TimeoutException ? '${p.name} didn\'t answer in time.' : 'Couldn\'t reach ${p.name}. Check your connection.');
+      }
+      if (res.statusCode == 200) return res;
+      final body = await res.stream.bytesToString();
+      if (res.statusCode == 401 && p.signedIn && attempt == 0) continue; // a revoked token: refresh once
+      if (_tools.isNotEmpty && round == 0 && const {400, 404, 422}.contains(res.statusCode) && RegExp(r'tool|function', caseSensitive: false).hasMatch(body)) {
+        _tools = const []; // this model can't use tools: answer without them
+        continue;
+      }
+      throw AiError(_errorText(res.statusCode, body));
+    }
+    throw AiError('${p.name} kept refusing the request.');
+  }
+
+  /// Adds the model's turn (its text and tool calls) and the tool results to the conversation.
+  void _append(_Turn t, List<String> results) {
+    final text = t.text.toString();
+    switch (provider.wire) {
       case Wire.openai:
-        if (j['error'] != null) throw AiError('${(j['error'] as Map)['message'] ?? j['error']}');
+        _items.add({
+          'role': 'assistant',
+          'content': text.isEmpty ? null : text,
+          'tool_calls': [
+            for (final c in t.calls)
+              {
+                'id': c.id,
+                'type': 'function',
+                'function': {'name': c.name, 'arguments': jsonEncode(c.args)},
+              },
+          ],
+        });
+        for (final (i, c) in t.calls.indexed) {
+          _items.add({'role': 'tool', 'tool_call_id': c.id, 'content': results[i]});
+        }
+      case Wire.responses:
+        if (text.isNotEmpty) {
+          _items.add({
+            'type': 'message',
+            'role': 'assistant',
+            'content': [
+              {'type': 'output_text', 'text': text},
+            ],
+          });
+        }
+        for (final (i, c) in t.calls.indexed) {
+          _items.add({'type': 'function_call', 'call_id': c.id, 'name': c.name, 'arguments': jsonEncode(c.args)});
+          _items.add({'type': 'function_call_output', 'call_id': c.id, 'output': results[i]});
+        }
+      case Wire.anthropic:
+        _items.add({
+          'role': 'assistant',
+          'content': [
+            if (text.isNotEmpty) {'type': 'text', 'text': text},
+            for (final c in t.calls) {'type': 'tool_use', 'id': c.id, 'name': c.name, 'input': c.args},
+          ],
+        });
+        _items.add({
+          'role': 'user',
+          'content': [
+            for (final (i, c) in t.calls.indexed) {'type': 'tool_result', 'tool_use_id': c.id, 'content': results[i]},
+          ],
+        });
+      case Wire.gemini:
+        // the model's parts go back as they came: Gemini checks their thought signatures
+        _items.add({
+          'role': 'model',
+          'parts': [
+            if (text.isNotEmpty) {'text': text},
+            ...t.rawParts,
+          ],
+        });
+        _items.add({
+          'role': 'user',
+          'parts': [
+            for (final (i, c) in t.calls.indexed)
+              {
+                'functionResponse': {
+                  'name': c.name,
+                  if (!c.id.startsWith('call_')) 'id': c.id,
+                  'response': {'result': results[i]},
+                },
+              },
+          ],
+        });
+    }
+  }
+
+  // ---- reading the stream ----
+
+  Delta? _parse(Map<String, dynamic> j, _Turn turn) {
+    switch (provider.wire) {
+      case Wire.openai:
+        if (j['error'] != null) throw AiError('${j['error'] is Map ? (j['error'] as Map)['message'] : j['error']}');
         final choices = j['choices'] as List?;
         if (choices == null || choices.isEmpty) return null;
         final d = (choices.first as Map)['delta'] as Map? ?? {};
+        for (final (n, tc) in ((d['tool_calls'] as List?) ?? const []).indexed) {
+          final i = (tc['index'] as num?)?.toInt() ?? n;
+          final c = turn.byIndex.putIfAbsent(i, () {
+            final c = _Call('call_$i', '');
+            turn.calls.add(c);
+            return c;
+          });
+          if (tc['id'] is String && (tc['id'] as String).isNotEmpty) c.id = tc['id'] as String;
+          final f = tc['function'] as Map? ?? {};
+          if (f['name'] is String) c.name += f['name'] as String;
+          if (f['arguments'] is String) c.raw += f['arguments'] as String;
+          if (f['arguments'] is Map) c.args = Map<String, dynamic>.from(f['arguments'] as Map);
+        }
         final text = d['content'] as String? ?? '';
         final reasoning = (d['reasoning_content'] ?? d['reasoning']) as String? ?? '';
         if (text.isEmpty && reasoning.isEmpty) return null;
@@ -473,6 +720,24 @@ class Run {
             return Delta(text: j['delta'] as String? ?? '');
           case 'response.reasoning_summary_text.delta' || 'response.reasoning_text.delta':
             return Delta(reasoning: j['delta'] as String? ?? '');
+          case 'response.reasoning_summary_part.added':
+            return turn.summaryParts++ > 0 ? const Delta(reasoning: '\n\n') : null;
+          case 'response.output_item.added':
+            final item = j['item'] as Map? ?? {};
+            if (item['type'] == 'function_call') {
+              final c = _Call('${item['call_id'] ?? item['id']}', '${item['name'] ?? ''}')..raw = item['arguments'] as String? ?? '';
+              turn.calls.add(c);
+              turn.byItem['${item['id']}'] = c;
+            }
+            return null;
+          case 'response.function_call_arguments.delta':
+            turn.byItem['${j['item_id']}']?.raw += j['delta'] as String? ?? '';
+            return null;
+          case 'response.output_item.done':
+            final item = j['item'] as Map? ?? {};
+            final c = turn.byItem['${item['id']}'];
+            if (c != null && item['arguments'] is String) c.raw = item['arguments'] as String;
+            return null;
           case 'response.failed':
             final e = (j['response'] as Map?)?['error'];
             throw AiError('${e is Map ? e['message'] : e ?? 'The provider reported an error.'}');
@@ -483,10 +748,19 @@ class Run {
         }
       case Wire.anthropic:
         switch (j['type']) {
+          case 'content_block_start':
+            final b = j['content_block'] as Map? ?? {};
+            if (b['type'] == 'tool_use') {
+              final c = _Call('${b['id']}', '${b['name']}');
+              turn.calls.add(c);
+              turn.byIndex[(j['index'] as num).toInt()] = c;
+            }
+            return null;
           case 'content_block_delta':
             final d = j['delta'] as Map;
             if (d['type'] == 'text_delta') return Delta(text: d['text'] as String? ?? '');
             if (d['type'] == 'thinking_delta') return Delta(reasoning: d['thinking'] as String? ?? '');
+            if (d['type'] == 'input_json_delta') turn.byIndex[(j['index'] as num).toInt()]?.raw += d['partial_json'] as String? ?? '';
             return null;
           case 'error':
             throw AiError('${(j['error'] as Map?)?['message'] ?? 'The provider reported an error.'}');
@@ -494,13 +768,21 @@ class Run {
             return null;
         }
       case Wire.gemini:
+        if (j['error'] != null) throw AiError('${(j['error'] as Map)['message'] ?? j['error']}');
         final cands = j['candidates'] as List?;
         if (cands == null || cands.isEmpty) return null;
         final parts = ((cands.first as Map)['content'] as Map?)?['parts'] as List? ?? [];
         var text = '', reasoning = '';
         for (final part in parts) {
-          final t = (part as Map)['text'] as String? ?? '';
-          if (part['thought'] == true) {
+          final pt = Map<String, dynamic>.from(part as Map);
+          if (pt['functionCall'] is Map) {
+            final f = pt['functionCall'] as Map;
+            turn.calls.add(_Call('${f['id'] ?? 'call_${turn.calls.length}'}', '${f['name']}')..args = Map<String, dynamic>.from(f['args'] as Map? ?? {}));
+            turn.rawParts.add(pt);
+            continue;
+          }
+          final t = pt['text'] as String? ?? '';
+          if (pt['thought'] == true) {
             reasoning += t;
           } else {
             text += t;
@@ -510,6 +792,24 @@ class Run {
         return Delta(text: text, reasoning: reasoning);
     }
   }
+}
+
+/// What the model said in one round, and the tools it asked for.
+class _Turn {
+  final text = StringBuffer();
+  final calls = <_Call>[];
+  final byIndex = <int, _Call>{};
+  final byItem = <String, _Call>{};
+  final rawParts = <Map<String, dynamic>>[];
+  int summaryParts = 0;
+}
+
+class _Call {
+  _Call(this.id, this.name);
+  String id;
+  String name;
+  String raw = ''; // arguments as they stream in
+  Map<String, dynamic>? args;
 }
 
 /// A short title from the first message, so the list reads well without an extra request.

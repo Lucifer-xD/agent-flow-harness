@@ -19,6 +19,7 @@ class Composer extends StatelessWidget {
     this.sendWhileBusy = false,
     this.top,
     this.tools = const [],
+    this.attached = false,
   });
   final TextEditingController controller;
   final FocusNode focus;
@@ -29,11 +30,12 @@ class Composer extends StatelessWidget {
   final bool sendWhileBusy; // remote runs take more messages while they work
   final Widget? top; // shown above the box (approvals in a remote thread)
   final List<Widget> tools; // chips along the bottom edge of the box
+  final bool attached; // photos are attached: sending with no text is fine
 
   @override
   Widget build(BuildContext context) {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final has = controller.text.trim().isNotEmpty;
+    final has = controller.text.trim().isNotEmpty || attached;
     final stop = busy && !(sendWhileBusy && has);
     return Padding(
       padding: EdgeInsets.fromLTRB(12, 4, 12, keyboard ? 8 : (bottom > 0 ? bottom + 6 : 12)),
