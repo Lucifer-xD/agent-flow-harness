@@ -227,7 +227,7 @@ class Engine:
 
         await browser.shutdown()
         for run in list(self.runs.values()):
-            run.abort.set()
+            run.abort.set()  # not stop(): a thread cut off by closing AFH is resumed on the next start
         await self.jobs.stop_all()
         if self.mcp:
             try:
@@ -510,7 +510,7 @@ class Engine:
         for s_id in sessions:
             run = self.runs.get(s_id)
             if run:
-                run.abort.set()
+                run.stop()
             self.on_loop(self.jobs.stop_session(s_id, forget=True))
             wt = self._afh(s_id).get("worktree")
             if wt:
@@ -633,12 +633,13 @@ class Engine:
         run = Run(self, session)
         self.runs[session["id"]] = run
         run.task = asyncio.create_task(run.run())
+        run.task.add_done_callback(run.ended)
         return run
 
     def interrupt(self, sid: str) -> None:
         run = self.runs.get(sid)
         if run:
-            run.abort.set()
+            run.stop()
             for req in [r for r in self.pending.values() if r.session_id == sid]:
                 req.reply("reject", "Interrupted")
 
@@ -910,6 +911,9 @@ class Engine:
         self.publish(event("session.compaction.started", session["id"], messages=len(old)))
         try:
             summary = await self.summarize_history(session["id"], ref, model, old)
+        except asyncio.CancelledError:  # stopped mid-summary: the history stays as it was
+            self.publish(event("session.compaction.ended", session["id"], skipped="stopped"))
+            raise
         except Exception as err:
             log.info("compaction skipped: %s", err)
             self.compact_failed[session["id"]] = time.time()

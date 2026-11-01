@@ -88,6 +88,18 @@ async def kill_tree(proc: asyncio.subprocess.Process) -> None:
         pass
 
 
+_reaping: set[asyncio.Task] = set()
+
+
+def kill_soon(proc: asyncio.subprocess.Process) -> None:
+    """Kill a process tree without waiting for it: a stopped run ends now, not after taskkill."""
+    if proc.returncode is not None:
+        return
+    task = asyncio.get_running_loop().create_task(kill_tree(proc))
+    _reaping.add(task)
+    task.add_done_callback(_reaping.discard)
+
+
 _CLIXML_BLOCK = re.compile(r"<Objs [^>]*>(.*?)</Objs>", re.DOTALL)
 _CLIXML_ITEM = re.compile(r'<S S="(\w+)">(.*?)</S>', re.DOTALL)
 _CLIXML_ESC = re.compile(r"_x([0-9A-Fa-f]{4})_")
@@ -184,6 +196,10 @@ class ShellTool(BaseTool):
             timed_out = True
             await kill_tree(proc)
             await proc.wait()
+        except asyncio.CancelledError:  # the run was stopped
+            kill_soon(proc)
+            pump_task.cancel()
+            raise
         # A surviving grandchild could hold the pipe open; do not wait on it forever.
         try:
             await asyncio.wait_for(pump_task, 5)
