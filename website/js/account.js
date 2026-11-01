@@ -1,5 +1,6 @@
-// The AFH account page: create an account or sign in, connect a computer that AFH sent here
-// (?link=CODE), and manage your computers. Talks to the relay at /relay/api on this same site;
+// The AFH account page: create an account or sign in (?signup opens that tab, ?next=/path is where
+// to go after), and connect a computer that AFH sent here (?link=CODE). Computers, chat and account
+// settings are on the dashboard (/dashboard). Talks to the relay at /relay/api on this same site;
 // the sign-in lives in an HttpOnly cookie the page itself can't read.
 (() => {
   const root = document.getElementById("acct");
@@ -7,7 +8,6 @@
   let linkCode = (params.get("link") || "").toUpperCase();
   let mode = params.has("signup") ? "signup" : "signin";
   let me = null;
-  let poll = 0;
 
   const h = (tag, attrs, ...kids) => {
     const [name, ...classes] = tag.split(".");
@@ -35,51 +35,98 @@
     return data;
   }
 
-  const ago = (t) => {
-    if (!t) return "never connected";
-    const s = Math.max(0, Date.now() / 1000 - t);
-    if (s < 90) return "seen just now";
-    if (s < 3600) return `seen ${Math.round(s / 60)} min ago`;
-    if (s < 86400) return `seen ${Math.round(s / 3600)} h ago`;
-    return `seen ${Math.round(s / 86400)} days ago`;
-  };
-
   const note = () => h("p.acct-msg", { hidden: true });
   const say = (box, text, ok) => { box.textContent = text; box.className = ok ? "acct-msg ok" : "acct-msg bad"; box.hidden = false; };
 
   // ---- signed out ----------------------------------------------------------------------------
 
+  const next = (() => {  // where to go after signing in: only paths on this site
+    const n = params.get("next") || "";
+    return /^\/(?!\/)[\w\-/.?=&#%]*$/.test(n) ? n : "/dashboard";
+  })();
+
+  function pwField(attrs) {
+    const input = h("input", { type: "password", required: true, ...attrs });
+    const eye = h("button.acct-eye", { type: "button", "aria-label": "Show password", title: "Show password" }, "Show");
+    eye.addEventListener("click", () => {
+      const showing = input.type === "text";
+      input.type = showing ? "password" : "text";
+      eye.textContent = showing ? "Show" : "Hide";
+      eye.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+      input.focus();
+    });
+    return [input, h("div.acct-pw", {}, input, eye)];
+  }
+
   async function authView(link) {
+    const signup = mode === "signup";
     const msg = note();
-    const email = h("input", { type: "email", autocomplete: "email", required: true, placeholder: "you@example.com" });
-    const pw = h("input", { type: "password", required: true, minlength: "8", autocomplete: mode === "signup" ? "new-password" : "current-password",
-      placeholder: mode === "signup" ? "8 characters or more" : "Your password" });
-    const go = h("button.btn.btn-primary.acct-submit", { type: "submit" }, mode === "signup" ? "Create account" : "Sign in");
+    const email = h("input", { type: "email", autocomplete: "email", required: true, placeholder: "you@example.com", inputmode: "email" });
+    const [pw, pwBox] = pwField({ minlength: "8", autocomplete: signup ? "new-password" : "current-password", placeholder: signup ? "8 characters or more" : "Your password" });
+    const [pw2, pw2Box] = pwField({ minlength: "8", autocomplete: "new-password", placeholder: "Type it again" });
+    const strength = h("p.acct-hint", {}, "");
+    if (signup) pw.addEventListener("input", () => {
+      const v = pw.value;
+      strength.textContent = !v ? "" : v.length < 8 ? `${8 - v.length} more character${v.length === 7 ? "" : "s"}` : v.length < 12 ? "Good" : "Strong";
+      strength.className = "acct-hint" + (v.length >= 8 ? " ok" : "");
+    });
+    const go = h("button.btn.btn-primary.acct-submit", { type: "submit" }, signup ? "Create account" : "Sign in");
     const form = h("form.acct-form", {
+      novalidate: true,
       async onsubmit(e) {
         e.preventDefault();
+        msg.hidden = true;
+        const mail = email.value.trim();
+        if (!/^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$/.test(mail)) return say(msg, "Enter a valid email address."), email.focus();
+        if (pw.value.length < (signup ? 8 : 1)) return say(msg, signup ? "Use a password of at least 8 characters." : "Enter your password."), pw.focus();
+        if (signup && pw.value !== pw2.value) return say(msg, "The two passwords don't match."), pw2.focus();
         go.disabled = true;
+        go.textContent = signup ? "Creating your account…" : "Signing in…";
         try {
-          await call("POST", mode, { email: email.value, password: pw.value });
-          await load();
-        } catch (x) { say(msg, x.message); go.disabled = false; }
+          await call("POST", mode, { email: mail, password: pw.value });
+          if (linkCode) return load();
+          location.href = next;
+        } catch (x) {
+          say(msg, x.message);
+          go.disabled = false;
+          go.textContent = signup ? "Create account" : "Sign in";
+        }
       },
     },
       h("label", {}, h("span", {}, "Email"), email),
-      h("label", {}, h("span", {}, "Password"), pw),
-      msg, go);
-    const tab = (m, label) => h("button", { type: "button", class: mode === m ? "on" : "", onclick: () => { mode = m; authView(link); } }, label);
+      h("label", {}, h("span", {}, "Password"), pwBox, signup ? strength : null),
+      signup ? h("label", {}, h("span", {}, "Confirm password"), pw2Box) : null,
+      msg, go,
+      h("p.acct-switch", {}, signup ? "Already have an account? " : "New to AFH? ",
+        h("button", { type: "button", onclick: () => switchTo(signup ? "signin" : "signup", link) }, signup ? "Sign in" : "Create a free account")));
+    const tab = (m, label) => h("button", { type: "button", role: "tab", "aria-selected": String(mode === m), class: mode === m ? "on" : "", onclick: () => switchTo(m, link) }, label);
     show(
       h("section.acct-hero", {},
-        h("p.kicker", {}, "AFH account"),
-        h("h1.acct-title", {}, link ? h("span", {}, "Connect ", h("span.grad-text", {}, link.name)) : mode === "signup" ? "Create your account." : "Welcome back."),
+        h("p.kicker", {}, link ? "Connect a computer" : signup ? "Create your AFH account" : "AFH account"),
+        h("h1.acct-title", {}, link ? h("span", {}, "Connect ", h("span.grad-text", {}, link.name)) : signup ? h("span", {}, "Your AFH, ", h("span.grad-text", {}, "everywhere.")) : "Welcome back."),
         h("p.sub", {}, link
-          ? "Sign in, or create an account, and this computer shows up in the AFH app on your phone."
-          : "One account for the AFH app on your phone and every computer you connect. AFH itself never needs it.")),
-      h("section.panel.acct-card", {},
-        h("div.acct-tabs", {}, tab("signin", "Sign in"), tab("signup", "Create account")),
-        form),
-      h("p.acct-fine", {}, "The account is only for remote access. The server keeps your email, a hash of your password and your list of computers — never threads, files or keys."));
+          ? "Sign in, or create an account, and this computer shows up in your dashboard and the AFH app on your phone."
+          : signup
+            ? "Free. Reach every computer running AFH from this website or your phone: chat with it, watch it work, approve steps and start new tasks."
+            : "Sign in to your dashboard: your computers, their threads and live chat with AFH.")),
+      h("section.acct-split", {},
+        h("div.panel.acct-card", {},
+          h("div.acct-tabs", { role: "tablist" }, tab("signin", "Sign in"), tab("signup", "Create account")),
+          form),
+        h("ul.acct-perks", {},
+          h("li", {}, h("b", {}, "Live dashboard"), h("span", {}, "Every computer and thread, with what AFH is doing right now.")),
+          h("li", {}, h("b", {}, "Chat from anywhere"), h("span", {}, "Send the next task, stop a run, approve a step or answer a question.")),
+          h("li", {}, h("b", {}, "Phone app too"), h("span", {}, "The same account signs in to AFH on Android and iPhone.")),
+          h("li", {}, h("b", {}, "Private"), h("span", {}, "The server keeps your email and computer list — never threads, files or keys.")))));
+  }
+
+  function switchTo(m, link) {
+    mode = m;
+    const q = new URLSearchParams(location.search);
+    q.delete("signup");
+    if (m === "signup") q.set("signup", "");
+    history.replaceState(null, "", "/account" + (q.toString() ? "?" + q.toString().replace(/=(&|$)/g, "$1") : ""));
+    authView(link);
   }
 
   // ---- connecting a computer --------------------------------------------------------------------
@@ -97,8 +144,8 @@
         show(h("section.acct-hero.acct-done", {},
           h("p.kicker", {}, "Connected"),
           h("h1.acct-title", {}, h("span.grad-text", {}, link.name), " is in."),
-          h("p.sub", {}, "Go back to AFH — it finishes by itself in a few seconds. Then open the AFH app on your phone and sign in with ", h("b", {}, me.user.email), "."),
-          h("div.cta-row", {}, h("a.btn.btn-primary", { href: "/account" }, "Your computers"), h("a.btn.btn-ghost", { href: "/download#phone" }, "Get the phone app"))));
+          h("p.sub", {}, "Go back to AFH — it finishes by itself in a few seconds. It then shows up in your dashboard, and in the AFH app on your phone when you sign in with ", h("b", {}, me.user.email), "."),
+          h("div.cta-row", {}, h("a.btn.btn-primary", { href: "/dashboard" }, "Open your dashboard"), h("a.btn.btn-ghost", { href: "/download#phone" }, "Get the phone app"))));
       } catch (x) { say(msg, x.message); yes.disabled = no.disabled = false; }
     });
     no.addEventListener("click", async () => {
@@ -111,7 +158,7 @@
       h("section.acct-hero", {},
         h("p.kicker", {}, "Connect a computer"),
         h("h1.acct-title", {}, "Add ", h("span.grad-text", {}, link.name), "?"),
-        h("p.sub", {}, "AFH on this computer asked to join your account. Once it's in, you can open it from the AFH app on your phone.")),
+        h("p.sub", {}, "AFH on this computer asked to join your account. Once it's in, you can chat with it from your dashboard here or the AFH app on your phone.")),
       h("section.panel.acct-card", {},
         h("div.acct-row", {}, h("span", {}, "Account"), h("b", {}, me.user.email)),
         h("div.acct-row", {}, h("span", {}, "Code"), h("b.mono", {}, linkCode)),
@@ -125,108 +172,24 @@
       h("p.kicker", {}, "Connect a computer"),
       h("h1.acct-title", {}, "This link has expired."),
       h("p.sub", {}, text || "Start again from AFH on your computer: Settings → Remote control → Sign in with your browser."),
-      h("div.cta-row", {}, h("a.btn.btn-ghost", { href: "/account" }, "Your account"))));
-  }
-
-  // ---- signed in -------------------------------------------------------------------------------
-
-  function computerRow(c) {
-    const msg = note();
-    let confirming = false;
-    const remove = h("button.btn.btn-ghost.btn-small.acct-danger", { type: "button" }, "Remove");
-    remove.addEventListener("click", async () => {
-      if (!confirming) { confirming = true; remove.textContent = "Click again to remove"; return; }
-      try { await call("DELETE", `computers/${c.id}`); load(); } catch (x) { say(msg, x.message); }
-    });
-    const rename = h("button.btn.btn-ghost.btn-small", { type: "button" }, "Rename");
-    const row = h("div.acct-pc" + (c.online ? ".on" : ""), {},
-      h("span.acct-dot", {}),
-      h("div.acct-pc-main", {}, h("b", {}, c.name), h("span", {}, c.online ? "Online" : `Offline · ${ago(c.lastSeen)}`, c.version ? ` · AFH ${c.version}` : "")),
-      h("div.acct-pc-actions", {},
-        c.online ? h("a.btn.btn-ghost.btn-small", { href: `/r/${c.id}/`, title: "Open AFH on this computer in your browser" }, "Open") : null,
-        rename, remove),
-      msg);
-    rename.addEventListener("click", () => {
-      const input = h("input", { value: c.name, maxlength: "60" });
-      const save = h("button.btn.btn-primary.btn-small", { type: "button" }, "Save");
-      const done = async () => {
-        try { await call("PATCH", `computers/${c.id}`, { name: input.value }); load(); } catch (x) { say(msg, x.message); }
-      };
-      save.addEventListener("click", done);
-      input.addEventListener("keydown", (e) => { if (e.key === "Enter") done(); if (e.key === "Escape") load(); });
-      row.querySelector(".acct-pc-main").replaceChildren(input);
-      row.querySelector(".acct-pc-actions").replaceChildren(save);
-      input.focus();
-      clearInterval(poll);
-    });
-    return row;
-  }
-
-  function accountView() {
-    const pwMsg = note();
-    const old = h("input", { type: "password", autocomplete: "current-password", placeholder: "Current password" });
-    const fresh = h("input", { type: "password", autocomplete: "new-password", minlength: "8", placeholder: "New password" });
-    const delMsg = note();
-    const delPw = h("input", { type: "password", autocomplete: "current-password", placeholder: "Your password" });
-    const list = me.computers;
-    root.replaceChildren(
-      h("section.acct-hero", {},
-        h("p.kicker", {}, "AFH account"),
-        h("h1.acct-title", {}, "Your computers."),
-        h("div.acct-who", {}, h("span", {}, "Signed in as ", h("b", {}, me.user.email)),
-          h("button.btn.btn-ghost.btn-small", { type: "button", async onclick() { await call("POST", "signout").catch(() => {}); me = null; mode = "signin"; authView(); } }, "Sign out"))),
-      h("section.panel.acct-card", {},
-        list.length ? h("div.acct-pcs", {}, list.map(computerRow)) : h("div.acct-empty", {},
-          h("b", {}, "No computers yet."),
-          h("p", {}, "In AFH on your computer, open ", h("b", {}, "Settings → Remote control"), " and choose ", h("b", {}, "Sign in with your browser"), ". It brings you back here to connect it."))),
-      h("section.acct-grid", {},
-        h("div.panel.acct-card", {},
-          h("h2", {}, "On your phone"),
-          h("p", {}, "Get the AFH app for Android or iPhone and sign in with this account to reach these computers from anywhere."),
-          h("div.cta-row", {}, h("a.btn.btn-primary.btn-small", { href: "/download#phone" }, "Get the app"))),
-        h("form.panel.acct-card", {
-          async onsubmit(e) {
-            e.preventDefault();
-            try { await call("POST", "password", { old: old.value, new: fresh.value }); old.value = fresh.value = ""; say(pwMsg, "Password changed. Your phones were signed out.", true); }
-            catch (x) { say(pwMsg, x.message); }
-          },
-        },
-          h("h2", {}, "Password"),
-          h("div.acct-form", {}, old, fresh),
-          pwMsg,
-          h("div.cta-row", {}, h("button.btn.btn-ghost.btn-small", { type: "submit" }, "Change password")))),
-      h("section.panel.acct-card.acct-delete", {},
-        h("h2", {}, "Delete account"),
-        h("p", {}, "Deletes the account and disconnects every computer. Nothing on your computers is touched."),
-        h("div.acct-inline", {}, delPw, h("button.btn.btn-ghost.btn-small.acct-danger", {
-          type: "button",
-          async onclick() {
-            try { await call("POST", "account/delete", { password: delPw.value }); me = null; authView(); }
-            catch (x) { say(delMsg, x.message); }
-          },
-        }, "Delete my account")),
-        delMsg));
+      h("div.cta-row", {}, h("a.btn.btn-ghost", { href: "/dashboard" }, "Your dashboard"))));
   }
 
   async function load() {
-    clearInterval(poll);
     let link = null;
     if (linkCode) {
       try { link = await call("GET", `link/${linkCode}`); } catch (x) { return expiredView(x.status === 410 ? x.message : null); }
     }
     try {
       me = await call("GET", "me");
+      if (!me?.user) throw Object.assign(new Error("The account server sent an unexpected answer."), { status: 0 });
     } catch (x) {
       if (x.status === 401) return authView(link);
       return show(h("section.acct-hero", {}, h("h1.acct-title", {}, "Can't reach the account server."), h("p.sub", {}, x.message),
         h("div.cta-row", {}, h("button.btn.btn-ghost", { type: "button", onclick: load }, "Try again"))));
     }
     if (link) return linkView(link);
-    accountView();
-    poll = setInterval(async () => {
-      if (document.hidden || root.querySelector(".acct-pc input")) return;
-      try { me = await call("GET", "me"); const pcs = root.querySelector(".acct-pcs"); if (pcs) pcs.replaceChildren(...me.computers.map(computerRow)); } catch { /* keep the list */ }
-    }, 8000);
+    location.replace(next);  // signed in already: computers, chat and settings live on the dashboard
   }
 
   load();

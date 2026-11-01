@@ -145,6 +145,29 @@
 .stat b { display: block; font: 700 clamp(44px, 5vw, 72px)/1 var(--display); letter-spacing: -0.04em; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .stat span { display: block; margin-top: 10px; color: var(--text-2); font-size: 14.5px; }
 
+/* ---- 6½ · account ---- */
+.acct-cta { position: relative; z-index: 2; width: min(1120px, calc(100% - 2 * var(--gutter))); margin: 6vh auto 4vh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: clamp(28px, 5vw, 70px); align-items: center; }
+.acct-cta { padding: clamp(24px, 4vw, 52px); border: 1px solid var(--line); border-radius: 30px; background: linear-gradient(160deg, rgba(24, 18, 15, 0.86), rgba(12, 9, 8, 0.8)); backdrop-filter: blur(22px) saturate(1.3); box-shadow: 0 40px 120px -50px rgba(0, 0, 0, 0.9); }
+.acct-cta .kicker { margin: 0; font: 500 12.5px var(--mono); letter-spacing: 0.22em; text-transform: uppercase; color: var(--orange); }
+.acct-cta .h2 { margin: 12px 0 0; font: 700 clamp(34px, 4.6vw, 60px)/1.02 var(--display); letter-spacing: -0.04em; }
+.acct-cta .sub { margin: 18px 0 0; max-width: 520px; color: var(--text-2); font-size: 17px; }
+.acct-cta .cta-row { margin-top: 28px; }
+.acct-cta-demo { padding: 18px; border: 1px solid var(--line-2); border-radius: 22px; background: rgba(20, 16, 14, 0.82); backdrop-filter: blur(14px); box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.8); }
+.demo-bar { display: flex; align-items: center; gap: 10px; padding: 4px 4px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.demo-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-3); }
+.demo-dot.on { background: #3ddc84; box-shadow: 0 0 10px rgba(61, 220, 132, 0.8); }
+.demo-tag { margin-left: auto; font: 500 12px var(--mono); color: #9ff0c2; }
+.demo-thread { display: grid; gap: 10px; padding-top: 14px; font-size: 14px; }
+.demo-msg { padding: 10px 14px; border-radius: 16px; line-height: 1.45; }
+.demo-msg.me { justify-self: end; max-width: 85%; background: rgba(255, 106, 42, 0.14); border: 1px solid rgba(255, 106, 42, 0.28); }
+.demo-msg.ai { color: var(--text-2); padding-left: 2px; }
+.demo-step { display: flex; align-items: center; gap: 9px; color: var(--text-3); font-size: 13px; }
+.demo-step i { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); }
+.demo-step code { font: 12.5px var(--mono); color: var(--text-2); }
+.demo-input { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding: 11px 12px 11px 16px; border: 1px solid var(--line-2); border-radius: 16px; color: var(--text-3); }
+.demo-input span { width: 26px; height: 26px; border-radius: 50%; background: var(--grad); }
+@media (max-width: 860px) { .acct-cta { grid-template-columns: 1fr; } }
+
 /* ---- 7 · download ---- */
 .download { min-height: 100vh; display: grid; place-items: center; padding: 12vh var(--gutter); }
 .dl-card { width: min(860px, 100%); text-align: center; }

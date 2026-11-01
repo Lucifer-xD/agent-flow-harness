@@ -15,6 +15,10 @@
     nav.innerHTML = `
       <a class="brand" href="/">${MARK}<span>Agent Flow Harness</span></a>
       <nav class="nav-links" aria-label="Main">${LINKS.map(link).join("")}</nav>
+      <span class="nav-auth" data-auth>
+        <a class="nav-signin" href="/account">Sign in</a>
+        <a class="btn btn-small btn-ghost nav-signup" href="/account?signup">Sign up</a>
+      </span>
       <a class="btn btn-small nav-cta${page === "download" ? " active" : ""}" href="/download">Download</a>
       <button class="burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu"><i></i><i></i></button>`;
     const menu = document.createElement("div");
@@ -22,6 +26,7 @@
     menu.id = "menu";
     menu.innerHTML = `<nav aria-label="Menu">${[["", "Home"], ...LINKS, ["download", "Download"]].map(([id, label], i) =>
       `<a href="/${id}" style="--i:${i}"${page === (id || "home") ? ' class="active"' : ""}>${label}</a>`).join("")}</nav>
+      <div class="menu-auth" data-auth-menu><a class="btn btn-ghost" href="/account">Sign in</a><a class="btn btn-primary" href="/account?signup">Create account</a></div>
       <p class="menu-foot">AFH <span data-version>1.10.0</span> · Windows 10/11</p>`;
     nav.after(menu);
     const burger = nav.querySelector(".burger");
@@ -32,6 +37,26 @@
     burger.addEventListener("click", () => toggle(!document.documentElement.classList.contains("menu-open")));
     menu.addEventListener("click", (e) => { if (e.target.closest("a")) toggle(false); });
     addEventListener("keydown", (e) => { if (e.key === "Escape") toggle(false); });
+    // signed in to the AFH account (an HttpOnly cookie this page can't read): ask the relay
+    if (!document.body.hasAttribute("data-no-auth")) {
+      fetch("/relay/api/me", { credentials: "same-origin" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((me) => {
+          if (!me?.user) return;
+          window.afhMe = me;
+          const email = me.user.email || "";
+          const initial = (email[0] || "A").toUpperCase();
+          const online = (me.computers || []).filter((c) => c.online).length;
+          nav.querySelector("[data-auth]").innerHTML = `
+            <a class="nav-me${page === "dashboard" ? " active" : ""}" href="/dashboard" title="${email.replace(/"/g, "&quot;")}">
+              <span class="nav-avatar">${initial}</span><span class="nav-me-label">Dashboard</span>${online ? `<span class="nav-online" title="${online} online"></span>` : ""}
+            </a>`;
+          menu.querySelector("[data-auth-menu]").innerHTML = `<a class="btn btn-primary" href="/dashboard">Open your dashboard</a>`;
+          document.documentElement.classList.add("signed-in");
+          document.dispatchEvent(new CustomEvent("afh:me", { detail: me }));
+        })
+        .catch(() => {});
+    }
     const onScroll = () => nav.classList.toggle("scrolled", scrollY > 40);
     addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -48,7 +73,7 @@
           <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.10.0</span> · <span data-date>Nov 1, 2026</span></a>
         </div>
         <nav class="footer-cols" aria-label="Footer">
-          <div><h4>Product</h4><a href="/features">Features</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a><a href="/account">Account</a></div>
+          <div><h4>Product</h4><a href="/features">Features</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a><a href="/dashboard">Dashboard</a><a href="/account?signup">Create account</a></div>
           <div><h4>Learn</h4><a href="/docs">Getting started</a><a href="/docs#providers">Add a provider</a><a href="/docs#shortcuts">Shortcuts</a><a href="/docs#faq">FAQ</a></div>
           <div><h4>Developers</h4><a href="/api">API reference</a><a href="/sdk/afh_sdk.py" download>Python SDK</a><a href="/sdk/afh.mjs" download>JavaScript SDK</a><a href="/api#events">Live events</a></div>
         </nav>
