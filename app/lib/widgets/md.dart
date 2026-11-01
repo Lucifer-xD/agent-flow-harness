@@ -1,8 +1,9 @@
-// Markdown for replies, styled for the dark AFH look: code blocks get a header with the language
+// Markdown for replies, in the current theme: code blocks get a header with the language
 // and a copy button, links open in the browser.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -29,33 +30,33 @@ class Md extends StatelessWidget {
       builders: {'pre': _CodeBuilder()},
       styleSheet: MarkdownStyleSheet(
         p: base,
-        a: base.copyWith(color: const Color(0xFFFF9A6A), decoration: TextDecoration.underline, decorationColor: const Color(0x66FF9A6A)),
-        strong: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+        a: base.copyWith(color: Afh.accent, decoration: TextDecoration.underline, decorationColor: Afh.accent.withValues(alpha: 0.4)),
+        strong: TextStyle(fontWeight: FontWeight.w600, color: Afh.text),
         em: const TextStyle(fontStyle: FontStyle.italic),
         h1: Afh.h2().copyWith(fontSize: 23),
         h2: Afh.h3().copyWith(fontSize: 20),
         h3: Afh.h3().copyWith(fontSize: 17.5),
-        h4: base.copyWith(fontWeight: FontWeight.w700),
+        h4: base.copyWith(fontWeight: FontWeight.w600),
         h1Padding: const EdgeInsets.only(top: 8, bottom: 2),
         h2Padding: const EdgeInsets.only(top: 8, bottom: 2),
         h3Padding: const EdgeInsets.only(top: 6),
         blockSpacing: 11,
         listIndent: 22,
-        listBullet: base.copyWith(color: Afh.orange, fontWeight: FontWeight.w700),
-        code: TextStyle(fontFamily: Afh.mono, fontSize: size * 0.86, color: const Color(0xFFFFC59E), backgroundColor: Colors.white.withValues(alpha: 0.07)),
+        listBullet: base.copyWith(color: Afh.text3),
+        code: TextStyle(fontFamily: Afh.mono, fontSize: size * 0.86, color: Afh.text, backgroundColor: Afh.surface2),
         codeblockPadding: EdgeInsets.zero,
         codeblockDecoration: const BoxDecoration(),
         blockquote: base.copyWith(color: Afh.text2),
-        blockquoteDecoration: const BoxDecoration(
-          border: Border(left: BorderSide(color: Afh.orange, width: 3)),
+        blockquoteDecoration: BoxDecoration(
+          border: Border(left: BorderSide(color: Afh.line2, width: 3)),
         ),
         blockquotePadding: const EdgeInsets.only(left: 14, top: 2, bottom: 2),
-        horizontalRuleDecoration: const BoxDecoration(
+        horizontalRuleDecoration: BoxDecoration(
           border: Border(top: BorderSide(color: Afh.line2)),
         ),
-        tableHead: base.copyWith(fontWeight: FontWeight.w700),
+        tableHead: base.copyWith(fontWeight: FontWeight.w600),
         tableBody: base.copyWith(fontSize: size - 1),
-        tableBorder: TableBorder.all(color: Afh.line2, width: 1),
+        tableBorder: TableBorder.all(color: Afh.line, width: 1),
         tableCellsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         tableColumnWidth: const IntrinsicColumnWidth(),
       ),
@@ -89,23 +90,23 @@ class CodeBlock extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F0C0A),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Afh.line2),
+        color: Afh.p.code,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Afh.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
-            decoration: const BoxDecoration(
+            padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+            decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: Afh.line)),
             ),
             child: Row(
               children: [
                 Text(
                   lang.isEmpty ? 'code' : lang,
-                  style: const TextStyle(fontFamily: Afh.mono, fontSize: 12, color: Afh.text3),
+                  style: TextStyle(fontFamily: Afh.mono, fontSize: 12, color: Afh.text3),
                 ),
                 const Spacer(),
                 _CopyButton(text: text),
@@ -117,7 +118,7 @@ class CodeBlock extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
             child: Text(
               text,
-              style: const TextStyle(fontFamily: Afh.mono, fontSize: 13, height: 1.5, color: Color(0xFFF1E4D8)),
+              style: TextStyle(fontFamily: Afh.mono, fontSize: 13, height: 1.5, color: Afh.text),
             ),
           ),
         ],
@@ -156,11 +157,11 @@ class _CopyButtonState extends State<_CopyButton> {
             key: ValueKey(_done),
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(_done ? Icons.check_rounded : Icons.copy_rounded, size: 15, color: _done ? Afh.good : Afh.text2),
+              Icon(_done ? LucideIcons.check : LucideIcons.copy, size: 14, color: _done ? Afh.good : Afh.text3),
               const SizedBox(width: 5),
               Text(
                 _done ? 'Copied' : 'Copy',
-                style: TextStyle(fontSize: 12.5, color: _done ? Afh.good : Afh.text2, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 12, color: _done ? Afh.good : Afh.text3, fontWeight: FontWeight.w500),
               ),
             ],
           ),
