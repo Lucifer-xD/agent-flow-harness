@@ -132,15 +132,15 @@ def new_session(con: sqlite3.Connection, user_id: str, kind: str) -> str:
     return token
 
 
-def session_token(request: Request) -> str:
+def session_token(request: Request, cookie_only: bool = False) -> str:
     auth = request.headers.get("authorization") or ""
-    if auth.lower().startswith("bearer "):
+    if auth.lower().startswith("bearer ") and not cookie_only:
         return auth[7:].strip()
     return request.cookies.get(COOKIE) or ""
 
 
-def current_user(request: Request) -> sqlite3.Row | None:
-    token = session_token(request)
+def current_user(request: Request, cookie_only: bool = False) -> sqlite3.Row | None:
+    token = session_token(request, cookie_only)
     if not token:
         return None
     with db() as con:
@@ -567,6 +567,89 @@ async def proxy(cid: str, path: str, request: Request):
                     pass
 
     return StreamingResponse(stream(), status_code=int(first.get("status") or 502), headers=out_headers)
+
+
+# ---- chat on the website: a pass-through to model providers and the web ------------------------
+#
+# Browsers can't call most model APIs (no CORS) or read other sites, so the web chat sends those
+# requests here with the target in X-AFH-Target. The relay forwards them as they are and streams the
+# answer back; keys and messages pass through and are never stored or logged. Only for signed-in
+# accounts, only to public https addresses.
+
+FWD_DROP = {"host", "cookie", "origin", "referer", "content-length", "connection", "accept-encoding", "user-agent", "te",
+            "upgrade", "priority", "x-real-ip", "x-forwarded-for", "x-forwarded-proto", "x-forwarded-host", "x-afh-target", "x-afh-ua"}
+FWD_RESPONSE = {"content-type", "cache-control", "retry-after", "x-request-id", "location"}
+FWD_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+_fwd_client = None
+
+
+def fwd_client():
+    global _fwd_client
+    if _fwd_client is None:
+        import httpx
+        _fwd_client = httpx.AsyncClient(timeout=httpx.Timeout(connect=20, read=300, write=60, pool=20), follow_redirects=False,
+                                        limits=httpx.Limits(max_connections=200, max_keepalive_connections=40))
+    return _fwd_client
+
+
+async def public_host(host: str, port: int) -> bool:
+    """Every address the name resolves to is on the public internet (not this server or a private network)."""
+    import ipaddress
+    import socket
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError:
+        return False
+    addrs = {ipaddress.ip_address(i[4][0].split("%")[0]) for i in infos}
+    return bool(addrs) and all(a.is_global for a in addrs)
+
+
+@app.api_route("/relay/api/fwd", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def forward(request: Request):
+    from urllib.parse import urlsplit
+    user = current_user(request, cookie_only=True)  # Authorization here is the provider's key, not ours
+    if not user:
+        return err("Sign in again", 401)
+    if limited(f"fwd:{user['id']}", 1500, 3600):
+        return err("Too many requests through AFH this hour. Try again later.", 429)
+    target = request.headers.get("x-afh-target") or ""
+    u = urlsplit(target)
+    if u.scheme != "https" or not u.hostname or u.username or u.password:
+        return err("Only https addresses can be reached", 400)
+    if not await public_host(u.hostname, u.port or 443):
+        return err(f"{u.hostname} can't be reached from AFH", 400)
+    if int(request.headers.get("content-length") or 0) > MAX_BODY:
+        return err("That request is too large", 413)
+    body = await request.body()
+    if len(body) > MAX_BODY:
+        return err("That request is too large", 413)
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in FWD_DROP and not k.lower().startswith("sec-")}
+    headers["user-agent"] = request.headers.get("x-afh-ua") or FWD_UA
+    headers["accept-encoding"] = "identity"  # bytes go straight through, so ask for them plain
+    client = fwd_client()
+    import httpx
+    try:
+        req = client.build_request(request.method, target, headers=headers, content=body or None)
+        res = await client.send(req, stream=True)
+    except httpx.TimeoutException:
+        return err(f"{u.hostname} didn't answer in time", 504)
+    except httpx.HTTPError:
+        return err(f"Couldn't reach {u.hostname}", 502)
+    out = {k: v for k, v in res.headers.items() if k.lower() in FWD_RESPONSE}
+    out["X-Accel-Buffering"] = "no"
+    out["Cache-Control"] = "no-store"
+    out["X-AFH-Fwd"] = "1"  # the provider's own answer, not the relay's
+
+    async def stream():
+        try:
+            async for chunk in res.aiter_raw():
+                yield chunk
+        except httpx.HTTPError:
+            pass
+        finally:
+            await res.aclose()
+
+    return StreamingResponse(stream(), status_code=res.status_code, headers=out)
 
 
 # ---- assets for the notice pages; accounts themselves live on the website (/account) ------------

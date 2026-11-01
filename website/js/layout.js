@@ -48,10 +48,10 @@
           const initial = (email[0] || "A").toUpperCase();
           const online = (me.computers || []).filter((c) => c.online).length;
           nav.querySelector("[data-auth]").innerHTML = `
-            <a class="nav-me${page === "dashboard" ? " active" : ""}" href="/dashboard" title="${email.replace(/"/g, "&quot;")}">
-              <span class="nav-avatar">${initial}</span><span class="nav-me-label">Dashboard</span>${online ? `<span class="nav-online" title="${online} online"></span>` : ""}
+            <a class="nav-me${page === "chat" ? " active" : ""}" href="/chat" title="${email.replace(/"/g, "&quot;")}">
+              <span class="nav-avatar">${initial}</span><span class="nav-me-label">Open chat</span>${online ? `<span class="nav-online" title="${online} online"></span>` : ""}
             </a>`;
-          menu.querySelector("[data-auth-menu]").innerHTML = `<a class="btn btn-primary" href="/dashboard">Open your dashboard</a>`;
+          menu.querySelector("[data-auth-menu]").innerHTML = `<a class="btn btn-primary" href="/chat">Open chat</a>`;
           document.documentElement.classList.add("signed-in");
           document.dispatchEvent(new CustomEvent("afh:me", { detail: me }));
         })
@@ -73,7 +73,7 @@
           <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.10.0</span> · <span data-date>Nov 1, 2026</span></a>
         </div>
         <nav class="footer-cols" aria-label="Footer">
-          <div><h4>Product</h4><a href="/features">Features</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a><a href="/dashboard">Dashboard</a><a href="/account?signup">Create account</a></div>
+          <div><h4>Product</h4><a href="/features">Features</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a><a href="/chat">Chat</a><a href="/computers">Computers</a><a href="/account?signup">Create account</a></div>
           <div><h4>Learn</h4><a href="/docs">Getting started</a><a href="/docs#providers">Add a provider</a><a href="/docs#shortcuts">Shortcuts</a><a href="/docs#faq">FAQ</a></div>
           <div><h4>Developers</h4><a href="/api">API reference</a><a href="/sdk/afh_sdk.py" download>Python SDK</a><a href="/sdk/afh.mjs" download>JavaScript SDK</a><a href="/api#events">Live events</a></div>
         </nav>
