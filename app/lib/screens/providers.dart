@@ -607,7 +607,7 @@ class _ProviderPageState extends State<ProviderPage> {
               ],
               if (showModels) ...[
                 SectionLabel(
-                  '${_count ?? models.length} models available',
+                  '${_count ?? models.length} model${(_count ?? models.length) == 1 ? '' : 's'} available',
                   trailing: models.length > 8
                       ? Pressable(
                           onTap: () => setState(() => _allModels = !_allModels),

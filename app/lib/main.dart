@@ -7,7 +7,7 @@ import 'screens/home.dart';
 import 'store.dart';
 import 'theme.dart';
 
-const appVersion = '1.10.2';
+const appVersion = '1.11.0';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
