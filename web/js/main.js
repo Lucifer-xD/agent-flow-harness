@@ -8,6 +8,7 @@ import { openContextEditor } from "./context.js";
 import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
 import { openSettings } from "./settings.js";
+import { openAccount, refreshAccountButton } from "./settings-remote.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
 import { initUpdates } from "./updates.js";
 import { applyWorkEvent, goalsPopover, jobsPopover, loadJobs, openGoalDialog, renderDock, renderJobsChip, setRedraw, syncState } from "./work.js";
@@ -117,7 +118,7 @@ async function boot() {
   apiHooks.onUnauthorized = () => showLogin();
   if (BASE) { // opened through the AFH account (phone app): a way back to the list of computers
     document.body.classList.add("via-relay");
-    $("btn-settings").before(el("a.icon-btn.sb-mini", { href: "/account", title: "Your computers" }, ico("cpu")));
+    $("btn-account").replaceWith(el("a.sb-foot-btn", { href: "/account", title: "Your computers" }, ico("cpu"), "Your computers"));
   }
   initUpdates();
   if (native.electron()) {
@@ -1788,6 +1789,11 @@ function wire() {
   $("btn-new").addEventListener("click", () => { showHome(); ta.focus(); });
   $("project-picker").addEventListener("click", projectMenu);
   $("btn-settings").addEventListener("click", () => openSettings("general", ctx));
+  if ($("btn-account")) {
+    $("btn-account").addEventListener("click", () => openAccount());
+    refreshAccountButton();
+    setInterval(() => !document.hidden && refreshAccountButton(), 15000);
+  }
   $("btn-memory").addEventListener("click", openMemory);
   $("btn-theme").addEventListener("click", toggleTheme);
   $("btn-lang").addEventListener("click", () => setLanguage(S.settings.ui.language === "ar" ? "en" : "ar"));

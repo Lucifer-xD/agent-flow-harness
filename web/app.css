@@ -1439,3 +1439,17 @@ body.resizing-drawer .drawer, body.resizing-drawer .app { transition: none !impo
 @keyframes msg-slide-l { from { opacity: 0; transform: translateX(-28px); } }
 @keyframes msg-pop { from { opacity: 0; transform: scale(0.94) translateY(6px); } }
 @keyframes msg-blur { from { opacity: 0; filter: blur(8px); transform: translateY(4px); } }
+
+/* sidebar account button (AFH account / phone access) */
+#btn-account { min-width: 0; padding: 5px 8px; gap: 10px; text-align: start; }
+.acct-avatar { position: relative; display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--panel-2); color: var(--text-2); }
+.acct-avatar .ico svg { width: 15px; height: 15px; }
+#btn-account.signed-in .acct-avatar { background: linear-gradient(135deg, var(--accent), #ff3d8a); color: #fff; }
+.acct-dot { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--bg-2, var(--bg)); background: var(--text-3); display: none; }
+#btn-account.signed-in .acct-dot { display: block; }
+#btn-account[data-state="online"] .acct-dot { background: var(--good, #3fb950); }
+#btn-account[data-state="connecting"] .acct-dot, #btn-account[data-state="retrying"] .acct-dot { background: var(--warn, #d29922); }
+.acct-text { display: grid; min-width: 0; line-height: 1.2; }
+.acct-text b { font-weight: 600; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-text small { font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-modal .card { margin: 0; }
