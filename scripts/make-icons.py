@@ -1,9 +1,10 @@
 """Draw the AFH mark as PNG app icons (the phone apps and the /m/ pages need bitmaps).
 
-python scripts/make-icons.py  ->  the Android app's launcher icons and splash screens (mobile/android),
-the iPhone app's (mobile/resources/ios, copied in by the iOS build) and relay/static/m/icon-*.png.
+python scripts/make-icons.py  ->  the phone app's launcher icons (app/android and app/ios, Flutter)
+and relay/static/m/icon-*.png.
 """
 
+import json
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -76,7 +77,7 @@ def round_icon(size: int) -> Image.Image:
 
 
 def main() -> None:
-    android = ROOT / "mobile" / "android" / "app" / "src" / "main" / "res"
+    android = ROOT / "app" / "android" / "app" / "src" / "main" / "res"
     if android.is_dir():
         for dpi, scale in {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}.items():
             d = android / f"mipmap-{dpi}"
@@ -90,12 +91,13 @@ def main() -> None:
             splash(w, h).convert("RGB").save(f)
         (android / "values" / "ic_launcher_background.xml").write_text(
             '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#0A0807</color>\n</resources>\n', encoding="utf-8")
-    ios = ROOT / "mobile" / "resources" / "ios"
-    ios.mkdir(parents=True, exist_ok=True)
-    draw(1024, background=True, mark_width=0.74).convert("RGB").save(ios / "AppIcon-512@2x.png")  # no alpha: Apple rejects it
-    big = splash(2732, 2732).convert("RGB")
-    for name in ("splash-2732x2732.png", "splash-2732x2732-1.png", "splash-2732x2732-2.png"):
-        big.save(ios / name)
+    ios = ROOT / "app" / "ios" / "Runner" / "Assets.xcassets" / "AppIcon.appiconset"
+    if ios.is_dir():
+        big = draw(1024, background=True, mark_width=0.74).convert("RGB")  # no alpha: Apple rejects it
+        for img in json.loads((ios / "Contents.json").read_text(encoding="utf-8"))["images"]:
+            if img.get("filename"):
+                px = round(float(img["size"].split("x")[0]) * int(img["scale"][0]))
+                big.resize((px, px), Image.LANCZOS).save(ios / img["filename"])
     web = ROOT / "relay" / "static" / "m"
     for n in (180, 192, 512):
         draw(n, background=True, mark_width=0.74).save(web / f"icon-{n}.png")

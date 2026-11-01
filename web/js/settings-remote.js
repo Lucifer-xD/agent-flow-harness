@@ -1,13 +1,10 @@
 // Settings → Remote control: use AFH from your phone or another computer.
 
 import { api, native } from "./api.js";
-import { copyText, el, ico, toast, toggle } from "./ui.js";
+import { copyText, el, ico, modal, toast, toggle } from "./ui.js";
 
 export async function remotePane(pane, ctx) {
-  pane.append(el("h2", "Remote control"), el("p.lead", "Open AFH from your phone, tablet or another computer: same threads, same approvals, live. Everything stays on this PC; the other device only shows the screen."));
-  const account = el("div");
-  pane.append(account);
-  accountCard(account);
+  pane.append(el("h2", "Remote control"), el("p.lead", "Open AFH from a phone, tablet or another computer on your own network: same threads, same approvals, live. To reach this PC from anywhere with the AFH phone app, use the account button at the bottom of the sidebar."));
   pane.append(el("h3.sub-h", "On your own network"));
   const box = el("div");
   pane.append(box);
@@ -52,7 +49,35 @@ export async function remotePane(pane, ctx) {
   draw();
 }
 
-// The AFH account: sign in once and this PC shows up in the AFH app on your phone, from anywhere.
+// The AFH account (the sidebar's account button): sign in once and this PC shows up in the AFH app
+// on your phone, from anywhere.
+export function openAccount() {
+  const box = el("div.account-modal");
+  modal(el("div.m-body", { style: { padding: "22px 24px 26px" } },
+    el("h2", "AFH account"),
+    el("p.lead", "Reach this PC from the AFH app on your phone — follow threads, approve steps and send tasks from anywhere."),
+    box), { small: true, onClose: () => refreshAccountButton() });
+  accountCard(box).then(() => refreshAccountButton());
+}
+
+/** Keeps the sidebar's account button showing who's signed in and whether the phone can reach this PC. */
+export async function refreshAccountButton() {
+  const btn = document.getElementById("btn-account");
+  if (!btn) return;
+  let st;
+  try { st = await api.get("/api/cloud"); } catch { return; }
+  const label = btn.querySelector(".acct-text b"), sub = btn.querySelector(".acct-text small");
+  btn.classList.toggle("signed-in", !!st.signedIn);
+  btn.dataset.state = st.signedIn ? (st.enabled ? st.state : "off") : "out";
+  if (!st.signedIn) {
+    label.textContent = st.link ? "Finish in your browser…" : "Sign in";
+    sub.textContent = "Use AFH from your phone";
+  } else {
+    label.textContent = st.email;
+    sub.textContent = !st.enabled ? "Phone access off" : st.state === "online" ? "Reachable from your phone" : st.state === "connecting" ? "Connecting…" : "Reconnecting…";
+  }
+}
+
 async function accountCard(box) {
   let st;
   try { st = await api.get("/api/cloud"); } catch (e) { box.replaceChildren(el("div.note", e.message)); return; }
@@ -67,6 +92,7 @@ async function accountCard(box) {
         const changed = next.state !== st.state || next.error !== st.error || next.signedIn !== st.signedIn || !!next.link !== !!st.link || next.linkError !== st.linkError;
         if (next.signedIn && !st.signedIn) toast("This PC is now in your AFH account", "ok");
         st = next;
+        refreshAccountButton();
         if (changed) draw(); else refreshSoon();
       } catch { refreshSoon(); }
     }, 2000);
@@ -77,7 +103,7 @@ async function accountCard(box) {
   const draw = () => {
     if (!st.signedIn) {
       // the account lives on the website: AFH opens it there and waits for the user to approve this PC
-      const head = el("div.card-head", el("div", el("h3", "AFH account — from anywhere"), el("p", "Sign in and this PC appears in the AFH app on your Android phone or iPhone. Watch and steer your threads while you're away; nothing to open on your router.")));
+      const head = el("div.card-head", el("div", el("h3", "Not signed in"), el("p", "Sign in and this PC appears in the AFH app on your Android phone or iPhone. Nothing to open on your router.")));
       const fine = el("div.note", { style: { margin: "0 16px 14px" } }, "You sign in or create the account on agentflowharness.com — AFH never sees your password. The account is only for remote access.");
       if (st.link) {
         const reopen = el("button.btn.sm", { on: { click: () => native.openExternal(st.link.url) } }, ico("globe"), "Open the page again");
@@ -110,7 +136,7 @@ async function accountCard(box) {
     });
     const dot = el("span", { style: { display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", marginInlineEnd: "6px", background: st.state === "online" ? "var(--good, #3fb950)" : st.state === "off" ? "var(--text-3)" : "var(--warn, #d29922)" } });
     box.replaceChildren(el("div.card",
-      el("div.card-head", el("div", el("h3", "AFH account — from anywhere"), el("p", "Open the AFH app on your phone and sign in with the same account to reach this PC.")),
+      el("div.card-head", el("div", el("h3", "Signed in"), el("p", "Open the AFH app on your phone and sign in with the same account to reach this PC.")),
         el("div", { style: { display: "flex", gap: "8px" } },
           el("button.btn.ghost.sm", { on: { click: () => native.openExternal(st.accountUrl) } }, "Manage account"),
           el("button.btn.ghost.sm", { on: { click: async () => { try { st = await api.post("/api/cloud/signout"); toast("Signed out — this PC was removed from your account", "ok"); draw(); } catch (e) { toast(e.message, "err"); } } } }, "Sign out"))),
