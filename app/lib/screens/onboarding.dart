@@ -21,7 +21,7 @@ class _OnboardingState extends State<Onboarding> {
 
   static const _copy = [
     ('AFH in your pocket', 'Chat with the best models from your phone, and take AFH on your computer with you wherever you go.'),
-    ('Chat with any model', 'Bring your own key for OpenAI, Anthropic, Gemini, OpenRouter and more. Your keys and your chats stay on this phone.'),
+    ('Chat with any model', 'Sign in with ChatGPT or GitHub Copilot, or bring a key for any of 200+ providers. Your keys and your chats stay on this phone.'),
     ('Your PC, in your hand', 'Sign in with your AFH account to follow threads live, approve steps with a tap and start new tasks on your computer.'),
   ];
 
