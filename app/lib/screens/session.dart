@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../remote.dart';
 import '../theme.dart';
@@ -268,34 +269,47 @@ class _SessionScreenState extends State<SessionScreen> {
         last['type'] == 'assistant' &&
         (last['content'] as List? ?? []).any((p) => p['live'] == true && p['type'] == 'text' && '${p['text']}'.isNotEmpty);
     final perms = _perms.values.toList();
+    final (Color dot, String state, bool pulse) = _live != 'live'
+        ? (Afh.warn, _live == 'connecting' ? 'Connecting' : 'Reconnecting', true)
+        : perms.isNotEmpty
+        ? (Afh.warn, 'Needs you', true)
+        : _running
+        ? (Afh.accent, 'Working', true)
+        : _runError != null
+        ? (Afh.bad, 'Failed', false)
+        : (Afh.good, 'Live', false);
+    final where = _subtitle.isEmpty ? widget.computer.name : '${widget.computer.name} · $_subtitle';
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 0,
         title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
+              duration: Afh.med,
               child: Text(title, key: ValueKey(title), maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
-            const SizedBox(height: 2),
-            Text(
-              _subtitle.isEmpty ? widget.computer.name : '${widget.computer.name} · $_subtitle',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12.5, color: Afh.text3, fontFamily: Afh.body),
+            const SizedBox(height: 1),
+            Tooltip(
+              message: _live == 'live' ? 'Live' : 'Reconnecting',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PulseDot(color: dot, live: pulse, size: 6),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      '$state · $where',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w400, color: Afh.text3, fontFamily: Afh.body),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Tooltip(
-              message: _live == 'live' ? 'Live' : 'Reconnecting',
-              child: PulseDot(color: _live == 'live' ? Afh.good : Afh.amber, live: _live == 'live'),
-            ),
-          ),
-        ],
+        actions: const [SizedBox(width: 8)],
       ),
       body: Column(
         children: [
@@ -314,7 +328,7 @@ class _SessionScreenState extends State<SessionScreen> {
                 : Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 350),
+                      duration: Afh.med,
                       transitionBuilder: (c, a) => SizeTransition(
                         sizeFactor: a,
                         child: FadeTransition(opacity: a, child: c),
@@ -328,7 +342,7 @@ class _SessionScreenState extends State<SessionScreen> {
                           if (perms.length > 1)
                             Padding(
                               padding: const EdgeInsets.only(top: 6),
-                              child: Text('+${perms.length - 1} more waiting', style: const TextStyle(color: Afh.text3, fontSize: 12.5)),
+                              child: Text('+${perms.length - 1} more waiting', style: TextStyle(color: Afh.text3, fontSize: 12.5)),
                             ),
                         ],
                       ),
@@ -347,18 +361,18 @@ class _SessionScreenState extends State<SessionScreen> {
         children: [
           const SizedBox(height: 60),
           EmptyState(
-            icon: off ? Icons.bedtime_rounded : Icons.error_outline_rounded,
+            icon: off ? LucideIcons.wifiOff : LucideIcons.circleAlert,
             title: off ? '${widget.computer.name} is offline' : 'Couldn\'t open this thread',
             text: _loadError!.message,
-            action: GhostButton(label: 'Try again', icon: Icons.refresh_rounded, onTap: _load),
+            action: SecondaryButton(label: 'Try again', icon: LucideIcons.refreshCw, onTap: _load),
           ),
         ],
       );
     }
-    if (!_loaded) return const Center(child: AfhLogo(width: 110, working: true));
+    if (!_loaded) return const Center(child: AfhLogo(width: 96, working: true));
     if (shown.isEmpty && !_running) {
       return const Center(
-        child: EmptyState(icon: Icons.auto_awesome_rounded, title: 'A fresh thread', text: 'Send the first message below.'),
+        child: EmptyState(icon: LucideIcons.sparkles, title: 'A fresh thread', text: 'Send the first message below.'),
       );
     }
     final items = <Widget>[
@@ -369,7 +383,7 @@ class _SessionScreenState extends State<SessionScreen> {
     return ListView.builder(
       reverse: true,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
       itemCount: items.length,
       itemBuilder: (_, i) => items[items.length - 1 - i],
     );
@@ -381,30 +395,31 @@ class _SessionScreenState extends State<SessionScreen> {
       Widget w = Align(
         alignment: Alignment.centerRight,
         child: Container(
-          margin: const EdgeInsets.only(left: 48, top: 12, bottom: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.8),
+          margin: const EdgeInsets.only(top: 14, bottom: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF3B2416), Color(0xFF3A1928)]),
+            color: Afh.p.bubble,
             borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(22),
-              topRight: Radius.circular(22),
-              bottomLeft: Radius.circular(22),
-              bottomRight: Radius.circular(7),
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+              bottomLeft: Radius.circular(20),
+              bottomRight: Radius.circular(6),
             ),
-            border: Border.all(color: Afh.orange.withValues(alpha: 0.28)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('${m['text'] ?? ''}', style: const TextStyle(fontSize: 15.5, height: 1.45, color: Color(0xFFFFF3EA))),
+              Text('${m['text'] ?? ''}', style: TextStyle(fontSize: 15.5, height: 1.45, color: Afh.text)),
               if (files > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.attach_file_rounded, size: 14, color: Afh.text2),
-                      Text('$files file${files > 1 ? 's' : ''}', style: const TextStyle(fontSize: 12.5, color: Afh.text2)),
+                      Icon(LucideIcons.paperclip, size: 13, color: Afh.text2),
+                      const SizedBox(width: 4),
+                      Text('$files file${files > 1 ? 's' : ''}', style: TextStyle(fontSize: 12.5, color: Afh.text2)),
                     ],
                   ),
                 ),
@@ -412,18 +427,28 @@ class _SessionScreenState extends State<SessionScreen> {
           ),
         ),
       );
-      if (m['fresh'] == true) w = w.animate().fadeIn(duration: 250.ms).moveY(begin: 12, end: 0, curve: Afh.ease);
+      if (m['fresh'] == true) w = w.enter();
       return w;
     }
     if (m['type'] != 'assistant') {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Center(
-          child: Text(
-            '${m['text'] ?? m['metadata']?['label'] ?? ''}',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Afh.text3, fontSize: 12.5),
-          ),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Expanded(child: Divider(color: Afh.line)),
+            Flexible(
+              flex: 4,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  '${m['text'] ?? m['metadata']?['label'] ?? ''}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Afh.text3, fontSize: 12.5, height: 1.35),
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Afh.line)),
+          ],
         ),
       );
     }
@@ -448,13 +473,11 @@ class _SessionScreenState extends State<SessionScreen> {
       } else if (part['type'] == 'reasoning' && text.trim().isNotEmpty) {
         final key = 'r:${m['id']}:${part['ordinal']}';
         out.add(
-          _Fold(
-            icon: Icons.psychology_alt_rounded,
-            title: part['live'] == true ? 'Thinking…' : 'Thought',
+          _Thoughts(
+            text: text.trim(),
             live: part['live'] == true,
             open: _open.contains(key),
             onTap: () => setState(() => _open.contains(key) ? _open.remove(key) : _open.add(key)),
-            child: Text(text.trim(), style: const TextStyle(color: Afh.text3, fontSize: 13.5, height: 1.45)),
           ),
         );
       }
@@ -462,7 +485,7 @@ class _SessionScreenState extends State<SessionScreen> {
     flush();
     if (m['error'] != null) out.add(_ErrorNote('${m['error']}'));
     return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 2),
+      padding: const EdgeInsets.only(top: 14, bottom: 2),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: out),
     );
   }
@@ -474,23 +497,24 @@ dynamic _deep(dynamic v) {
   return v;
 }
 
+/// "Working" under the last message while the run hasn't started writing yet.
 class _Working extends StatelessWidget {
   const _Working();
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 2),
       child: Row(
         children: [
-          const AfhLogo(width: 44, working: true, intro: false),
-          const SizedBox(width: 12),
-          const Text(
-            'AFH is working',
-            style: TextStyle(color: Afh.text2, fontWeight: FontWeight.w600),
-          ).animate(onPlay: (c) => c.repeat()).shimmer(duration: 1600.ms, color: Afh.amber),
+          TypingDots(color: Afh.text3),
+          const SizedBox(width: 10),
+          Text(
+            'Working…',
+            style: TextStyle(color: Afh.text3, fontSize: 13.5, fontWeight: FontWeight.w500),
+          ).animate(onPlay: (c) => c.repeat()).shimmer(duration: 1600.ms, color: Afh.text),
         ],
       ),
-    ).animate().fadeIn();
+    ).animate().fadeIn(duration: 250.ms);
   }
 }
 
@@ -501,19 +525,19 @@ class _ErrorNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Afh.bad.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(14),
+        color: Afh.bad.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(Afh.r),
         border: Border.all(color: Afh.bad.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded, size: 18, color: Afh.bad),
-          const SizedBox(width: 8),
+          Padding(padding: const EdgeInsets.only(top: 1), child: Icon(LucideIcons.circleAlert, size: 18, color: Afh.bad)),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(text, style: const TextStyle(color: Color(0xFFFFC2CD), height: 1.4)),
+            child: Text(text, style: TextStyle(color: Afh.text, fontSize: 14, height: 1.4)),
           ),
         ],
       ),
@@ -521,57 +545,54 @@ class _ErrorNote extends StatelessWidget {
   }
 }
 
-/// A box with a header that folds its body away.
-class _Fold extends StatelessWidget {
-  const _Fold({required this.icon, required this.title, required this.open, required this.onTap, required this.child, this.live = false});
-  final IconData icon;
-  final String title;
-  final bool open, live;
+/// The agent's reasoning: a quiet "Thought" line that unfolds into text along a hairline.
+class _Thoughts extends StatelessWidget {
+  const _Thoughts({required this.text, required this.live, required this.open, required this.onTap});
+  final String text;
+  final bool live, open;
   final VoidCallback onTap;
-  final Widget child;
   @override
   Widget build(BuildContext context) {
-    Widget label = Text(
-      title,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: const TextStyle(fontWeight: FontWeight.w600, color: Afh.text2, fontSize: 13.5),
-    );
-    if (live) label = label.animate(onPlay: (c) => c.repeat()).shimmer(duration: 1400.ms, color: Afh.amber);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Afh.line),
-      ),
+    final label = Text(live ? 'Thinking' : 'Thought', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: Afh.text2));
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(16),
+          Pressable(
+            scale: 0.98,
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 17, color: Afh.amber),
-                  const SizedBox(width: 9),
-                  Expanded(child: label),
+                  Icon(LucideIcons.brain, size: 16, color: Afh.text3),
+                  const SizedBox(width: 8),
+                  live ? label.animate(onPlay: (c) => c.repeat()).shimmer(duration: 1500.ms, color: Afh.text) : label,
+                  const SizedBox(width: 4),
                   AnimatedRotation(
-                    turns: open ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 250),
-                    child: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: Afh.text3),
+                    turns: open ? 0.25 : 0,
+                    duration: Afh.fast,
+                    child: Icon(LucideIcons.chevronRight, size: 15, color: Afh.text3),
                   ),
                 ],
               ),
             ),
           ),
           AnimatedSize(
-            duration: const Duration(milliseconds: 300),
+            duration: Afh.med,
             curve: Afh.ease,
             alignment: Alignment.topCenter,
-            child: open ? Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 12), child: child) : const SizedBox(width: double.infinity),
+            child: open
+                ? Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(top: 6, left: 7, bottom: 4),
+                    padding: const EdgeInsets.only(left: 14),
+                    decoration: BoxDecoration(border: Border(left: BorderSide(color: Afh.line2, width: 2))),
+                    child: Text(text, style: TextStyle(color: Afh.text3, fontSize: 13.5, height: 1.5)),
+                  )
+                : const SizedBox(width: double.infinity),
           ),
         ],
       ),
@@ -615,55 +636,61 @@ String? _pick(Map input, List<String> keys) {
   return null;
 }
 
-(IconData, String, String) _toolLook(J p) {
+/// The icon, verb ("Edited"/"Editing"), short target and whether the target is code-like (mono).
+(IconData, String, String, bool) _toolLook(J p) {
   final name = '${p['name'] ?? ''}'.toLowerCase();
   final st = (p['state'] as Map?) ?? {};
   final input = st['input'] is Map ? st['input'] as Map : const {};
   final done = st['status'] == 'completed' || st['status'] == 'error';
   final v = _verbs[name] ?? (name.isEmpty ? 'Tool' : name.replaceAll('_', ' '), name.isEmpty ? 'Working' : name.replaceAll('_', ' '));
   final verb = done ? v.$1 : v.$2;
-  var icon = Icons.build_rounded;
+  var icon = LucideIcons.wrench;
   var target = _pick(input, ['path', 'filePath', 'file_path', 'file']) ?? '';
   var isPath = target.isNotEmpty;
+  var mono = true;
   if (RegExp(r'^(write|edit|multiedit|patch|apply_patch)$').hasMatch(name)) {
-    icon = Icons.edit_document;
+    icon = LucideIcons.filePen;
   } else if (name == 'read') {
-    icon = Icons.description_rounded;
+    icon = LucideIcons.fileText;
   } else if (RegExp(r'^(shell|bash|exec|execute|command)$').hasMatch(name)) {
-    icon = Icons.terminal_rounded;
+    icon = LucideIcons.terminal;
     target = _pick(input, ['command', 'cmd', 'code']) ?? '';
     isPath = false;
   } else if (RegExp(r'^(grep|glob|search|find|list|ls)$').hasMatch(name)) {
-    icon = Icons.search_rounded;
+    icon = LucideIcons.search;
     target = _pick(input, ['pattern', 'query', 'path']) ?? '';
   } else if (name == 'browser') {
-    icon = Icons.public_rounded;
+    icon = LucideIcons.monitor;
     target = _pick(input, ['url', 'action']) ?? '';
     isPath = false;
   } else if (RegExp('web|fetch').hasMatch(name)) {
-    icon = Icons.language_rounded;
+    icon = LucideIcons.globe;
     target = _pick(input, ['url', 'query']) ?? '';
     isPath = false;
+    mono = target.startsWith('http');
   } else if (RegExp('task|agent|delegate').hasMatch(name)) {
-    icon = Icons.groups_rounded;
+    icon = LucideIcons.bot;
     target = _pick(input, ['description', 'prompt']) ?? '';
     isPath = false;
+    mono = false;
   } else if (name == 'question') {
-    icon = Icons.help_rounded;
+    icon = LucideIcons.messageCircleQuestion;
     final qs = input['questions'];
     target = qs is List && qs.isNotEmpty && qs.first is Map ? (_pick(qs.first as Map, ['question']) ?? '') : '';
     isPath = false;
+    mono = false;
   } else if (RegExp('todo|plan|goal').hasMatch(name)) {
-    icon = Icons.checklist_rounded;
+    icon = LucideIcons.listChecks;
     target = _pick(input, ['objective', 'goal']) ?? '';
     isPath = false;
+    mono = false;
   } else if (RegExp('memory|skill').hasMatch(name)) {
-    icon = Icons.bookmark_rounded;
+    icon = LucideIcons.bookmark;
   }
   if (isPath && !target.contains(' ')) target = baseName(target);
   target = target.split('\n').first;
   if (target.length > 140) target = target.substring(0, 140);
-  return (icon, verb, target);
+  return (icon, verb, target, mono);
 }
 
 String _toolText(dynamic content) {
@@ -681,6 +708,7 @@ String _toolText(dynamic content) {
 
 String _clip(String s, [int n = 4000]) => s.length > n ? '${s.substring(0, n)}\n… ${s.length - n} more characters' : s;
 
+/// A run of tool calls in one hairline box; more than two fold behind a "N steps" header.
 class _ToolGroup extends StatelessWidget {
   const _ToolGroup({super.key, required this.tools, required this.open, required this.onToggle});
   final List<J> tools;
@@ -696,19 +724,85 @@ class _ToolGroup extends StatelessWidget {
     final collapsible = tools.length > 2;
     final expanded = !collapsible || anyBusy || open.contains(key);
     final rows = Column(
-      children: [for (final p in tools) _ToolRow(key: ValueKey('t${p['id']}'), tool: p, open: open, onToggle: onToggle)],
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < tools.length; i++) ...[
+          if (i > 0) Divider(height: 1, color: Afh.line),
+          _ToolRow(key: ValueKey('t${tools[i]['id']}'), tool: tools[i], open: open, onToggle: onToggle),
+        ],
+      ],
     );
-    if (!collapsible) return Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: rows);
-    return _Fold(
-      icon: anyBusy ? Icons.autorenew_rounded : Icons.done_all_rounded,
-      title: anyBusy ? 'Working · ${tools.length} steps' : '${tools.length} steps${failed > 0 ? ' · $failed failed' : ''}',
-      live: anyBusy,
-      open: expanded,
-      onTap: () {
-        open.contains(key) ? open.remove(key) : open.add(key);
-        onToggle();
-      },
-      child: rows,
+    Widget header() {
+      Widget label = Text(
+        anyBusy ? 'Working · ${tools.length} steps' : '${tools.length} steps',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontWeight: FontWeight.w500, color: Afh.text2, fontSize: 13.5),
+      );
+      if (anyBusy) label = label.animate(onPlay: (c) => c.repeat()).shimmer(duration: 1500.ms, color: Afh.text);
+      return InkWell(
+        onTap: () {
+          open.contains(key) ? open.remove(key) : open.add(key);
+          onToggle();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 15,
+                height: 15,
+                child: anyBusy
+                    ? Padding(padding: const EdgeInsets.all(1.5), child: CircularProgressIndicator(strokeWidth: 1.8, color: Afh.accent))
+                    : Icon(LucideIcons.layers, size: 15, color: Afh.text3),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(child: label),
+                    if (failed > 0 && !anyBusy) ...[const SizedBox(width: 8), Pill('$failed failed', color: Afh.bad)],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              AnimatedRotation(
+                turns: expanded ? 0.25 : 0,
+                duration: Afh.fast,
+                child: Icon(LucideIcons.chevronRight, size: 15, color: Afh.text3),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: Afh.line)),
+      child: Material(
+        type: MaterialType.transparency,
+        child: collapsible
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  header(),
+                  AnimatedSize(
+                    duration: Afh.med,
+                    curve: Afh.ease,
+                    alignment: Alignment.topCenter,
+                    child: expanded
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [Divider(height: 1, color: Afh.line), rows],
+                          )
+                        : const SizedBox(width: double.infinity),
+                  ),
+                ],
+              )
+            : rows,
+      ),
     );
   }
 }
@@ -721,7 +815,7 @@ class _ToolRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (icon, verb, target) = _toolLook(tool);
+    final (icon, verb, target, mono) = _toolLook(tool);
     final st = (tool['state'] as Map?) ?? {};
     final status = '${st['status'] ?? 'pending'}';
     final input = st['input'] is Map ? st['input'] as Map : const {};
@@ -731,128 +825,146 @@ class _ToolRow extends StatelessWidget {
     final err = st['error'];
     final out = err != null ? _toolText(err is Map ? (err['message'] ?? err) : err) : _toolText(st['content']);
     final running = status == 'running' || status == 'pending';
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 3),
-      decoration: BoxDecoration(
-        color: Afh.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: status == 'error'
-              ? Afh.bad.withValues(alpha: 0.35)
-              : running
-              ? Afh.orange.withValues(alpha: 0.35)
-              : Afh.line,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () {
-              isOpen ? open.remove(key) : open.add(key);
-              onToggle();
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  Icon(icon, size: 17, color: running ? Afh.orange : Afh.text2),
-                  const SizedBox(width: 9),
-                  Text(verb, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      target,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: Afh.mono, fontSize: 12.5, color: Afh.text3),
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () {
+            isOpen ? open.remove(key) : open.add(key);
+            onToggle();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            child: Row(
+              children: [
+                Icon(icon, size: 15, color: running ? Afh.text2 : Afh.text3),
+                const SizedBox(width: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 150),
+                  child: Text(
+                    verb,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5, color: Afh.text),
                   ),
-                  const SizedBox(width: 6),
-                  if (running)
-                    const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Afh.orange))
-                  else
-                    Icon(
-                      status == 'error' ? Icons.cancel_rounded : Icons.check_circle_rounded,
-                      size: 17,
-                      color: status == 'error' ? Afh.bad : Afh.good,
-                    ).animate().scale(curve: Afh.spring, duration: 400.ms),
-                ],
-              ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    target,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: mono
+                        ? TextStyle(fontFamily: Afh.mono, fontSize: 12.5, color: Afh.text3)
+                        : TextStyle(fontSize: 13.5, color: Afh.text3),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: running
+                      ? Padding(padding: const EdgeInsets.all(1), child: CircularProgressIndicator(strokeWidth: 1.8, color: Afh.accent))
+                      : Icon(
+                          status == 'error' ? LucideIcons.circleAlert : LucideIcons.check,
+                          size: 14,
+                          color: status == 'error' ? Afh.bad : Afh.good,
+                        ).animate().fadeIn(duration: 200.ms),
+                ),
+              ],
             ),
           ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 280),
-            curve: Afh.ease,
-            alignment: Alignment.topCenter,
-            child: !isOpen
-                ? const SizedBox(width: double.infinity)
-                : Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (cmd != null)
-                          _Code(_clip(cmd, 2000))
-                        else if (input.isNotEmpty)
-                          _Code(_clip(const JsonEncoder.withIndent('  ').convert(input), 2000)),
-                        if (out.isNotEmpty) ...[const SizedBox(height: 6), _Code(_clip(out), bad: status == 'error')],
-                      ],
-                    ),
+        ),
+        AnimatedSize(
+          duration: Afh.med,
+          curve: Afh.ease,
+          alignment: Alignment.topCenter,
+          child: !isOpen
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (cmd != null)
+                        _Code(_clip(cmd, 2000))
+                      else if (input.isNotEmpty)
+                        _Code(_clip(const JsonEncoder.withIndent('  ').convert(input), 2000)),
+                      if (out.isNotEmpty) ...[const SizedBox(height: 6), _Code(_clip(out), bad: status == 'error')],
+                    ],
                   ),
-          ),
-        ],
-      ),
+                ),
+        ),
+      ],
     );
   }
 }
 
-class _Code extends StatelessWidget {
+/// Monospace text in the theme's code colour: scrolls both ways, with a copy button.
+class _Code extends StatefulWidget {
   const _Code(this.text, {this.bad = false, this.diff = false});
   final String text;
   final bool bad, diff;
   @override
+  State<_Code> createState() => _CodeState();
+}
+
+class _CodeState extends State<_Code> {
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.text));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (mounted) setState(() => _copied = false);
+  }
+
+  Color _diffColor(String l) {
+    if (l.startsWith('+') && !l.startsWith('+++')) return Afh.good;
+    if (l.startsWith('-') && !l.startsWith('---')) return Afh.bad;
+    if (l.startsWith('@@')) return Afh.text3;
+    return Afh.text2;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final lines = text.split('\n');
+    final style = TextStyle(fontFamily: Afh.mono, fontSize: 12.5, height: 1.5, color: Afh.text2);
     return Container(
+      width: double.infinity,
       constraints: const BoxConstraints(maxHeight: 320),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F0C0A),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: bad ? Afh.bad.withValues(alpha: 0.3) : Afh.line),
+        color: Afh.p.code,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: widget.bad ? Afh.bad.withValues(alpha: 0.35) : Afh.line),
       ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(10),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: diff
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final l in lines)
-                      Text(
-                        l,
-                        style: TextStyle(
-                          fontFamily: Afh.mono,
-                          fontSize: 12,
-                          height: 1.45,
-                          color: l.startsWith('+') && !l.startsWith('+++')
-                              ? Afh.good
-                              : l.startsWith('-') && !l.startsWith('---')
-                              ? Afh.bad
-                              : l.startsWith('@@')
-                              ? Afh.amber
-                              : Afh.text2,
-                        ),
-                      ),
-                  ],
-                )
-              : Text(
-                  text,
-                  style: TextStyle(fontFamily: Afh.mono, fontSize: 12, height: 1.45, color: bad ? const Color(0xFFFFC2CD) : Afh.text2),
-                ),
-        ),
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(12, 10, 38, 10),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: widget.diff
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [for (final l in widget.text.split('\n')) Text(l, style: style.copyWith(color: _diffColor(l)))],
+                    )
+                  : Text(widget.text, style: style),
+            ),
+          ),
+          Positioned(
+            top: 2,
+            right: 2,
+            child: IconBtn(
+              _copied ? LucideIcons.check : LucideIcons.copy,
+              tooltip: 'Copy',
+              size: 30,
+              iconSize: 14,
+              color: _copied ? Afh.good : Afh.text3,
+              onTap: _copy,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -884,26 +996,35 @@ class _ApprovalCardState extends State<_ApprovalCard> {
     final md = (r['metadata'] as Map?) ?? {};
     final files = (md['files'] as List? ?? []).whereType<Map>().toList();
     final resources = (r['resources'] as List? ?? []).map((e) => '$e').toList();
-    return _CardShell(
-      icon: Icons.verified_user_rounded,
-      title: 'Approval needed',
-      sub: '${md['title'] ?? r['action'] ?? 'The agent wants to continue'}',
+    final cmd = md['command'] == null ? null : '${md['command']}';
+    final shortCmd = cmd != null && !cmd.contains('\n') && cmd.length <= 120;
+    return _Card(
+      icon: LucideIcons.shieldCheck,
+      title: '${md['title'] ?? r['action'] ?? 'The agent wants to continue'}',
       children: [
-        if (md['command'] != null) _Code(_clip('${md['command']}', 1500)),
+        if (cmd != null)
+          shortCmd
+              ? Text(
+                  'wants to run: $cmd',
+                  style: TextStyle(fontFamily: Afh.mono, fontSize: 12.5, height: 1.45, color: Afh.text3),
+                )
+              : _Code(_clip(cmd, 1500)),
         if (files.isNotEmpty)
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 220),
             child: ListView(
               shrinkWrap: true,
+              padding: EdgeInsets.zero,
               children: [
                 for (final f in files.take(8))
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      InkWell(
+                      Pressable(
+                        scale: 1,
                         onTap: () => setState(() => _openFile = _openFile == '${f['file']}' ? null : '${f['file']}'),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Row(
                             children: [
                               _FileStat('${f['status'] ?? 'modified'}'),
@@ -913,38 +1034,39 @@ class _ApprovalCardState extends State<_ApprovalCard> {
                                   baseName('${f['file']}'),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontFamily: Afh.mono, fontSize: 13),
+                                  style: TextStyle(fontFamily: Afh.mono, fontSize: 12.5, color: Afh.text),
                                 ),
                               ),
                               if (f['patch'] != null)
-                                Icon(_openFile == '${f['file']}' ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: Afh.text3),
+                                AnimatedRotation(
+                                  turns: _openFile == '${f['file']}' ? 0.25 : 0,
+                                  duration: Afh.fast,
+                                  child: Icon(LucideIcons.chevronRight, size: 15, color: Afh.text3),
+                                ),
                             ],
                           ),
                         ),
                       ),
-                      if (_openFile == '${f['file']}' && f['patch'] != null) _Code(_clip('${f['patch']}', 3000), diff: true),
+                      if (_openFile == '${f['file']}' && f['patch'] != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: _Code(_clip('${f['patch']}', 3000), diff: true),
+                        ),
                     ],
                   ),
-                if (files.length > 8) Text('+${files.length - 8} more files', style: const TextStyle(color: Afh.text3, fontSize: 12.5)),
+                if (files.length > 8) Text('+${files.length - 8} more files', style: TextStyle(color: Afh.text3, fontSize: 12.5)),
               ],
             ),
           ),
-        if (md['command'] == null && files.isEmpty && resources.isNotEmpty) _Code(resources.take(8).join('\n')),
+        if (cmd == null && files.isEmpty && resources.isNotEmpty) _Code(resources.take(8).join('\n')),
         const SizedBox(height: 12),
-        Row(
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
           children: [
-            Expanded(
-              child: _PermButton(label: 'Reject', kind: 0, busy: _busy == 'reject', onTap: _busy == null ? () => _go('reject') : null),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _PermButton(label: 'Always', kind: 1, busy: _busy == 'always', onTap: _busy == null ? () => _go('always') : null),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: _PermButton(label: 'Allow', kind: 2, busy: _busy == 'once', onTap: _busy == null ? () => _go('once') : null),
-            ),
+            _SmallButton(label: 'Allow', primary: true, busy: _busy == 'once', onTap: _busy == null ? () => _go('once') : null),
+            _SmallButton(label: 'Always allow', busy: _busy == 'always', onTap: _busy == null ? () => _go('always') : null),
+            _SmallButton(label: 'Deny', busy: _busy == 'reject', onTap: _busy == null ? () => _go('reject') : null),
           ],
         ),
       ],
@@ -952,24 +1074,23 @@ class _ApprovalCardState extends State<_ApprovalCard> {
   }
 }
 
+/// + added, − deleted, ~ changed.
 class _FileStat extends StatelessWidget {
   const _FileStat(this.status);
   final String status;
   @override
   Widget build(BuildContext context) {
-    final c = status.startsWith('a')
-        ? Afh.good
+    final (sym, c) = status.startsWith('a')
+        ? ('+', Afh.good)
         : status.startsWith('d')
-        ? Afh.bad
-        : Afh.amber;
-    return Container(
-      width: 22,
-      height: 22,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: c.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+        ? ('−', Afh.bad)
+        : ('~', Afh.text2);
+    return SizedBox(
+      width: 14,
       child: Text(
-        status.isEmpty ? 'M' : status[0].toUpperCase(),
-        style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 12),
+        sym,
+        textAlign: TextAlign.center,
+        style: TextStyle(fontFamily: Afh.mono, color: c, fontWeight: FontWeight.w600, fontSize: 13.5),
       ),
     );
   }
@@ -1011,10 +1132,70 @@ class _QuestionCardState extends State<_QuestionCard> {
     if (!ok && mounted) setState(() => _busy = null);
   }
 
+  Widget _option(int i, Map o) {
+    final label = '${o['label']}';
+    final on = _picks[i].contains(label);
+    final multiple = _qs[i]['multiple'] == true;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Pressable(
+        scale: 0.99,
+        onTap: () => setState(() {
+          if (!multiple) {
+            final had = _picks[i].contains(label);
+            _picks[i].clear();
+            if (!had) _picks[i].add(label);
+          } else {
+            _picks[i].contains(label) ? _picks[i].remove(label) : _picks[i].add(label);
+          }
+        }),
+        child: AnimatedContainer(
+          duration: Afh.fast,
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: on ? Afh.tint : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: on ? Afh.accent : Afh.line),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(
+                  multiple
+                      ? (on ? LucideIcons.squareCheck : LucideIcons.square)
+                      : (on ? LucideIcons.circleCheck : LucideIcons.circle),
+                  size: 17,
+                  color: on ? Afh.accent : Afh.text3,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14.5, height: 1.3, color: Afh.text)),
+                    if (o['description'] != null && '${o['description']}'.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text('${o['description']}', style: TextStyle(color: Afh.text2, fontSize: 13, height: 1.35)),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _CardShell(
-      icon: Icons.help_rounded,
+    return _Card(
+      icon: LucideIcons.messageCircleQuestion,
       title: 'AFH has a question',
       sub: _qs.length > 1 ? '${_qs.length} questions' : 'Pick an answer',
       children: [
@@ -1022,71 +1203,42 @@ class _QuestionCardState extends State<_QuestionCard> {
           constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.42),
           child: ListView(
             shrinkWrap: true,
+            padding: EdgeInsets.zero,
             children: [
               for (var i = 0; i < _qs.length; i++) ...[
                 if (_qs[i]['header'] != null) Text('${_qs[i]['header']}'.toUpperCase(), style: Afh.label),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text('${_qs[i]['question'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600, height: 1.35)),
-                ),
-                for (final o in (_qs[i]['options'] as List? ?? []).whereType<Map>())
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Pressable(
-                      scale: 0.98,
-                      onTap: () => setState(() {
-                        final label = '${o['label']}';
-                        if (_qs[i]['multiple'] != true) {
-                          final had = _picks[i].contains(label);
-                          _picks[i].clear();
-                          if (!had) _picks[i].add(label);
-                        } else {
-                          _picks[i].contains(label) ? _picks[i].remove(label) : _picks[i].add(label);
-                        }
-                      }),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: _picks[i].contains('${o['label']}') ? const LinearGradient(colors: [Color(0x38FFB11F), Color(0x38FF3D8A)]) : null,
-                          color: _picks[i].contains('${o['label']}') ? null : Afh.surface2,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: _picks[i].contains('${o['label']}') ? Afh.orange.withValues(alpha: 0.6) : Afh.line),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('${o['label']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                            if (o['description'] != null && '${o['description']}'.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 3),
-                                child: Text('${o['description']}', style: const TextStyle(color: Afh.text2, fontSize: 13)),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                  child: Text(
+                    '${_qs[i]['question'] ?? ''}',
+                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15, height: 1.4, color: Afh.text),
                   ),
+                ),
+                for (final o in (_qs[i]['options'] as List? ?? []).whereType<Map>()) _option(i, o),
                 TextField(
                   controller: _others[i],
-                  decoration: const InputDecoration(hintText: 'Or type your own answer', contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
+                  style: TextStyle(fontSize: 14.5, color: Afh.text),
+                  decoration: InputDecoration(
+                    hintText: 'Or type your own answer',
+                    isDense: true,
+                    fillColor: Afh.bg,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Afh.line)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Afh.line)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Afh.accent)),
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
               ],
             ],
           ),
         ),
-        Row(
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
           children: [
-            Expanded(
-              child: _PermButton(label: 'Skip', kind: 1, busy: _busy == 'skip', onTap: _busy == null ? () => _go(true) : null),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: _PermButton(label: 'Send answer', kind: 2, busy: _busy == 'send', onTap: _busy == null ? () => _go(false) : null),
-            ),
+            _SmallButton(label: 'Send answer', primary: true, busy: _busy == 'send', onTap: _busy == null ? () => _go(false) : null),
+            _SmallButton(label: 'Skip', busy: _busy == 'skip', onTap: _busy == null ? () => _go(true) : null),
           ],
         ),
       ],
@@ -1094,94 +1246,90 @@ class _QuestionCardState extends State<_QuestionCard> {
   }
 }
 
-class _CardShell extends StatelessWidget {
-  const _CardShell({required this.icon, required this.title, required this.sub, required this.children});
+/// The flat card approvals and questions sit in, with a "Needs you" label.
+class _Card extends StatelessWidget {
+  const _Card({required this.icon, required this.title, this.sub, required this.children});
   final IconData icon;
-  final String title, sub;
+  final String title;
+  final String? sub;
   final List<Widget> children;
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Afh.surface2,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Afh.orange.withValues(alpha: 0.45)),
-        boxShadow: [BoxShadow(color: Afh.orange.withValues(alpha: 0.15), blurRadius: 30, spreadRadius: -6)],
+        color: Afh.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Afh.line),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(gradient: Afh.grad, borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, size: 20, color: const Color(0xFF1A0D05)),
-              ).animate(onPlay: (c) => c.repeat(reverse: true)).scaleXY(end: 1.08, duration: 900.ms, curve: Curves.easeInOut),
-              const SizedBox(width: 12),
+              Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 16, color: Afh.text2)),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5)),
                     Text(
-                      sub,
+                      title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Afh.text2, fontSize: 13),
+                      style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14.5, height: 1.3, color: Afh.text),
                     ),
+                    if (sub != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(sub!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Afh.text3, fontSize: 13)),
+                      ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              Pill('Needs you', color: Afh.warn),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           ...children,
         ],
       ),
-    ).animate().fadeIn(duration: 250.ms).moveY(begin: 20, end: 0, curve: Afh.spring, duration: 500.ms);
+    ).enter();
   }
 }
 
-class _PermButton extends StatelessWidget {
-  const _PermButton({required this.label, required this.kind, required this.busy, this.onTap});
+/// The compact buttons on a card: accent for the main answer, a hairline outline for the rest.
+class _SmallButton extends StatelessWidget {
+  const _SmallButton({required this.label, required this.busy, this.onTap, this.primary = false});
   final String label;
-  final int kind; // 0 reject, 1 quiet, 2 primary
-  final bool busy;
+  final bool busy, primary;
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
-    final fg = kind == 2
-        ? const Color(0xFF1A0D05)
-        : kind == 0
-        ? Afh.bad
-        : Afh.text;
+    final fg = primary ? Afh.onAccent : Afh.text;
     return Pressable(
       onTap: onTap,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 200),
+        duration: Afh.fast,
         opacity: onTap == null && !busy ? 0.5 : 1,
         child: Container(
-          height: 46,
+          height: 32,
+          constraints: const BoxConstraints(minWidth: 64),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            gradient: kind == 2 ? Afh.grad : null,
-            color: kind == 2
-                ? null
-                : kind == 0
-                ? Afh.bad.withValues(alpha: 0.1)
-                : Afh.surface3,
-            borderRadius: BorderRadius.circular(23),
-            border: kind == 0 ? Border.all(color: Afh.bad.withValues(alpha: 0.35)) : null,
+            color: primary ? Afh.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: primary ? null : Border.all(color: Afh.line2),
           ),
           child: busy
-              ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: fg))
+              ? SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.8, color: fg))
               : Text(
                   label,
-                  style: TextStyle(fontWeight: FontWeight.w700, color: fg),
+                  style: TextStyle(fontSize: 13, fontWeight: primary ? FontWeight.w600 : FontWeight.w500, color: fg),
                 ),
         ),
       ),

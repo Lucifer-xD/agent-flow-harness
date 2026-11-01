@@ -1,14 +1,13 @@
 // First launch: three pages that show what the app does, each with its own small animation.
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/logo.dart';
-import 'shell.dart';
+import 'home.dart';
 
 class Onboarding extends StatefulWidget {
   const Onboarding({super.key});
@@ -21,7 +20,7 @@ class _OnboardingState extends State<Onboarding> {
   double _page = 0;
 
   static const _copy = [
-    ('AFH in your pocket', 'Chat with the best models straight from your phone, and take AFH on your computer with you wherever you go.'),
+    ('AFH in your pocket', 'Chat with the best models from your phone, and take AFH on your computer with you wherever you go.'),
     ('Chat with any model', 'Bring your own key for OpenAI, Anthropic, Gemini, OpenRouter and more. Your keys and your chats stay on this phone.'),
     ('Your PC, in your hand', 'Sign in with your AFH account to follow threads live, approve steps with a tap and start new tasks on your computer.'),
   ];
@@ -42,15 +41,9 @@ class _OnboardingState extends State<Onboarding> {
     Settings.i.onboarded = true;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 700),
-        pageBuilder: (_, _, _) => const Shell(),
-        transitionsBuilder: (_, a, _, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
-          child: ScaleTransition(
-            scale: Tween(begin: 1.06, end: 1.0).animate(CurvedAnimation(parent: a, curve: Afh.ease)),
-            child: child,
-          ),
-        ),
+        transitionDuration: const Duration(milliseconds: 500),
+        pageBuilder: (_, _, _) => const Home(),
+        transitionsBuilder: (_, a, _, child) => FadeTransition(opacity: CurvedAnimation(parent: a, curve: Curves.easeOut), child: child),
       ),
     );
   }
@@ -59,91 +52,81 @@ class _OnboardingState extends State<Onboarding> {
   Widget build(BuildContext context) {
     final last = _page > 1.5;
     return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(child: Aurora(intensity: 1.2)),
-          SafeArea(
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: AnimatedOpacity(
-                    opacity: last ? 0 : 1,
-                    duration: const Duration(milliseconds: 250),
-                    child: TextButton(
-                      onPressed: last ? null : _finish,
-                      child: const Text('Skip', style: TextStyle(color: Afh.text2)),
-                    ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            SizedBox(
+              height: 52,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: AnimatedOpacity(
+                  opacity: last ? 0 : 1,
+                  duration: Afh.fast,
+                  child: TextButton(
+                    onPressed: last ? null : _finish,
+                    child: Text('Skip', style: TextStyle(color: Afh.text2, fontWeight: FontWeight.w500)),
                   ),
                 ),
-                Expanded(
-                  child: PageView.builder(
-                    controller: _pages,
-                    itemCount: 3,
-                    itemBuilder: (_, i) {
-                      final off = (_page - i).clamp(-1.0, 1.0);
-                      return Opacity(
-                        opacity: (1 - off.abs() * 0.8).clamp(0.0, 1.0),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 30),
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: Center(
-                                  child: Transform.translate(
-                                    offset: Offset(off * -60, 0),
-                                    child: Transform.scale(scale: 1 - off.abs() * 0.15, child: [const _Intro(), const _ChatArt(), const _RemoteArt()][i]),
-                                  ),
-                                ),
-                              ),
-                              Transform.translate(
-                                offset: Offset(off * 40, 0),
-                                child: GradText(_copy[i].$1, style: Afh.h1().copyWith(fontSize: 36)),
-                              ),
-                              const SizedBox(height: 14),
-                              Text(
-                                _copy[i].$2,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 16, height: 1.5, color: Afh.text2),
-                              ),
-                              const SizedBox(height: 24),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (var i = 0; i < 3; i++)
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 350),
-                        curve: Afh.ease,
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: (_page.round() == i) ? 26 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          gradient: _page.round() == i ? Afh.grad : null,
-                          color: _page.round() == i ? null : Afh.line2,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 26, 24, 20),
-                  child: GradButton(
-                    label: last ? 'Get started' : 'Next',
-                    icon: last ? Icons.arrow_forward_rounded : null,
-                    onTap: () => last ? _finish() : _pages.nextPage(duration: const Duration(milliseconds: 550), curve: Afh.ease),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Expanded(
+              child: PageView.builder(
+                controller: _pages,
+                itemCount: 3,
+                itemBuilder: (_, i) {
+                  final off = (_page - i).clamp(-1.0, 1.0);
+                  return Opacity(
+                    opacity: (1 - off.abs() * 0.9).clamp(0.0, 1.0),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Center(
+                              child: Transform.translate(offset: Offset(off * -50, 0), child: [const _Intro(), const _ChatArt(), const _RemoteArt()][i]),
+                            ),
+                          ),
+                          Transform.translate(
+                            offset: Offset(off * 30, 0),
+                            child: Text(_copy[i].$1, style: Afh.h1().copyWith(fontSize: 32)),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(_copy[i].$2, style: TextStyle(fontSize: 16, height: 1.5, color: Afh.text2)),
+                          const SizedBox(height: 28),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
+              child: Row(
+                children: [
+                  for (var i = 0; i < 3; i++)
+                    AnimatedContainer(
+                      duration: Afh.med,
+                      curve: Afh.ease,
+                      margin: const EdgeInsets.only(right: 6),
+                      width: (_page.round() == i) ? 22 : 6,
+                      height: 6,
+                      decoration: BoxDecoration(color: _page.round() == i ? Afh.accent : Afh.line2, borderRadius: BorderRadius.circular(3)),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 22, 24, 16),
+              child: PrimaryButton(
+                label: last ? 'Get started' : 'Continue',
+                icon: last ? LucideIcons.arrowRight : null,
+                onTap: () => last ? _finish() : _pages.nextPage(duration: const Duration(milliseconds: 450), curve: Afh.ease),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -152,61 +135,43 @@ class _OnboardingState extends State<Onboarding> {
 class _Intro extends StatelessWidget {
   const _Intro();
   @override
-  Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Container(
-              width: 230,
-              height: 230,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [Afh.pink.withValues(alpha: 0.28), Afh.pink.withValues(alpha: 0)]),
-              ),
-            )
-            .animate(onPlay: (c) => c.repeat(reverse: true))
-            .scale(begin: const Offset(0.85, 0.85), end: const Offset(1.1, 1.1), duration: 2600.ms, curve: Curves.easeInOut),
-        const AfhLogo(width: 190, working: true),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => const AfhLogo(width: 200, working: true);
 }
 
-/// Chat bubbles that pop in one after another, then start over.
+/// A short chat that writes itself, one message after another.
 class _ChatArt extends StatelessWidget {
   const _ChatArt();
   @override
   Widget build(BuildContext context) {
     Widget bubble(String text, bool me, int i) {
-      return Align(
-            alignment: me ? Alignment.centerRight : Alignment.centerLeft,
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              constraints: const BoxConstraints(maxWidth: 240),
+      final w = me
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              constraints: const BoxConstraints(maxWidth: 230),
               decoration: BoxDecoration(
-                gradient: me ? Afh.grad : null,
-                color: me ? null : Afh.surface2,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(me ? 20 : 6),
-                  bottomRight: Radius.circular(me ? 6 : 20),
+                color: Afh.p.bubble,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(18),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(6),
                 ),
-                border: me ? null : Border.all(color: Afh.line),
               ),
-              child: Text(
-                text,
-                style: TextStyle(color: me ? const Color(0xFF1A0D05) : Afh.text, fontWeight: me ? FontWeight.w600 : FontWeight.w400, fontSize: 14.5),
-              ),
-            ),
-          )
-          .animate(delay: (i * 650).ms)
-          .fadeIn(duration: 350.ms)
-          .moveY(begin: 18, end: 0, curve: Afh.spring, duration: 600.ms)
-          .scale(begin: const Offset(0.9, 0.9), curve: Afh.spring, duration: 600.ms);
+              child: Text(text, style: TextStyle(color: Afh.text, fontSize: 14.5)),
+            )
+          : Container(
+              constraints: const BoxConstraints(maxWidth: 260),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(text, style: TextStyle(color: Afh.text2, fontSize: 14.5, height: 1.45)),
+            );
+      return Align(
+        alignment: me ? Alignment.centerRight : Alignment.centerLeft,
+        child: Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: w),
+      ).animate(delay: (300 + i * 600).ms).fadeIn(duration: 300.ms).moveY(begin: 10, end: 0, curve: Afh.ease, duration: 450.ms);
     }
 
+    const colors = [Color(0xFF10A37F), Color(0xFFD97757), Color(0xFF4F8DF7), Color(0xFF8B7CF6)];
+    const letters = ['O', 'A', 'G', 'R'];
     return SizedBox(
       width: 320,
       child: Column(
@@ -215,31 +180,24 @@ class _ChatArt extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              for (final (i, c) in [(0, const Color(0xFF10A37F)), (1, const Color(0xFFD97757)), (2, const Color(0xFF4F8DF7)), (3, const Color(0xFF8B7CF6))])
-                Container(
-                  width: 38,
-                  height: 38,
-                  margin: const EdgeInsets.symmetric(horizontal: 5),
-                  decoration: BoxDecoration(
-                    color: c.withValues(alpha: 0.18),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: c.withValues(alpha: 0.6)),
-                  ),
-                  child: Icon(Icons.auto_awesome_rounded, size: 18, color: c),
-                ).animate(onPlay: (ctl) => ctl.repeat(reverse: true), delay: (i * 200).ms).moveY(begin: 0, end: -6, duration: 1200.ms, curve: Curves.easeInOut),
+              for (var i = 0; i < 4; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: Avatar(letters[i], size: 36, color: colors[i]),
+                ).animate(delay: (i * 80).ms).fadeIn().scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack),
             ],
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 26),
           bubble('Explain black holes like I\'m five', true, 0),
           bubble('Imagine a vacuum cleaner so strong that even light can\'t escape it…', false, 1),
-          bubble('Now in one sentence 😄', true, 2),
+          bubble('Now in one sentence', true, 2),
         ],
       ),
     );
   }
 }
 
-/// A phone and a computer with light flowing between them.
+/// A phone and a computer with a light running between them.
 class _RemoteArt extends StatefulWidget {
   const _RemoteArt();
   @override
@@ -247,7 +205,7 @@ class _RemoteArt extends StatefulWidget {
 }
 
 class _RemoteArtState extends State<_RemoteArt> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..repeat();
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
   @override
   void dispose() {
     _c.dispose();
@@ -256,119 +214,105 @@ class _RemoteArtState extends State<_RemoteArt> with SingleTickerProviderStateMi
 
   @override
   Widget build(BuildContext context) {
+    Widget device(IconData icon, String label) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 76,
+          height: 76,
+          decoration: BoxDecoration(color: Afh.surface, borderRadius: BorderRadius.circular(22), border: Border.all(color: Afh.line)),
+          child: Icon(icon, size: 32, color: Afh.text),
+        ),
+        const SizedBox(height: 10),
+        Text(label, style: TextStyle(color: Afh.text2, fontWeight: FontWeight.w500, fontSize: 13.5)),
+      ],
+    );
     return SizedBox(
-      width: 320,
-      height: 220,
-      child: Stack(
-        alignment: Alignment.center,
+      width: 300,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          AnimatedBuilder(
-            animation: _c,
-            builder: (_, _) => CustomPaint(size: const Size(320, 220), painter: _FlowPainter(_c.value)),
+          Row(
+            children: [
+              device(LucideIcons.smartphone, 'Phone'),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 26),
+                  child: SizedBox(
+                    height: 12,
+                    child: AnimatedBuilder(
+                      animation: _c,
+                      builder: (_, _) => CustomPaint(painter: _Link(_c.value, Afh.line2, Afh.accent)),
+                    ),
+                  ),
+                ),
+              ),
+              device(LucideIcons.laptop, 'Your PC'),
+            ],
           ),
-          Positioned(
-            left: 10,
-            child: _device(Icons.phone_iphone_rounded, 'Phone', 80, 130).animate().fadeIn().moveX(begin: -20, end: 0, curve: Afh.ease, duration: 700.ms),
-          ),
-          Positioned(
-            right: 0,
-            child: _device(
-              Icons.laptop_mac_rounded,
-              'Your PC',
-              120,
-              100,
-            ).animate().fadeIn(delay: 150.ms).moveX(begin: 20, end: 0, curve: Afh.ease, duration: 700.ms),
-          ),
+          const SizedBox(height: 26),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: Afh.surface,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Afh.good.withValues(alpha: 0.4)),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
+            width: 260,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Afh.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: Afh.line)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                PulseDot(color: Afh.good, size: 7),
-                SizedBox(width: 8),
-                Text(
-                  'Live',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: Afh.good),
+                Row(
+                  children: [
+                    Expanded(child: Text('Fix website nav on mobile', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5, color: Afh.text))),
+                    Pill('Needs you', color: Afh.warn),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('wants to run: npm test', style: TextStyle(fontFamily: Afh.mono, fontSize: 11.5, color: Afh.text3)),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Container(
+                      height: 28,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: Afh.accent, borderRadius: BorderRadius.circular(8)),
+                      child: Text('Allow', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Afh.onAccent)),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      height: 28,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Afh.line2)),
+                      child: Text('Deny', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: Afh.text)),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ).animate().scale(delay: 400.ms, curve: Afh.spring, duration: 600.ms),
+          ).animate(delay: 300.ms).fadeIn().moveY(begin: 10, end: 0, curve: Afh.ease),
         ],
       ),
     );
   }
-
-  Widget _device(IconData icon, String label, double w, double h) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(
-            gradient: Afh.gradSoft,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Afh.orange.withValues(alpha: 0.3)),
-          ),
-          child: Icon(icon, size: 44, color: const Color(0xFFFFB48A)),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          label,
-          style: const TextStyle(color: Afh.text2, fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
 }
 
-class _FlowPainter extends CustomPainter {
-  _FlowPainter(this.t);
+class _Link extends CustomPainter {
+  _Link(this.t, this.line, this.dot);
   final double t;
+  final Color line, dot;
   @override
   void paint(Canvas canvas, Size size) {
-    final a = Offset(90, size.height / 2 - 14);
-    final b = Offset(size.width - 120, size.height / 2 - 14);
-    final path = Path()
-      ..moveTo(a.dx, a.dy)
-      ..cubicTo(a.dx + 50, a.dy - 50, b.dx - 50, b.dy - 50, b.dx, b.dy);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..color = Afh.line2,
-    );
-    final back = Path()
-      ..moveTo(b.dx, b.dy + 8)
-      ..cubicTo(b.dx - 50, b.dy + 58, a.dx + 50, a.dy + 58, a.dx, a.dy + 8);
-    canvas.drawPath(
-      back,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..color = Afh.line2,
-    );
-    for (final (p, colors, shift) in [
-      (path, [Afh.amber, Afh.orange], 0.0),
-      (back, [Afh.pink, Afh.magenta], 0.5),
-    ]) {
-      final m = p.computeMetrics().first;
-      for (var k = 0; k < 3; k++) {
-        final at = ((t + shift + k / 3) % 1.0);
-        final pos = m.getTangentForOffset(m.length * at)!.position;
-        final r = 3.5 + 2 * math.sin(at * math.pi);
-        canvas.drawCircle(pos, r * 2.4, Paint()..color = colors[0].withValues(alpha: 0.18));
-        canvas.drawCircle(pos, r, Paint()..color = colors[k % 2]);
-      }
+    final y = size.height / 2;
+    final dash = Paint()
+      ..color = line
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+    for (var x = 10.0; x < size.width - 10; x += 8) {
+      canvas.drawLine(Offset(x, y), Offset(x + 3, y), dash);
     }
+    final x = 10 + (size.width - 20) * Curves.easeInOut.transform(t);
+    canvas.drawCircle(Offset(x, y), 4, Paint()..color = dot);
   }
 
   @override
-  bool shouldRepaint(_FlowPainter old) => old.t != t;
+  bool shouldRepaint(_Link old) => old.t != t || old.dot != dot;
 }

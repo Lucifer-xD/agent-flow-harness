@@ -65,6 +65,17 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Appearance: 'system' | 'dark' | 'light', plus the theme picked for each mode.
+  String get themeMode => _p.getString('theme.mode') ?? 'system';
+  String get darkTheme => _p.getString('theme.dark') ?? 'sunset';
+  String get lightTheme => _p.getString('theme.light') ?? 'paper';
+  void setTheme({String? mode, String? dark, String? light}) {
+    if (mode != null) _p.setString('theme.mode', mode);
+    if (dark != null) _p.setString('theme.dark', dark);
+    if (light != null) _p.setString('theme.light', light);
+    notifyListeners();
+  }
+
   String? baseUrl(String provider) => _p.getString('base.$provider');
   void setBaseUrl(String provider, String? url) {
     url == null || url.isEmpty ? _p.remove('base.$provider') : _p.setString('base.$provider', url);

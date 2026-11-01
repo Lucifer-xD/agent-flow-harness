@@ -1,6 +1,7 @@
 // The bottom sheet for picking a model across every provider that has a key.
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../ai.dart';
 import '../store.dart';
@@ -55,6 +56,11 @@ class _PickerState extends State<_Picker> {
     if (mounted) setState(() => _loading.remove(p.id));
   }
 
+  void _providers() {
+    Navigator.pop(context);
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProvidersScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     final ready = providers.where((p) => p.ready).toList();
@@ -66,17 +72,14 @@ class _PickerState extends State<_Picker> {
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
+              padding: const EdgeInsets.fromLTRB(20, 0, 8, 10),
               child: Row(
                 children: [
                   Expanded(child: Text('Choose a model', style: Afh.h2())),
                   TextButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProvidersScreen()));
-                    },
-                    icon: const Icon(Icons.key_rounded, size: 18),
-                    label: const Text('Providers'),
+                    onPressed: _providers,
+                    icon: Icon(LucideIcons.keyRound, size: 16, color: Afh.accent),
+                    label: Text('Providers', style: TextStyle(color: Afh.accent, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -85,13 +88,18 @@ class _PickerState extends State<_Picker> {
           if (ready.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                 child: TextField(
                   onChanged: (v) => setState(() => _q = v),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Search models',
-                    prefixIcon: Icon(Icons.search_rounded, color: Afh.text3),
-                    contentPadding: EdgeInsets.symmetric(vertical: 12),
+                    isDense: true,
+                    fillColor: Afh.surface2,
+                    prefixIcon: Icon(LucideIcons.search, size: 17, color: Afh.text3),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Afh.line2)),
                   ),
                 ),
               ),
@@ -99,43 +107,27 @@ class _PickerState extends State<_Picker> {
           if (ready.isEmpty)
             SliverToBoxAdapter(
               child: EmptyState(
-                icon: Icons.key_rounded,
+                icon: LucideIcons.keyRound,
                 title: 'No providers yet',
                 text: 'Add an API key and its models show up here.',
-                action: GradButton(
-                  label: 'Add a provider',
-                  icon: Icons.add_rounded,
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProvidersScreen()));
-                  },
-                ),
+                action: PrimaryButton(label: 'Add a provider', icon: LucideIcons.plus, expand: false, onTap: _providers),
               ),
             ),
           for (final (pi, p) in ready.indexed) ...[
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 18, 10, 6),
+                padding: const EdgeInsets.fromLTRB(20, 14, 8, 4),
                 child: Row(
                   children: [
-                    ProviderBadge(p, size: 26),
+                    ProviderBadge(p, size: 24),
                     const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                    ),
+                    Expanded(child: Text(p.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: Afh.text))),
                     _loading.contains(p.id)
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                          )
-                        : IconButton(
-                            tooltip: 'Refresh models',
-                            onPressed: () => _refresh(p),
-                            icon: const Icon(Icons.refresh_rounded, size: 20, color: Afh.text3),
-                          ),
+                        ? const Padding(padding: EdgeInsets.all(11), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+                        : IconBtn(LucideIcons.refreshCw, tooltip: 'Refresh models', iconSize: 16, color: Afh.text3, onTap: () => _refresh(p)),
                   ],
                 ),
-              ).animate().fadeIn(delay: (pi * 60).ms),
+              ).enter(pi),
             ),
             SliverList.builder(
               itemCount: p.models.where((m) => q.isEmpty || m.toLowerCase().contains(q)).length,
@@ -143,36 +135,30 @@ class _PickerState extends State<_Picker> {
                 final m = p.models.where((m) => q.isEmpty || m.toLowerCase().contains(q)).elementAt(i);
                 final on = widget.provider == p.id && widget.model == m;
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  child: Pressable(
-                    onTap: () {
-                      Settings.i.lastModel = '${p.id}/$m';
-                      Navigator.pop(context, (p.id, m));
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: on ? null : Colors.transparent,
-                        gradient: on ? const LinearGradient(colors: [Color(0x30FFB11F), Color(0x30FF3D8A)]) : null,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: on ? Afh.orange.withValues(alpha: 0.4) : Colors.transparent),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              m,
-                              style: TextStyle(
-                                fontFamily: Afh.mono,
-                                fontSize: 14,
-                                color: on ? Afh.text : Afh.text2,
-                                fontWeight: on ? FontWeight.w500 : FontWeight.w400,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+                  child: Material(
+                    color: on ? Afh.tint : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        Settings.i.lastModel = '${p.id}/$m';
+                        Navigator.pop(context, (p.id, m));
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                m,
+                                style: TextStyle(fontFamily: Afh.mono, fontSize: 13.5, color: on ? Afh.text : Afh.text2, fontWeight: on ? FontWeight.w500 : FontWeight.w400),
                               ),
                             ),
-                          ),
-                          if (on) const Icon(Icons.check_circle_rounded, color: Afh.orange, size: 20),
-                        ],
+                            if (on) Icon(LucideIcons.check, color: Afh.accent, size: 18),
+                          ],
+                        ),
                       ),
                     ),
                   ),

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The default light theme's background (Paper), so a light phone doesn't flash black on launch -->
+    <color name="afh_bg">#F6F3EF</color>
+</resources>

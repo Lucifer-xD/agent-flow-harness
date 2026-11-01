@@ -1,7 +1,7 @@
-// The message box at the bottom of a chat: grows with the text, and its send button turns into a
-// stop button while a reply is running.
+// The message box at the bottom of a chat: grows with the text, holds optional chips (like "Run on
+// PC") under it, and its send button turns into a stop button while a reply is running.
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme.dart';
 import 'common.dart';
@@ -18,6 +18,7 @@ class Composer extends StatelessWidget {
     required this.hint,
     this.sendWhileBusy = false,
     this.top,
+    this.tools = const [],
   });
   final TextEditingController controller;
   final FocusNode focus;
@@ -27,6 +28,7 @@ class Composer extends StatelessWidget {
   final String hint;
   final bool sendWhileBusy; // remote runs take more messages while they work
   final Widget? top; // shown above the box (approvals in a remote thread)
+  final List<Widget> tools; // chips along the bottom edge of the box
 
   @override
   Widget build(BuildContext context) {
@@ -34,62 +36,62 @@ class Composer extends StatelessWidget {
     final has = controller.text.trim().isNotEmpty;
     final stop = busy && !(sendWhileBusy && has);
     return Padding(
-      padding: EdgeInsets.fromLTRB(12, 6, 12, keyboard ? 10 : (bottom > 0 ? bottom : 12)),
+      padding: EdgeInsets.fromLTRB(12, 4, 12, keyboard ? 8 : (bottom > 0 ? bottom + 6 : 12)),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ?top,
-          Glass(
-            radius: 28,
-            padding: const EdgeInsets.fromLTRB(18, 4, 6, 4),
-            color: Afh.surface2.withValues(alpha: 0.85),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
+          ListenableBuilder(
+            listenable: focus,
+            builder: (context, _) => AnimatedContainer(
+              duration: Afh.fast,
+              decoration: BoxDecoration(
+                color: Afh.surface,
+                borderRadius: BorderRadius.circular(Afh.rLg),
+                border: Border.all(color: focus.hasFocus ? Afh.line2 : Afh.line),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: Afh.p.dark ? 0.25 : 0.05), blurRadius: 18, offset: const Offset(0, 6))],
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
                     controller: controller,
                     focusNode: focus,
                     minLines: 1,
-                    maxLines: 6,
+                    maxLines: 7,
                     textCapitalization: TextCapitalization.sentences,
-                    style: const TextStyle(fontSize: 16, height: 1.4),
+                    style: TextStyle(fontSize: 16, height: 1.4, color: Afh.text),
                     decoration: InputDecoration(
                       hintText: hint,
                       hintMaxLines: 1,
                       filled: false,
+                      isDense: true,
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      contentPadding: const EdgeInsets.fromLTRB(0, 12, 0, 8),
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4, left: 6),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 320),
-                    switchInCurve: Afh.spring,
-                    transitionBuilder: (c, a) => RotationTransition(
-                      turns: Tween(begin: 0.6, end: 1.0).animate(a),
-                      child: ScaleTransition(scale: a, child: c),
-                    ),
-                    child: stop
-                        ? RoundButton(
-                            key: const ValueKey('stop'),
-                            onTap: onStop,
-                            filled: false,
-                            child: const Icon(Icons.stop_rounded, color: Afh.text, size: 22),
-                          )
-                        : RoundButton(
-                            key: const ValueKey('send'),
-                            onTap: has ? onSend : null,
-                            filled: has,
-                            child: Icon(Icons.arrow_upward_rounded, color: has ? const Color(0xFF1A0D05) : Afh.text3, size: 22),
-                          ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(children: [for (final t in tools) Padding(padding: const EdgeInsets.only(right: 6), child: t)]),
+                        ),
+                      ),
+                      AnimatedSwitcher(
+                        duration: Afh.fast,
+                        transitionBuilder: (c, a) => ScaleTransition(scale: a, child: FadeTransition(opacity: a, child: c)),
+                        child: stop
+                            ? SendButton(key: const ValueKey('stop'), icon: LucideIcons.square, onTap: onStop, stop: true)
+                            : SendButton(key: const ValueKey('send'), icon: LucideIcons.arrowUp, onTap: has ? onSend : null),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -98,30 +100,71 @@ class Composer extends StatelessWidget {
   }
 }
 
-class RoundButton extends StatelessWidget {
-  const RoundButton({super.key, required this.child, this.onTap, this.filled = true});
-  final Widget child;
+class SendButton extends StatelessWidget {
+  const SendButton({super.key, required this.icon, this.onTap, this.stop = false});
+  final IconData icon;
   final VoidCallback? onTap;
-  final bool filled;
+  final bool stop;
   @override
   Widget build(BuildContext context) {
-    final stop = !filled && onTap != null;
+    final on = onTap != null;
+    final bg = stop ? Afh.text : (on ? Afh.accent : Afh.surface3);
+    final fg = stop ? Afh.bg : (on ? Afh.onAccent : Afh.text3);
+    return Semantics(
+      button: true,
+      label: stop ? 'Stop' : 'Send',
+      child: Pressable(
+        onTap: onTap,
+        scale: 0.88,
+        child: AnimatedContainer(
+          duration: Afh.fast,
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: bg),
+          child: Icon(icon, size: stop ? 14 : 19, color: fg, fill: stop ? 1 : null),
+        ),
+      ),
+    );
+  }
+}
+
+/// A small toggle chip inside the composer.
+class ComposerChip extends StatelessWidget {
+  const ComposerChip({super.key, required this.icon, required this.label, this.on = false, this.onTap});
+  final IconData icon;
+  final String label;
+  final bool on;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) {
     return Pressable(
       onTap: onTap,
-      scale: 0.88,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        width: 44,
-        height: 44,
+        duration: Afh.fast,
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: filled ? Afh.grad : null,
-          color: filled ? null : Afh.surface3,
-          border: stop ? Border.all(color: Afh.orange.withValues(alpha: 0.6), width: 1.5) : null,
-          boxShadow: filled ? [BoxShadow(color: Afh.pink.withValues(alpha: 0.4), blurRadius: 16, spreadRadius: -4)] : null,
+          color: on ? Afh.tint : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: on ? Afh.accent.withValues(alpha: 0.45) : Afh.line),
         ),
-        child: Center(child: child),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: on ? Afh.accent : Afh.text2),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 170),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: on ? Afh.accent : Afh.text2),
+              ),
+            ),
+          ],
+        ),
       ),
-    ).animate(target: stop ? 1 : 0, onPlay: (c) => stop ? c.repeat(reverse: true) : null).scaleXY(end: 1.06, duration: 700.ms);
+    );
   }
 }
