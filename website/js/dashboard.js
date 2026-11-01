@@ -1,4 +1,4 @@
-// The AFH dashboard: the computers on your account, their threads, and live chat with AFH on them.
+// Computers (/computers): the computers on your account, their threads, and live chat with AFH on them.
 // Everything about a computer goes through the relay at /r/<computer>/api/… (the same API the
 // desktop app and the phone app use), signed in by the account's HttpOnly cookie. Routes live in
 // the hash: #/c/<computer>, #/c/<computer>/t/<thread>, #/c/<computer>/new, #/computers, #/account.
@@ -96,7 +96,7 @@
     if (!res.ok) {
       const d = data && (data.error || data.detail);
       const message = typeof d === "string" ? d : Array.isArray(d) && d[0]?.msg ? d[0].msg : res.status === 503 ? "That computer is offline." : `Something went wrong (${res.status})`;
-      if (res.status === 401 && path.startsWith("/relay/api/me")) location.replace("/account?next=" + encodeURIComponent("/dashboard" + location.hash));
+      if (res.status === 401 && path.startsWith("/relay/api/me")) location.replace("/account?next=" + encodeURIComponent("/computers" + location.hash));
       throw Object.assign(new Error(message), { status: res.status });
     }
     return data;
@@ -443,6 +443,7 @@
       c ? h("label.dash-searchbox", {}, icon("search", 16), search) : null,
       body,
       h("div.dash-side-foot", {},
+        h("a", { href: "/chat" }, icon("send", 17), "Chat"),
         h("a" + (S.route.view === "computers" ? ".on" : ""), { href: "#/computers" }, icon("pc", 17), "Computers"),
         h("a" + (S.route.view === "account" ? ".on" : ""), { href: "#/account" }, icon("user", 17), "Account")));
   }
@@ -459,7 +460,7 @@
       h("div.dash-empty", {},
         h("div.dash-empty-art", {}, icon("pc", 34)),
         h("h1", {}, "Connect your first computer"),
-        h("p", {}, "Install AFH on your PC, then open ", h("b", {}, "Settings → Remote control"), " and choose ", h("b", {}, "Sign in with your browser"), ". Approve it here and it appears in this dashboard — ready to chat."),
+        h("p", {}, "Install AFH on your PC, then open ", h("b", {}, "Settings → Remote control"), " and choose ", h("b", {}, "Sign in with your browser"), ". Approve it here and it appears on this page, ready for tasks."),
         h("div.cta-row.center", {},
           h("a.btn.btn-primary", { href: "/download" }, "Download AFH"),
           h("a.btn.btn-ghost", { href: "/docs" }, "Read the guide"))));

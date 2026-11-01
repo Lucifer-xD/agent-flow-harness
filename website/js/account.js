@@ -1,6 +1,6 @@
 // The AFH account page: create an account or sign in (?signup opens that tab, ?next=/path is where
 // to go after), and connect a computer that AFH sent here (?link=CODE). Computers, chat and account
-// settings are on the dashboard (/dashboard). Talks to the relay at /relay/api on this same site;
+// the chat (/chat) and computers (/computers) take over from there. Talks to the relay at /relay/api on this same site;
 // the sign-in lives in an HttpOnly cookie the page itself can't read.
 (() => {
   const root = document.getElementById("acct");
@@ -42,7 +42,7 @@
 
   const next = (() => {  // where to go after signing in: only paths on this site
     const n = params.get("next") || "";
-    return /^\/(?!\/)[\w\-/.?=&#%]*$/.test(n) ? n : "/dashboard";
+    return /^\/(?!\/)[\w\-/.?=&#%]*$/.test(n) ? n : "/chat";
   })();
 
   function pwField(attrs) {
@@ -105,19 +105,19 @@
         h("p.kicker", {}, link ? "Connect a computer" : signup ? "Create your AFH account" : "AFH account"),
         h("h1.acct-title", {}, link ? h("span", {}, "Connect ", h("span.grad-text", {}, link.name)) : signup ? h("span", {}, "Your AFH, ", h("span.grad-text", {}, "everywhere.")) : "Welcome back."),
         h("p.sub", {}, link
-          ? "Sign in, or create an account, and this computer shows up in your dashboard and the AFH app on your phone."
+          ? "Sign in, or create an account, and this computer shows up under Computers here and in the AFH app on your phone."
           : signup
-            ? "Free. Reach every computer running AFH from this website or your phone: chat with it, watch it work, approve steps and start new tasks."
-            : "Sign in to your dashboard: your computers, their threads and live chat with AFH.")),
+            ? "Free. Chat with any model right here in your browser — 228 providers, with web search and more — and reach every computer running AFH from here or your phone."
+            : "Sign in to chat with any model, and to reach AFH on your computers.")),
       h("section.acct-split", {},
         h("div.panel.acct-card", {},
           h("div.acct-tabs", { role: "tablist" }, tab("signin", "Sign in"), tab("signup", "Create account")),
           form),
         h("ul.acct-perks", {},
-          h("li", {}, h("b", {}, "Live dashboard"), h("span", {}, "Every computer and thread, with what AFH is doing right now.")),
-          h("li", {}, h("b", {}, "Chat from anywhere"), h("span", {}, "Send the next task, stop a run, approve a step or answer a question.")),
+          h("li", {}, h("b", {}, "Chat with any model"), h("span", {}, "Sign in with ChatGPT, Copilot or OpenRouter, or use your own keys. It can search the web and more.")),
+          h("li", {}, h("b", {}, "Your computers"), h("span", {}, "Follow AFH on your PCs live, approve steps and start new tasks.")),
           h("li", {}, h("b", {}, "Phone app too"), h("span", {}, "The same account signs in to AFH on Android and iPhone.")),
-          h("li", {}, h("b", {}, "Private"), h("span", {}, "The server keeps your email and computer list — never threads, files or keys.")))));
+          h("li", {}, h("b", {}, "Private"), h("span", {}, "The server keeps your email and computer list. Chats and keys stay in your browser.")))));
   }
 
   function switchTo(m, link) {
@@ -144,8 +144,8 @@
         show(h("section.acct-hero.acct-done", {},
           h("p.kicker", {}, "Connected"),
           h("h1.acct-title", {}, h("span.grad-text", {}, link.name), " is in."),
-          h("p.sub", {}, "Go back to AFH — it finishes by itself in a few seconds. It then shows up in your dashboard, and in the AFH app on your phone when you sign in with ", h("b", {}, me.user.email), "."),
-          h("div.cta-row", {}, h("a.btn.btn-primary", { href: "/dashboard" }, "Open your dashboard"), h("a.btn.btn-ghost", { href: "/download#phone" }, "Get the phone app"))));
+          h("p.sub", {}, "Go back to AFH — it finishes by itself in a few seconds. It then shows up under Computers here, and in the AFH app on your phone when you sign in with ", h("b", {}, me.user.email), "."),
+          h("div.cta-row", {}, h("a.btn.btn-primary", { href: "/computers" }, "Open Computers"), h("a.btn.btn-ghost", { href: "/download#phone" }, "Get the phone app"))));
       } catch (x) { say(msg, x.message); yes.disabled = no.disabled = false; }
     });
     no.addEventListener("click", async () => {
@@ -158,7 +158,7 @@
       h("section.acct-hero", {},
         h("p.kicker", {}, "Connect a computer"),
         h("h1.acct-title", {}, "Add ", h("span.grad-text", {}, link.name), "?"),
-        h("p.sub", {}, "AFH on this computer asked to join your account. Once it's in, you can chat with it from your dashboard here or the AFH app on your phone.")),
+        h("p.sub", {}, "AFH on this computer asked to join your account. Once it's in, you can follow it and send it tasks from Computers here or the AFH app on your phone.")),
       h("section.panel.acct-card", {},
         h("div.acct-row", {}, h("span", {}, "Account"), h("b", {}, me.user.email)),
         h("div.acct-row", {}, h("span", {}, "Code"), h("b.mono", {}, linkCode)),
@@ -172,7 +172,7 @@
       h("p.kicker", {}, "Connect a computer"),
       h("h1.acct-title", {}, "This link has expired."),
       h("p.sub", {}, text || "Start again from AFH on your computer: Settings → Remote control → Sign in with your browser."),
-      h("div.cta-row", {}, h("a.btn.btn-ghost", { href: "/dashboard" }, "Your dashboard"))));
+      h("div.cta-row", {}, h("a.btn.btn-ghost", { href: "/chat" }, "Open chat"))));
   }
 
   async function load() {

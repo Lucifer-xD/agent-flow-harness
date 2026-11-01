@@ -145,3 +145,49 @@ def test_the_phone_app_signs_in_with_a_token(relay):
     # other sites get no CORS grant
     r = app.get("/relay/api/health", headers={"origin": "https://evil.example"})
     assert "access-control-allow-origin" not in r.headers
+
+
+def test_the_web_chat_forwards_to_public_https_only(relay, monkeypatch):
+    web = TestClient(relay.app)
+    assert web.post("/relay/api/fwd", headers={"x-afh-target": "https://example.com/"}).status_code == 401
+    assert web.post("/relay/api/signup", json={"email": "fwd@example.com", "password": "correct horse 1"}).status_code == 200
+    # not https, a private address, this server itself: refused before anything is sent
+    for target in ("http://example.com/", "https://127.0.0.1/", "https://localhost:8840/relay/api/me", "https://10.0.0.5/", "https://user:pw@example.com/"):
+        assert web.get("/relay/api/fwd", headers={"x-afh-target": target}).status_code == 400, target
+
+    seen = {}
+
+    class Upstream:
+        status_code = 200
+        headers = {"content-type": "text/event-stream", "set-cookie": "x=1"}
+
+        async def aiter_raw(self):
+            yield b"data: one\n\n"
+            yield b"data: two\n\n"
+
+        async def aclose(self):
+            pass
+
+    class Client:
+        def build_request(self, method, url, headers, content):
+            seen.update(method=method, url=url, headers=headers, content=content)
+            return object()
+
+        async def send(self, req, stream):
+            return Upstream()
+
+    async def public(host, port):
+        return True
+
+    monkeypatch.setattr(relay, "fwd_client", lambda: Client())
+    monkeypatch.setattr(relay, "public_host", public)
+    res = web.post("/relay/api/fwd", content=b'{"model":"m"}', headers={
+        "x-afh-target": "https://api.example.com/v1/chat/completions", "authorization": "Bearer sk-test",
+        "content-type": "application/json", "x-afh-ua": "Tester/1"})
+    assert res.status_code == 200
+    assert res.text == "data: one\n\ndata: two\n\n"
+    assert "set-cookie" not in res.headers  # the provider's cookies stay out of agentflowharness.com
+    assert seen["url"] == "https://api.example.com/v1/chat/completions" and seen["content"] == b'{"model":"m"}'
+    sent = {k.lower(): v for k, v in seen["headers"].items()}
+    assert sent["authorization"] == "Bearer sk-test" and sent["user-agent"] == "Tester/1"
+    assert "cookie" not in sent and "x-afh-target" not in sent  # the AFH session never leaves

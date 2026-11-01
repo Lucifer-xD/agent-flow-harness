@@ -1,6 +1,9 @@
 User-agent: *
 Allow: /
 Disallow: /account
+Disallow: /chat
+Disallow: /computers
+Disallow: /dashboard
 Disallow: /r/
 Disallow: /relay/
 
