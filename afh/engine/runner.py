@@ -177,6 +177,20 @@ class Run:
         self.stop_rounds = 0  # stop hooks that sent the agent back to work
         self.todo_nudged = False
         self.step_files: list[tuple[str, str]] = []  # (tool call id, absolute path) changed in this step
+        self.msg: dict | None = None  # the step being answered, as streamed so far
+
+    def stop(self) -> None:
+        """Stop now: whatever the run is waiting on (the model, a command, a retry pause) is cancelled."""
+        self.abort.set()
+        if self.task and not self.task.done():
+            self.task.get_loop().call_soon_threadsafe(self.task.cancel)
+
+    def ended(self, task: asyncio.Task) -> None:
+        # Cancelled before run() got going, so its own cleanup never ran.
+        if task.cancelled() and self.engine.runs.get(self.sid) is self:
+            self.engine.runs.pop(self.sid, None)
+            self.engine.store.touch(self.sid, idle=True)
+            self.emit("session.execution.interrupted")
 
     def emit(self, type_: str, **data: Any) -> None:
         self.engine.publish(event(type_, self.sid, **data))
@@ -202,6 +216,7 @@ class Run:
                 provider, model = e.resolve_model(model_ref)
                 msg = {"id": new_id("msg"), "type": "assistant", "agent": agent.id, "model": model_ref, "content": [], "time": {"created": now_ms()}}
                 store.add_message(self.sid, msg)
+                self.msg = msg
                 self.emit("session.step.started", assistantMessageID=msg["id"], agent=agent.id, model=model_ref, started=msg["time"]["created"])
                 tools = e.tools_for(self.session, agent)
                 system = e.system_prompt_for(self.session, agent)
@@ -239,7 +254,11 @@ class Run:
             else:
                 self.emit("session.notice", kind="limit", label=f"Stopped after {max_steps} steps (the per-run limit) — send a message to continue")
             self.emit("session.execution.succeeded")
-        except Interrupted:
+        except (Interrupted, asyncio.CancelledError) as err:
+            if isinstance(err, asyncio.CancelledError):
+                if not self.abort.is_set():
+                    raise  # cancelled from outside: AFH is shutting down
+                asyncio.current_task().uncancel()
             self._mark_interrupted()
             self.emit("session.execution.interrupted")
         except ProviderError as err:
@@ -516,13 +535,16 @@ class Run:
         self.engine.store.save_message(self.sid, msg)
 
     def _mark_interrupted(self) -> None:
-        msgs = self.engine.store.list_messages(self.sid)
-        if msgs and msgs[-1].get("type") == "assistant" and not msgs[-1].get("time", {}).get("completed"):
-            m = msgs[-1]
-            for p in m.get("content", []):
-                if p.get("type") == "tool" and p.get("state", {}).get("status") in ("streaming", "pending", "running"):
-                    p["state"] = {"status": "error", "input": p["state"].get("input") or {}, "error": {"type": "aborted", "message": "Interrupted"}, "content": []}
+        m = self.msg  # the step in hand, with what was written before the stop
+        if m is None:
+            return
+        for p in m.get("content", []):
+            p.pop("_closed", None)
+            if p.get("type") == "tool" and p.get("state", {}).get("status") in ("streaming", "pending", "running"):
+                p["state"] = {"status": "error", "input": p["state"].get("input") or {}, "error": {"type": "aborted", "message": "Interrupted"}, "content": []}
+                self.emit("session.tool.failed", assistantMessageID=m["id"], id=p["id"], error=p["state"]["error"], content=[], metadata={}, executed=False)
+        if not m.get("time", {}).get("completed"):
             m["error"] = {"type": "aborted", "message": "Step interrupted"}
             m["finish"] = "error"
             m["time"]["completed"] = now_ms()
-            self.engine.store.save_message(self.sid, m)
+        self.engine.store.save_message(self.sid, m)

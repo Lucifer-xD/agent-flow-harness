@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-from .tools.shell import CREATE_NO_WINDOW, child_env, clean_clixml, kill_tree, spawn
+from .tools.shell import CREATE_NO_WINDOW, child_env, clean_clixml, kill_soon, kill_tree, spawn
 
 MAX_REPORT = 4000
 FAST_TIMEOUT = 20
@@ -53,6 +53,9 @@ async def _exec(argv: list[str], cwd: str, timeout: float) -> tuple[int, str]:
     except asyncio.TimeoutError:
         await kill_tree(proc)
         return -2, f"timed out after {timeout:.0f}s"
+    except asyncio.CancelledError:
+        kill_soon(proc)
+        raise
     return proc.returncode or 0, out.decode("utf-8", errors="replace").replace("\r\n", "\n").strip()
 
 
@@ -63,6 +66,9 @@ async def _shell(command: str, cwd: str, timeout: float, shell_pref: str | None)
     except asyncio.TimeoutError:
         await kill_tree(proc)
         return -2, f"timed out after {timeout:.0f}s"
+    except asyncio.CancelledError:
+        kill_soon(proc)
+        raise
     return proc.returncode or 0, clean_clixml(out.decode("utf-8", errors="replace")).replace("\r\n", "\n").strip()
 
 

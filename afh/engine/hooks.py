@@ -23,7 +23,7 @@ import re
 import subprocess
 import time
 
-from .tools.shell import clean_clixml, kill_tree, spawn, truncate_output
+from .tools.shell import clean_clixml, kill_soon, kill_tree, spawn, truncate_output
 
 log = logging.getLogger("afh.hooks")
 
@@ -83,6 +83,9 @@ async def run_hook(hook: dict, payload: dict, cwd: str, shell_pref: str | None =
         timed_out = True
         await kill_tree(proc)
         out = b""
+    except asyncio.CancelledError:
+        kill_soon(proc)
+        raise
     text = clean_clixml(out.decode("utf-8", errors="replace")).replace("\r\n", "\n").strip()
     text, _ = truncate_output(text, 8000)
     code = proc.returncode if proc.returncode is not None else -1

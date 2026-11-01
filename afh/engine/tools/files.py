@@ -743,7 +743,11 @@ async def grep_rg(rg: str, root: Path, pattern: str, include: str, cap: int) -> 
         argv += ["--glob", include]
     argv += ["-e", pattern, "--", str(root)]
     proc = await asyncio.create_subprocess_exec(*argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, creationflags=CREATE_NO_WINDOW)
-    out, err = await proc.communicate()
+    try:
+        out, err = await proc.communicate()
+    except asyncio.CancelledError:
+        proc.kill()
+        raise
     if proc.returncode not in (0, 1):
         raise ToolError(f"rg failed: {err.decode('utf-8', errors='replace').strip()}")
     hits: list[tuple[str, int, str]] = []

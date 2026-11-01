@@ -813,3 +813,91 @@ def test_project_memory_is_kept_out_of_git_and_may_hold_credentials(home, tmp_pa
     prompt = e.system_prompt_for(s, e.agent_for(s))
     assert "- API key: k-1" in prompt and "saved for you to use" in prompt and "safe for access tokens" in prompt
     assert "never secrets" not in prompt
+
+
+# ---- stop ----------------------------------------------------------------------------------------
+
+
+class HangingProvider(FakeProvider):
+    """Starts a reply, then goes quiet, like a model thinking for a long time."""
+
+    async def stream(self, req):
+        yield {"type": "text.delta", "text": "Let me think"}
+        await asyncio.sleep(60)
+        yield {"type": "finish", "reason": "stop"}
+
+
+async def stop_after(e: Engine, sid: str, wait: float) -> float:
+    """Stop the run once it has been going for `wait` seconds; how long it took to end."""
+    await asyncio.sleep(wait)
+    started = time.monotonic()
+    e.interrupt(sid)
+    await asyncio.wait_for(e.runs[sid].task, 2)
+    return time.monotonic() - started
+
+
+def test_stop_is_immediate_while_the_model_is_quiet(home, tmp_path):
+    e = make_engine(HangingProvider([]))
+
+    async def go():
+        e.loop = asyncio.get_running_loop()
+        sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+        await e.prompt(sid, "hi")
+        return sid, await stop_after(e, sid, 0.3)
+
+    sid, took = asyncio.run(go())
+    assert took < 0.5
+    assert sid not in e.runs and [ev for ev in e.events if ev["type"] == "session.execution.interrupted"]
+    last = e.store.list_messages(sid)[-1]
+    assert last["error"]["type"] == "aborted" and last["content"][0]["text"] == "Let me think"  # what streamed is kept
+
+
+def test_stop_is_immediate_during_a_long_command_and_kills_it(home, tmp_path):
+    script = tmp_path / "slow.py"
+    script.write_text("import os, time\nopen('pid.txt', 'w').write(str(os.getpid()))\ntime.sleep(60)\n")
+    e = make_engine(FakeProvider([[("shell", {"command": (f'& "{sys.executable}" slow.py' if sys.platform == "win32" else f'"{sys.executable}" slow.py')})]]))
+
+    async def go():
+        e.loop = asyncio.get_running_loop()
+        sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+        await e.prompt(sid, "run it")
+        for _ in range(100):
+            if (tmp_path / "pid.txt").exists():
+                break
+            await asyncio.sleep(0.1)
+        took = await stop_after(e, sid, 0)
+        await asyncio.sleep(3)  # the tree is killed in the background
+        return sid, took
+
+    sid, took = asyncio.run(go())
+    assert took < 0.5
+    part = tool_results(e, sid)[0]
+    assert part["state"]["status"] == "error" and part["state"]["error"]["type"] == "aborted"
+    pid = int((tmp_path / "pid.txt").read_text())
+    if sys.platform == "win32":
+        alive = str(pid) in subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
+    else:
+        import os
+        try:
+            os.kill(pid, 0)
+            alive = True
+        except OSError:
+            alive = False
+    assert not alive
+
+
+def test_stop_right_after_sending_still_ends_the_run(home, tmp_path):
+    e = make_engine(FakeProvider(["never sent"]))
+
+    async def go():
+        e.loop = asyncio.get_running_loop()
+        sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+        await e.prompt(sid, "hi")
+        e.interrupt(sid)  # before the run has taken a single step
+        for _ in range(20):
+            await asyncio.sleep(0)
+        return sid
+
+    sid = asyncio.run(go())
+    assert sid not in e.runs and not e.is_running(sid)
+    assert [ev for ev in e.events if ev["type"] == "session.execution.interrupted"]
