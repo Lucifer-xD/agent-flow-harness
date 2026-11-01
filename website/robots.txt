@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /account
+Disallow: /r/
+Disallow: /relay/
+
+Sitemap: https://agentflowharness.com/sitemap.xml

@@ -220,7 +220,7 @@
 }
 
 /* ---- account (/account) ---- */
-.acct { max-width: 760px; padding: 150px 0 12vh; }
+.acct { max-width: 980px; padding: 150px 0 12vh; }
 .acct-loading { color: var(--text-3); padding: 20vh 0; text-align: center; }
 .acct-hero { margin-bottom: 30px; }
 .acct-title { margin: 0; font: 700 clamp(34px, 5vw, 58px)/1.04 var(--display); letter-spacing: -0.04em; }
@@ -263,9 +263,25 @@
 .acct-inline { display: flex; gap: 10px; margin-top: 12px; }
 .acct-inline input { flex: 1; }
 .acct-delete { border-color: rgba(255, 61, 138, 0.18); }
+.acct-split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 18px; align-items: start; }
+.acct-split .acct-card { margin: 0; }
+.acct-pw { position: relative; }
+.acct-pw input { padding-right: 70px; }
+.acct-eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); padding: 6px 10px; border: 0; border-radius: 8px; background: rgba(255,255,255, 0.06); color: var(--text-2); font: 500 12.5px var(--body); cursor: pointer; }
+.acct-eye:hover { color: var(--text); background: rgba(255,255,255, 0.1); }
+.acct-hint { margin: 0; min-height: 1em; font-size: 12.5px; color: var(--text-3); }
+.acct-hint.ok { color: #9ff0c2; }
+.acct-switch { margin: 4px 0 0; font-size: 14px; color: var(--text-3); text-align: center; }
+.acct-switch button { padding: 0; border: 0; background: none; color: var(--orange); font: 600 14px var(--body); cursor: pointer; }
+.acct-perks { list-style: none; margin: 0; padding: 8px 4px; display: grid; gap: 18px; }
+.acct-perks li { display: grid; gap: 3px; padding-left: 18px; border-left: 2px solid rgba(255, 106, 42, 0.35); }
+.acct-perks b { font: 600 16px var(--display); }
+.acct-perks span { color: var(--text-2); font-size: 14.5px; }
 @media (max-width: 640px) {
   .acct { padding-top: 110px; }
   .acct-grid { grid-template-columns: 1fr; }
+  .acct-split { grid-template-columns: 1fr; }
+  .acct-perks { gap: 12px; }
   .acct-pc { grid-template-columns: auto minmax(0, 1fr); }
   .acct-pc-actions { grid-column: 2; justify-content: flex-start; }
   .acct-inline { flex-direction: column; }
