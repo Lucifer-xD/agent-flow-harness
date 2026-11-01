@@ -1,162 +1,256 @@
 <p align="center">
-  <img src="web/brand/logo-480.png" width="220" alt="Agent Flow Harness" />
+  <a href="https://agentflowharness.com"><img src="web/brand/logo-480.png" width="200" alt="Agent Flow Harness" /></a>
 </p>
 
 <h1 align="center">Agent Flow Harness</h1>
 
 <p align="center">
-  <b>An open-source desktop coding agent that works with any AI model — and lets models work together.</b><br/>
-  Pick a model, point it at a folder, and it reads, edits and runs code there with your approval.<br/>
-  Let one model lead and delegate to others. Control it from your phone. Everything runs on your own computer.
+  <b>Your agents. Your machine. Your flow.</b><br/>
+  A free desktop coding agent for Windows that plans, delegates and writes code with the models you choose,<br/>
+  and lets you watch every line as it happens. Plus an app for Android and iPhone, and AFH Chat on the web.
 </p>
 
 <p align="center">
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white" />
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-f59f00" />
-  <img alt="Engine" src="https://img.shields.io/badge/engine-AFH%20Engine%20(own)-ff6a2a" />
-  <img alt="Models" src="https://img.shields.io/badge/models-any%20OpenAI%2FAnthropic%2FGemini%20API-ff3d71" />
+  <a href="https://agentflowharness.com"><b>Website</b></a> ·
+  <a href="https://agentflowharness.com/download"><b>Download</b></a> ·
+  <a href="https://agentflowharness.com/features">Features</a> ·
+  <a href="https://agentflowharness.com/models">Models</a> ·
+  <a href="https://agentflowharness.com/docs">Docs</a> ·
+  <a href="https://agentflowharness.com/api">API</a> ·
+  <a href="https://agentflowharness.com/changelog">Changelog</a> ·
+  <a href="https://agentflowharness.com/chat">AFH Chat</a>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/thread-delegation.png" width="880" alt="A thread where the lead model delegates to a second model" />
+  <a href="https://agentflowharness.com/download"><img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white" /></a>
+  <a href="https://agentflowharness.com/download"><img alt="Desktop 1.10.1" src="https://img.shields.io/badge/desktop-1.10.1-ff6a2a" /></a>
+  <a href="https://agentflowharness.com/download"><img alt="Android and iPhone 1.11.0" src="https://img.shields.io/badge/Android%20%7C%20iPhone-1.11.0-ff3d71?logo=flutter&logoColor=white" /></a>
+  <a href="https://agentflowharness.com/models"><img alt="228 providers" src="https://img.shields.io/badge/providers-228-f59f00" /></a>
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2ea44f" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/desktop-live.png" width="900" alt="AFH at work: the to-do list, a browser check of the page it built, and the Live pane showing the file as it is written" />
 </p>
 
 ---
 
-## What it does
+## Contents
+
+- [Why AFH](#why-afh)
+- [Get it](#get-it)
+- [A tour](#a-tour)
+- [Everything it does](#everything-it-does)
+- [AFH on your phone and on the web](#afh-on-your-phone-and-on-the-web)
+- [Models and providers](#models-and-providers)
+- [Everyday use](#everyday-use)
+- [Build on it: API and SDKs](#build-on-it-api-and-sdks)
+- [Private by design](#private-by-design)
+- [For developers](#for-developers)
+- [License](#license)
+
+## Why AFH
+
+- **It finishes the job.** Give it a task and it sets a goal, plans it as a to-do list you can edit, does the work, runs the tests, checks the result in a real browser and tells you the goal is achieved, or exactly what is in the way.
+- **You see everything.** Code streams into the Live pane character by character. Every thought, tool call, command and diff is in the thread, and the Context view shows exactly what the model sees.
+- **Any model, mixed freely.** 228 providers, local models, or sign in with the ChatGPT, GitHub Copilot or OpenRouter plan you already pay for. Lead with a strong model and hand work to fast, cheap ones.
+- **You stay in control.** Ask first, Full access or Read only. Stop is instant. Undo rewinds the thread *and the files on disk*.
+- **It's yours.** Everything runs and is stored on your PC. No account needed, no telemetry. The engine is written from scratch in this repo, in plain Python.
+
+## Get it
 
 | | |
 |---|---|
-| **Any model** | Context windows, effort levels, image/video/audio/PDF input and prices come from the open models.dev catalog (correctable by hand). Paste an API key for OpenAI, Anthropic, Gemini, Kimi, Z.AI, DeepSeek, Groq, OpenRouter, Mistral, xAI, Together, Fireworks, Cerebras or Perplexity, or point AFH at any OpenAI-, Anthropic- or Gemini-compatible endpoint. Local models too (Ollama, LM Studio, vLLM, llama.cpp, Jan) with no key — AFH finds the ones running on your computer. Hide the models you don't use so the picker stays short. |
-| **Delegate mode** | One model leads: it plans, talks to you and reviews. It hands tasks to **delegates** — other models with jobs you describe ("writes code", "reviews diffs", "writes tests"). Every delegation shows live progress, needs-your-approval prompts, a **Watch** button that opens the delegate's thread beside yours, and its report. Switch modes any time, even mid-conversation. |
-| **Goals & to-do list** | The agent sets a **goal** by itself for any multi-step task (or you set one: "all tests pass and the login page works") and plans it as a live **to-do list** you can see and edit, works through it, checks the result and reports the goal **achieved** — or **blocked** if it needs you. With **autopilot** it keeps going on its own instead of stopping to ask. |
-| **It checks its own work** | After every edit AFH checks the changed files (Python, JSON, TOML, JavaScript, TypeScript with your project's `tsc`, Go, PHP, Ruby, plus your own linters) and hands any errors straight back to the model, so it fixes them before you see them. |
-| **Runs your app** | Servers, watchers and long builds run as **background jobs**: the agent starts your dev server, waits for "ready", tests against it, and stops it. You see every job and its output from the composer. |
-| **Many agents at once** | Every mode has a built-in **Helper** subagent (your own model), plus the delegates you configure. Independent reads, searches and **subagents run in parallel**, and the top bar shows how many are working — with what each was asked, what it replied, and **Watch**. Each thread or delegate can work in its own **git worktree** (own branch and folder) so parallel agents never collide; merge the branch back with one click. |
-| **Hooks & commands** | **Hooks** run your own commands before or after tools and when the agent finishes (format on save, block risky commands, "the tests must pass before you stop"). **Slash commands** (`/review`, `/fix-tests`, `/goal`, `/compact`, your own, or `.claude/commands/*.md` files) are one keystroke away. |
-| **Knows what it costs** | Tokens, prompt-cache hits and **cost** per step and per thread, a 30-day **Usage & cost** page, your own prices per model, and **spending limits** per thread or per day. Prompt caching on Anthropic and smarter context trimming keep long threads cheap. |
-| **Never loses work** | If AFH closes in the middle of a run — an update, a crash — it picks that thread up again by itself when it reopens. |
-| **You stay in control** | *Ask first* mode shows every file change (with a diff) and every command before it runs. *Full access* and *Read only* are one click away. **Undo** rewinds the thread **and the files on disk** to before any message. |
-| **See everything** | **Context** shows exactly what the model sees — your messages, its replies, tool inputs and outputs, system notices — and lets you edit or delete any of it. **Prompt** shows the exact system prompt the model receives, which you can copy, change or replace. |
-| **Extend it** | A **Skills store** (skills.sh) installs skills with one click. Add **MCP servers** (Chrome, Playwright, GitHub, filesystem…) from Settings. |
-| **Your own engine** | No third-party harness underneath: the agent loop, tools (read, write, edit, patch, glob, grep, list, shell, jobs, todo, goal, webfetch, websearch), permissions, undo snapshots, delegation, worktrees, hooks, error checks, compaction and MCP client are all in this repo, in plain Python. Tool calls stream live, so you watch files being written line by line. |
-| **Take it anywhere** | **Remote control**: open the same app on your phone or another computer over Wi-Fi (password-protected), optionally from outside your network through a free Cloudflare tunnel. **Export** any thread as a file and **import** it on another PC; import your old **Zadloop / DeepSeek Harness** sessions. |
-| **Feels good** | Smooth streaming, eased scrolling, a logo that flows while a model is thinking, 25 dark and light themes with a one-click dark/light switch, your accent color, a **command palette** (Ctrl+P), and an **Arabic interface** with right-to-left layout (the conversation follows each paragraph's own language). A **message rail** on the left jumps to any message of yours; drag the chat's edge to make it wider. |
+| **Windows** | Download the installer from **[agentflowharness.com/download](https://agentflowharness.com/download)** (or [Releases](../../releases)) and run it. Windows may show *"Windows protected your PC"* because the app isn't code-signed yet: click **More info → Run anyway**. AFH updates itself after that. |
+| **Android** | Download the APK from the [download page](https://agentflowharness.com/download) and open it (allow installs from your browser when asked). |
+| **iPhone** | Download the IPA from the [download page](https://agentflowharness.com/download) and install it with [Sideloadly](https://sideloadly.io) or [AltStore](https://altstore.io). |
+| **Web** | Open **[agentflowharness.com/chat](https://agentflowharness.com/chat)** and sign in. Nothing to install. |
+
+**First run on Windows:** AFH opens *Models & providers*. Sign in with ChatGPT, GitHub Copilot or OpenRouter, paste an API key, or pick a local model (Ollama, LM Studio and friends need no key). Then open a project folder and ask for something.
+
+Your settings, keys and threads live in `C:\Users\<you>\.afh` and never leave your PC, except to the model providers you choose.
+
+## A tour
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/desktop-goal.png" alt="The agent sets a goal and a to-do list" /><br/><b>It plans its own work.</b> The agent turns your request into a goal with a clear "done when", and a to-do list you can tick, add to, reorder or edit while it works.</td>
+<td width="50%"><img src="docs/screenshots/desktop-achieved.png" alt="Goal achieved, with how it was verified" /><br/><b>It checks before it says "done".</b> Tests run, the page is clicked through in a real browser, and the goal is marked achieved with how it was verified.</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/desktop-changes.png" alt="Changes pane with a diff" /><br/><b>Every change, reviewable.</b> The Changes pane lists every file the thread touched, with diffs. Undo to any message rewinds the files too.</td>
+<td width="50%"><img src="docs/screenshots/settings-models.png" alt="Models and providers settings" /><br/><b>Bring any model.</b> Sign in with a plan you already pay for, paste a key, or point it at any compatible endpoint.</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/settings-delegation.png" alt="Delegation settings" /><br/><b>Models working together.</b> In Delegate mode one model leads and hands tasks to delegates, each with its own model and job.</td>
+<td width="50%"><img src="docs/screenshots/settings-skills.png" alt="Skills store" /><br/><b>Extend it in one click.</b> Install skills from the skills.sh store, add MCP servers, or just ask: the agent installs new abilities itself.</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/settings-hooks.png" alt="Hooks" /><br/><b>Hooks.</b> Your own commands before or after any tool, or when the agent stops: format on save, block risky commands, "the tests must pass".</td>
+<td width="50%"><img src="docs/screenshots/settings-usage.png" alt="Usage and cost" /><br/><b>Know what it costs.</b> Tokens, cache hits and cost per thread, 30 days of usage, your own prices and spending limits.</td>
+</tr>
+</table>
+
+## Everything it does
+
+**Plans and finishes**
+- **Goals:** for any multi-step task the agent sets a goal and works until it's met, or reports *blocked* with what it needs. Set one yourself with `/goal`. With **autopilot** it keeps going on its own.
+- **A to-do list you can touch:** every step shows above the message box; your edits reach the agent on its next turn.
+- **It asks instead of guessing:** when a choice is really yours, it pauses with multiple-choice questions.
+- **Project memory:** how to run and test the project, the gotcha that cost an hour, the way you like things done. The agent saves what it learns, and every new thread starts knowing it. Say "remember…", type `/remember`, or edit it under **Memory**.
+- **Picks up after a restart:** close the app mid-run, or lose power, and interrupted runs resume by themselves.
+
+**Splits the work**
+- **Three modes:** *Build* does the work, *Plan* investigates and proposes without changing anything, *Delegate* leads and hands tasks to your delegate models. Or create your own agents.
+- **Helpers in parallel:** the built-in Helper (your own model) plus your own subagents run side by side; watch any of them live from the top bar.
+- **Mix models:** lead with your strongest model, delegate tests to a fast one and styles to another, across providers.
+- **Git worktrees:** give a thread or a delegate its own branch and folder, then merge it back with one click.
+
+**You watch it work**
+- **Live file pane:** tool arguments stream as they are generated, so code appears character by character.
+- **Every step on a timeline:** thinking time, each tool call, tokens per second and how long each reply took.
+- **It checks its work in a browser:** the browser tool drives a real Chrome or Edge, and screenshots go back to models that can see.
+- **Errors caught after edits:** Python, JSON, TOML, JavaScript, TypeScript (your project's `tsc`), Go, PHP, Ruby and your own linters; problems go straight back to the model.
+- **Images and voice:** paste or drop screenshots and files; press the mic and speak (with a Groq or OpenAI speech key).
+
+**You stay in control**
+- **Approval modes:** *Ask first* (approve every edit and command, with diffs), *Full access*, *Read only*. Reading `.env` files always asks.
+- **Stop is instant:** the run, the model call and any running command stop the moment you press Stop or Esc.
+- **Rewind anything:** *Undo to here* rewinds the thread and the files on disk to just before a message. Or fork the thread from any point.
+- **See everything:** *Context* shows and lets you edit everything the model sees; *Prompt* shows the exact system prompt.
+- **Cost you can see:** tokens and cost per thread, budgets that stop a run, prompt caching on by default for Anthropic. Subscription plans count as no cost.
+
+**Built for long sessions**
+- **Endless threads:** when a conversation fills the model's context, older parts are summarised in place. You can still read every message. Or type `/compact`.
+- **Background jobs:** dev servers, watchers and long builds run in the background while the agent keeps working (`/jobs`).
+- **Schedules:** run a prompt every few minutes, hourly, daily, on weekdays or weekly; each run is a new thread you can read.
+- **Bring your threads:** import from OpenCode or Zadloop; export any thread as JSON or Markdown.
+
+**Make it yours**
+- **46 themes** (29 dark, 17 light) with your own accent color, or build your own.
+- **English and Arabic**, with a full right-to-left layout, switchable live.
+- **Slash commands:** `/goal` `/todo` `/memory` `/remember` `/compact` `/jobs` `/new` `/cost` `/review` `/fix-tests` `/explain` `/commit`, plus your own as Markdown files (`.claude/commands` works too).
+- **MCP servers and skills:** local or remote MCP servers, skills from `~/.afh/skills` or the project. Skills made for other agents work as they are.
+- **It extends itself:** ask for a new ability and it installs skills, MCP servers, commands, hooks or custom agents.
 
 <p align="center">
-  <img src="docs/screenshots/settings-delegation.png" width="430" alt="Delegation settings" />
-  <img src="docs/screenshots/settings-models.png" width="430" alt="Models and providers" />
+  <img src="docs/screenshots/settings-themes.png" width="820" alt="46 themes" />
 </p>
+
+## AFH on your phone and on the web
+
 <p align="center">
-  <img src="docs/screenshots/settings-skills.png" width="430" alt="Skills store" />
-  <img src="docs/screenshots/context-editor.png" width="430" alt="Context editor" />
+  <img src="docs/screenshots/phone.png" width="900" alt="The AFH app for Android and iPhone: the home screen, web search at work, a code answer and the providers list" />
 </p>
 
-## Install (no programming needed)
+The **AFH app for Android and iPhone** does two things:
 
-1. **Download AFH**: open the [Releases](../../releases) page and download `AFH-Setup-1.6.0.exe`.
-2. **Run the installer.** Windows may show a blue *"Windows protected your PC"* screen because the app isn't code-signed yet — click **More info → Run anyway**. Pick a folder, finish, and AFH opens.
-3. **Connect a model**: on first launch AFH opens *Models & providers*. Pick a provider and paste its API key (local servers like Ollama need none). If you used OpenCode before, one click imports its keys, MCP servers and threads. Then set your **Default model**.
-4. **Open a folder** (the project you want to work on) and ask for something.
+- **Chat with any model, straight from your phone:** all 228 providers, or sign in with ChatGPT, GitHub Copilot or OpenRouter. Keys stay in the phone's secure storage and chats go straight to the provider; it works with your computer off and without an account.
+- **An assistant that can use your phone:** it searches the web and reads pages, checks the weather and where you are, sets reminders, adds calendar events, finds contacts, drafts calls, texts and emails for you to send, opens maps and links, uses the clipboard, does math and remembers things you tell it. Each step shows in the reply.
+- **Your computers, from anywhere:** sign in and see which computers are online, follow their threads live, approve and answer with a tap, send the next task, start a new thread or stop a run. Nothing to open on your router.
 
-That's it. Nothing else to install. Your settings, keys and threads live in `C:\Users\<you>\.afh` and never leave your PC except to the model providers you chose.
+**AFH Chat** at [agentflowharness.com/chat](https://agentflowharness.com/chat) is the same chat in your browser: the same providers, sign-ins and tools, with your chats kept in your browser. **Computers** follows AFH on your PCs live.
 
-### Using it from your phone
+<p align="center">
+  <img src="docs/screenshots/web-chat.png" width="820" alt="AFH Chat on the web, using its calculator tool" />
+</p>
 
-Settings → **Remote control** → set a password → turn it on. Scan the QR code (or type the address) on a phone connected to the same Wi-Fi. For access from anywhere, turn on the Cloudflare tunnel (requires [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/) installed on the PC). Windows Firewall will ask once to allow Python on private networks — allow it.
+The optional **AFH account** is only for reaching your computers and the web chat. AFH itself needs none, and the server never stores your threads, files or keys.
+
+## Models and providers
+
+- **228 providers** from the open models.dev catalog: OpenAI, Anthropic, Google Gemini, Kimi, Z.AI, DeepSeek, Groq, OpenRouter, Mistral, xAI, Together, Fireworks, Cerebras, Perplexity and many more. Context windows, effort levels, inputs (image, video, audio, PDF) and prices come from the catalog, and you can correct them by hand.
+- **Sign in instead of pasting a key:** ChatGPT (Plus, Pro or Team), GitHub Copilot (Claude, GPT and Gemini through your Copilot plan) and OpenRouter.
+- **Local models with no key:** Ollama, LM Studio, vLLM, llama.cpp and Jan. AFH finds the ones running on your computer.
+- **Any compatible endpoint:** anything that speaks the OpenAI, Anthropic or Gemini API.
+- Hide the models you don't use so the picker stays short.
+
+See the full list at [agentflowharness.com/models](https://agentflowharness.com/models).
 
 ## Everyday use
 
 | Where | What |
 |---|---|
-| **Mode pill** (bottom of the composer) | *Build* does the work itself. *Plan* only plans. *Delegate* leads and delegates to your delegates. Custom agents you create appear here too. |
-| **Approval pill** | *Ask first* / *Full access* / *Read only*. Per thread, changeable any time. |
-| **Model pill** | Model and effort level for this thread. |
-| **Goal** (top right, or the Goal pill on a new thread) | Set what done looks like; the dock above the composer shows the goal, autopilot, and the live to-do list. |
-| **Worktree pill** (new thread, git projects) | The thread works in its own copy of the repo on its own branch; the branch chip in the top bar merges it back. |
-| **Type `/`** | Commands: `/goal`, `/compact`, `/review`, `/fix-tests`, `/explain`, `/commit`, your own. |
-| **Jobs chip** (composer) | Background jobs the agent started: live output, stop. |
-| **Context** (top right) | See and edit everything the model sees. |
-| **Prompt** | The exact system prompt, instructions, skills and permissions in effect. |
-| **Changes** | Every file the thread changed, with diffs. |
-| **⋯ menu** | Rename, fork, edit context, export, copy as Markdown, archive, delete. |
-| **Hover a message of yours** | **Undo to here** — rewinds the thread and your files. |
-| **Project menu** (sidebar) | Open folders, switch projects, **Import thread** (from an export file, OpenCode or Zadloop). |
+| **Mode** (message box) | *Build*, *Plan*, *Delegate*, or your own agents. |
+| **Approval** | *Ask first*, *Full access* or *Read only*, per thread, changeable any time. |
+| **Model** | Model and effort level for this thread. |
+| **Goal** and **Memory** | What done looks like, autopilot and the live to-do list; what the agent knows about the project. |
+| **Worktree** (new thread, git projects) | The thread works on its own branch; the branch chip merges it back. |
+| **Live**, **Context**, **Prompt**, **Changes** | Watch files being written; see and edit what the model sees; the exact system prompt; every file changed, with diffs. |
+| **Type `/`** | Commands. |
+| **Hover a message of yours** | **Undo to here** rewinds the thread and your files. |
 
 Keyboard: `Enter` send · `Shift+Enter` new line · `/` commands · `Ctrl+P` command palette · `Esc` stop · `Ctrl+N` new thread · `Ctrl+K` search · `Ctrl+B` sidebar · `Ctrl+,` settings.
 
-## Goals and the to-do list
+## Build on it: API and SDKs
 
-1. Usually you do nothing: for multi-step work the agent sets the goal itself (Settings → Agent can turn that off). To set one yourself, click **Goal** (top right) — or on a new thread, the **Goal** pill next to the mode pills — or type `/goal <what done looks like>`.
-2. Describe the goal and, optionally, **Done when** (how to check it: "`npm test` passes and the page loads"). Leave **Autopilot** on to let the agent keep working until it is done.
-3. Click **Start now**. The agent writes its plan as a to-do list above the composer and ticks items off as it works. You can tick, add, edit (double-click) or remove items yourself — it is told about your changes.
-4. When it is finished it verifies the result and marks the goal **achieved** (you get a notification), or **blocked** with exactly what it needs from you. Autopilot sends it back to work at most *Continuations* times per message (Settings → Agent).
+Everything the app does is a local REST API: create threads, send messages, stream every token and tool call, read replies and diffs, set goals and approve actions. Use one key from **Settings → Developer**.
 
-## Hooks, checks and limits
+```python
+from afh_sdk import AFH            # sdk/python: one file, standard library only
 
-- **Settings → Agent**: steps per run, the to-do check before finishing, goal defaults, and the error checks after edits (add your own: `npx eslint {files}` for `*.ts`).
-- **Settings → Hooks**: commands that run *before a tool*, *after a tool* or *when the agent finishes*. Exit code 2 blocks the tool or sends the agent back to work with the hook's output. Start from the templates.
-- **Settings → Commands**: your saved prompts for `/name`; `.afh/commands/*.md` and `.claude/commands/*.md` in a project work too.
-- **Settings → Usage & cost**: 30 days of tokens and spending, model prices (USD per million tokens), and spending limits.
+afh = AFH()                        # finds the running app; key from $AFH_API_KEY
+result = afh.run("Add a /health endpoint and a test for it", directory=r"C:\code\api")
+print(result["reply"])
 
-## Setting up Delegate mode
+for event in afh.events():         # live events from every thread
+    print(event["type"])
+```
 
-1. Settings → **Delegation** → *Add delegate*.
-2. Give it a name, pick its **model** (and effort), and write its **job** — this is what the leader reads to decide when to use it. Example: *"Writes and edits code. Send it implementation tasks, bug fixes and tests. Good at Python and TypeScript."*
-3. Optionally make it **read-only** (good for reviewers) or give it extra system-prompt instructions.
-4. Add **leader instructions** if you want house rules ("always have the Reviewer check the Coder's work").
-5. Save. In any thread, pick **Delegate** in the mode pill.
+The JavaScript SDK is `sdk/js/afh.mjs`. Full reference: [agentflowharness.com/api](https://agentflowharness.com/api).
 
-The leader can continue a delegate's existing session or start a fresh one, run several delegates **at the same time**, give each its own **git worktree** so they never edit the same files, and run delegates in the background. If a delegate needs your approval (Ask first mode), the request appears inside the delegation card.
+## Private by design
+
+- Threads, settings and undo history live in `~/.afh` on your PC.
+- API keys are stored only on your computer (or in your phone's secure storage).
+- Your code goes only to the model providers you choose.
+- The only other calls: the update check, the model catalog refresh, and web search or voice if you turn them on.
 
 ## For developers
 
 ```
 afh/            Python backend (FastAPI + SSE), token-protected, loopback only
-  api.py          the HTTP API the UI talks to
-  store.py        ~/.afh files: settings, prompts, personalization, delegation, agents, MCP servers
-  transfer.py     export/import, Zadloop conversion     skills_store.py  skills.sh client + installer
-  remote.py       LAN listener + Cloudflare tunnel
+  api.py          the HTTP API the UI, the phone and the SDKs talk to
+  cloud.py        the outgoing connection to the relay (remote control through an AFH account)
+  store.py, transfer.py, skills_store.py, remote.py, devapi.py
 afh/engine/     the AFH Engine
-  core.py         Engine facade: providers, sessions, runs, undo, compaction, titles, delegation, goals, to-dos, cost
-  runner.py       the agent loop: stream → run tools (parallel when safe) → hooks → error checks → repeat
-  state.py        the todo and goal tools, autopilot      jobs.py      background jobs + the jobs tool
-  diagnostics.py  error checks after edits                hooks.py     user hooks (pre_tool, post_tool, stop)
-  worktree.py     git worktrees per thread/delegate       commands.py  slash commands
-  pricing.py      prices and cost per step
-  providers/      OpenAI-compatible, Anthropic and Gemini adapters (streaming, tool-call deltas) + catalog
-  tools/          read, write, edit, patch, glob, grep, list, shell, webfetch, websearch
-  permissions.py  Ask first / Full access / Read only rules and the approval gate
-  sessions.py     SQLite store (threads, messages, undo snapshots)
-  prompt.py       system prompt assembly       agents.py   modes, custom agents, delegates
-  mcp.py          MCP client (stdio + HTTP)    skills.py   SKILL.md discovery and the skill tool
-  migrate.py      one-click import of an OpenCode install (keys, endpoints, MCP servers, threads)
-web/            the UI: plain HTML/CSS/JS, no build step (js/main.js, chat.js, delegate.js, settings*.js)
-desktop/        Electron shell (main.js, preload.js) + electron-builder config
-scripts/        build-backend.ps1 (PyInstaller)
-tests/          pytest (about 150 tests: providers, tools, engine features, MCP, skills, transfer, UI modules)
+  core.py         providers, sessions, runs, undo, compaction, titles, delegation, goals, to-dos, cost
+  runner.py       the agent loop: stream → tools (parallel when safe) → hooks → error checks → repeat
+  providers/      OpenAI-compatible, Anthropic and Gemini adapters + the 228-provider catalog
+  tools/          read, write, edit, patch, glob, grep, list, shell, webfetch, websearch, browser
+  state.py, jobs.py, diagnostics.py, hooks.py, worktree.py, commands.py, schedules.py, memory.py,
+  permissions.py, sessions.py, prompt.py, agents.py, mcp.py, skills.py, pricing.py, voice.py, auth.py
+web/            the desktop UI: plain HTML/CSS/JS, no build step
+desktop/        Electron shell + electron-builder (NSIS installer, auto-update)
+app/            the phone app (Flutter): chats, tools, providers, remote control
+relay/          the AFH account server (FastAPI): sign-in, computers, the relay, AFH Chat's forwarder
+website/        agentflowharness.com, including AFH Chat (website/js/chat)
+sdk/            Python and JavaScript SDKs
+scripts/        build, install and deploy scripts
+tests/          pytest (about 220 tests: engine, tools, providers, MCP, skills, relay, transfer)
 ```
 
 ```bash
 # run from source
 python -m venv .venv && .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python run.py --browser   # backend + UI in your browser
-cd desktop && npm install && npm run dev   # or the Electron window
+.venv\Scripts\python run.py --browser        # backend + UI in your browser
+cd desktop && npm install && npm run dev     # or the Electron window
 
-# build the installer
+# test
+.venv\Scripts\python -m pytest tests
+
+# build the Windows installer
 powershell -ExecutionPolicy Bypass -File scripts\build-backend.ps1   # PyInstaller → desktop/backend-dist
 cd desktop && npm run dist                                           # → desktop/dist/AFH-Setup-<version>.exe
+
+# build the phone app (Flutter 3.47)
+cd app && flutter build apk --release
 ```
 
-Everything AFH knows lives under `~/.afh`: `settings.json`, `providers.json` (keys), `afh.db` (threads, messages, undo snapshots), `skills/`, `AGENTS.md`, `personalization.md`. See [docs/architecture.md](docs/architecture.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Roadmap
-
-- iOS and Android apps (the remote-control web UI works on phones today)
-- Voice input
-- Auto-update
-- Code signing
+More in [docs/architecture.md](docs/architecture.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT. Bundles marked (MIT), DOMPurify (Apache-2.0/MPL-2.0), highlight.js (BSD-3), Electron (MIT), FastAPI (MIT), httpx (BSD-3), the MCP Python SDK (MIT).
+MIT. Bundles marked (MIT), DOMPurify (Apache-2.0/MPL-2.0), highlight.js (BSD-3), Electron (MIT), FastAPI (MIT), httpx (BSD-3), the MCP Python SDK (MIT) and Flutter (BSD-3).
+
+<p align="center"><a href="https://agentflowharness.com"><img src="docs/screenshots/website.jpg" width="820" alt="agentflowharness.com" /></a></p>
