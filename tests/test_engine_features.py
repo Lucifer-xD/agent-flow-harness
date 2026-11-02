@@ -342,6 +342,29 @@ def test_background_job_start_wait_for_pattern_and_stop(tmp_path):
     asyncio.run(go())
 
 
+def test_shell_streams_output_while_the_command_runs(tmp_path):
+    async def go():
+        seen = []
+        ctx = ToolContext(session_id="s1", message_id="m1", directory=str(tmp_path), permissions=AllowGate(), snapshots=NoSnap(),
+                          emit=lambda type_, data: seen.append((type_, data["content"][0]["text"])))
+        script = tmp_path / "slow.py"
+        script.write_text("import time\nprint('step one', flush=True)\ntime.sleep(1.2)\nprint('step two', flush=True)\ntime.sleep(0.8)\n")
+        res = await ShellTool().run(ctx, {"command": f'{RUN}"{sys.executable}" "{script}"'})
+        assert "step two" in res.text
+        live = [text for type_, text in seen if type_ == "session.tool.progress"]
+        # The first line reached the app before the command finished, then the update that added the second.
+        assert any("step one" in t and "step two" not in t for t in live)
+        assert "step two" in live[-1]
+
+    asyncio.run(go())
+
+
+def test_live_tail_keeps_the_last_state_of_redrawn_lines():
+    from afh.engine.tools.shell import live_tail
+
+    assert live_tail(b"a\r\nprogress 10%\rprogress 50%\rprogress 100%\r\ndone\r\n") == "a\nprogress 100%\ndone\n"
+
+
 def test_background_job_that_exits_immediately_reports_failure(tmp_path):
     async def go():
         jobs = JobManager(lambda ev: None)

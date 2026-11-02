@@ -8,12 +8,13 @@ to a thread: they are stopped when the thread is deleted and when AFH quits.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 import time
 from typing import Callable
 
 from .tools.files import BaseTool, ToolError, int_arg, require_writable, str_arg
-from .tools.shell import clean_clixml, kill_tree, spawn, truncate_output
+from .tools.shell import LIVE_TAIL, clean_clixml, kill_tree, spawn, stream_output, truncate_output
 from .types import ToolContext, ToolResult, ToolSpec, event
 
 BUFFER_LIMIT = 2_000_000  # bytes kept per job (the oldest output is dropped first)
@@ -190,11 +191,22 @@ def describe(job: Job) -> str:
     return f"{job.id} ({state}): {job.command}"
 
 
+@contextlib.asynccontextmanager
+async def live_job(ctx: ToolContext, job: Job):
+    """While a tool waits on a job, its card shows the job's output as it arrives."""
+    task = asyncio.create_task(stream_output(ctx, lambda: (job.dropped + len(job.buf), bytes(job.buf[-LIVE_TAIL * 2:]))))
+    try:
+        yield
+    finally:
+        task.cancel()
+
+
 async def start_background(ctx: ToolContext, command: str, description: str, wait: float) -> ToolResult:
     jobs: JobManager = ctx.jobs
     job = await jobs.start(ctx.session_id, command, ctx.directory, (ctx.settings or {}).get("shell"), description)
-    await jobs.wait_output(job, wait)
-    await asyncio.sleep(0.3)  # let a burst of startup output land
+    async with live_job(ctx, job):
+        await jobs.wait_output(job, wait)
+        await asyncio.sleep(0.3)  # let a burst of startup output land
     text, _ = jobs.read(job)
     text = text.strip()
     head = f"Started background job {job.id}: {command}"
@@ -258,7 +270,8 @@ class JobsTool(BaseTool):
                 re.compile(pattern)
             except re.error as e:
                 raise ToolError(f"Invalid pattern: {e}") from None
-        matched = await jobs.wait_output(job, wait, pattern) if (wait or pattern) else True
+        async with live_job(ctx, job):
+            matched = await jobs.wait_output(job, wait, pattern) if (wait or pattern) else True
         text, skipped = jobs.read(job)
         status = describe(job)
         note = ""

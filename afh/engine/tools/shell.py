@@ -17,6 +17,7 @@ import signal
 import subprocess
 import sys
 import time
+from typing import Callable
 
 from afh.engine.types import ToolContext, ToolResult, ToolSpec
 from afh.engine.tools.files import BaseTool, ToolError, int_arg, str_arg, require_writable
@@ -132,6 +133,33 @@ def truncate_output(text: str, limit: int = MAX_OUTPUT) -> tuple[str, bool]:
     return text[:half] + TRUNCATION_MARKER + text[-half:], True
 
 
+LIVE_EVERY = 0.25  # seconds between live output updates of a running command
+LIVE_TAIL = 6000  # characters of output each update carries
+_CR_LINE = re.compile(r"[^\n]*\r(?=[^\n])")  # everything up to the last \r of a line
+
+
+def live_tail(raw: bytes) -> str:
+    """The end of a command's output as a terminal would show it: progress bars redrawn with \\r keep their last state."""
+    text = clean_clixml(raw[-LIVE_TAIL * 2:].decode("utf-8", errors="replace")).replace("\r\n", "\n")
+    return _CR_LINE.sub("", text)[-LIVE_TAIL:]
+
+
+async def stream_output(ctx: ToolContext, output: Callable[[], tuple[int, bytes]]) -> None:
+    """Send a running command's output to the app as it arrives, so its card fills in live.
+    `output()` gives (bytes so far, the end of them). Runs until cancelled; only sends when there is something new."""
+    sent = -1
+    while True:
+        await asyncio.sleep(LIVE_EVERY)
+        size, raw = output()
+        if size == sent:
+            continue
+        sent = size
+        try:
+            ctx.emit("session.tool.progress", {"content": [{"type": "text", "text": live_tail(raw)}], "metadata": {"live": True, "bytes": size}})
+        except Exception:  # the live view must never break the command
+            return
+
+
 class ShellTool(BaseTool):
     spec = ToolSpec(
         name="shell",
@@ -189,6 +217,7 @@ class ShellTool(BaseTool):
                 buf.extend(chunk)
 
         pump_task = asyncio.create_task(pump())
+        live_task = asyncio.create_task(stream_output(ctx, lambda: (len(buf), bytes(buf[-LIVE_TAIL * 2:]))))
         timed_out = False
         try:
             await asyncio.wait_for(proc.wait(), timeout)
@@ -200,6 +229,8 @@ class ShellTool(BaseTool):
             kill_soon(proc)
             pump_task.cancel()
             raise
+        finally:
+            live_task.cancel()
         # A surviving grandchild could hold the pipe open; do not wait on it forever.
         try:
             await asyncio.wait_for(pump_task, 5)
