@@ -12,6 +12,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const overlay = require("./overlay-main");
+const browser = require("./browser-main");
 
 const IS_WIN = process.platform === "win32";
 const IS_MAC = process.platform === "darwin";
@@ -39,6 +40,10 @@ const stderrTail = [];
 
 const log = (...args) => console.log("[afh]", ...args);
 const logErr = (...args) => console.error("[afh]", ...args);
+
+// The agent keeps working in the browser panel while this window is behind others: without this,
+// Windows reports a covered window as hidden and Chromium stops painting it (no screenshots, lost clicks).
+if (IS_WIN) app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 
 // ---- single instance ---------------------------------------------------------------------
 
@@ -277,6 +282,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       spellcheck: false,
+      webviewTag: true, // the built-in browser panel (see browser-main.js)
     },
   };
   if (boundsVisible(saved)) {
@@ -313,6 +319,7 @@ function createWindow() {
   });
 
   const wc = mainWindow.webContents;
+  browser.guardWindow(wc);
   wc.on("did-finish-load", () => {
     log("did-finish-load", wc.getURL().split("#")[0]);
     wc.executeJavaScript("typeof window.afh").then(
@@ -551,6 +558,7 @@ function onReady() {
   initUpdater();
   // The computer-use overlay listens to the backend itself (it works while this window is minimized).
   overlay.registerOverlay({ backendUrl, mainWindow: () => mainWindow });
+  browser.registerBrowser();
   if (backendUrl) createWindow();
 
   app.on("activate", () => {

@@ -50,6 +50,7 @@
           <button class="chip-btn" id="btn-context" title="See and edit everything the model sees"><span class="ico" data-icon="list"></span>Context</button>
           <button class="chip-btn" id="btn-harness" title="See what the model is told"><span class="ico" data-icon="scroll"></span>Prompt</button>
           <button class="chip-btn" id="btn-changes" title="Changed files"><span class="ico" data-icon="diff"></span>Changes<span class="badge" id="changes-count" hidden></span></button>
+          <button class="chip-btn" id="btn-browser" title="Browser: browse the web and watch the agent use it" hidden><span class="ico" data-icon="globe"></span>Browser</button>
           <button class="icon-btn" id="btn-thread-menu" title="Thread actions"></button>
         </div>
       </header>
@@ -90,6 +91,8 @@
         <div class="composer-hint" id="composer-hint"></div>
       </div>
     </main>
+
+    <aside class="browser-pane" id="browser-pane" aria-label="Browser"></aside>
 
     <aside class="drawer" id="drawer" aria-hidden="true">
       <div class="drawer-head">

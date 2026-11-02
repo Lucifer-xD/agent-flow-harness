@@ -39,6 +39,32 @@ contextBridge.exposeInMainWorld("afh", {
     install: () => ipcRenderer.invoke("afh:update:install"),
   },
 
+  /**
+   * The built-in browser panel (see browser-main.js). `id` is a <webview>'s getWebContentsId().
+   * attach(id) connects the DevTools Protocol, send(id, method, params) runs a command, shot(id, width)
+   * resolves to { data (base64 JPEG), width, height } in CSS pixels, and onEvent(cb) gets
+   * { id, method, params } protocol events, { id, detached } and { id, newTab: url }.
+   */
+  browser: {
+    partition: "persist:afh-browser",
+    attach: (id) => ipcRenderer.invoke("afh:browser:attach", Number(id)),
+    send: (id, method, params) => ipcRenderer.invoke("afh:browser:send", Number(id), String(method), params || {}),
+    shot: (id, width) => ipcRenderer.invoke("afh:browser:shot", Number(id), Number(width) || 0),
+    detach: (id) => ipcRenderer.invoke("afh:browser:detach", Number(id)),
+    onEvent: (cb) => {
+      if (typeof cb !== "function") return () => {};
+      const handler = (_event, payload) => {
+        try {
+          cb(payload);
+        } catch (err) {
+          console.error("[afh] browser event callback failed", err);
+        }
+      };
+      ipcRenderer.on("afh:browser:event", handler);
+      return () => ipcRenderer.removeListener("afh:browser:event", handler);
+    },
+  },
+
   window: {
     minimize: () => ipcRenderer.invoke("afh:window:minimize"),
     maximize: () => ipcRenderer.invoke("afh:window:maximize"),

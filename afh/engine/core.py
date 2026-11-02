@@ -580,6 +580,9 @@ class Engine:
             raise KeyError(sid)
         if self.stashes.pop(sid, None) is not None:  # sending after an undo keeps the undo
             self.publish(event("session.revert.committed", sid))
+        from .tools.browser import PANEL
+
+        PANEL.paused.discard(sid)  # a new message hands the browser tab you took over back to the agent
         fields: dict[str, Any] = {}
         if agent and agent != session.get("agent"):
             fields["agent"] = agent

@@ -1,11 +1,16 @@
-"""The `browser` tool: a real browser the agent drives to check its own work — open a page (your
-dev server, a site), look at a screenshot, read the text, click, type, run JavaScript and read
-the console.
+"""The `browser` tool: a real browser the agent drives to check its own work, or to do things on the
+web for you — open a page (your dev server, a site), look at a screenshot, read the text, click and
+type (on an element, or at x,y on the screenshot), run JavaScript and read the console.
 
-It uses the Chrome or Edge already on the computer through the Chrome DevTools Protocol, with
-its own profile in ~/.afh/browser-profile/<browser> (your normal browser and sign-ins are never touched).
-One tab per thread; it runs headless unless Settings → Agent → "Show the browser window" is on.
-Screenshots go to vision models as images and show in the tool card.
+Two places it can run:
+- **The panel in the AFH window** (the desktop app): tabs in a side panel you watch live, can take
+  over at any time, and browse in yourself. The page connects to /api/browser/host and relays the
+  Chrome DevTools Protocol of its <webview> tabs (desktop/browser-main.js, web/js/browser.js).
+- **Chrome or Edge** already on the computer, through the DevTools Protocol, with its own profile in
+  ~/.afh/browser-profile/<browser> (your normal browser and sign-ins are never touched). It runs
+  headless unless Settings → Agent → "Show the browser window" is on. Used by the CLI, when the
+  window isn't open, or when Settings → Agent → Browser is set to Chrome/Edge.
+One tab per thread either way. Screenshots go to vision models as images and show in the tool card.
 """
 from __future__ import annotations
 
@@ -30,7 +35,9 @@ log = logging.getLogger("afh.browser")
 VIEWPORT = (1280, 800)
 MAX_TEXT = 30_000
 NAV_TIMEOUT = 30.0
-ACTIONS = ("open", "screenshot", "text", "click", "type", "press", "scroll", "evaluate", "console", "close")
+ACTIONS = ("open", "screenshot", "text", "click", "double_click", "hover", "drag", "type", "press", "scroll", "back", "forward",
+           "reload", "evaluate", "console", "close")
+MODIFIERS = {"alt": 1, "ctrl": 2, "control": 2, "meta": 4, "cmd": 4, "command": 4, "win": 4, "shift": 8}
 
 
 def find_browsers(settings: dict | None = None) -> list[str]:
@@ -50,15 +57,59 @@ def find_browsers(settings: dict | None = None) -> list[str]:
     return list(dict.fromkeys(c for c in candidates if c and Path(c).is_file()))
 
 
-class CDP:
-    """One DevTools websocket (a page): request/response by id, events kept for the console."""
+class Tab:
+    """One browser tab the tool talks to: DevTools commands, events, and the console kept for `console`."""
+
+    viewport: tuple[int, int] = VIEWPORT
+
+    def __init__(self):
+        self.listeners: list[tuple[str, asyncio.Future]] = []
+        self.console: list[str] = []
+
+    async def send(self, method: str, params: dict | None = None, timeout: float = 30) -> dict:
+        raise NotImplementedError
+
+    async def screenshot(self) -> tuple[str, int, int]:
+        """(base64 JPEG, width, height); width × height is the page's own coordinate space."""
+        shot = await self.send("Page.captureScreenshot", {"format": "jpeg", "quality": 70})
+        return shot["data"], self.viewport[0], self.viewport[1]
+
+    async def close(self) -> None:
+        pass
+
+    def _event(self, method: str, params: dict) -> None:
+        if method == "Runtime.consoleAPICalled":
+            text = " ".join(str(a.get("value", a.get("description", ""))) for a in params.get("args", []))
+            self._log(f"[{params.get('type', 'log')}] {text}")
+        elif method == "Runtime.exceptionThrown":
+            d = params.get("exceptionDetails") or {}
+            self._log(f"[exception] {(d.get('exception') or {}).get('description') or d.get('text', '')}")
+        elif method == "Log.entryAdded":
+            e = params.get("entry") or {}
+            self._log(f"[{e.get('level', 'log')}] {e.get('text', '')} {e.get('url', '')}".rstrip())
+        for name, fut in list(self.listeners):
+            if name == method and not fut.done():
+                fut.set_result(params)
+        self.listeners = [(n, f) for n, f in self.listeners if not f.done()]
+
+    def _log(self, line: str) -> None:
+        self.console.append(line[:2000])
+        del self.console[:-200]
+
+    def wait_for(self, method: str) -> asyncio.Future:
+        fut = asyncio.get_running_loop().create_future()
+        self.listeners.append((method, fut))
+        return fut
+
+
+class CDP(Tab):
+    """One DevTools websocket (a page of the Chrome/Edge the tool started): request/response by id."""
 
     def __init__(self, ws):
+        super().__init__()
         self.ws = ws
         self.ids = itertools.count(1)
         self.waiting: dict[int, asyncio.Future] = {}
-        self.listeners: list[tuple[str, asyncio.Future]] = []
-        self.console: list[str] = []
         self.reader = asyncio.create_task(self._read())
 
     @classmethod
@@ -80,21 +131,7 @@ class CDP:
                         else:
                             fut.set_result(msg.get("result") or {})
                     continue
-                method = msg.get("method", "")
-                params = msg.get("params") or {}
-                if method == "Runtime.consoleAPICalled":
-                    text = " ".join(str(a.get("value", a.get("description", ""))) for a in params.get("args", []))
-                    self._log(f"[{params.get('type', 'log')}] {text}")
-                elif method == "Runtime.exceptionThrown":
-                    d = params.get("exceptionDetails") or {}
-                    self._log(f"[exception] {(d.get('exception') or {}).get('description') or d.get('text', '')}")
-                elif method == "Log.entryAdded":
-                    e = params.get("entry") or {}
-                    self._log(f"[{e.get('level', 'log')}] {e.get('text', '')} {e.get('url', '')}".rstrip())
-                for name, fut in list(self.listeners):
-                    if name == method and not fut.done():
-                        fut.set_result(params)
-                self.listeners = [(n, f) for n, f in self.listeners if not f.done()]
+                self._event(msg.get("method", ""), msg.get("params") or {})
         except Exception:
             pass
         finally:
@@ -102,21 +139,12 @@ class CDP:
                 if not fut.done():
                     fut.set_exception(ToolError("The browser tab closed"))
 
-    def _log(self, line: str) -> None:
-        self.console.append(line[:2000])
-        del self.console[:-200]
-
     async def send(self, method: str, params: dict | None = None, timeout: float = 30) -> dict:
         i = next(self.ids)
         fut = asyncio.get_running_loop().create_future()
         self.waiting[i] = fut
         await self.ws.send(json.dumps({"id": i, "method": method, "params": params or {}}))
         return await asyncio.wait_for(fut, timeout)
-
-    def wait_for(self, method: str) -> asyncio.Future:
-        fut = asyncio.get_running_loop().create_future()
-        self.listeners.append((method, fut))
-        return fut
 
     async def close(self) -> None:
         self.reader.cancel()
@@ -269,6 +297,158 @@ class BrowserManager:
 
 MANAGER = BrowserManager()
 
+
+class PanelTab(Tab):
+    """A tab of the browser panel in the AFH window; commands go through the page (PanelHost)."""
+
+    def __init__(self, host: "PanelHost", tab: str):
+        super().__init__()
+        self.host = host
+        self.tab = tab
+
+    async def send(self, method: str, params: dict | None = None, timeout: float = 30) -> dict:
+        return await self.host.request("cdp", timeout, tab=self.tab, method=method, params=params or {}) or {}
+
+    async def screenshot(self) -> tuple[str, int, int]:
+        shot = await self.host.request("shot", 30, tab=self.tab) or {}
+        if shot.get("minimized"):
+            raise ToolError("The AFH window is minimized, so its browser panel can't be seen. The action itself went through; "
+                            "ask the user to restore the window (it can stay behind other windows), or use `text` to read the page.")
+        if not shot.get("data"):
+            raise ToolError("The browser panel couldn't take a screenshot; try again, or use `text` to read the page.")
+        self.viewport = (int(shot["width"]), int(shot["height"]))
+        return shot["data"], self.viewport[0], self.viewport[1]
+
+
+class PanelHost:
+    """The AFH window's browser panel, connected over /api/browser/host while the desktop app is open.
+
+    Messages to the page: {id, op: "open", sid} → {tab}; {id, op: "cdp", tab, method, params} → the result;
+    {id, op: "shot", tab} → {data, width, height}; {id, op: "close", tab}; {op: "activity", sid, tab, what}.
+    From the page: {id, result} / {id, error}; {event: {tab, method, params}}; {op: "closed", tab} when you
+    close a tab; {op: "takeover", sid} / {op: "handback", sid} when you take the agent's tab over or give it back.
+    """
+
+    def __init__(self):
+        self.ws = None
+        self.ids = itertools.count(1)
+        self.pending: dict[int, asyncio.Future] = {}
+        self.tabs: dict[str, PanelTab] = {}  # session id -> its tab
+        self.paused: set[str] = set()  # threads whose tab you took over
+        self.send_lock = asyncio.Lock()
+
+    @property
+    def connected(self) -> bool:
+        return self.ws is not None
+
+    async def serve(self, ws) -> None:
+        """Runs for as long as the page stays connected; a newer page replaces an older one."""
+        await ws.accept()
+        old, self.ws = self.ws, ws
+        if old is not None:
+            self._drop()
+            try:
+                await old.close()
+            except Exception:
+                pass
+        log.info("browser panel connected")
+        try:
+            while True:
+                self._receive(await ws.receive_json())
+        except Exception:
+            pass
+        finally:
+            if self.ws is ws:
+                self.ws = None
+                self._drop()
+                log.info("browser panel disconnected")
+
+    def _receive(self, msg: dict) -> None:
+        if not isinstance(msg, dict):
+            return
+        if "id" in msg and ("result" in msg or "error" in msg):
+            fut = self.pending.pop(msg["id"], None)
+            if fut and not fut.done():
+                if msg.get("error"):
+                    fut.set_exception(ToolError(f"Browser: {msg['error']}"))
+                else:
+                    fut.set_result(msg.get("result"))
+            return
+        if isinstance(msg.get("event"), dict):
+            ev = msg["event"]
+            for tab in self.tabs.values():
+                if tab.tab == ev.get("tab"):
+                    tab._event(str(ev.get("method", "")), ev.get("params") or {})
+            return
+        op, sid = msg.get("op"), str(msg.get("sid") or "")
+        if op == "closed":
+            for key, tab in list(self.tabs.items()):
+                if tab.tab == msg.get("tab"):
+                    del self.tabs[key]
+        elif op == "takeover" and sid:
+            self.paused.add(sid)
+        elif op == "handback" and sid:
+            self.paused.discard(sid)
+
+    def _drop(self) -> None:
+        for fut in self.pending.values():
+            if not fut.done():
+                fut.set_exception(ToolError("The AFH window's browser panel closed"))
+        self.pending.clear()
+        self.tabs.clear()
+
+    async def _send(self, msg: dict) -> None:
+        if self.ws is None:
+            raise ToolError("The AFH window isn't open, so its browser panel isn't available")
+        async with self.send_lock:
+            await self.ws.send_json(msg)
+
+    async def request(self, op: str, timeout: float = 30, **fields):
+        i = next(self.ids)
+        fut = asyncio.get_running_loop().create_future()
+        self.pending[i] = fut
+        try:
+            await self._send({"id": i, "op": op, **fields})
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            raise ToolError(f"The browser panel didn't answer ({op})") from None
+        finally:
+            self.pending.pop(i, None)
+
+    async def tab(self, sid: str) -> PanelTab:
+        if sid in self.tabs:
+            return self.tabs[sid]
+        info = await self.request("open", 30, sid=sid) or {}
+        tab = PanelTab(self, str(info.get("tab", "")))
+        for m in ("Page.enable", "Runtime.enable", "Log.enable"):
+            await tab.send(m)
+        self.tabs[sid] = tab
+        return tab
+
+    async def activity(self, sid: str, what: str, x: float | None = None, y: float | None = None) -> None:
+        """Tells the page what the agent is doing, for the "AFH is using this tab" bar."""
+        tab = self.tabs.get(sid)
+        try:
+            await self._send({"op": "activity", "sid": sid, "tab": tab.tab if tab else None, "what": what, "x": x, "y": y})
+        except Exception:
+            pass
+
+    async def close_tab(self, sid: str) -> None:
+        tab = self.tabs.pop(sid, None)
+        if tab and self.ws is not None:
+            try:
+                await self.request("close", 10, tab=tab.tab)
+            except ToolError:
+                pass
+
+
+PANEL = PanelHost()
+
+
+def use_panel(settings: dict) -> bool:
+    """The panel when the AFH window is open, unless Settings → Agent → Browser says Chrome/Edge."""
+    return PANEL.connected and ((settings or {}).get("browser") or {}).get("where") != "external"
+
 # Finds an element by CSS selector or by its visible text (buttons, links, labels).
 _FIND_JS = """(q) => {
   let el = null;
@@ -290,24 +470,32 @@ class BrowserTool(BaseTool):
     spec = ToolSpec(
         name="browser",
         description=(
-            "A real web browser (Chrome/Edge) to check your work like a user would: open your dev server or any page, see a "
-            "screenshot, read the page text, click, type, press keys, scroll, run JavaScript, and read console errors. One tab "
-            "per thread that keeps its state between calls. Actions: `open` (url), `screenshot`, `text`, `click` (target: CSS "
-            "selector or visible text), `type` (target, text; submit:true presses Enter), `press` (key, e.g. Enter, Tab, "
-            "Escape), `scroll` (direction up/down), `evaluate` (script: a JS expression), `console` (messages and errors since "
-            "the last call), `close`. open/click/type/press/scroll return a fresh screenshot. Start a dev server with the shell "
-            "tool (background: true) first when you need one."
+            "A real web browser to check your work like a user would, or to do things on the web: open your dev server or any "
+            "page, see a screenshot, read the page text, click, type, press keys, scroll, run JavaScript, and read console errors. "
+            "One tab per thread that keeps its state (and sign-ins) between calls; in the AFH app it is a side panel the user "
+            "watches live and can take over. Actions: `open` (url), `screenshot`, `text`, `click` / `double_click` / `hover` "
+            "(target: CSS selector or visible text, or x,y read off the latest screenshot), `drag` (x,y to to_x,to_y), `type` "
+            "(text; into target or x,y if given, else the focused field; submit:true presses Enter), `press` (key, e.g. Enter, Tab, "
+            "Escape, Ctrl+A), `scroll` (direction up/down/left/right, optional amount in pixels and x,y), `back`, `forward`, "
+            "`reload`, `evaluate` (script: a JS expression), `console` (messages and errors since the last call), `close`. Every "
+            "action except text/evaluate/console/close returns a fresh screenshot whose pixels are the page's coordinates. Start a "
+            "dev server with the shell tool (background: true) first when you need one."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "action": {"type": "string", "enum": list(ACTIONS), "description": "What to do in this thread's tab."},
                 "url": {"type": "string", "description": "For open: the page (http(s):// or file://)."},
-                "target": {"type": "string", "description": "For click/type: a CSS selector or the element's visible text."},
+                "target": {"type": "string", "description": "For click/double_click/hover/type: a CSS selector or the element's visible text."},
+                "x": {"type": "number", "description": "For click/double_click/hover/drag/type/scroll: x on the latest screenshot (instead of target)."},
+                "y": {"type": "number", "description": "y on the latest screenshot."},
+                "to_x": {"type": "number", "description": "For drag: where to drop, x."},
+                "to_y": {"type": "number", "description": "For drag: where to drop, y."},
                 "text": {"type": "string", "description": "For type: the text to enter."},
                 "submit": {"type": "boolean", "description": "For type: press Enter afterwards."},
-                "key": {"type": "string", "description": "For press: a key name such as Enter, Tab, Escape, ArrowDown."},
-                "direction": {"type": "string", "enum": ["up", "down"], "description": "For scroll."},
+                "key": {"type": "string", "description": "For press: a key such as Enter, Tab, Escape, ArrowDown, or a combination like Ctrl+A."},
+                "direction": {"type": "string", "enum": ["up", "down", "left", "right"], "description": "For scroll."},
+                "amount": {"type": "number", "description": "For scroll: how far in pixels (default 650)."},
                 "script": {"type": "string", "description": "For evaluate: a JavaScript expression; its value is returned."},
             },
             "required": ["action"],
@@ -318,9 +506,15 @@ class BrowserTool(BaseTool):
         action = str_arg(input, "action").strip().lower()
         if action not in ACTIONS:
             raise ToolError(f"Unknown action {action!r}. Use one of: {', '.join(ACTIONS)}.")
+        panel = use_panel(ctx.settings)
+        sid = ctx.session_id
+        if panel and sid in PANEL.paused:
+            return ToolResult(text="The user has taken over this thread's browser tab and is using it themselves. Don't use the browser "
+                                   "until they hand it back or ask you to; tell them what you wanted to do there.", is_error=True)
         if action == "close":
-            await MANAGER.close_tab(ctx.session_id)
+            await (PANEL.close_tab(sid) if panel else MANAGER.close_tab(sid))
             return ToolResult(text="Closed this thread's browser tab.")
+        url = ""
         if action == "open":
             url = str_arg(input, "url").strip()
             if not urlsplit(url).scheme:
@@ -330,9 +524,14 @@ class BrowserTool(BaseTool):
             await ctx.permissions.require("web", [url], {"url": url, "tool": "browser"})
         elif action == "evaluate":
             await ctx.permissions.require("web", ["javascript"], {"tool": "browser", "script": str(input.get("script", ""))[:500]})
-        page = await MANAGER.tab(ctx.session_id, ctx.settings)
+        page = await (PANEL.tab(sid) if panel else MANAGER.tab(sid, ctx.settings))
+
+        async def show(what: str, x=None, y=None) -> None:
+            if panel:
+                await PANEL.activity(sid, what, x, y)
 
         if action == "open":
+            await show(f"Opening {url}")
             for attempt in range(3):
                 loaded = page.wait_for("Page.loadEventFired")
                 res = await page.send("Page.navigate", {"url": url})
@@ -342,47 +541,88 @@ class BrowserTool(BaseTool):
                 await asyncio.sleep(1)
             if res.get("errorText"):
                 return ToolResult(text=f"Couldn't open {url}: {res['errorText']}", is_error=True)
-            try:
-                await asyncio.wait_for(loaded, NAV_TIMEOUT)
-            except asyncio.TimeoutError:
-                pass  # still loading; show what is there
-            await asyncio.sleep(0.6)
+            await self._settle(loaded)
             return await self._shot(page, f"Opened {await self._where(page)}")
         if action == "screenshot":
             return await self._shot(page, f"Screenshot of {await self._where(page)}")
         if action == "text":
+            await show("Reading the page")
             text = await self._eval(page, "document.body ? document.body.innerText : ''")
             text = str(text or "")
             cut = len(text) > MAX_TEXT
             return ToolResult(text=f"{await self._where(page)}\n\n{text[:MAX_TEXT]}" + ("\n\n[…cut]" if cut else ""), truncated=cut)
-        if action in ("click", "type"):
-            target = str_arg(input, "target")
-            spot = await self._eval(page, f"({_FIND_JS})({json.dumps(target)})")
-            if not spot:
-                return ToolResult(text=f"No element matches {target!r} on {await self._where(page)}. Try `text` or a screenshot to see what's there.", is_error=True)
-            x, y = spot["x"], spot["y"]
-            for kind in ("mousePressed", "mouseReleased"):
-                await page.send("Input.dispatchMouseEvent", {"type": kind, "x": x, "y": y, "button": "left", "clickCount": 1})
-            what = f"{spot['tag']}{' “' + spot['text'] + '”' if spot.get('text') else ''}"
-            if action == "type":
-                await page.send("Input.insertText", {"text": str(input.get("text", ""))})
-                if input.get("submit"):
-                    await self._key(page, "Enter")
+        if action in ("back", "forward", "reload"):
+            await show({"back": "Going back", "forward": "Going forward", "reload": "Reloading"}[action])
+            loaded = page.wait_for("Page.loadEventFired")
+            if action == "reload":
+                await page.send("Page.reload", {})
+            else:
+                await self._eval(page, f"history.{action}()")
+            await self._settle(loaded, 10)
+            return await self._shot(page, f"{'Reloaded' if action == 'reload' else 'Went ' + action}: {await self._where(page)}")
+        into = ""
+        if action in ("click", "double_click", "hover", "drag") or (action == "type" and (input.get("target") or input.get("x") is not None)):
+            spot = await self._spot(page, input)
+            if isinstance(spot, ToolResult):
+                return spot
+            x, y, what = spot
+            if action == "hover":
+                await show(f"Pointing at {what}", x, y)
+                await self._mouse(page, "mouseMoved", x, y)
+                await asyncio.sleep(0.4)
+                return await self._shot(page, f"Moved the pointer to {what}")
+            if action == "drag":
+                if input.get("to_x") is None or input.get("to_y") is None:
+                    raise ToolError("drag needs to_x and to_y.")
+                tx, ty = float(input["to_x"]), float(input["to_y"])
+                await show(f"Dragging from {what} to ({round(tx)}, {round(ty)})", x, y)
+                await self._mouse(page, "mouseMoved", x, y)
+                await self._mouse(page, "mousePressed", x, y, clicks=1)
+                for i in range(1, 9):  # a few steps in between, so pages that track the movement see it
+                    await self._mouse(page, "mouseMoved", x + (tx - x) * i / 8, y + (ty - y) * i / 8, buttons=1)
+                    await asyncio.sleep(0.02)
+                await self._mouse(page, "mouseReleased", tx, ty, clicks=1)
                 await asyncio.sleep(0.5)
-                return await self._shot(page, f"Typed into {what}" + (" and pressed Enter" if input.get("submit") else ""))
-            await asyncio.sleep(0.6)
-            return await self._shot(page, f"Clicked {what}")
+                return await self._shot(page, f"Dragged from {what} to ({round(tx)}, {round(ty)})")
+            clicks = 2 if action == "double_click" else 1
+            await show(f"{'Double-clicking' if clicks == 2 else 'Clicking'} {what}", x, y)
+            await self._mouse(page, "mouseMoved", x, y)
+            for n in range(1, clicks + 1):
+                await self._mouse(page, "mousePressed", x, y, clicks=n)
+                await self._mouse(page, "mouseReleased", x, y, clicks=n)
+            if action != "type":
+                await asyncio.sleep(0.6)
+                return await self._shot(page, f"{'Double-clicked' if clicks == 2 else 'Clicked'} {what}")
+            into = f" into {what}"
+        if action == "type":
+            await show(f"Typing{into}")
+            await page.send("Input.insertText", {"text": str(input.get("text", ""))})
+            if input.get("submit"):
+                await self._key(page, "Enter")
+            await asyncio.sleep(0.5)
+            return await self._shot(page, f"Typed{into or ' into the focused field'}" + (" and pressed Enter" if input.get("submit") else ""))
         if action == "press":
             key = str_arg(input, "key")
+            await show(f"Pressing {key}")
             await self._key(page, key)
             await asyncio.sleep(0.4)
             return await self._shot(page, f"Pressed {key}")
         if action == "scroll":
-            dy = -650 if str(input.get("direction", "down")).lower() == "up" else 650
-            await page.send("Input.dispatchMouseEvent", {"type": "mouseWheel", "x": VIEWPORT[0] / 2, "y": VIEWPORT[1] / 2, "deltaX": 0, "deltaY": dy})
+            direction = str(input.get("direction", "down")).lower()
+            amount = abs(float(input.get("amount") or 650))
+            dx = {"left": -amount, "right": amount}.get(direction, 0)
+            dy = 0 if dx else (-amount if direction == "up" else amount)
+            if input.get("x") is not None and input.get("y") is not None:
+                x, y = float(input["x"]), float(input["y"])
+            else:
+                w, h = await self._size(page)
+                x, y = w / 2, h / 2
+            await show(f"Scrolling {direction}", x, y)
+            await page.send("Input.dispatchMouseEvent", {"type": "mouseWheel", "x": x, "y": y, "deltaX": dx, "deltaY": dy})
             await asyncio.sleep(0.5)
-            return await self._shot(page, f"Scrolled {'up' if dy < 0 else 'down'}")
+            return await self._shot(page, f"Scrolled {direction}")
         if action == "evaluate":
+            await show("Running JavaScript")
             value = await self._eval(page, str_arg(input, "script"))
             out = value if isinstance(value, str) else json.dumps(value, indent=2, ensure_ascii=False, default=str)
             return ToolResult(text=str(out)[:MAX_TEXT])
@@ -391,30 +631,109 @@ class BrowserTool(BaseTool):
         return ToolResult(text="\n".join(lines) if lines else "No console messages since the last check.")
 
     @staticmethod
-    async def _eval(page: CDP, expr: str):
+    async def _settle(loaded: asyncio.Future, timeout: float = NAV_TIMEOUT) -> None:
+        try:
+            await asyncio.wait_for(loaded, timeout)
+        except asyncio.TimeoutError:
+            pass  # still loading; show what is there
+        await asyncio.sleep(0.6)
+
+    async def _spot(self, page: Tab, input: dict):
+        """(x, y, description) of the target element or the given point, or a ToolResult explaining the miss."""
+        if input.get("x") is not None and input.get("y") is not None:
+            x, y = float(input["x"]), float(input["y"])
+            label = await self._eval(page, f"({_AT_JS})({x}, {y})")
+            return x, y, f"{label or 'the page'} at ({round(x)}, {round(y)})"
+        target = str(input.get("target") or "").strip()
+        if not target:
+            raise ToolError("Give a target (CSS selector or visible text) or x and y from the screenshot.")
+        spot = await self._eval(page, f"({_FIND_JS})({json.dumps(target)})")
+        if not spot:
+            return ToolResult(text=f"No element matches {target!r} on {await self._where(page)}. Try `text`, or a screenshot and x,y.", is_error=True)
+        return spot["x"], spot["y"], f"{spot['tag']}{' “' + spot['text'] + '”' if spot.get('text') else ''}"
+
+    @staticmethod
+    async def _mouse(page: Tab, kind: str, x: float, y: float, clicks: int = 0, buttons: int = 0) -> None:
+        params = {"type": kind, "x": x, "y": y}
+        if kind in ("mousePressed", "mouseReleased"):
+            params.update(button="left", clickCount=clicks, buttons=1 if kind == "mousePressed" else 0)
+        elif buttons:
+            params.update(button="left", buttons=buttons)
+        await page.send("Input.dispatchMouseEvent", params)
+
+    @classmethod
+    async def _size(cls, page: Tab) -> tuple[float, float]:
+        size = await cls._eval(page, "[innerWidth, innerHeight]")
+        return (float(size[0]), float(size[1])) if isinstance(size, list) and len(size) == 2 else page.viewport
+
+    @staticmethod
+    async def _eval(page: Tab, expr: str):
         res = await page.send("Runtime.evaluate", {"expression": expr, "returnByValue": True, "awaitPromise": True})
         if res.get("exceptionDetails"):
             d = res["exceptionDetails"]
             raise ToolError(f"JavaScript error: {(d.get('exception') or {}).get('description') or d.get('text', '')}")
         return (res.get("result") or {}).get("value")
 
-    async def _where(self, page: CDP) -> str:
+    async def _where(self, page: Tab) -> str:
         info = await self._eval(page, "({t: document.title, u: location.href})") or {}
         return f"{info.get('t') or '(untitled)'} — {info.get('u', '')}"
 
     @staticmethod
-    async def _key(page: CDP, key: str) -> None:
-        codes = {"Enter": 13, "Tab": 9, "Escape": 27, "Backspace": 8, "ArrowDown": 40, "ArrowUp": 38, "ArrowLeft": 37, "ArrowRight": 39, "Space": 32}
-        params = {"key": key, "code": key, "windowsVirtualKeyCode": codes.get(key, 0)}
-        if key == "Enter":
+    def _keys(combo: str) -> dict:
+        """The DevTools key event for "Enter", "a", "Ctrl+A", "Shift+Tab"…"""
+        parts = [p for p in combo.replace(" ", "").split("+") if p] or ["+"]
+        *mods, key = parts if not combo.strip().endswith("++") else [*parts, "+"]
+        mask = 0
+        for m in mods:
+            mask |= MODIFIERS.get(m.lower(), 0)
+        key = _KEY_NAMES.get(key.lower(), key)
+        if len(key) == 1 and key.isalpha():
+            key = key.upper() if mask & 8 else key.lower()
+        if len(key) == 1:
+            vk = ord(key.upper()) if key.isalnum() else _KEY_CODES.get(key, 0)
+            code = f"Key{key.upper()}" if key.isalpha() else f"Digit{key}" if key.isdigit() else "Space" if key == " " else ""
+        else:
+            vk, code = _KEY_CODES.get(key, 0), key
+        params = {"key": key, "code": code, "windowsVirtualKeyCode": vk, "modifiers": mask}
+        if key == "Enter" and not mask:
             params["text"] = "\r"
-        await page.send("Input.dispatchKeyEvent", {"type": "keyDown", **params})
-        await page.send("Input.dispatchKeyEvent", {"type": "keyUp", **params})
+        elif len(key) == 1 and not mask & ~8:  # plain or with Shift: it types the character
+            params["text"] = key
+        command = _EDIT_COMMANDS.get((mask & ~4 | (2 if mask & 4 else 0), key.lower()))  # Cmd works like Ctrl
+        if command:
+            params["commands"] = [command]  # pages get the key, the field does the edit
+        return params
 
-    async def _shot(self, page: CDP, summary: str) -> ToolResult:
-        shot = await page.send("Page.captureScreenshot", {"format": "jpeg", "quality": 70})
-        uri = "data:image/jpeg;base64," + shot["data"]
+    @classmethod
+    async def _key(cls, page: Tab, combo: str) -> None:
+        params = cls._keys(combo)
+        await page.send("Input.dispatchKeyEvent", {"type": "keyDown" if "text" in params else "rawKeyDown", **params})
+        await page.send("Input.dispatchKeyEvent", {"type": "keyUp", **{k: v for k, v in params.items() if k != "text"}})
+
+    async def _shot(self, page: Tab, summary: str) -> ToolResult:
+        data, w, h = await page.screenshot()
+        uri = "data:image/jpeg;base64," + data
         errors = [line for line in page.console if line.startswith(("[error]", "[exception]"))]
         note = f"\n\nConsole errors on this page:\n" + "\n".join(errors[-10:]) if errors else ""
-        size = len(base64.b64decode(shot["data"])) // 1024
-        return ToolResult(text=f"{summary}. Screenshot attached ({VIEWPORT[0]}×{VIEWPORT[1]}, {size} KB).{note}", images=[uri], metadata={"screenshot": True})
+        size = len(base64.b64decode(data)) // 1024
+        return ToolResult(text=f"{summary}. Screenshot attached ({w}×{h}, {size} KB; x,y on it are page coordinates).{note}",
+                          images=[uri], metadata={"screenshot": True})
+
+
+_KEY_NAMES = {"enter": "Enter", "return": "Enter", "tab": "Tab", "escape": "Escape", "esc": "Escape", "backspace": "Backspace",
+              "delete": "Delete", "del": "Delete", "arrowdown": "ArrowDown", "down": "ArrowDown", "arrowup": "ArrowUp", "up": "ArrowUp",
+              "arrowleft": "ArrowLeft", "left": "ArrowLeft", "arrowright": "ArrowRight", "right": "ArrowRight", "space": " ",
+              "home": "Home", "end": "End", "pageup": "PageUp", "pagedown": "PageDown"}
+_KEY_CODES = {"Enter": 13, "Tab": 9, "Escape": 27, "Backspace": 8, "Delete": 46, "ArrowDown": 40, "ArrowUp": 38, "ArrowLeft": 37,
+              "ArrowRight": 39, " ": 32, "Home": 36, "End": 35, "PageUp": 33, "PageDown": 34}
+
+_EDIT_COMMANDS = {(2, "a"): "selectAll", (2, "c"): "copy", (2, "x"): "cut", (2, "v"): "paste", (2, "z"): "undo", (10, "z"): "redo",
+                  (2, "y"): "redo"}
+
+# Names what is at a point (for "Clicked button “Save” at (412, 230)").
+_AT_JS = """(x, y) => {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return '';
+  const t = (el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('alt') || el.placeholder || '').trim().replace(/\\s+/g, ' ').slice(0, 60);
+  return el.tagName.toLowerCase() + (t ? ' “' + t + '”' : '');
+}"""

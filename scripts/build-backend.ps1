@@ -75,6 +75,7 @@ $PyArgs = @(
     '--hidden-import', 'uvicorn.protocols.http.httptools_impl',
     '--hidden-import', 'uvicorn.protocols.websockets.auto',
     '--hidden-import', 'uvicorn.protocols.websockets.websockets_impl',
+    '--hidden-import', 'uvicorn.protocols.websockets.websockets_sansio_impl',
     '--hidden-import', 'uvicorn.protocols.websockets.wsproto_impl',
     '--hidden-import', 'uvicorn.lifespan.on',
     '--hidden-import', 'uvicorn.lifespan.off',

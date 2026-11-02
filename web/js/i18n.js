@@ -72,6 +72,17 @@ const AR = {
   "Worktree": "نسخة عمل", "Goal set": "تم تحديد الهدف", "Set a goal: the agent keeps working until it is achieved": "حدّد هدفًا: يواصل الوكيل العمل حتى يتحقق",
   "This thread works in its own git worktree": "هذه المحادثة تعمل في نسخة git خاصة بها", "Drag to make the chat wider or narrower · double-click to reset": "اسحب لتوسيع المحادثة أو تضييقها · انقر مرتين للإعادة",
   "Your messages": "رسائلك", "Chat width reset": "تمت إعادة عرض المحادثة",
+  // browser panel
+  "Browser": "المتصفح", "Browser: browse the web and watch the agent use it": "المتصفح: تصفّح الويب وشاهد الوكيل وهو يستخدمه",
+  "Search or type a URL": "ابحث أو اكتب عنوانًا", "Browse the web": "تصفّح الويب", "New tab": "علامة تبويب جديدة", "Close tab": "أغلق علامة التبويب",
+  "Type a URL or a search above. The agent opens its own tab here when it uses the browser, and you can watch or take over.": "اكتب عنوانًا أو بحثًا في الأعلى. يفتح الوكيل علامة تبويب خاصة به هنا عندما يستخدم المتصفح، ويمكنك المشاهدة أو تولّي التحكم.",
+  "Close the browser": "أغلق المتصفح", "Back": "رجوع", "Forward": "تقدّم", "Reload": "إعادة تحميل", "Stop loading": "أوقف التحميل",
+  "Open in your browser": "افتح في متصفحك", "Drag to resize": "اسحب لتغيير الحجم", "AFH is using this tab": "AFH يستخدم علامة التبويب هذه",
+  "Take over": "تولَّ التحكم", "You're in control": "أنت المتحكم", "Hand back": "أعِده للوكيل", "Stop the agent's run": "أوقف تشغيل الوكيل",
+  "Use this tab yourself; the agent stops using it": "استخدم علامة التبويب بنفسك؛ يتوقف الوكيل عن استخدامها", "Click to take over from the agent": "انقر لتتولى التحكم بدلًا من الوكيل",
+  "You have the tab. The agent stops using it until you hand it back or send a message.": "علامة التبويب لك الآن. يتوقف الوكيل عن استخدامها حتى تعيدها أو ترسل رسالة.",
+  "Where it browses": "أين يتصفح", "Side panel in AFH (recommended)": "اللوحة الجانبية في AFH (موصى به)", "Separate Chrome or Edge": "Chrome أو Edge منفصل",
+  "Show the Chrome/Edge window": "أظهر نافذة Chrome/Edge",
   // home
   "What are we building?": "ماذا سنبني؟", "Working in": "نعمل في", "Welcome to Agent Flow Harness": "مرحبًا بك في Agent Flow Harness",
   "Open a project folder and AFH will read, edit and run code there with any model you choose.": "افتح مجلد مشروع وسيقرأ AFH الكود ويعدّله ويشغّله فيه بأي نموذج تختاره.",
@@ -243,7 +254,7 @@ const AR_PATTERNS = [
   [/^Summarising (\d+) older messages in (\d+) parts… (\d+)\/(\d+)$/, "جارٍ تلخيص $1 رسالة قديمة على $2 أجزاء… $3/$4"], [/^#(\d+)$/, "#$1"],
 ];
 
-const EXCLUDE = ".md, .bubble, pre, code, textarea, input, .think-text, .compact-text, .rail-text, .th-title, .tb-title h1, .todo-text, .plan-item, .goal-text, .goal-sub, .goal-card-text, .deleg-sub, .deleg-brief-text, .sub-desc, .sub-text, .job-cmd, .job-tail, .job-full, .live-code, .live-head .path, .diff, .h-pre, .tool-pre, .tool-target, .deleg-last, .err-msg, .slash-desc, .slash-name, .cmd-chip, .file-chip, .tb-path, .wt-path, .li-sub, .pi-sub, .deleg-model, .model";
+const EXCLUDE = ".md, .bubble, pre, code, textarea, input, .think-text, .compact-text, .rail-text, .th-title, .tb-title h1, .todo-text, .plan-item, .goal-text, .goal-sub, .goal-card-text, .deleg-sub, .deleg-brief-text, .sub-desc, .sub-text, .job-cmd, .job-tail, .job-full, .live-code, .live-head .path, .diff, .h-pre, .tool-pre, .tool-target, .deleg-last, .err-msg, .slash-desc, .slash-name, .cmd-chip, .file-chip, .tb-path, .wt-path, .li-sub, .pi-sub, .deleg-model, .model, .bw-name, .bw-msg small";
 const ATTRS = ["title", "placeholder", "aria-label"];
 
 const originals = new WeakMap(); // text node -> English text it replaced
