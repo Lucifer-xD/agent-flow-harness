@@ -11,6 +11,7 @@ const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const overlay = require("./overlay-main");
 
 const IS_WIN = process.platform === "win32";
 const IS_MAC = process.platform === "darwin";
@@ -104,6 +105,7 @@ function startBackend() {
     backendUrl = m[1];
     backendOrigin = new URL(backendUrl).origin;
     log("backend URL parsed:", backendOrigin);
+    overlay.setBackend(backendUrl);
     if (app.isReady()) createWindow();
   });
   readLines(backend.stderr, (line) => {
@@ -547,6 +549,8 @@ function onReady() {
   Menu.setApplicationMenu(null);
   createTray();
   initUpdater();
+  // The computer-use overlay listens to the backend itself (it works while this window is minimized).
+  overlay.registerOverlay({ backendUrl, mainWindow: () => mainWindow });
   if (backendUrl) createWindow();
 
   app.on("activate", () => {
@@ -571,6 +575,7 @@ app.on("before-quit", (event) => {
 });
 
 app.on("will-quit", () => {
+  overlay.destroyOverlay();
   killBackendTree();
   if (tray) {
     tray.destroy();

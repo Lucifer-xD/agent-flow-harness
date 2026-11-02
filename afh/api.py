@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import Response as FastResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__, cloud, devapi, remote, skills_store, store, transfer
@@ -870,6 +871,70 @@ def set_memory(body: dict = Body(...)):
     else:
         engine.save_memory(directory, body.get("text", ""), by="user")
     return memory_payload(directory)
+
+
+# ---- computer control ----------------------------------------------------------------------
+
+
+@app.get("/api/computer/apps")
+def computer_apps():
+    """What the computer tool can see: whether it's supported and on, and the apps open now / already allowed."""
+    from .engine.computer import win as cwin
+    from .engine.computer.control import controller
+
+    if not cwin.is_supported():
+        return {"supported": False, "enabled": False, "running": [], "allowed": []}
+    ctrl = controller(engine)
+    cfg = engine.settings().get("computer") or {}
+    return {
+        "supported": True,
+        "enabled": cfg.get("enabled", True) is not False,
+        "browserControl": bool(cfg.get("browserControl")),
+        "running": [a.to_dict() for a in ctrl.running_apps()],
+        "allowed": [a.to_dict() for a in ctrl.allowed_apps()],
+    }
+
+
+@app.post("/api/computer/allow")
+def computer_allow(body: dict = Body(...)):
+    from .engine.computer.apps import App
+    from .engine.computer.control import controller
+
+    ctrl = controller(engine)
+    if body.get("app"):
+        ctrl.allow_app(App.from_dict(body["app"]))
+    elif body.get("query"):
+        app = ctrl.resolve_app(str(body["query"]))
+        if app:
+            ctrl.allow_app(app)
+    return {"ok": True}
+
+
+@app.post("/api/computer/forget")
+def computer_forget(body: dict = Body(...)):
+    from .engine.computer.control import controller
+
+    controller(engine).forget_app(str(body.get("id", "")))
+    return {"ok": True}
+
+
+@app.get("/api/computer/icon")
+def computer_icon(path: str = "", size: int = 64):
+    """An app's own icon (from its .exe) for the approval cards; 404 when it has none."""
+    from .engine.computer import win as cwin
+
+    png = cwin.exe_icon_png(path, max(16, min(256, size))) if cwin.is_supported() and path.lower().endswith(".exe") else None
+    if not png:
+        raise KeyError("icon")
+    return FastResponse(png, media_type="image/png", headers={"Cache-Control": "max-age=86400"})
+
+
+@app.post("/api/computer/teach")
+def computer_teach(body: dict = Body(...)):
+    """The user clicked Next or Exit on a lesson tooltip."""
+    from .engine.computer.control import controller
+
+    return {"ok": controller(engine).lesson_reply(str(body.get("id", "")), str(body.get("choice", "next")))}
 
 
 # ---- providers -----------------------------------------------------------------------------

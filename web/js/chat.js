@@ -304,6 +304,8 @@ export function describeTool(p) {
   if (/todo/.test(name)) return { icon: "list", label: "Plan", target: "" };
   if (name === "memory") return { icon: "book", label: "Memory", target: pick(input, "text", "old") || "" };
   if (name === "harness") return { icon: "plug", label: (HARNESS_VERBS[input.action] || ["Harness"])[0], target: pick(input, "source", "name", "id", "url") || "" };
+  if (name === "computer") return { icon: input.action === "teach" ? "book" : "mouse-pointer", label: "Computer",
+    target: pick(input, "intent", "title", "app", "key", "text", "direction") || (input.action === "batch" ? `${(input.actions || []).length} steps` : "") || (Array.isArray(input.apps) ? input.apps.join(", ") : "") };
   if (/skill/.test(name)) return { icon: "book", label: "Skill", target: pick(input, "name", "id") || "" };
   const first = Object.values(input).find((v) => typeof v === "string") || "";
   return { icon: name.includes("_") || name.includes(".") ? "plug" : "zap", label: p.name, target: first };
@@ -439,7 +441,16 @@ function renderTool(p, openSet, thread) {
   const BROWSER = { open: ["Opened in browser", "Opening in browser"], screenshot: ["Took a screenshot", "Taking a screenshot"], text: ["Read the page", "Reading the page"],
     click: ["Clicked", "Clicking"], type: ["Typed into", "Typing into"], press: ["Pressed", "Pressing"], scroll: ["Scrolled", "Scrolling"],
     evaluate: ["Ran JavaScript", "Running JavaScript"], console: ["Read the console", "Reading the console"], close: ["Closed the browser tab", "Closing the browser tab"] };
-  const verbs = name === "browser" ? BROWSER[input0.action] || ["Used the browser", "Using the browser"]
+  const COMPUTER = { screenshot: ["Looked at the screen", "Looking at the screen"], zoom: ["Looked closer", "Looking closer"], apps: ["Listed apps", "Listing apps"],
+    request_access: ["Asked to use apps", "Asking to use apps"], launch: ["Opened an app", "Opening an app"], focus: ["Switched app", "Switching app"],
+    switch_display: ["Switched display", "Switching display"], cursor_position: ["Found the pointer", "Finding the pointer"], move: ["Moved the pointer", "Moving the pointer"],
+    click: ["Clicked", "Clicking"], double_click: ["Double-clicked", "Double-clicking"], triple_click: ["Triple-clicked", "Triple-clicking"],
+    right_click: ["Right-clicked", "Right-clicking"], middle_click: ["Middle-clicked", "Middle-clicking"], mouse_down: ["Pressed the mouse", "Pressing the mouse"],
+    mouse_up: ["Released the mouse", "Releasing the mouse"], drag: ["Dragged", "Dragging"], scroll: ["Scrolled", "Scrolling"], type: ["Typed", "Typing"],
+    key: ["Pressed keys", "Pressing keys"], hold_key: ["Held a key", "Holding a key"], wait: ["Waited", "Waiting"], read_clipboard: ["Read the clipboard", "Reading the clipboard"],
+    set_clipboard: ["Set the clipboard", "Setting the clipboard"], batch: ["Did several steps", "Doing several steps"], teach: ["Showed you a step", "Showing you a step"] };
+  const verbs = name === "computer" ? COMPUTER[input0.action] || ["Used the computer", "Using the computer"]
+    : name === "browser" ? BROWSER[input0.action] || ["Used the browser", "Using the browser"]
     : name === "shell" && input0.background ? ["Started in background", "Starting in background"]
     : name === "jobs" ? ({ stop: ["Stopped job", "Stopping job"], list: ["Listed jobs", "Listing jobs"] }[input0.action] || ["Read job output", "Waiting for job output"])
       : name === "harness" ? HARNESS_VERBS[input0.action] || ["Changed AFH setup", "Changing AFH setup"]
@@ -894,6 +905,7 @@ export function errorCard(err, { model, onRetry, onChangeModel } = {}) {
 /** An approval request for session `sid`; `onDone(id)` runs after the reply is accepted. */
 export function permissionCard(p, sid, onDone) {
   if (p.action === "question" && Array.isArray(p.metadata?.questions)) return questionCard(p, sid, onDone);
+  if (p.action === "computer" && p.metadata?.kind === "computer") return computerCard(p, sid, onDone);
   const action = p.action || "tool";
   const title = p.metadata?.title || (action === "edit" ? "Allow file changes?" : action === "shell" ? "Run this command?" : `Allow ${action}?`);
   const files = p.metadata?.files || [];
@@ -922,6 +934,44 @@ export function permissionCard(p, sid, onDone) {
       el("span.spacer"),
       feedback,
       el("button.btn.danger.sm", { on: { click: (e) => reply("reject", e.currentTarget) } }, "Reject")));
+}
+
+/** The agent wants to use desktop apps with the mouse and keyboard; the user allows them (once/always) or not. */
+export function computerCard(p, sid, onDone) {
+  const apps = p.metadata?.apps?.length ? p.metadata.apps : [p.metadata?.app || {}];
+  const TIER = { full: "Full control", click: "Click only", read: "View only" };
+  const reply = async (decision, btn) => {
+    const box = btn.closest(".approval");
+    box.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try {
+      await api.post(`/api/sessions/${sid}/permissions/${p.id}`, { decision });
+      onDone?.(p.id);
+    } catch (e) {
+      toast(e.message, "err");
+      box.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
+  };
+  const icon = (a) => {
+    const box = el("span.comp-ico", (a.name || "?").trim()[0] || "?");
+    if (/\.exe$/i.test(a.path || "")) {
+      const img = new Image();
+      img.onload = () => box.replaceChildren(img);
+      img.src = api.url("/api/computer/icon", { path: a.path, size: 64 });
+    }
+    return box;
+  };
+  const many = apps.length > 1;
+  return el("div.approval.computer-approval",
+    el("div.approval-head", el("span.comp-badge", ico("mouse-pointer")),
+      el("div", el("div", p.metadata?.title || `Let AFH use ${apps[0].name || "this app"}?`),
+        el("div.approval-sub", p.metadata?.reason || `AFH will take over the mouse and keyboard in ${many ? "these apps" : "it"} while it works. Press Esc any time to stop.`))),
+    el("div.comp-list", apps.map((a) => el("div.comp-app", icon(a), el("span.comp-name", a.name || a.id || "App"),
+      el("span.comp-tier" + (a.tier === "full" || !a.tier ? ".full" : ""), TIER[a.tier] || "Full control")))),
+    el("div.approval-actions",
+      el("button.btn.primary.sm", { on: { click: (e) => reply("once", e.currentTarget) } }, ico("check"), "Allow"),
+      el("button.btn.sm", { title: many ? "Don't ask again for these apps" : "Don't ask again for this app", on: { click: (e) => reply("always", e.currentTarget) } }, "Always allow"),
+      el("span.spacer"),
+      el("button.btn.danger.sm", { on: { click: (e) => reply("reject", e.currentTarget) } }, "Don't allow")));
 }
 
 /** The agent paused to ask: one multiple-choice question at a time, with Back / Next / Submit. */

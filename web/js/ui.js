@@ -22,6 +22,8 @@ export const ICONS = {
   scroll: P('<path d="M8 21h11a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2h4M6 3h12a2 2 0 0 1 2 2v12"/><path d="M10 8h6M10 12h6"/>'),
   "arrow-down": P('<path d="M12 5v14M19 12l-7 7-7-7"/>'),
   terminal: P('<path d="m4 17 6-5-6-5M12 19h8"/>'),
+  "mouse-pointer": P('<path d="M5 3l15 9-6.3 1.2L17 20l-2.8 1.2-3.2-6.9L5 18z"/>'),
+  monitor: P('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>'),
   file: P('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'),
   edit: P('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
   globe: P('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>'),

@@ -185,6 +185,7 @@ class ToolContext:
     settings: dict = field(default_factory=dict)  # app settings (shell preference, timeouts...)
     read_only: bool = False  # the session forbids edits and shell
     jobs: Any = None  # the engine's JobManager (background shell commands), when available
+    engine: Any = None  # the Engine, for tools that need more than files/shell (computer control)
 
 
 @dataclass

@@ -83,6 +83,8 @@ $PyArgs = @(
     '--hidden-import', 'pydantic',
     '--hidden-import', 'zstandard',
     '--hidden-import', 'qrcode',
+    '--hidden-import', 'PIL.ImageGrab',  # the computer tool captures the screen
+    '--hidden-import', 'PIL._imaging',
     # the desktop shell is Electron now; never pull pywebview or Tk into the exe
     '--exclude-module', 'webview',
     '--exclude-module', 'tkinter',
