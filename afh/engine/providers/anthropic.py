@@ -22,6 +22,7 @@ from typing import AsyncIterator
 
 import httpx
 
+from afh.engine import usage
 from afh.engine.providers import catalog
 from afh.engine.providers.sse import (
     NETWORK_ERRORS, ProviderError, decode_body, error_message, http_error, image_data, iter_json, join_url,
@@ -148,6 +149,7 @@ class AnthropicProvider:
         async with make_client(self.headers(), self._transport) as client:
             try:
                 async with client.stream("POST", url, json=body) as resp:
+                    usage.observe(self.config.id, resp.headers)
                     if resp.status_code >= 300:
                         yield http_error(resp.status_code, decode_body(await resp.aread()))
                         return

@@ -11,6 +11,7 @@ import { openSettings } from "./settings.js";
 import { openAccount, refreshAccountButton } from "./settings-remote.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
 import { initUpdates } from "./updates.js";
+import { initUsage, refreshUsage, renderUsage } from "./usage.js";
 import { applyWorkEvent, goalsPopover, jobsPopover, loadJobs, openGoalDialog, renderDock, renderJobsChip, setRedraw, syncState } from "./work.js";
 import {
   ago, basename, closePopover, confirmDialog, contextRing, dayGroup, diffView, el, escapeHtml, fmtTokens,
@@ -121,6 +122,7 @@ async function boot() {
     $("btn-account").replaceWith(el("a.sb-foot-btn", { href: "/account", title: "Your computers" }, ico("cpu"), "Your computers"));
   }
   initUpdates();
+  initUsage({ names: () => S.providerNames });
   if (native.electron()) {
     document.body.classList.add("electron");
     $("tb-brand").append(logoNode({ size: 22 }));
@@ -1206,6 +1208,7 @@ function renderComposerState() {
     ctxm.innerHTML = contextRing(limit ? used / limit : 0);
     ctxm.title = limit ? `Context: ${fmtTokens(used)} of ${fmtTokens(limit)} tokens — click for details` : "Context details";
   } else ctxm.className = "ctx";
+  renderUsage(ref);
 
   renderTps();
   const hint = $("composer-hint");
@@ -1722,6 +1725,7 @@ function onEvent(ev) {
     notify("ask", ev.data?.metadata?.title || (asking ? "A question for you" : "Approval needed"), `${t.session.title || "A thread"} ${asking ? "has a question" : `wants to ${ev.data?.action || "run a tool"}`}`);
   }
   if (type === "session.execution.succeeded" && !D.children.has(sid)) notify("done", "Done", t.session.title || "The thread finished");
+  if ((type === "session.execution.succeeded" || type === "session.execution.failed") && sid === S.current?.id) refreshUsage();
   if (type === "session.execution.failed" && !D.children.has(sid)) notify("error", "Run failed", ev.data?.error?.message || t.session.title || "");
 }
 

@@ -19,6 +19,7 @@ from typing import AsyncIterator
 
 import httpx
 
+from afh.engine import usage
 from afh.engine.providers import catalog
 from afh.engine.providers.sse import (
     NETWORK_ERRORS, ProviderError, decode_body, error_message, http_error, image_data, iter_json, join_url,
@@ -38,6 +39,8 @@ _CACHE_LIMIT = 512
 
 
 class GeminiProvider:
+    call_ids = False  # send tool-call ids on functionCall/functionResponse (Claude behind a Gemini API needs them)
+
     def __init__(self, config: ProviderConfig, transport: httpx.AsyncBaseTransport | None = None):
         self.config = config
         self._transport = transport
@@ -117,7 +120,7 @@ class GeminiProvider:
                 if m.text:
                     parts.append({"text": m.text})
                 for c in m.tool_calls:
-                    part: dict = {"functionCall": {"name": c.name, "args": c.input}}
+                    part: dict = {"functionCall": {"name": c.name, "args": c.input, **({"id": c.id} if self.call_ids else {})}}
                     sig = self._signatures.get(c.id)
                     if sig:
                         part["thoughtSignature"] = sig
@@ -129,7 +132,8 @@ class GeminiProvider:
             elif m.role == "tool":
                 name = m.tool_name or tool_name_for(messages, m.tool_call_id) or "tool"
                 response = {"result": m.text}
-                push("user", [{"functionResponse": {"name": name, "response": response}}])
+                fr = {"name": name, "response": response, **({"id": m.tool_call_id} if self.call_ids and m.tool_call_id else {})}
+                push("user", [{"functionResponse": fr}])
         return out
 
     # ---- streaming --------------------------------------------------------------------
@@ -140,6 +144,7 @@ class GeminiProvider:
         async with make_client(self.headers(), self._transport) as client:
             try:
                 async with client.stream("POST", url, json=body) as resp:
+                    usage.observe(self.config.id, resp.headers)
                     if resp.status_code >= 300:
                         yield http_error(resp.status_code, decode_body(await resp.aread()))
                         return
@@ -149,12 +154,16 @@ class GeminiProvider:
                 yield network_error(exc, url)
 
     async def _parse(self, resp: httpx.Response) -> AsyncIterator[ProviderEvent]:
+        async for ev in self._parse_events(iter_json(resp)):
+            yield ev
+
+    async def _parse_events(self, events: AsyncIterator[dict]) -> AsyncIterator[ProviderEvent]:
         calls = 0
         finish: str | None = None
         usage: dict | None = None
         blocked: str | None = None
 
-        async for ev in iter_json(resp):
+        async for ev in events:
             if ev.get("error"):
                 yield stream_error(ev)
                 return

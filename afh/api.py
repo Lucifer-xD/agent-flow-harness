@@ -753,6 +753,18 @@ def usage_summary(days: int = 30):
             "today": engine.store.cost_since(int(dt.datetime.combine(dt.date.today(), dt.time()).timestamp() * 1000)), "budget": store.load_settings().get("budget")}
 
 
+@app.get("/api/usage/limits")
+async def usage_limits(provider: str = "", force: bool = False):
+    """Plan limits, balances and rate limits per provider (engine/usage.py): one provider, or all of them."""
+    from .engine import usage as usagemod
+
+    ids = [provider] if provider else list(engine.providers)
+    if provider and provider not in engine.providers:
+        raise KeyError(provider)
+    reports = await asyncio.gather(*(usagemod.report(engine.providers[pid].config, engine.store, force) for pid in ids))
+    return reports[0] if provider else {"providers": list(reports)}
+
+
 def pricing_is_plan(pid: str) -> bool:
     from .engine import pricing
 
