@@ -4,6 +4,9 @@
   chatgpt     browser (OAuth PKCE, the Codex CLI client); a ChatGPT Plus/Pro/Team plan pays for
               the tokens, requests go to the Codex backend through the Responses API adapter
   copilot     GitHub device code; a GitHub token buys short-lived Copilot tokens
+  antigravity browser (Google OAuth with Antigravity's client); the Google account's Antigravity
+              quota pays for Gemini and Claude models through Google's Cloud Code backend. Google
+              may suspend Antigravity access for accounts used outside its own app.
 
 A login runs in the background: ``start`` returns at once with the URL to open (or the code to
 type), the UI polls ``get``. Tokens live in the provider's ``auth`` entry in providers.json and
@@ -48,11 +51,24 @@ COPILOT_HEADERS = {
     "Copilot-Integration-Id": "vscode-chat", "User-Agent": "GitHubCopilotChat/0.26.0",
 }
 
+# ---- Google Antigravity ----
+ANTIGRAVITY_CLIENT_ID = "REMOVED"
+ANTIGRAVITY_CLIENT_SECRET = "REMOVED"  # an installed-app client: the secret is public
+ANTIGRAVITY_SCOPES = ["https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/userinfo.email",
+                      "https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/cclog",
+                      "https://www.googleapis.com/auth/experimentsandconfigs"]
+ANTIGRAVITY_PORT = 51121  # the redirect URI registered for this client
+ANTIGRAVITY_BASE = "https://REMOVED"
+ANTIGRAVITY_VERSION = "2.24.0"
+ANTIGRAVITY_UA = f"antigravity/hub/{ANTIGRAVITY_VERSION} REMOVED"
+GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
+
 # Which saved provider each sign-in creates.
 PROVIDERS = {
     "openrouter": {"id": "openrouter", "catalog": "openrouter"},
     "chatgpt": {"id": "chatgpt", "catalog": "chatgpt"},
     "copilot": {"id": "github-copilot", "catalog": "github-copilot"},
+    "antigravity": {"id": "antigravity", "catalog": "antigravity"},
 }
 
 
@@ -108,7 +124,7 @@ async def start(method: str, on_done: OnDone | None = None) -> Login:
             cancel(old.id)
     login = Login(method)
     _logins[login.id] = login
-    flow = {"openrouter": _openrouter, "chatgpt": _chatgpt, "copilot": _copilot}[method]
+    flow = {"openrouter": _openrouter, "chatgpt": _chatgpt, "copilot": _copilot, "antigravity": _antigravity}[method]
     login.task = asyncio.create_task(_run(login, flow, on_done))
     try:
         await asyncio.wait_for(login.ready.wait(), 20)
@@ -321,6 +337,79 @@ async def _copilot_token(auth: dict) -> dict:
                    "api": ((data.get("endpoints") or {}).get("api") or COPILOT_BASE).rstrip("/")}
 
 
+async def _antigravity(login: Login) -> None:
+    verifier, challenge = pkce()
+    state = _b64url(secrets.token_bytes(24))
+    redirect = f"http://localhost:{ANTIGRAVITY_PORT}/oauth-callback"
+    async with _Callback("/oauth-callback", ANTIGRAVITY_PORT) as cb:
+        login.url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({
+            "client_id": ANTIGRAVITY_CLIENT_ID, "response_type": "code", "redirect_uri": redirect, "scope": " ".join(ANTIGRAVITY_SCOPES),
+            "code_challenge": challenge, "code_challenge_method": "S256", "state": state, "access_type": "offline", "prompt": "consent",
+        })
+        login.ready.set()
+        query = await cb.result
+    if query.get("state") != state:
+        raise RuntimeError("The sign-in answer did not match this request. Try again.")
+    if not query.get("code"):
+        raise RuntimeError(query.get("error_description") or query.get("error") or "Google returned no code")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(GOOGLE_TOKEN, data={"client_id": ANTIGRAVITY_CLIENT_ID, "client_secret": ANTIGRAVITY_CLIENT_SECRET, "code": query["code"],
+                                                     "grant_type": "authorization_code", "redirect_uri": redirect, "code_verifier": verifier})
+        if resp.status_code >= 300:
+            raise RuntimeError(f"Google refused the code ({resp.status_code}): {resp.text[:200]}")
+        tokens = resp.json()
+        if not tokens.get("refresh_token"):
+            raise RuntimeError("Google returned no refresh token. Try again.")
+        access = tokens["access_token"]
+        info = await client.get("https://www.googleapis.com/oauth2/v1/userinfo?alt=json", headers={"authorization": f"Bearer {access}"})
+        login.account = (info.json() or {}).get("email", "") if info.status_code < 300 else ""
+        project = await _antigravity_project(client, access)
+    auth = {"type": "antigravity", "access": access, "refresh": tokens["refresh_token"], "expires": time.time() + int(tokens.get("expires_in") or 3600),
+            "account": login.account, "project": project}
+    login.provider_id = _save("antigravity", {"auth": auth})
+
+
+async def _antigravity_project(client: httpx.AsyncClient, access: str) -> str:
+    """The Cloud Code project the account's quota lives in: from loadCodeAssist, or made by onboardUser
+    for an account that never opened Antigravity."""
+    h = {"authorization": f"Bearer {access}", "content-type": "application/json", "user-agent": ANTIGRAVITY_UA}
+    resp = await client.post(f"{ANTIGRAVITY_BASE}/v1internal:loadCodeAssist", headers=h, json={"metadata": {"ideType": "ANTIGRAVITY"}})
+    if resp.status_code == 403:
+        raise RuntimeError(f"Google refused Antigravity for this account: {_google_error(resp)}")
+    data = resp.json() if resp.status_code < 300 else {}
+    project = _project_id(data.get("cloudaicompanionProject"))
+    if project:
+        return project
+    tiers = data.get("allowedTiers") or []
+    tier = (next((t.get("id") for t in tiers if t.get("isDefault") and t.get("id")), None) or (tiers[0].get("id") if tiers else None)
+            or (data.get("currentTier") or {}).get("id") or "free-tier")
+    body = {"tier_id": tier, "metadata": {"ide_type": "ANTIGRAVITY", "ide_version": ANTIGRAVITY_VERSION, "ide_name": "antigravity"}}
+    for _ in range(10):
+        r = await client.post(f"{ANTIGRAVITY_BASE}/v1internal:onboardUser", headers=h, json=body)
+        if r.status_code >= 300:
+            raise RuntimeError(f"Google could not set up Antigravity for this account: {_google_error(r)}")
+        payload = r.json()
+        if payload.get("done"):
+            project = _project_id((payload.get("response") or {}).get("cloudaicompanionProject"))
+            if project:
+                return project
+            break
+        await asyncio.sleep(3)
+    raise RuntimeError("Google did not finish setting up Antigravity for this account. Open Antigravity once, then sign in again.")
+
+
+def _project_id(value: Any) -> str:
+    pid = value.get("id") if isinstance(value, dict) else value
+    return pid.strip() if isinstance(pid, str) else ""
+
+
+def _google_error(resp: httpx.Response) -> str:
+    try:
+        return (resp.json().get("error") or {}).get("message") or resp.text[:200]
+    except ValueError:
+        return resp.text[:200] or str(resp.status_code)
+
+
 # ---- using the credentials -------------------------------------------------------------------
 
 _locks: dict[str, asyncio.Lock] = {}
@@ -335,11 +424,23 @@ async def _refresh(config: ProviderConfig) -> dict:
         if resp.status_code >= 300:
             raise RuntimeError("ChatGPT sign-in expired. Sign in again in Settings → Models.")
         return _chatgpt_auth(resp.json(), auth)
+    if auth.get("type") == "antigravity":
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(GOOGLE_TOKEN, data={"client_id": ANTIGRAVITY_CLIENT_ID, "client_secret": ANTIGRAVITY_CLIENT_SECRET,
+                                                         "grant_type": "refresh_token", "refresh_token": auth.get("refresh", "")})
+        if resp.status_code >= 300:
+            raise RuntimeError("Antigravity sign-in expired. Sign in again in Settings → Models.")
+        data = resp.json()
+        return auth | {"access": data.get("access_token", ""), "expires": time.time() + int(data.get("expires_in") or 3600),
+                       "refresh": data.get("refresh_token") or auth.get("refresh", "")}
     return await _copilot_token(auth)
 
 
+SIGNED_IN = ("chatgpt", "copilot", "antigravity")
+
+
 def signed_in(config: ProviderConfig) -> bool:
-    return (config.auth or {}).get("type") in ("chatgpt", "copilot")
+    return (config.auth or {}).get("type") in SIGNED_IN
 
 
 async def prepare(config: ProviderConfig, req: ChatRequest | None = None, force: bool = False) -> tuple[str, dict[str, str]]:
@@ -347,7 +448,7 @@ async def prepare(config: ProviderConfig, req: ChatRequest | None = None, force:
     ``force`` refreshes anyway: the server just said 401 to a token we thought was fine."""
     auth = config.auth or {}
     kind = auth.get("type")
-    if kind not in ("chatgpt", "copilot"):
+    if kind not in SIGNED_IN:
         return config.base_url, {}
     lock = _locks.setdefault(config.id, asyncio.Lock())
     async with lock:
@@ -359,6 +460,8 @@ async def prepare(config: ProviderConfig, req: ChatRequest | None = None, force:
     if kind == "chatgpt":
         return config.base_url or CHATGPT_BASE, {"authorization": f"Bearer {auth['access']}", "chatgpt-account-id": auth.get("account_id", ""),
                                                  "OpenAI-Beta": "responses=experimental", "originator": "codex_cli_rs"}
+    if kind == "antigravity":
+        return config.base_url or ANTIGRAVITY_BASE, {"authorization": f"Bearer {auth['access']}", "user-agent": ANTIGRAVITY_UA}
     h = {"authorization": f"Bearer {auth['access']}", "Openai-Intent": "conversation-edits", **COPILOT_HEADERS}
     if req is not None:
         last = req.messages[-1] if req.messages else None

@@ -593,6 +593,39 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .ctx.on { display: grid; }
 .ctx:hover { background: var(--panel-2); }
 .ctx-pop { padding: 10px 12px 6px; min-width: 280px; }
+/* usage meter (js/usage.js) */
+.usage-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; margin-right: 2px; border-radius: 8px; font: inherit; font-size: 12px;
+  font-variant-numeric: tabular-nums; color: var(--text-2); background: none; border: 0; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.usage-chip[hidden] { display: none; }
+.usage-chip:hover { background: var(--panel-2); color: var(--text); }
+.usage-chip.warn .um-txt { color: var(--warn); }
+.usage-chip.bad .um-txt, .usage-chip.limited .um-txt { color: var(--bad); }
+.um-bars { display: inline-flex; flex-direction: column; gap: 3px; width: 22px; }
+.um-bars i { display: block; height: 4px; border-radius: 2px; background: var(--panel-3); overflow: hidden; }
+.um-bars b, .um-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.6s var(--ease); }
+.um-bars b.warn, .um-bar i.warn { background: var(--warn); }
+.um-bars b.bad, .um-bar i.bad { background: var(--bad); }
+.um-pop { padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 8px; transition: opacity 0.2s; }
+.um-pop.loading { opacity: 0.55; }
+.um-title { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.um-title .icon-btn { margin-left: auto; width: 26px; height: 26px; }
+.um-acct { color: var(--text-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.um-plan { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-2); text-transform: capitalize; }
+.um-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--text-2); }
+.um-row b { color: var(--text); font-weight: 550; }
+.um-bar { height: 6px; border-radius: 3px; background: var(--panel-3); overflow: hidden; margin: 5px 0 3px; }
+.um-sub { font-size: 11.5px; color: var(--text-3); }
+.um-note { font-size: 12px; }
+.um-note.bad { color: var(--bad); }
+.um-head { font-size: 11px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); margin-bottom: 4px; }
+.um-local, .um-others { border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+.um-source { font-size: 11px; color: var(--text-3); }
+.um-other { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 5px 6px; margin: 0 -6px; border: 0; border-radius: 6px; background: none;
+  font: inherit; font-size: 12.5px; color: var(--text-2); cursor: pointer; text-align: left; }
+.um-other:hover { background: var(--panel-2); color: var(--text); }
+.um-other-val { font-variant-numeric: tabular-nums; }
+.um-other-val.warn { color: var(--warn); }
+.um-other-val.bad { color: var(--bad); }
 .ctx-pop h4 { margin: 0 0 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
 .ctx-bar { height: 8px; border-radius: 4px; background: var(--panel-3); overflow: hidden; margin: 6px 0 4px; }
 .ctx-bar i { display: block; height: 100%; background: var(--accent-grad); border-radius: 4px; transition: width 0.5s var(--ease); }

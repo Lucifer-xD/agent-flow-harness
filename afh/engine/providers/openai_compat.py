@@ -23,7 +23,7 @@ from typing import AsyncIterator
 
 import httpx
 
-from afh.engine import auth, pricing
+from afh.engine import auth, pricing, usage
 from afh.engine.providers import catalog
 from afh.engine.providers.sse import (
     NETWORK_ERRORS, ProviderError, decode_body, error_message, http_error, image_data, iter_json, join_url,
@@ -134,6 +134,7 @@ class OpenAICompatProvider:
             for attempt in (0, 1):
                 try:
                     async with client.stream("POST", url, json=body) as resp:
+                        usage.observe(self.config.id, resp.headers)
                         if resp.status_code == 401 and attempt == 0 and auth.signed_in(self.config):
                             # A revoked or rotated token: get a new one and try once more.
                             await resp.aread()
