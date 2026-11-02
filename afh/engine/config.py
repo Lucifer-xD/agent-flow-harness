@@ -76,7 +76,7 @@ def _model(d: dict) -> ModelInfo:
 
 
 OVERRIDABLE = ("context", "output", "variants", "input", "reasoning")
-SELF_DESCRIBING = {"chatgpt"}  # providers whose model list carries context, effort levels and inputs
+SELF_DESCRIBING = {"chatgpt", "antigravity"}  # providers whose model list carries context, effort levels and inputs
 
 
 def models_of(p: dict, pid: str | None = None) -> list[ModelInfo]:

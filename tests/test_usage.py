@@ -317,6 +317,73 @@ def test_antigravity_lists_only_visible_chat_models():
     assert models["gemini-3-flash"].context == 1048576
 
 
+def test_antigravity_groups_models_listed_once_per_effort(monkeypatch):
+    from afh.engine import config as provcfg
+
+    saved = {}
+    monkeypatch.setattr(provcfg, "upsert", lambda pid, patch: saved.update({pid: patch}))
+
+    def handler(request):
+        if request.url.path.endswith("fetchAvailableModels"):
+            return httpx.Response(200, json={"models": {
+                "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash (Low)", "maxTokens": 1048576},
+                "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash (High)", "maxTokens": 1048576},
+                "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash (Medium)", "maxTokens": 1048576},
+                "gpt-oss-120b-medium": {"displayName": "GPT-OSS 120B (Medium)"},
+                "gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash Lite"},
+                "claude-opus-4-6-thinking": {"displayName": "Claude Opus 4.6 (Thinking)"},
+            }})
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, content=_sse([{"response": {"candidates": [{"content": {"parts": [{"text": "ok"}]}, "finishReason": "STOP"}]}}]),
+                              headers={"content-type": "text/event-stream"})
+
+    seen = {}
+    p = AntigravityProvider(_ag_config(), transport=httpx.MockTransport(handler))
+    models = {m.id: m for m in asyncio.run(p.list_models())}
+    assert set(models) == {"gemini-3.8-flash", "gpt-oss-120b", "gemini-3.5-flash-lite", "claude-opus-4-6-thinking"}
+    flash = models["gemini-3.8-flash"]
+    assert flash.name == "Gemini 3.8 Flash" and flash.variants == ["low", "medium", "high"] and flash.reasoning
+    assert models["gpt-oss-120b"].name == "GPT-OSS 120B" and models["gpt-oss-120b"].variants == []
+    assert saved["antigravity"]["extra"]["effort_ids"] == {"gemini-3.8-flash": ["low", "medium", "high"], "gpt-oss-120b": ["medium"]}
+
+    def send(model, variant):
+        async def go():
+            return [ev async for ev in p.stream(ChatRequest(model=model, system="", variant=variant, reasoning=True, messages=[ChatMessage("user", "hi")]))]
+        asyncio.run(go())
+        return seen["body"]
+
+    body = send("gemini-3.8-flash", "medium")
+    assert body["model"] == "gemini-3.8-flash-medium"
+    assert body["request"]["generationConfig"]["thinkingConfig"] == {"includeThoughts": True}  # the level is in the id
+    assert send("gemini-3.8-flash", "max")["model"] == "gemini-3.8-flash-high"  # an effort it doesn't have: the default
+    assert send("gpt-oss-120b", None)["model"] == "gpt-oss-120b-medium"
+    assert send("gemini-3.8-flash-low", "high")["model"] == "gemini-3.8-flash-low"  # an old thread's full id still works
+    assert send("gemini-3.5-flash-lite", "low")["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "low"
+
+
+def test_gemini_schemas_keep_only_what_google_accepts():
+    from afh.engine.providers.gemini import clean_schema
+
+    schema = {"type": "object", "additionalProperties": False, "$schema": "x", "properties": {
+        "count": {"type": "integer", "exclusiveMinimum": 0, "description": "How many"},
+        "mode": {"const": "fast"},
+        "name": {"type": ["string", "null"], "minLength": 1, "format": "uri", "title": "Name"},
+        "level": {"type": "integer", "enum": [1, 2, 3]},
+        "tags": {"type": "array", "items": {"type": "string", "exclusiveMaximum": 9}, "uniqueItems": True},
+    }, "required": ["count"]}
+    out = clean_schema(schema)
+    props = out["properties"]
+    assert set(out) == {"type", "properties", "required"}
+    assert props["count"] == {"type": "integer", "minimum": 0, "description": "How many"}
+    assert props["mode"] == {"enum": ["fast"]}
+    assert props["name"] == {"type": "string", "nullable": True, "minLength": 1}
+    assert props["level"] == {"type": "integer", "description": "(one of: 1, 2, 3)"}
+    assert props["tags"] == {"type": "array", "items": {"type": "string", "maximum": 9}}
+    strict = clean_schema(schema, strict=True)["properties"]
+    assert strict["name"] == {"type": "string", "nullable": True, "description": "(minLength: 1)"}
+    assert strict["count"]["minimum"] == 0
+
+
 def test_antigravity_project_from_load_or_onboarding(monkeypatch):
     async def no_sleep(_):
         return None

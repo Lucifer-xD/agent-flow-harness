@@ -80,7 +80,7 @@ KNOWN: dict[str, dict] = {
     },
     "antigravity": {
         "name": "Google Antigravity", "kind": "antigravity", "base_url": "https://REMOVED",
-        "env": [], "docs": "https://antigravity.google", "extra": {},
+        "env": [], "docs": "https://antigravity.google", "extra": {"effort_ids": {"gemini-3.1-pro": ["low", "high"]}},
         "login": "antigravity", "login_only": True, "needs_key": False,
     },
     "mistral": {
@@ -268,8 +268,7 @@ _LMH = ["low", "medium", "high"]
 STATIC_MODELS: dict[str, list[ModelInfo]] = {
     # Until the account's own list arrives (fetchAvailableModels replaces these).
     "antigravity": [
-        _m("gemini-3.1-pro-high", "Gemini 3.1 Pro (High)", 1_048_576, 65_535, reasoning=True),
-        _m("gemini-3.1-pro-low", "Gemini 3.1 Pro (Low)", 1_048_576, 65_535, reasoning=True),
+        _m("gemini-3.1-pro", "Gemini 3.1 Pro", 1_048_576, 65_535, reasoning=True, variants=["low", "high"]),  # sent as -low / -high
         _m("gemini-3-flash", "Gemini 3 Flash", 1_048_576, 65_536, reasoning=True),
         _m("claude-sonnet-4-6", "Claude Sonnet 4.6", 200_000, 64_000),
         _m("claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)", 200_000, 64_000, reasoning=True, variants=["low", "high", "max"]),

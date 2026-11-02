@@ -33,8 +33,13 @@ LEVELS = {"low": "low", "medium": "medium", "high": "high", "max": "high"}  # Ge
 SKIP_SIGNATURE = "skip_thought_signature_validator"
 # Finish reasons that mean the model was cut off rather than done.
 BLOCKED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "MALFORMED_FUNCTION_CALL", "IMAGE_SAFETY"}
-# JSON-schema keys Gemini's OpenAPI subset rejects.
-_SCHEMA_DROP = {"$schema", "$id", "$ref", "$defs", "definitions", "additionalProperties", "title", "examples"}
+# The JSON-schema keys Gemini's OpenAPI subset accepts; anything else (exclusiveMinimum, const,
+# $ref, additionalProperties...) is a 400 "Unknown name", so it is rewritten or dropped.
+_SCHEMA_KEEP = {"type", "format", "description", "nullable", "enum", "items", "properties", "required", "anyOf",
+                "minimum", "maximum", "minItems", "maxItems", "minLength", "maxLength", "pattern", "propertyOrdering"}
+_FORMATS = {"enum", "date-time", "int32", "int64", "float", "double"}
+# Constraints validated function calling (Claude behind Antigravity) rejects; kept as description hints.
+_STRICT_HINTS = ("minLength", "maxLength", "pattern", "minItems", "maxItems", "format")
 _CACHE_LIMIT = 512
 
 
@@ -72,7 +77,7 @@ class GeminiProvider:
             decls = []
             for t in req.tools:
                 decl: dict = {"name": t.name, "description": t.description}
-                params = clean_schema(t.parameters)
+                params = clean_schema(t.parameters or {}, strict=self.strict_schema(req))
                 if params.get("properties"):  # an empty object schema is rejected
                     decl["parameters"] = params
                 decls.append(decl)
@@ -93,6 +98,9 @@ class GeminiProvider:
             body["generationConfig"] = gen
         body.update(extra.get("body", {}))
         return body
+
+    def strict_schema(self, req: ChatRequest) -> bool:
+        return False
 
     def translate_messages(self, messages: list[ChatMessage], model: str = "") -> list[dict]:
         out: list[dict] = []
@@ -245,16 +253,43 @@ class GeminiProvider:
         return catalog.merge_static(self.config, fetched)
 
 
-def clean_schema(schema: dict) -> dict:
-    """Drop JSON-schema keywords Gemini's function-declaration schema does not accept."""
+def clean_schema(schema: dict, strict: bool = False) -> dict:
+    """A JSON schema reduced to what Gemini's function declarations accept: ``exclusiveMinimum``
+    becomes ``minimum``, ``const`` a one-value ``enum``, ``type: [x, "null"]`` ``nullable``; other
+    keywords are dropped. ``strict`` also moves length/pattern/format limits into the description."""
+    src = dict(schema)
+    for exclusive, inclusive in (("exclusiveMinimum", "minimum"), ("exclusiveMaximum", "maximum")):
+        if isinstance(src.get(exclusive), (int, float)) and not isinstance(src[exclusive], bool):
+            src.setdefault(inclusive, src[exclusive])
+    if "const" in src and "enum" not in src:
+        src["enum"] = [src["const"]]
+    if isinstance(src.get("type"), list):
+        types = [t for t in src["type"] if t != "null"]
+        if len(types) < len(src["type"]):
+            src["nullable"] = True
+        src["type"] = types[0] if types else "string"
+    if "anyOf" not in src and isinstance(src.get("oneOf"), list):
+        src["anyOf"] = src["oneOf"]
+    if src.get("format") not in _FORMATS:
+        src.pop("format", None)
+    hints = []
+    if strict:
+        hints = [f"{k}: {src.pop(k)}" for k in _STRICT_HINTS if k in src]
     out: dict = {}
-    for key, value in schema.items():
-        if key in _SCHEMA_DROP:
+    for key, value in src.items():
+        if key not in _SCHEMA_KEEP:
             continue
-        if isinstance(value, dict):
-            out[key] = {k: clean_schema(v) if isinstance(v, dict) else v for k, v in value.items()} if key == "properties" else clean_schema(value)
-        elif isinstance(value, list):
-            out[key] = [clean_schema(v) if isinstance(v, dict) else v for v in value]
+        if key == "properties" and isinstance(value, dict):
+            out[key] = {k: clean_schema(v, strict) if isinstance(v, dict) else v for k, v in value.items()}
+        elif isinstance(value, dict):
+            out[key] = clean_schema(value, strict)
+        elif isinstance(value, list) and key != "enum":
+            out[key] = [clean_schema(v, strict) if isinstance(v, dict) else v for v in value]
         else:
             out[key] = value
+    if hints:
+        out["description"] = (f"{out['description']} " if out.get("description") else "") + f"({', '.join(hints)})"
+    if "enum" in out and not all(isinstance(v, str) for v in out["enum"]):  # Gemini enums are strings only
+        values = out.pop("enum")
+        out["description"] = (f"{out['description']} " if out.get("description") else "") + f"(one of: {', '.join(json.dumps(v) for v in values)})"
     return out
