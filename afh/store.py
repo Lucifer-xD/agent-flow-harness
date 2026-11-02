@@ -86,7 +86,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # The agent loop: steps per run, and whether an out-of-date to-do list sends it back to work once.
     "agent": {"maxSteps": 200, "todoNudge": True, "resumeOnRestart": True, "compactAt": 80},  # compactAt: % of the context window
     # Goals: autopilot keeps the agent going until it reports the goal achieved or blocked.
-    "goals": {"autopilot": True, "maxTurns": 10, "auto": True},
+    "goals": {"autopilot": True, "maxTurns": 3, "auto": False},
     # Error checks after edits (see engine/diagnostics.py). commands: [{name, glob, command, timeout, enabled}]
     "diagnostics": {"enabled": True, "typescript": True, "ruff": True, "commands": []},
     # Hooks: [{id, name, event: pre_tool|post_tool|stop, matcher, command, timeout, enabled}]

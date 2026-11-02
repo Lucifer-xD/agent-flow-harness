@@ -816,7 +816,13 @@ class Engine:
                             "label": f"Stop hook failed: {', '.join(r['name'] for r in blocking)} — continuing"}
         goal = self.goal(sid)
         if goal and goal.get("status") == "active" and goal.get("autopilot"):
-            if goal.get("turns", 0) < goal.get("maxTurns", statemod.DEFAULT_GOAL_TURNS):
+            if run.goal_nudge_at is not None and run.work_steps == run.goal_nudge_at and not goal.get("exhausted"):
+                # Sent back once and it did nothing but talk: more nudges would only loop. Wait for the user.
+                self.update_goal(sid, exhausted=True)
+                self.publish(event("session.notice", sid, kind="goal", label="Autopilot paused: no progress since the last nudge — reply to keep going"))
+                goal = self.goal(sid)
+            if not goal.get("exhausted") and goal.get("turns", 0) < goal.get("maxTurns", statemod.DEFAULT_GOAL_TURNS):
+                run.goal_nudge_at = run.work_steps
                 goal = self.update_goal(sid, turns=goal.get("turns", 0) + 1)
                 return {"kind": "goal", "text": statemod.continuation_text(goal, self.todos(sid)),
                         "label": f"Goal not achieved yet — continuing ({goal['turns']}/{goal['maxTurns']})"}

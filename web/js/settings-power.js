@@ -106,9 +106,9 @@ export async function agentPane(pane, ctx) {
     row("Language", "A code like en or ar makes short clips more accurate", voLang)));
 
   pane.append(card("Goals", "The agent sets a goal itself for multi-step work; you can also set one with the Goal button or /goal", null,
-    row("Goals for every multi-step task", "When the agent plans 3 or more steps without a goal, your request becomes the thread's goal", toggle(goals.auto !== false, (v) => save({ goals: { auto: v } }))),
+    row("Goals for every multi-step task", "Off: the agent sets a goal only when you ask for one. On: when it plans 3 or more steps, your request becomes the thread's goal", toggle(goals.auto === true, (v) => save({ goals: { auto: v } }))),
     row("Autopilot by default", "New goals keep the agent working until it reports them achieved or blocked", toggle(goals.autopilot !== false, (v) => save({ goals: { autopilot: v } }))),
-    row("Continuations per message", "How often autopilot may send the agent back to work before it waits for you", num(goals.maxTurns ?? 10, { min: 1, max: 100, onChange: (v) => save({ goals: { maxTurns: v } }, "Saved") }))));
+    row("Continuations per message", "How often autopilot may send the agent back to work before it waits for you", num(goals.maxTurns ?? 3, { min: 1, max: 100, onChange: (v) => save({ goals: { maxTurns: v } }, "Saved") }))));
 
   const cmds = [...(diag.commands || [])];
   const list = el("div");

@@ -199,15 +199,40 @@ def test_goal_achieved_refused_with_open_todos_and_blocked_stops(home, tmp_path)
 
 
 def test_goal_autopilot_budget_runs_out(home, tmp_path):
-    p = FakeProvider(["a", "b", "c", "d", "e"])
+    (tmp_path / "f.txt").write_text("x")
+    work = [("read", {"path": "f.txt"})]
+    p = FakeProvider(["a", [*work], "b", [*work], "c", "d"])  # works after each nudge, never finishes
     e = make_engine(p)
     sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
     e.set_goal(sid, "never done", max_turns=2)
     asyncio.run(run_prompt(e, tmp_path, "go", sid=sid))
     g = e.goal(sid)
     assert g["turns"] == 2 and g["exhausted"] is True and g["status"] == "active"
-    assert len(p.requests) == 3
-    assert any(ev["type"] == "session.notice" and "Autopilot paused" in ev["data"]["label"] for ev in e.events)
+    assert len(p.requests) == 5
+    assert any(ev["type"] == "session.notice" and "Autopilot paused after 2" in ev["data"]["label"] for ev in e.events)
+
+
+def test_goal_autopilot_stops_when_a_nudge_brings_no_progress(home, tmp_path):
+    p = FakeProvider(["I can't do this.", "Still can't, it's impossible.", "x", "y"])
+    e = make_engine(p)
+    sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+    e.set_goal(sid, "impossible", max_turns=10)
+    asyncio.run(run_prompt(e, tmp_path, "go", sid=sid))
+    g = e.goal(sid)
+    assert g["turns"] == 1 and g["exhausted"] is True  # one nudge, then it waits for the user
+    assert len(p.requests) == 2
+    assert any(ev["type"] == "session.notice" and "no progress" in ev["data"]["label"] for ev in e.events)
+
+
+def test_goals_are_opt_in_by_default(home, tmp_path):
+    from afh.engine.prompt import harness_guide
+
+    p = FakeProvider([[("todo", {"todos": [{"content": f"step {i}", "status": "pending"} for i in range(4)]})], "done"])
+    e = make_engine(p)
+    asyncio.run(run_prompt(e, tmp_path, "please add a parser module with tests", agent={"todoNudge": False}))
+    assert e.goal(e.store.list_sessions()[0]["id"]) is None  # a plan alone no longer becomes a goal
+    guide = harness_guide(["goal", "todo"])
+    assert "Do NOT set a goal for ordinary tasks" in guide and "FIRST tool call" not in guide
 
 
 def test_slash_goal_sets_goal_and_prompts(home, tmp_path):
@@ -637,11 +662,11 @@ def test_fit_history_leaves_out_the_oldest_and_says_so():
     assert runmod.estimate_tokens(msgs) <= 20_000
 
 
-def test_a_three_step_plan_without_a_goal_gets_one_from_the_request(home, tmp_path):
+def test_with_auto_goals_on_a_three_step_plan_gets_a_goal_from_the_request(home, tmp_path):
     plan = {"todos": [{"content": "a", "status": "in_progress"}, {"content": "b", "status": "pending"}, {"content": "c", "status": "pending"}]}
     p = FakeProvider([[("todo", plan)], [("goal", {"status": "set", "text": "sharper goal", "criteria": "tests pass"})], "ok"])
     e = make_engine(p)
-    s = asyncio.run(run_prompt(e, tmp_path, "please add a parser module with tests", agent={"todoNudge": False}, goals={"autopilot": False}))
+    s = asyncio.run(run_prompt(e, tmp_path, "please add a parser module with tests", agent={"todoNudge": False}, goals={"autopilot": False, "auto": True}))
     parts = tool_results(e, s["id"])
     assert "AFH set this task as the thread's goal" in text_of(parts[0])
     g = e.goal(s["id"])

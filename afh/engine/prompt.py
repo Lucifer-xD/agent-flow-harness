@@ -44,10 +44,11 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
     lines = ["# Your harness: Agent Flow Harness", "",
              "You run inside AFH, which gives you more than file and shell tools. Use these on your own judgment; the user does not have to ask for them."]
     if "goal" in have:
-        lines.append("- **Goal** (`goal` tool): when the user asks for work that changes the project and takes more than one step (add a feature, "
-                     "fix a bug, make the tests pass, build something), your FIRST tool call is `goal` with status \"set\": `text` = what done looks "
-                     "like, `criteria` = how you will verify it. Then plan it with `todo`. The user sees the goal above the message box. Finish by "
-                     "verifying and reporting it \"achieved\", or \"blocked\" with what you need. Skip goals for questions, explanations and one-line changes.")
+        lines.append("- **Goal** (`goal` tool): rarely needed. Do NOT set a goal for ordinary tasks - features, fixes, questions, multi-step "
+                     "work - plan those with `todo` and just do them. Set one only when the user asks for a goal, or tells you to keep going on "
+                     "your own until something is true (\"don't stop until the tests pass\", \"work on this overnight\"). While a goal is active, "
+                     "AFH may send you back to work when you stop: if the goal turns out impossible, or you tried and keep failing the same way, "
+                     "call `goal` with status \"blocked\" and explain - never retry the same thing over and over.")
     if "todo" in have:
         lines.append("- **To-do list** (`todo` tool): the user watches it live. Plan multi-step work there and keep it current, one item in progress at a time.")
     if "question" in have:
