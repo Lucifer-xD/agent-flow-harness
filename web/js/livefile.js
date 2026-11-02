@@ -16,6 +16,13 @@ export function initLive(c) {
 
 const WRITE = new Set(["write"]);
 const EDIT = new Set(["edit", "multiedit"]);
+const names = new Map(); // tool id -> tool name, so a later event can tell a command from other tools
+
+/** A tool call that waits on a command's output: a foreground shell command, or jobs output/wait. */
+function runsCommand(name, input) {
+  if (name === "shell") return !input.background;
+  return name === "jobs" && (input.action || "output") === "output";
+}
 
 export function onLiveEvent(ev) {
   if (!ctx || ctx.S.settings.ui.liveFiles === false) return;
@@ -23,6 +30,8 @@ export function onLiveEvent(ev) {
   switch (ev.type) {
     case "session.tool.input.started": {
       const n = (d.name || "").toLowerCase();
+      names.set(d.id, n);
+      if (names.size > 200) names.delete(names.keys().next().value);
       if (!WRITE.has(n) && !EDIT.has(n)) return;
       Object.assign(st, { tool: d.id, kind: WRITE.has(n) ? "write" : "edit", raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, scrolledTo: -1, startedAt: Date.now() });
       startPacing();
@@ -38,6 +47,16 @@ export function onLiveEvent(ev) {
       break;
     case "session.tool.called":
       if (d.id === st.tool) { st.input = d.input || {}; schedule(); }
+      else if (runsCommand(names.get(d.id), d.input || {}) && (st.done || !st.tool || st.kind === "run")) {
+        // A command shows as a terminal while it runs, unless a file is still being written.
+        const i = d.input || {};
+        const command = names.get(d.id) === "shell" ? String(i.command || "") : `job ${i.id || i.job || ""}`.trim();
+        Object.assign(st, { tool: d.id, kind: "run", raw: "", input: i, command, out: "", file: null, filePath: null, loading: null, done: false, error: null, scrolledTo: -1, startedAt: Date.now(), pace: null });
+        schedule();
+      }
+      break;
+    case "session.tool.progress":
+      if (d.id === st.tool && st.kind === "run" && d.content?.[0]?.text != null) { st.out = d.content[0].text; schedule(); }
       break;
     case "session.tool.success":
     case "session.tool.failed":
@@ -182,9 +201,10 @@ async function loadFile(path, force = false) {
 export function renderLive(body, titleBox) {
   if (!st.tool) {
     titleBox.replaceChildren(ico("eye"), el("span", "Live"));
-    body.replaceChildren(el("div.live-note", "When the model writes or edits a file, it appears here as it happens."));
+    body.replaceChildren(el("div.live-note", "When the model writes or edits a file, or runs a command, it appears here as it happens."));
     return;
   }
+  if (st.kind === "run") return renderRun(body, titleBox);
   const p = parse();
   if (p.path) p.path = absolute(p.path);
   if (p.path && st.filePath !== p.path && !st.loading) loadFile(p.path);
@@ -237,12 +257,15 @@ export function renderLive(body, titleBox) {
   // The pane is built once and then patched row by row: rebuilding it every frame cost thousands of
   // DOM nodes per frame and swapped the Follow switch out from under the user's click.
   const v = paneFor(body);
+  v.path.classList.remove("cmd");
+  v.code.hidden = false;
   v.path.textContent = p.path || "";
   v.path.title = p.path || "";
   v.note.textContent = note || "";
   v.note.hidden = !note;
   if (v.toggle.classList.contains("on") !== st.follow) setToggle(v.toggle, st.follow);
   if (lines.length > 4000) lines = lines.slice(0, 4000).concat(["… (truncated)"]);
+  if (v.code.firstChild?.classList?.contains("live-term")) v.code.replaceChildren(); // was showing a command
   const rows = v.code.children;
   for (let i = 0; i < lines.length; i++) {
     const cls = `ln-row${marks.has(i) ? " " + marks.get(i) : ""}${i === caret ? " caret" : ""}`;
@@ -267,6 +290,32 @@ export function renderLive(body, titleBox) {
         const row = rows[caret];
         if (row && row.offsetTop > body.scrollTop + body.clientHeight - 60) body.scrollTop = row.offsetTop - body.clientHeight + 80;
       }
+      requestAnimationFrame(() => (v.auto = false));
+    });
+  }
+}
+
+/** A running command as a terminal: the command line, then its output as it arrives. */
+function renderRun(body, titleBox) {
+  const finished = st.done;
+  titleBox.replaceChildren(logoNode({ size: 26, working: !finished }), el("span", finished ? "Ran a command" : "Running a command"),
+    finished ? el("span.pill-tag", st.error ? "failed" : "done") : el("span.pill-tag.accent", "live"));
+  const v = paneFor(body);
+  v.path.textContent = st.command;
+  v.path.title = st.command;
+  v.path.classList.add("cmd");
+  const out = (st.out || "").replace(/\s+$/, "");
+  v.note.textContent = out ? "" : finished ? "(no output)" : "Waiting for the first output…";
+  v.note.hidden = !!out;
+  v.code.hidden = !out;
+  if (v.toggle.classList.contains("on") !== st.follow) setToggle(v.toggle, st.follow);
+  let term = v.code.firstChild;
+  if (!term || !term.classList.contains("live-term")) { term = el("pre.live-term"); v.code.replaceChildren(term); }
+  if (term.textContent !== out) term.textContent = out;
+  if (st.follow) {
+    requestAnimationFrame(() => {
+      v.auto = true;
+      body.scrollTop = body.scrollHeight;
       requestAnimationFrame(() => (v.auto = false));
     });
   }

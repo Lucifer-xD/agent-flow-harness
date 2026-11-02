@@ -417,6 +417,14 @@ function renderQuestionTool(p) {
     })));
 }
 
+const LIVE_LINES = 14; // lines of a running command's output shown under its card
+
+/** The last lines of a running command's output, or "" when the tool isn't streaming any. */
+function liveTail(p) {
+  const out = p.state?.metadata?.live ? toolText(p.state.content) : "";
+  return out ? out.replace(/\s+$/, "").split("\n").slice(-LIVE_LINES).join("\n") : "";
+}
+
 function renderTool(p, openSet, thread) {
   const name = (p.name || "tool").toLowerCase();
   if (name === "subagent" && hooks.delegation) return hooks.delegation(p, { thread, open: openSet });
@@ -474,8 +482,11 @@ function renderTool(p, openSet, thread) {
   // Browser screenshots stay visible under the card's header; click one to see it full size.
   const shots = (p.state?.content || []).filter((c) => c.type === "image" && c.uri);
   const gallery = shots.length ? el("div.tool-shots", shots.map((c) => el("img.tool-shot", { src: c.uri, alt: "Browser screenshot", loading: "lazy", on: { click: () => viewImage(c.uri) } }))) : null;
+  // A running command shows its latest output under the header as it arrives, no click needed.
+  const tail = live ? liveTail(p) : "";
+  const liveOut = tail ? el("div.tool-live", el("pre.tool-live-pre", tail)) : null;
   // Native .append stringifies null ("null" text node), so leave the gallery out when there is none.
-  card.append(head, ...(gallery ? [gallery] : []), el("div.tool-body", el("div", sections)));
+  card.append(head, ...(liveOut ? [liveOut] : []), ...(gallery ? [gallery] : []), el("div.tool-body", el("div", sections)));
   return card;
 }
 
@@ -609,6 +620,13 @@ export class ChatView {
     if (!m || !node) return false;
     for (const p of m.content) {
       if (p.type === "tool") {
+        if (p.state?.status === "running" && p.state.metadata?.live) {
+          const pre = node.querySelector(`[data-tool="${p.id}"] .tool-live-pre`);
+          if (!pre) return false; // the first output: draw the card with its live box
+          const tail = liveTail(p);
+          if (pre.textContent !== tail) pre.textContent = tail;
+          continue;
+        }
         if (p.state?.status !== "streaming") continue;
         const pre = node.querySelector(`[data-tool="${p.id}"] .tool-pre`);
         if (!pre) return false;

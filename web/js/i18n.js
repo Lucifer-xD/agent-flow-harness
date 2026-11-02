@@ -133,7 +133,7 @@ const AR = {
   "Summarise older messages now to free up context": "لخّص الرسائل القديمة الآن لتوفير مساحة في السياق",
   "Set this model's price in Settings → Usage & cost to track spending.": "حدّد سعر هذا النموذج في الإعدادات ← الاستخدام والتكلفة لتتبع الإنفاق.",
   "No file changes in this thread yet.": "لا توجد تغييرات على الملفات في هذه المحادثة بعد.", "What the model is told": "ما يُقال للنموذج", "Close": "إغلاق",
-  "When the model writes or edits a file, it appears here as it happens.": "عندما يكتب النموذج ملفًا أو يعدّله يظهر هنا لحظة بلحظة.", "follow": "متابعة",
+  "When the model writes or edits a file, or runs a command, it appears here as it happens.": "عندما يكتب النموذج ملفًا أو يعدّله أو يشغّل أمرًا يظهر هنا لحظة بلحظة.", "Running a command": "يشغّل أمرًا", "Ran a command": "شغّل أمرًا", "Waiting for the first output…": "بانتظار أول مخرجات…", "(no output)": "(لا مخرجات)", "follow": "متابعة",
   "Loading the file…": "جارٍ تحميل الملف…", "Waiting for the file path…": "بانتظار مسار الملف…", "Waiting for the text to replace…": "بانتظار النص المراد استبداله…",
   "Locating the text to replace…": "جارٍ تحديد النص المراد استبداله…", "Preparing the file…": "جارٍ تحضير الملف…", "done": "تم", "live": "مباشر",
   "The text to replace isn't in this copy of the file (it may have changed).": "النص المراد استبداله غير موجود في هذه النسخة من الملف (ربما تغيّر).",
