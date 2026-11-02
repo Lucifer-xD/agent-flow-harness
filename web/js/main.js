@@ -1,5 +1,6 @@
 import { BASE, api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
-import { browserHandBack, initBrowser, syncBrowserRuns, toggleBrowser } from "./browser.js";
+import { browserHandBack, initBrowser, openBrowserTab, syncBrowserRuns, toggleBrowser } from "./browser.js";
+import { designHooks } from "./design.js";
 import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread, viewImage } from "./chat.js";
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
 import { PRESETS, applyAppearance as applyTheme, themeTransition } from "./appearance.js";
@@ -864,6 +865,7 @@ function wireBrowser() {
     onToggle: (open) => $("btn-browser").classList.toggle("on", open),
   });
   if (!on) return;
+  designHooks.openInBrowser = openBrowserTab;
   $("btn-browser").hidden = false;
   $("btn-browser").addEventListener("click", () => toggleBrowser());
   document.addEventListener("keydown", (e) => {

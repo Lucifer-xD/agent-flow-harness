@@ -24,6 +24,8 @@ from . import prompt as promptmod
 from . import state as statemod
 from . import worktree as wtmod
 from .install import HarnessTool
+from .design import DesignTool
+from .design import prompt_section as design_prompt
 from .questions import QuestionTool
 from .jobs import JobManager, JobsTool
 from .runner import Run, to_chat
@@ -384,7 +386,10 @@ class Engine:
             extra += "\n\n" + goal_text
         mem_project = session.get("project") or directory
         extra += "\n\n" + memmod.prompt_section(mem_project, self.read_memory(mem_project))
-        wt = self._afh(session["id"]).get("worktree")
+        design_text = design_prompt(mem_project)
+        if design_text:
+            extra += "\n\n" + design_text
+        wt =self._afh(session["id"]).get("worktree")
         if wt:
             extra = (extra + "\n\n" if extra else "") + (
                 f"# Worktree\n\nThis thread works in its own git worktree (a separate copy of the repository) on branch `{wt['branch']}`, "
@@ -411,6 +416,7 @@ class Engine:
         if agent.kind != "delegate":  # goals belong to the thread the user talks to
             tools.append(statemod.GoalTool(self))
             tools.append(QuestionTool())  # delegates report to their lead instead of asking the user
+            tools.append(DesignTool())
         skills = self.skills_for(session["location"]["directory"])
         if skills:
             tools.append(SkillTool(skills))

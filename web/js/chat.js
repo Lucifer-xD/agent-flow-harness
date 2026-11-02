@@ -2,6 +2,7 @@
 // so a single renderer draws both.
 
 import { api } from "./api.js";
+import { designCard, renderDesignTool } from "./design.js";
 import { el, ico, icon, markdown, diffView, patchFromStrings, copyText, fmtDur, fmtTokens, basename, toast } from "./ui.js";
 
 // ---- state ----------------------------------------------------------------------
@@ -301,6 +302,7 @@ export function describeTool(p) {
   if (/web|fetch|browse/.test(name)) return { icon: "globe", label: name === "websearch" ? "Search web" : "Fetch", target: pick(input, "url", "query") || "" };
   if (/task|agent/.test(name)) return { icon: "bot", label: "Subagent", target: pick(input, "description", "prompt") || "" };
   if (name === "question") return { icon: "info", label: "Asked", target: pick((input.questions || [])[0] || {}, "question") || "" };
+  if (name === "design") return { icon: "sparkle", label: "Design", target: input.title || "" };
   if (/todo/.test(name)) return { icon: "list", label: "Plan", target: "" };
   if (name === "memory") return { icon: "book", label: "Memory", target: pick(input, "text", "old") || "" };
   if (name === "harness") return { icon: "plug", label: (HARNESS_VERBS[input.action] || ["Harness"])[0], target: pick(input, "source", "name", "id", "url") || "" };
@@ -347,7 +349,7 @@ const VERBS = {
   write: ["Wrote", "Writing"], edit: ["Edited", "Editing"], multiedit: ["Edited", "Editing"], patch: ["Patched", "Patching"], apply_patch: ["Patched", "Patching"],
   shell: ["Ran", "Running"], bash: ["Ran", "Running"], execute: ["Ran code", "Running code"], read: ["Read", "Reading"], glob: ["Found files", "Finding files"],
   grep: ["Searched", "Searching"], list: ["Listed", "Listing"], ls: ["Listed", "Listing"], webfetch: ["Fetched", "Fetching"], websearch: ["Searched the web", "Searching the web"],
-  skill: ["Loaded skill", "Loading skill"], question: ["Asked", "Asking"], todowrite: ["Planned", "Planning"], todoread: ["Checked plan", "Checking plan"],
+  skill: ["Loaded skill", "Loading skill"], question: ["Asked", "Asking"], design: ["Showed design options", "Preparing design options"], todowrite: ["Planned", "Planning"], todoread: ["Checked plan", "Checking plan"],
   memory: ["Updated project memory", "Updating project memory"],
 };
 const MEMORY_VERBS = { add: ["Remembered", "Remembering"], remove: ["Forgot", "Forgetting"], replace: ["Corrected memory", "Correcting memory"], list: ["Checked memory", "Checking memory"] };
@@ -433,6 +435,7 @@ function renderTool(p, openSet, thread) {
   if (name === "todo") return renderTodoTool(p, openSet);
   if (name === "goal") { const g = renderGoalTool(p, openSet); if (g) return g; }
   if (name === "question") { const q = renderQuestionTool(p); if (q) return q; }
+  if (name === "design") { const d = renderDesignTool(p); if (d) return d; }
   const info = describeTool(p);
   const status = p.state?.status || "streaming";
   const live = status === "streaming" || status === "running";
@@ -440,6 +443,8 @@ function renderTool(p, openSet, thread) {
   const input0 = typeof p.state?.input === "object" ? p.state.input : {};
   const BROWSER = { open: ["Opened in browser", "Opening in browser"], screenshot: ["Took a screenshot", "Taking a screenshot"], text: ["Read the page", "Reading the page"],
     click: ["Clicked", "Clicking"], type: ["Typed into", "Typing into"], press: ["Pressed", "Pressing"], scroll: ["Scrolled", "Scrolling"],
+    double_click: ["Double-clicked", "Double-clicking"], hover: ["Pointed at", "Pointing at"], drag: ["Dragged", "Dragging"],
+    back: ["Went back", "Going back"], forward: ["Went forward", "Going forward"], reload: ["Reloaded", "Reloading"],
     evaluate: ["Ran JavaScript", "Running JavaScript"], console: ["Read the console", "Reading the console"], close: ["Closed the browser tab", "Closing the browser tab"] };
   const COMPUTER = { screenshot: ["Looked at the screen", "Looking at the screen"], zoom: ["Looked closer", "Looking closer"], apps: ["Listed apps", "Listing apps"],
     request_access: ["Asked to use apps", "Asking to use apps"], launch: ["Opened an app", "Opening an app"], focus: ["Switched app", "Switching app"],
@@ -905,6 +910,7 @@ export function errorCard(err, { model, onRetry, onChangeModel } = {}) {
 /** An approval request for session `sid`; `onDone(id)` runs after the reply is accepted. */
 export function permissionCard(p, sid, onDone) {
   if (p.action === "question" && Array.isArray(p.metadata?.questions)) return questionCard(p, sid, onDone);
+  if (p.action === "design" && p.metadata?.design) return designCard(p, sid, onDone);
   if (p.action === "computer" && p.metadata?.kind === "computer") return computerCard(p, sid, onDone);
   const action = p.action || "tool";
   const title = p.metadata?.title || (action === "edit" ? "Allow file changes?" : action === "shell" ? "Run this command?" : `Allow ${action}?`);

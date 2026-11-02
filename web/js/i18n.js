@@ -241,6 +241,16 @@ const AR = {
   "Voice": "الصوت", "Speech-to-text provider": "مزوّد تحويل الكلام إلى نص", "Language": "اللغة", "Compact the conversation at": "اضغط المحادثة عند",
   "Speak — your words are typed here": "تحدّث — تُكتب كلماتك هنا", "Stop and transcribe": "أوقف وحوّل إلى نص", "Didn't catch any words — try again": "لم تُلتقط أي كلمات — حاول مجددًا",
   "Scheduled job started": "بدأت مهمة مجدولة",
+  // 1.16: design first
+  "Choose a design": "اختر تصميمًا", "Compare": "قارن", "Skip": "تخطَّ", "New options": "خيارات جديدة", "Full size": "الحجم الكامل", "View all": "عرض الكل",
+  "Open in browser": "افتح في المتصفح", "Open full size": "افتح بالحجم الكامل", "Design": "التصميم", "Design options — skipped": "خيارات التصميم — تم التخطي",
+  "Asked for new design options": "طُلبت خيارات تصميم جديدة", "Showed design options": "عرض خيارات التصميم", "Preparing design options": "جارٍ تجهيز خيارات التصميم",
+  "Phone": "هاتف", "Tablet": "جهاز لوحي", "Desktop": "سطح المكتب", "Laptop": "حاسوب محمول", "App window": "نافذة تطبيق", "Watch": "ساعة", "TV": "تلفاز",
+  "This mockup file is gone": "ملف هذا النموذج لم يعد موجودًا", "Close (Esc)": "إغلاق (Esc)",
+  "Close without choosing; the agent goes with the option it thinks fits best": "أغلق دون اختيار؛ يختار الوكيل الخيار الأنسب برأيه",
+  "None of these: the agent makes new options (say what to change in the notes)": "لا شيء منها: يصنع الوكيل خيارات جديدة (اكتب ما تريد تغييره في الملاحظات)",
+  "The same screen in every option, side by side": "الشاشة نفسها في كل خيار، جنبًا إلى جنب", "Open this mockup in the browser panel": "افتح هذا النموذج في لوحة المتصفح",
+  "Notes or a mix, e.g. \"A's colours with B's layout, bigger buttons\"": "ملاحظات أو مزيج، مثل \"ألوان A مع تخطيط B، وأزرار أكبر\"",
 };
 
 // Text with numbers or names in it.
@@ -251,10 +261,12 @@ const AR_PATTERNS = [
   [/^([\d.]+[kM]?) tokens$/, "$1 رمز"], [/^(\d+) problems?$/, "$1 مشكلة"], [/^(\d+) hooks?$/, "$1 خطاف"], [/^(\d+) tool calls?$/, "$1 استدعاء أداة"], [/^(\d+) files?$/, "$1 ملف"],
   [/^Done when: (.+)$/, "يكتمل عندما: $1"], [/^(\d+) in this thread$/, "$1 في هذه المحادثة"], [/^(\d+) working · (\d+) in this thread$/, "$1 يعمل · $2 في هذه المحادثة"],
   [/^Merge into (.+)$/, "ادمج في $1"], [/^Merged into (.+)$/, "دُمج في $1"], [/^(\d+) configured$/, "$1 مُعدّ"], [/^Edit (.+)$/, "تعديل $1"],
+  [/^Choose ([A-D])$/, "اختر $1"], [/^Choose ([A-D]) with notes$/, "اختر $1 مع الملاحظات"], [/^Option ([A-D])$/, "الخيار $1"],
+  [/^Design ([A-D]) chosen: (.+)$/, "اختير التصميم $1: $2"], [/^(.+) — click a screen to see it full size and try it$/, "$1 — انقر على شاشة لتراها بالحجم الكامل وتجرّبها"],
   [/^Summarising (\d+) older messages in (\d+) parts… (\d+)\/(\d+)$/, "جارٍ تلخيص $1 رسالة قديمة على $2 أجزاء… $3/$4"], [/^#(\d+)$/, "#$1"],
 ];
 
-const EXCLUDE = ".md, .bubble, pre, code, textarea, input, .think-text, .compact-text, .rail-text, .th-title, .tb-title h1, .todo-text, .plan-item, .goal-text, .goal-sub, .goal-card-text, .deleg-sub, .deleg-brief-text, .sub-desc, .sub-text, .job-cmd, .job-tail, .job-full, .live-code, .live-head .path, .diff, .h-pre, .tool-pre, .tool-target, .deleg-last, .err-msg, .slash-desc, .slash-name, .cmd-chip, .file-chip, .tb-path, .wt-path, .li-sub, .pi-sub, .deleg-model, .model, .bw-name, .bw-msg small";
+const EXCLUDE = ".md, .bubble, pre, code, textarea, input, .think-text, .compact-text, .rail-text, .th-title, .tb-title h1, .todo-text, .plan-item, .goal-text, .goal-sub, .goal-card-text, .deleg-sub, .deleg-brief-text, .sub-desc, .sub-text, .job-cmd, .job-tail, .job-full, .live-code, .live-head .path, .diff, .h-pre, .tool-pre, .tool-target, .deleg-last, .err-msg, .slash-desc, .slash-name, .cmd-chip, .file-chip, .tb-path, .wt-path, .li-sub, .pi-sub, .deleg-model, .model, .bw-name, .bw-msg small, .d-name, .d-chip, .d-summary, .d-recap-note, .d-recap-sub, .dv-url, .dview-cap, .d-shot figcaption b, .d-col figcaption b";
 const ATTRS = ["title", "placeholder", "aria-label"];
 
 const originals = new WeakMap(); // text node -> English text it replaced

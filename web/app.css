@@ -2079,3 +2079,97 @@ body.resizing-browser webview { pointer-events: none; }
   .browser-pane.open { position: fixed; inset: 0; z-index: 30; width: auto; max-width: none; }
   body.electron .browser-pane.open { top: 38px; }
 }
+
+/* ==== design first: options A/B/C as live mockups in device frames (web/js/design.js) ==== */
+.dv { --bezel: #0d0d0f; --bezel-edge: #2a2a2e; display: inline-flex; flex-direction: column; flex: none; position: relative; background: var(--bezel);
+  border: 1px solid var(--bezel-edge); box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.7); }
+.dv-screen { position: relative; overflow: hidden; background: #fff; }
+.dv-screen > iframe { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: #fff; display: block; }
+.dv-missing { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; text-align: center;
+  background: var(--panel-2); color: var(--text-3); font-size: 12px; }
+/* phone: rounded bezel; iOS gets the island, Android the punch hole */
+.dv-phone { padding: 6px; border-radius: 30px; }
+.dv-phone .dv-screen { border-radius: 24px; }
+.dv-phone::after { content: ""; position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 28%; max-width: 92px; height: 9px; border-radius: 9px; background: #000; z-index: 2; pointer-events: none; }
+.dv-phone.dv-android::after { width: 6px; height: 6px; top: 10px; }
+.dv-phone.live { padding: 11px; border-radius: 52px; }
+.dv-phone.live .dv-screen { border-radius: 42px; }
+.dv-phone.live::after { top: 22px; height: 26px; max-width: 120px; border-radius: 20px; }
+.dv-phone.live.dv-android::after { width: 13px; height: 13px; top: 19px; }
+.dv-tablet { padding: 9px; border-radius: 22px; }
+.dv-tablet .dv-screen { border-radius: 13px; }
+.dv-tablet.live { padding: 16px; border-radius: 34px; }
+.dv-tablet.live .dv-screen { border-radius: 18px; }
+.dv-watch { padding: 9px; border-radius: 38px; --bezel: #18181b; }
+.dv-watch .dv-screen { border-radius: 30px; background: #000; }
+.dv-watch.dv-android { border-radius: 50%; }
+.dv-watch.dv-android .dv-screen { border-radius: 50%; }
+/* desktop and laptop: a browser window; laptop adds the base */
+.dv-desktop, .dv-laptop { --bezel: var(--panel-3); --bezel-edge: var(--line-2); border-radius: 9px; overflow: hidden; }
+.dv-bar { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; flex: none; }
+.dv-bar > i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.dv-bar > i:nth-child(1) { background: #ff5f57; }
+.dv-bar > i:nth-child(2) { background: #febc2e; }
+.dv-bar > i:nth-child(3) { background: #28c840; }
+.dv-url { flex: 1; min-width: 0; margin-inline-start: 6px; height: 14px; line-height: 14px; padding: 0 8px; border-radius: 5px; background: var(--panel); color: var(--text-3); font-size: 9.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.dv-desktop.live .dv-bar, .dv-laptop.live .dv-bar { height: 34px; gap: 7px; padding: 0 14px; }
+.dv-desktop.live .dv-bar > i, .dv-laptop.live .dv-bar > i { width: 11px; height: 11px; }
+.dv-desktop.live .dv-url, .dv-laptop.live .dv-url { height: 22px; line-height: 22px; font-size: 12px; max-width: 420px; margin-inline: auto; }
+.dv-laptop { overflow: visible; border-radius: 9px 9px 0 0; margin-bottom: 9px; }
+.dv-laptop .dv-screen, .dv-laptop .dv-bar { border-radius: 9px 9px 0 0; }
+.dv-laptop::after { content: ""; position: absolute; left: -7%; right: -7%; bottom: -10px; height: 9px; border-radius: 0 0 10px 10px; background: linear-gradient(var(--panel-3), color-mix(in srgb, var(--panel-3), #000 25%)); border: 1px solid var(--line-2); border-top: 0; }
+/* app window: the mockup draws its own title bar */
+.dv-window { border-radius: 8px; overflow: hidden; --bezel-edge: var(--line-3); }
+.dv-window.dv-ios { border-radius: 11px; }
+.dv-tv { padding: 5px; border-radius: 6px; margin-bottom: 12px; }
+.dv-tv::after { content: ""; position: absolute; left: 38%; right: 38%; bottom: -12px; height: 12px; background: var(--bezel); border-radius: 0 0 4px 4px; }
+.dv-tv.live { padding: 9px; }
+
+.dcard .approval-head { padding-bottom: 8px; }
+.d-tabs { display: flex; align-items: center; gap: 6px; padding: 0 14px 10px; overflow-x: auto; scrollbar-width: thin; }
+.d-tabs .spacer { flex: 1; }
+.d-tab { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px 0 5px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel);
+  color: var(--text-2); font: inherit; font-size: 12.8px; font-weight: 550; cursor: pointer; flex: none; white-space: nowrap; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+.d-tab:hover { border-color: var(--line-3); color: var(--text); }
+.d-tab.on { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); }
+.d-letter { display: grid; place-items: center; width: 21px; height: 21px; border-radius: 50%; background: var(--panel-3); color: var(--text); font-size: 11.5px; font-weight: 700; flex: none; }
+.d-tab.on .d-letter { background: var(--accent); color: var(--accent-ink); }
+.d-compare { padding: 0 11px; gap: 6px; }
+.d-compare .ico svg { width: 14px; height: 14px; }
+.d-body { padding: 2px 14px 12px; }
+.d-summary { margin: 0 0 12px; color: var(--text-2); font-size: 13px; line-height: 1.55; max-width: 760px; }
+.d-screens { display: flex; align-items: flex-end; gap: 16px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: thin; }
+.d-shot { margin: 0; flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: zoom-in; }
+.d-shot > .dv { transition: transform 0.2s ease, box-shadow 0.2s; }
+.d-shot:hover > .dv { transform: translateY(-3px); box-shadow: 0 0 0 2px var(--accent-line), 0 18px 34px -18px rgba(0, 0, 0, 0.75); }
+.d-shot figcaption { display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 12px; text-align: center; max-width: 100%; }
+.d-shot figcaption b { font-weight: 600; color: var(--text); }
+.d-shot figcaption span { color: var(--text-3); font-size: 11px; }
+.d-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.d-chip { height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line-2); background: transparent; color: var(--text-2); font: inherit; font-size: 12px; cursor: pointer; }
+.d-chip:hover { color: var(--text); border-color: var(--line-3); }
+.d-chip.on { background: var(--panel-3); color: var(--text); border-color: var(--line-3); }
+.d-compare-row { display: flex; gap: 14px; overflow-x: auto; align-items: stretch; padding: 2px 2px 8px; }
+.d-col { padding: 12px 12px 10px; border-radius: 12px; border: 1px solid var(--line); cursor: pointer; justify-content: flex-end; }
+.d-col:hover { border-color: var(--line-3); }
+.d-col.picked { border-color: var(--accent-line); background: var(--accent-soft); box-shadow: var(--ring); }
+.d-col figcaption { flex-direction: row; gap: 8px; align-items: center; }
+.d-notes-row { padding: 0 14px 12px; }
+.d-notes { margin-top: 0; }
+
+.d-recap .q-recap-head { flex-wrap: wrap; }
+.d-recap-sub { color: var(--text-3); font-weight: 400; font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-recap-note { padding: 8px 12px 0; color: var(--text-2); font-size: 12.8px; font-style: italic; }
+.d-recap .d-screens { padding: 10px 12px 12px; gap: 12px; }
+
+.dview { position: fixed; inset: 0; z-index: 45; display: grid; grid-template-rows: auto minmax(0, 1fr); background: color-mix(in srgb, var(--bg) 84%, #000); backdrop-filter: blur(8px); animation: fade 0.2s both; }
+.dview-top { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--bg-side); flex-wrap: wrap; }
+.dview-top .spacer { flex: 1; }
+.dview-tabs { display: flex; gap: 6px; }
+.dview-top .d-chips { margin: 0; }
+.dview-stage { min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px 24px 14px; overflow: hidden; }
+.dview-cap { color: var(--text-3); font-size: 12px; text-align: center; }
+:root[data-theme="light"] .dv-phone, :root[data-theme="light"] .dv-tablet, :root[data-theme="light"] .dv-watch { --bezel: #1b1b1f; --bezel-edge: #3a3a40; }
+:root[data-theme="light"] .dview { background: color-mix(in srgb, var(--bg) 92%, #3a2a1a); }
+body.electron .dview { top: 38px; }
