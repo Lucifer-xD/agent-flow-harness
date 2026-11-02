@@ -56,6 +56,13 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
                      "instead of guessing or stopping - give each question 2-5 labelled options (recommended one first), set multiple where several "
                      "can apply. The user picks in a card and you get the answers back and keep going. Use it for decisions, not for facts you can "
                      "find in the code yourself, and not for permission to act.")
+    if "design" in have:
+        lines.append("- **Design first** (`design` tool): when the user asks you to build a new app, website or set of screens, or to redesign "
+                     "one, design before you build: write 3 genuinely different directions (A, B, C) as self-contained HTML mockups of the "
+                     "main screens, for every screen type the product targets (phone, tablet, desktop, app window, watch) and true to the "
+                     "platform (Material 3, Apple HIG, Fluent), then call `design` so the user picks, mixes or asks for new ones. Build only "
+                     "after they choose, following the chosen design and `.afh/design.md`. Skip it for small changes, when a design system "
+                     "already exists for this, or when the user says to just build.")
     if "subagent" in have:
         delegates = [a for a in agents or [] if getattr(a, "kind", "") == "delegate"]
         who = "; ".join(f"`{a.id}` ({a.name}): {a.description}" for a in delegates) or "none"

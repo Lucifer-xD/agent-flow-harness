@@ -35,6 +35,12 @@ export function toggleBrowser(force) {
   if (open && !B.tabs.length) newTab(HOME, { focus: true });
 }
 
+/** Opens a URL in a new tab of the panel (for "Open in browser" on design mockups and the like). */
+export function openBrowserTab(url) {
+  toggleBrowser(true);
+  select(newTab(url));
+}
+
 /** The agent's bar follows its thread's run: call when a run starts or ends. */
 export function syncBrowserRuns() {
   for (const t of B.tabs) if (t.sid) drawAgent(t);

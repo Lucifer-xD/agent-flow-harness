@@ -377,6 +377,17 @@ def image(path: str):
     return FileResponse(p, media_type=mime)
 
 
+@app.get("/api/design/file")
+def design_file(path: str):
+    """A design mockup for the picker card: only HTML under a project's .afh/designs folder."""
+    p = Path(path).resolve()
+    parts = [x.lower() for x in p.parts]
+    inside = any(parts[i] == ".afh" and parts[i + 1] == "designs" for i in range(len(parts) - 2))
+    if p.suffix.lower() not in (".html", ".htm") or not inside or not p.is_file() or p.stat().st_size > 3 * 1024 * 1024:
+        raise KeyError(path)
+    return {"html": p.read_text(encoding="utf-8", errors="replace")}
+
+
 @app.post("/api/transcribe")
 async def transcribe(request: Request):
     """Speech to text for the mic button, through a Whisper-style endpoint of a provider you set up."""
