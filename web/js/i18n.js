@@ -73,7 +73,7 @@ const AR = {
   "This thread works in its own git worktree": "هذه المحادثة تعمل في نسخة git خاصة بها", "Drag to make the chat wider or narrower · double-click to reset": "اسحب لتوسيع المحادثة أو تضييقها · انقر مرتين للإعادة",
   "Your messages": "رسائلك", "Chat width reset": "تمت إعادة عرض المحادثة",
   // home
-  "What are we building?": "ماذا سنبني؟", "Welcome to Agent Flow Harness": "مرحبًا بك في Agent Flow Harness",
+  "What are we building?": "ماذا سنبني؟", "Working in": "نعمل في", "Welcome to Agent Flow Harness": "مرحبًا بك في Agent Flow Harness",
   "Open a project folder and AFH will read, edit and run code there with any model you choose.": "افتح مجلد مشروع وسيقرأ AFH الكود ويعدّله ويشغّله فيه بأي نموذج تختاره.",
   "Explain this codebase": "اشرح هذا المشروع", "Give me a tour of the architecture and the main entry points.": "خذني في جولة على بنية المشروع ونقاط الدخول الرئيسية.",
   "Find and fix a bug": "اعثر على خطأ وأصلحه", "Run the tests, find what's failing, and fix it.": "شغّل الاختبارات، واعرف ما يفشل، وأصلحه.",

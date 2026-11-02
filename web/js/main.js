@@ -574,23 +574,26 @@ function showHome() {
   const root = $("messages");
   view.thread = null;
   root.replaceChildren();
+  renderRail();
+  $("jump").hidden = true;
   if (!project()) {
-    root.append(el("div.hero.no-project", logoNode({ size: 150 }), el("h2", "Welcome to Agent Flow Harness"),
+    root.append(el("div.hero.no-project", logoNode({ size: 112 }), el("h2", "Welcome to Agent Flow Harness"),
       el("p", "Open a project folder and AFH will read, edit and run code there with any model you choose."),
       el("button.btn.primary", { on: { click: chooseFolder } }, ico("folder-plus"), "Open a folder")));
     return;
   }
   const name = S.settings.personalization?.name;
   const ideas = [
-    ["Explain this codebase", "Give me a tour of the architecture and the main entry points."],
-    ["Find and fix a bug", "Run the tests, find what's failing, and fix it."],
-    ["Write tests", "Add tests for the parts of this project that have none."],
-    ["Review my changes", "Review the uncommitted changes and point out problems."],
+    ["book", "Explain this codebase", "Give me a tour of the architecture and the main entry points."],
+    ["bug", "Find and fix a bug", "Run the tests, find what's failing, and fix it."],
+    ["checklist", "Write tests", "Add tests for the parts of this project that have none."],
+    ["diff", "Review my changes", "Review the uncommitted changes and point out problems."],
   ];
-  root.append(el("div.hero", logoNode({ size: 150, working: true }),
+  root.append(el("div.hero", logoNode({ size: 112, working: true }),
     el("h2", name ? `What are we building, ${name}?` : "What are we building?"),
-    el("p", el("span", "in "), el("b", basename(project()))),
-    el("div.suggest", ideas.map(([title, text]) => el("button", { type: "button", on: { click: () => { setInput(text); $("input").focus(); } } }, el("b", title), text)))));
+    el("p", el("span", "Working in"), el("span.hero-proj", ico("folder"), basename(project()))),
+    el("div.suggest", ideas.map(([icon, title, text]) => el("button", { type: "button", on: { click: () => { setInput(text); $("input").focus(); } } },
+      el("span.sg-ico", ico(icon)), el("b", title), el("span", text))))));
 }
 
 async function deleteThread(id) {
