@@ -14,7 +14,7 @@ $ssh = @("-o", "BatchMode=yes", "-o", "ConnectTimeout=15")
 
 $tmp = Join-Path $env:TEMP "afh-relay.tgz"
 Write-Host "==> Packing relay"
-& (Join-Path $env:SystemRoot "System32\tar.exe") -czf $tmp --exclude "__pycache__" -C (Join-Path $root "relay") app.py requirements.txt static
+& (Join-Path $env:SystemRoot "System32\tar.exe") -czf $tmp --exclude "__pycache__" -C (Join-Path $root "relay") app.py analytics.py requirements.txt static
 if ($LASTEXITCODE -ne 0) { throw "tar failed" }
 
 Write-Host "==> Uploading"
