@@ -82,6 +82,15 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
         lines.append("- **Browser** (`browser` tool): a real Chrome/Edge tab for this thread. After building or changing anything with a UI, open it "
                      "(start the dev server as a background job first), look at the screenshot, click through the change and read `console` for errors "
                      "before you call it done.")
+    if "computer" in have:
+        lines.append("- **Computer** (`computer` tool): see the screen and use the mouse and keyboard in desktop apps, for tasks with no "
+                     "file, shell or web path. Prefer `edit`/`shell` for code and `browser` for the web; reach for `computer` only for GUI-only "
+                     "work (a native app, a settings screen, a tool with no API). Ask for every app the task needs at once with `request_access` "
+                     "(the user approves each app once). Screenshot, read it, act on x,y from that image; use `batch` when you can predict "
+                     "several steps, `zoom` to read small text, and set `intent` to a few words so the user sees what each move does. When the "
+                     "user asks HOW to do something, teach instead of doing it: `teach` one step at a time (text + x,y pointing at the control), "
+                     "and wait for them to click Next. Never change the user's own open documents or tabs unless they asked: start a new "
+                     "document (ctrl+n) for your own work. The user stops you with Esc.")
     if "harness" in have:
         lines.append("- **Extending AFH** (`harness` tool): when the user asks to install, add or remove a skill, an MCP server, a slash command, a hook "
                      "or a custom agent - a GitHub link, a repo, an npm/pip package, a URL - do it with `harness`, never by cloning into folders or "

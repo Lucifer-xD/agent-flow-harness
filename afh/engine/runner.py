@@ -274,6 +274,8 @@ class Run:
         finally:
             store.touch(self.sid, idle=True)
             e.runs.pop(self.sid, None)
+            if getattr(e, "_computer", None):
+                e._computer.clear(self.sid)  # hide the computer-use overlay the moment the run ends
             for req in [r for r in e.pending.values() if r.session_id == self.sid]:
                 req.reply("reject", "The run ended")
         if not failed:
@@ -458,7 +460,7 @@ class Run:
             else:
                 ctx = ToolContext(session_id=self.sid, message_id=msg["id"], directory=directory, permissions=gate,
                                   snapshots=self.engine.snapshots_for(self.sid, msg["id"]), emit=lambda t, d: self.emit(t, assistantMessageID=msg["id"], id=call.id, **d),
-                                  settings=settings, read_only=self.engine.is_read_only(self.session, agent), jobs=self.engine.jobs)
+                                  settings=settings, read_only=self.engine.is_read_only(self.session, agent), jobs=self.engine.jobs, engine=self.engine)
                 try:
                     result = await tool.run(ctx, call.input)
                 except PermissionDenied as err:

@@ -21,6 +21,54 @@ function select(options, value, onChange, width = "220px") {
   return el("select.sel", { style: { width }, on: { change: (e) => onChange(e.target.value) } }, options.map(([v, l]) => el("option", { value: v, selected: v === value }, l)));
 }
 
+// ---- Computer control -----------------------------------------------------------------------
+
+const TIER_LABEL = { full: "full control", click: "click only", read: "view only" };
+
+async function computerCard(pane, ctx, save) {
+  const c = ctx.S.settings.computer || {};
+  const body = el("div.comp-apps");
+  const wrap = card("Computer control",
+    "Lets the agent see the screen and use the mouse and keyboard in desktop apps — for things with no file, shell or web path — or teach you how to do something, one on-screen tooltip at a time. You approve each app the first time; press Esc any time to stop. Web browsers are view-only here (the agent has its own Browser tool), and terminals and code editors are click-only.",
+    null,
+    row("Let the agent use the computer", "Adds the computer tool (Windows). The agent still needs your approval for each app", toggle(c.enabled !== false, (v) => { save({ computer: { enabled: v } }); setTimeout(() => refresh(), 150); })),
+    row("Let it control web browsers too", "Off by default — browsers stay view-only, since the agent has a dedicated Browser tool for the web", toggle(!!c.browserControl, (v) => save({ computer: { browserControl: v } }))),
+    row("Step aside while it works", "Minimize AFH's window during a computer task so the agent sees your apps, and bring it back after", toggle(c.hideWindow !== false, (v) => save({ computer: { hideWindow: v } }))),
+    row("Show AFH's cursor and effects", "The on-screen cursor, click ripples, keycaps and screenshot flashes (the glowing edge and Stop button always show)", toggle(c.effects !== false, (v) => save({ computer: { effects: v } }))),
+    el("div.comp-head", el("b", "Always-allowed apps"), el("span.comp-sub", "Apps the agent can use without asking again. Open apps are listed so you can pre-approve them.")),
+    body);
+  pane.append(wrap);
+
+  async function refresh() {
+    body.replaceChildren(el("div.comp-loading", "Loading apps…"));
+    let data;
+    try { data = await api.get("/api/computer/apps"); } catch { body.replaceChildren(el("div.comp-empty", "Couldn't load apps.")); return; }
+    if (!data.supported) { body.replaceChildren(el("div.comp-empty", "Computer control works on Windows only.")); return; }
+    const allowed = data.allowed || [];
+    const allowedIds = new Set(allowed.map((a) => a.id));
+    const running = (data.running || []).filter((a) => !allowedIds.has(a.id));
+    const rows = [];
+    for (const a of allowed) rows.push(appRow(a, true));
+    if (running.length) {
+      rows.push(el("div.comp-group", "Open now"));
+      for (const a of running) rows.push(appRow(a, false));
+    }
+    if (!rows.length) rows.push(el("div.comp-empty", "No apps approved yet, and nothing controllable is open."));
+    body.replaceChildren(...rows);
+  }
+
+  function appRow(a, isAllowed) {
+    const tier = el("span.comp-tier", TIER_LABEL[a.tier] || a.tier || "full control");
+    const action = isAllowed
+      ? el("button.btn.ghost.sm", { on: { click: async () => { await api.post("/api/computer/forget", { id: a.id }); refresh(); } } }, "Remove")
+      : el("button.btn.sm", { on: { click: async () => { await api.post("/api/computer/allow", { app: a }); refresh(); } } }, "Always allow");
+    return el("div.comp-row", el("span.comp-name", a.name || a.id), tier, el("span.spacer"), action);
+  }
+
+  ctx.onComputerAppsChanged = refresh;
+  await refresh();
+}
+
 // ---- Agent ----------------------------------------------------------------------------------
 
 export async function agentPane(pane, ctx) {
@@ -42,6 +90,8 @@ export async function agentPane(pane, ctx) {
     row("Let the agent use a browser", "Adds the browser tool. Screenshots go to models that accept images", toggle(br.enabled !== false, (v) => save({ browser: { enabled: v } }))),
     row("Show the browser window", "Watch it work instead of running it hidden (headless). Takes effect on its next start", toggle(!!br.visible, (v) => save({ browser: { visible: v } }))),
     row("Browser program", "Only if you want a specific Chrome/Edge/Chromium", brPath)));
+
+  if (WIN) await computerCard(pane, ctx, save);
 
   const vo = s.voice || {};
   const names = ctx.S.providerNames || {};
