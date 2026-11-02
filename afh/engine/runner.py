@@ -176,6 +176,8 @@ class Run:
         self.task: asyncio.Task | None = None
         self.stop_rounds = 0  # stop hooks that sent the agent back to work
         self.todo_nudged = False
+        self.work_steps = 0  # steps that ran tools other than todo/goal
+        self.goal_nudge_at: int | None = None  # work_steps when autopilot last sent the agent back
         self.step_files: list[tuple[str, str]] = []  # (tool call id, absolute path) changed in this step
         self.msg: dict | None = None  # the step being answered, as streamed so far
 
@@ -246,6 +248,8 @@ class Run:
                         continue
                     break
                 self.step_files = []
+                if any(c.name not in ("todo", "goal") for c in tool_calls):
+                    self.work_steps += 1
                 await self._run_tools(tool_calls, msg, tools, gate, agent)
                 await self._diagnose(msg)
                 store.save_message(self.sid, msg)

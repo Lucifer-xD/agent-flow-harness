@@ -98,7 +98,7 @@ function goalRow(t, goal, opts) {
   const label = (st === "achieved" ? "Goal achieved" : st === "blocked" ? "Goal blocked" : st === "paused" ? "Goal paused" : "Goal") + (goal.by === "agent" ? " · set by the agent" : goal.by === "auto" ? " · from your request" : "");
   const chip = auto
     ? el("button.goal-chip.auto", { type: "button", title: "Autopilot keeps the agent working until it reports the goal achieved or blocked. Click to turn it off.", on: { click: () => patchGoal(t, { autopilot: false }, "Autopilot off") } },
-      el("span.pulse-dot"), goal.exhausted ? "Autopilot paused" : `Autopilot ${goal.turns || 0}/${goal.maxTurns || 10}`)
+      el("span.pulse-dot"), goal.exhausted ? "Autopilot paused" : `Autopilot ${goal.turns || 0}/${goal.maxTurns || 3}`)
     : st === "active" ? el("button.goal-chip", { type: "button", title: "Turn autopilot on: the agent keeps going until the goal is achieved", on: { click: () => patchGoal(t, { autopilot: true }, "Autopilot on") } }, "Autopilot off")
       : null;
   const last = (goal.progress || []).at(-1);
@@ -234,9 +234,9 @@ export function openGoalDialog(opts = {}) {
   const text = el("textarea.ta", { rows: 3, value: g.text || "", placeholder: "e.g. Users can sign up and log in with email; all tests pass" });
   const criteria = el("textarea.ta", { rows: 2, value: g.criteria || "", placeholder: "Optional: how to check it, e.g. `npm test` passes and the login page works in the browser" });
   let autopilot = g.autopilot !== false;
-  const turns = el("input.inp", { type: "number", min: 1, max: 100, value: g.maxTurns || 10, style: { width: "90px" } });
+  const turns = el("input.inp", { type: "number", min: 1, max: 100, value: g.maxTurns || 3, style: { width: "90px" } });
   const err = el("div", { style: { color: "var(--bad)", fontSize: "12.5px", minHeight: "16px" } });
-  const values = () => ({ text: text.value.trim(), criteria: criteria.value.trim(), autopilot, maxTurns: Math.max(1, Math.min(100, Number(turns.value) || 10)) });
+  const values = () => ({ text: text.value.trim(), criteria: criteria.value.trim(), autopilot, maxTurns: Math.max(1, Math.min(100, Number(turns.value) || 3)) });
   const save = async (start) => {
     const v = values();
     if (!v.text) { err.textContent = "Describe the goal first."; text.focus(); return; }

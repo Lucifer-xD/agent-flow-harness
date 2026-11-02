@@ -24,7 +24,7 @@ _STATUS_ALIASES = {
 MARKS = {"pending": "[ ]", "in_progress": "[>]", "completed": "[x]", "cancelled": "[-]"}
 MAX_TODOS = 50
 GOAL_STATUSES = ("active", "achieved", "blocked", "paused")
-DEFAULT_GOAL_TURNS = 10
+DEFAULT_GOAL_TURNS = 3
 
 
 # ---- to-do list ----------------------------------------------------------------------------
@@ -171,10 +171,10 @@ class TodoTool:
 
     def _auto_goal(self, sid: str, todos: list[dict]) -> dict | None:
         """A multi-step plan without a goal: make the user's request the goal, so the thread always shows
-        what it is working toward. Off with settings.goals.auto = false."""
+        what it is working toward. Off unless settings.goals.auto is true."""
         e = self.engine
         settings = e.settings().get("goals", {})
-        if not settings.get("auto", True) or len(todos) < 3 or e.goal(sid):
+        if not settings.get("auto", False) or len(todos) < 3 or e.goal(sid):
             return None
         request = next((m for m in reversed(e.store.list_messages(sid)) if m.get("type") == "user"), None)
         text = " ".join(((request or {}).get("text") or "").split())
@@ -239,8 +239,9 @@ def continuation_text(goal: dict, todos: list[dict]) -> str:
         parts.append(f"Done when: {goal['criteria']}")
     if left:
         parts.append("Open to-do items:\n" + render_todos(left))
-    parts.append("Continue working toward the goal now. If it is fully done, verify it and call `goal` with status \"achieved\". "
-                 "If you truly cannot continue without the user, call `goal` with status \"blocked\" and explain what you need.")
+    parts.append("Continue working toward the goal now if there is a real next step. If it is fully done, verify it and call `goal` with status "
+                 "\"achieved\". If it is impossible, you need the user, or you already tried and it keeps failing the same way, call `goal` with "
+                 "status \"blocked\" and explain - do not retry the same thing again.")
     return "\n\n".join(parts)
 
 
@@ -249,11 +250,10 @@ class GoalTool:
         name="goal",
         description=(
             "The thread's goal: what done looks like for the whole task. The user sees it above the message box. "
-            "status \"set\": start a goal - do this yourself at the start of any substantial task with a clear end state "
-            "(build a feature, fix the failing tests, make something work), not for questions or one-step changes; give `text` "
-            "(what done looks like) and `criteria` (how to verify it). "
+            "status \"set\": only when the user asks for a goal or tells you to keep working on your own until something is true; "
+            "never for ordinary tasks (use the todo tool for those). Give `text` (what done looks like) and `criteria` (how to verify it). "
             "status \"achieved\": every done-when condition holds and you verified it - give `summary` and `evidence`. "
-            "status \"blocked\": you cannot continue without the user - say exactly what you need in `summary`. "
+            "status \"blocked\": you cannot continue without the user, the goal is impossible, or your attempts keep failing - say why and what you need in `summary`. "
             "status \"progress\": a short milestone note. Never claim achieved for partial or unverified work."
         ),
         parameters={
