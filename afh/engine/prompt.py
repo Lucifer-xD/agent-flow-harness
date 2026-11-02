@@ -80,9 +80,10 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
         lines.append("- **Background jobs**: start servers and watchers with `shell` and `background: true`, then `jobs` to read output, wait for a "
                      "line like \"ready\", and stop them when done.")
     if "browser" in have:
-        lines.append("- **Browser** (`browser` tool): a real Chrome/Edge tab for this thread. After building or changing anything with a UI, open it "
-                     "(start the dev server as a background job first), look at the screenshot, click through the change and read `console` for errors "
-                     "before you call it done.")
+        lines.append("- **Browser** (`browser` tool): a real browser tab for this thread (in the AFH app, a side panel the user watches live and "
+                     "can take over). After building or changing anything with a UI, open it (start the dev server as a background job first), look "
+                     "at the screenshot, click through the change and read `console` for errors before you call it done. Use it for web tasks too. "
+                     "Click by selector or visible text, or at x,y read off the latest screenshot. If the user takes the tab over, stop using it.")
     if "computer" in have:
         lines.append("- **Computer** (`computer` tool): see the screen and use the mouse and keyboard in desktop apps, for tasks with no "
                      "file, shell or web path. Prefer `edit`/`shell` for code and `browser` for the web; reach for `computer` only for GUI-only "

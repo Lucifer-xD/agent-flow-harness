@@ -94,6 +94,11 @@ export function connectEvents(onEvent, onState) {
   return () => es?.close();
 }
 
+/** A ws:// URL for an API socket, with the token. */
+export function socketUrl(path) {
+  return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${BASE}${path}?token=${encodeURIComponent(token || "")}`;
+}
+
 // Native dialogs: the Electron preload exposes window.afh; the pywebview window exposes pywebview.api.
 export const native = {
   available: () => !!(window.afh || window.pywebview?.api),

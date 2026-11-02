@@ -1,4 +1,5 @@
 import { BASE, api, connectEvents, hooks as apiHooks, native, remoteLogin } from "./api.js";
+import { browserHandBack, initBrowser, syncBrowserRuns, toggleBrowser } from "./browser.js";
 import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread, viewImage } from "./chat.js";
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
 import { PRESETS, applyAppearance as applyTheme, themeTransition } from "./appearance.js";
@@ -158,6 +159,7 @@ async function boot() {
   ctx.renderLive = () => { if (S.drawer === "live") renderLive($("drawer-body"), $("drawer-title")); };
   hooks.delegation = (p, o) => delegationCard(p, { ...o, onWatch: openWatch });
   wire();
+  wireBrowser();
   connectEvents(onEvent, (state) => $("conn").className = "conn " + (state === "open" ? "ok" : "bad"));
   $("app").hidden = false;
   $("boot").classList.add("gone");
@@ -853,6 +855,25 @@ function wireResize() {
 
 // ---- command palette ---------------------------------------------------------------------------
 
+/** The built-in browser panel (desktop app): the Browser button, Ctrl+Shift+B, and what the panel needs to know. */
+function wireBrowser() {
+  const on = initBrowser({
+    threadTitle: (sid) => S.sessions.find((s) => s.id === sid)?.title || "",
+    isBusy: (sid) => S.busy.has(sid) || !!S.threads.get(sid)?.busy,
+    stop: (sid) => api.post(`/api/sessions/${sid}/interrupt`).catch((e) => toast(e.message, "err")),
+    onToggle: (open) => $("btn-browser").classList.toggle("on", open),
+  });
+  if (!on) return;
+  $("btn-browser").hidden = false;
+  $("btn-browser").addEventListener("click", () => toggleBrowser());
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      toggleBrowser();
+    }
+  });
+}
+
 function showPalette() {
   const t = S.current;
   const items = [
@@ -860,6 +881,7 @@ function showPalette() {
     { group: "Actions", title: document.documentElement.dataset.theme === "dark" ? "Switch to light" : "Switch to dark", icon: "sun", keywords: "theme mode dark light", run: () => toggleTheme() },
     { group: "Actions", title: S.settings.ui.language === "ar" ? "English interface" : "العربية — Arabic interface", icon: "languages", keywords: "language arabic rtl", run: () => setLanguage(S.settings.ui.language === "ar" ? "en" : "ar") },
     { group: "Actions", title: "Set a goal", icon: "target", run: () => editGoal() },
+    ...($("btn-browser").hidden ? [] : [{ group: "Actions", title: "Browser", icon: "globe", sub: "Ctrl+Shift+B", keywords: "web page internet tab", run: () => toggleBrowser() }]),
     { group: "Actions", title: "Open folder…", icon: "folder-plus", run: chooseFolder },
     { group: "Actions", title: "Import thread…", icon: "arrow-down", run: importThread },
     ...(t ? [
@@ -1600,6 +1622,7 @@ async function submit(override) {
     thread.phase = "sending";
     thread.liveTps = 0;
     S.busy.add(thread.id);
+    browserHandBack(thread.id);
     renderComposerState();
     renderThreads();
     view.stick = true;
@@ -1679,6 +1702,7 @@ function onEvent(ev) {
   trackEvent(ev); // delegation children register themselves on session.created
   const sid = ev.data?.sessionID || ev.data?.session_id || (type.startsWith("session.") ? ev.data?.id : null);
   if (type === "session.execution.started" && sid) S.busy.add(sid);
+  if (type.startsWith("session.execution.")) queueMicrotask(syncBrowserRuns); // the agent's bar in its browser tab
   if (/^session\.execution\.(succeeded|failed|interrupted)$/.test(type) && sid) {
     S.busy.delete(sid);
     if (S.current?.id === sid) renderComposerState();  // settle the dock/to-do spinner the moment the run ends

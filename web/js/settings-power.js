@@ -86,10 +86,12 @@ export async function agentPane(pane, ctx) {
   const br = s.browser || {};
   const brPath = el("input.inp", { value: br.path || "", placeholder: "Found automatically (Chrome or Edge)", style: { width: "320px" } });
   brPath.addEventListener("change", () => save({ browser: { path: brPath.value.trim() } }, "Saved"));
-  pane.append(card("Browser", "A real browser the agent drives to check its work: open your dev server, look at screenshots, click and type, read console errors. It uses its own profile — never your sign-ins.", null,
+  pane.append(card("Browser", "A real browser the agent drives to check its work or do things on the web: open your dev server, look at screenshots, click and type, read console errors. It has its own sign-ins, never your normal browser's.", null,
     row("Let the agent use a browser", "Adds the browser tool. Screenshots go to models that accept images", toggle(br.enabled !== false, (v) => save({ browser: { enabled: v } }))),
-    row("Show the browser window", "Watch it work instead of running it hidden (headless). Takes effect on its next start", toggle(!!br.visible, (v) => save({ browser: { visible: v } }))),
-    row("Browser program", "Only if you want a specific Chrome/Edge/Chromium", brPath)));
+    row("Where it browses", "The side panel shows each thread's tab live; you can browse in it yourself and take over from the agent any time. Chrome or Edge is used when the AFH window isn't open (the CLI)",
+      select([["panel", "Side panel in AFH (recommended)"], ["external", "Separate Chrome or Edge"]], br.where === "external" ? "external" : "panel", (v) => save({ browser: { where: v } }, "Saved"), "260px")),
+    row("Show the Chrome/Edge window", "For the separate browser: watch it work instead of running it hidden (headless). Takes effect on its next start", toggle(!!br.visible, (v) => save({ browser: { visible: v } }))),
+    row("Browser program", "For the separate browser: only if you want a specific Chrome/Edge/Chromium", brPath)));
 
   if (WIN) await computerCard(pane, ctx, save);
 

@@ -11,7 +11,7 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, FastAPI, Request
+from fastapi import Body, FastAPI, Request, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.responses import Response as FastResponse
 from fastapi.staticfiles import StaticFiles
@@ -1669,6 +1669,21 @@ async def run_task(body: dict = Body(...)):
 def last_reply(sid: str):
     session_or_404(sid)
     return {"sessionID": sid, "running": engine.is_running(sid), "reply": reply_of(sid)}
+
+
+@app.websocket("/api/browser/host")
+async def browser_host(ws: WebSocket):
+    """The AFH window's browser panel connects here so the agent's browser tool can drive its tabs.
+    Only the local window may: its per-launch token, the expected Host, never the remote listener."""
+    from afh.engine.tools.browser import PANEL
+
+    server = ws.scope.get("server") or ("", 0)
+    via_remote = remote.state["port"] and server[1] == remote.state["port"]
+    bad_host = ACCESS["hosts"] and ws.headers.get("host") not in ACCESS["hosts"]
+    if via_remote or bad_host or not ACCESS["token"] or ws.query_params.get("token") != ACCESS["token"]:
+        await ws.close(code=4401)
+        return
+    await PANEL.serve(ws)
 
 
 @app.get("/api/events")
