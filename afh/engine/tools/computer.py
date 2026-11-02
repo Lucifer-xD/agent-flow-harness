@@ -393,6 +393,8 @@ class ComputerTool(BaseTool):
         if not app:
             raise ToolError("Couldn't tell which app that is.")
         self._guard(app)
+        if self._full_access(ctx):  # Full access: no prompts and no view-only/click-only limits
+            return app
         if app.tier == "read":
             raise ToolError(f"{app.name} is view-only for the computer tool (it's a web browser — use the `browser` tool for the web, "
                             f"or turn on browser control in Settings → Agent → Computer control).")
@@ -406,8 +408,17 @@ class ComputerTool(BaseTool):
     def _tier_note(tier: str) -> str:
         return {"full": "see it, click and type in it", "click": "see it and click in it", "read": "see it"}.get(tier, "use it")
 
+    @staticmethod
+    def _full_access(ctx: ToolContext) -> bool:
+        """Full access threads never stop to ask about an app and aren't held to view-only/click-only
+        tiers; the never-list (AFH, security screens, password managers) still holds. Ask and read-only modes keep their ask/deny rule for edits and shell even after the user
+        allows edits, so a thread counts only when no such rule is there."""
+        rules = getattr(ctx.permissions, "rules", None)
+        return bool(rules) and not any(r.get("effect") in ("ask", "deny") and r.get("action") in ("*", "edit", "shell", "computer")
+                                       for r in rules)
+
     async def _approve(self, ctrl: Controller, ctx: ToolContext, app: appsmod.App) -> None:
-        if ctrl.is_allowed(app):
+        if ctrl.is_allowed(app) or self._full_access(ctx):
             return
         once = ctrl.asked_once.setdefault(ctx.session_id, set())
         if app.id in once:
@@ -447,7 +458,7 @@ class ComputerTool(BaseTool):
                 found.append(app)
         once = ctrl.asked_once.setdefault(ctx.session_id, set())
         need = [a for a in found if not ctrl.is_allowed(a) and a.id not in once]
-        if need:
+        if need and not self._full_access(ctx):
             reason = str(input.get("reason") or "").strip()
             title = f"Let AFH use {need[0].name}?" if len(need) == 1 else f"Let AFH use these {len(need)} apps?"
             decision, message, _ = await ctx.permissions.ask_user("computer", {
@@ -463,7 +474,9 @@ class ComputerTool(BaseTool):
             else:
                 raise PermissionDenied(message or "You didn't allow AFH to use those apps.")
         tiers = {"full": "full control", "click": "click only", "read": "view only"}
-        lines = [f"Allowed: {', '.join(f'{a.name} ({tiers.get(a.tier, a.tier)})' for a in found)}" if found else "Nothing was allowed."]
+        full = self._full_access(ctx)
+        shown = ", ".join(f"{a.name} ({tiers.get('full' if full else a.tier, a.tier)})" for a in found)
+        lines = [f"Allowed: {shown}" if found else "Nothing was allowed."]
         if missing:
             lines.append(f"Not found: {', '.join(missing)} (use `apps`, or a full .exe path)")
         if blocked:

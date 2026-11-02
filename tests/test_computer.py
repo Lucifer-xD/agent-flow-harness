@@ -93,9 +93,11 @@ class FakeEngine:
 
 
 class FakeGate:
-    def __init__(self, decision="once"):
+    def __init__(self, decision="once", rules=None):
         self.decision = decision
         self.asked = []
+        if rules is not None:
+            self.rules = rules
 
     async def ask_user(self, action, metadata):
         self.asked.append((action, metadata))
@@ -199,6 +201,33 @@ def test_request_access_asks_once_for_every_app(monkeypatch):
     with pytest.raises(PermissionDenied):  # a refusal reaches the model through the runner
         asyncio.run(comp.ComputerTool().run(_ctx(FakeEngine(), gate2), {"action": "request_access", "apps": ["Notepad"]}))
     assert gate2.asked
+
+
+def test_full_access_never_asks_and_lifts_tiers_but_ask_mode_still_asks(monkeypatch):
+    import asyncio
+
+    from afh.engine.computer.control import Controller
+    from afh.engine.permissions import rules_for_mode
+    from afh.engine.tools import computer as comp
+
+    apps = {"notepad": appsmod.App("notepad.exe", "Notepad", ["notepad.exe"], "", r"C:\Windows\notepad.exe"),
+            "code": appsmod.App("code.exe", "VS Code", ["code.exe"], "", "", "click"),
+            "afh": appsmod.App("afh-backend.exe", "AFH", ["afh-backend.exe"], "", "")}
+    monkeypatch.setattr(Controller, "resolve_app", lambda self, q: apps.get(q.lower()))
+    monkeypatch.setattr(Controller, "app_of_window", lambda self, w: apps["code"])
+    full = FakeGate("reject", rules_for_mode("full"))
+    res = asyncio.run(comp.ComputerTool().run(_ctx(FakeEngine(), full), {"action": "request_access", "apps": ["Notepad", "Code", "AFH"]}))
+    assert full.asked == []
+    assert "VS Code (full control)" in res.text and "Never available: AFH" in res.text
+    # typing into a click-only app is fine in Full access, and still never asks
+    got = asyncio.run(comp.ComputerTool()._require(Controller(FakeEngine()), _ctx(FakeEngine(), full), object(), typing=True))
+    assert got.name == "VS Code" and full.asked == []
+    # ask mode (even after "always allow" for edits) still asks
+    for rules in (rules_for_mode("ask"), [*rules_for_mode("ask"), {"action": "edit", "resource": "*", "effect": "allow"}]):
+        gate = FakeGate("reject", rules)
+        with pytest.raises(comp.PermissionDenied):
+            asyncio.run(comp.ComputerTool().run(_ctx(FakeEngine(), gate), {"action": "request_access", "apps": ["Notepad"]}))
+        assert len(gate.asked) == 1
 
 
 def test_pointer_actions_and_zoom_need_a_screenshot_first(monkeypatch):
