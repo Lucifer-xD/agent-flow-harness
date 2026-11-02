@@ -1,4 +1,4 @@
-// The overlay page: the glowing edge and pill while the agent works, AFH's cursor gliding along a
+// The overlay page: a hairline frame (with a light travelling round it while busy) and the pill while the agent works, AFH's cursor gliding along a
 // gentle curve to each point, and an effect for every action — click ripples, drag trails, scroll
 // chevrons, typing and keycaps, screenshot corners, zoom boxes — plus app approval cards and lesson
 // tooltips. Effects play in order (a click waits for the glide before it). Only the pill, cards and
@@ -110,7 +110,7 @@ function hideTag(ms) {
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-/** Glide along a slight arc (like a hand moving a mouse), leaving a fading trail. */
+/** Glide along a slight arc, like a hand moving a mouse. */
 function glide(x, y, ms) {
   wake();
   if (cur.x == null) {
@@ -129,7 +129,6 @@ function glide(x, y, ms) {
   const off = Math.min(70, dist * 0.1) * cur.bend;
   const cx = sx + dx / 2 + (-dy / dist) * off, cy = sy + dy / 2 + (dx / dist) * off;
   const t0 = performance.now();
-  let frame = 0;
   return new Promise((done) => {
     const step = (now) => {
       const t = clamp((now - t0) / dur, 0, 1);
@@ -138,20 +137,11 @@ function glide(x, y, ms) {
       const px = u * u * sx + 2 * u * e * cx + e * e * x;
       const py = u * u * sy + 2 * u * e * cy + e * e * y;
       place(px, py);
-      if (++frame % 2 === 0 && t < 0.92) trail(px, py);
       if (t < 1) requestAnimationFrame(step);
       else done();
     };
     requestAnimationFrame(step);
   });
-}
-
-function trail(x, y) {
-  const d = el("div", "trail");
-  d.style.left = x + "px";
-  d.style.top = y + "px";
-  body.append(d);
-  setTimeout(() => d.remove(), 500);
 }
 
 function ripple(x, y, cls = "") {
@@ -527,6 +517,18 @@ document.addEventListener("mousemove", (e) => {
 $("stop").addEventListener("click", () => api.stop(!!state.teaching));
 
 // ---- wiring ---------------------------------------------------------------------------------------
+
+/** The frame's rects follow the window: inset 6px, corners matching the viewfinder marks. */
+function sizeFrame() {
+  const w = innerWidth, h = innerHeight;
+  for (const r of document.querySelectorAll("#frame rect")) {
+    r.setAttribute("x", 6.5); r.setAttribute("y", 6.5);
+    r.setAttribute("width", Math.max(0, w - 13)); r.setAttribute("height", Math.max(0, h - 13));
+    r.setAttribute("rx", 14); r.setAttribute("ry", 14);
+  }
+}
+new ResizeObserver(sizeFrame).observe(document.documentElement);
+sizeFrame();
 
 api.onState((d) => setState(d));
 api.onFx((d) => enqueue(() => play(d)));
