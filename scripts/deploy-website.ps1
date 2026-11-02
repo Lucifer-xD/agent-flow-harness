@@ -47,7 +47,24 @@ if ($LASTEXITCODE -ne 0) { throw "tar failed" }
 Remove-Item $stage -Recurse -Force
 
 Write-Host "==> Uploading"
-scp @ssh -q $tmp (Join-Path $root "deploy\afh-website.nginx") "${hostname}:/tmp/"
+# The VPS sometimes resets a long upload partway, so the archive goes up with sftp and each retry
+# resumes (reput) where the last one stopped. The stale copy from an earlier deploy goes first, or
+# reput would append to it.
+ssh @ssh $hostname 'rm -f /tmp/afh-website.tgz'
+$size = (Get-Item $tmp).Length
+$batch = Join-Path $env:TEMP "afh-sftp.txt"
+$sent = $false
+for ($try = 1; $try -le 8 -and -not $sent; $try++) {
+  $verb = if ($try -eq 1) { "put" } else { "reput" }
+  [IO.File]::WriteAllText($batch, ("{0} ""{1}"" /tmp/afh-website.tgz`n" -f $verb, ($tmp -replace "\\", "/")), (New-Object Text.UTF8Encoding $false))
+  sftp @ssh -o ServerAliveInterval=15 -q -b $batch $hostname | Out-Null
+  $got = ssh @ssh $hostname 'stat -c %s /tmp/afh-website.tgz 2>/dev/null || echo 0'
+  $sent = ($LASTEXITCODE -eq 0) -and ([int64]$got -eq $size)
+  if (-not $sent) { Write-Host ("    connection dropped at {0:N0} of {1:N0} MB, resuming" -f ([int64]$got / 1MB), ($size / 1MB)) }
+}
+Remove-Item $batch -ErrorAction SilentlyContinue
+if (-not $sent) { throw "upload failed" }
+scp @ssh -q (Join-Path $root "deploy\afh-website.nginx") "${hostname}:/tmp/"
 if ($LASTEXITCODE -ne 0) { throw "scp failed" }
 
 Write-Host "==> Installing on the VPS"
