@@ -29,6 +29,8 @@ from fastapi import Body, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
+import analytics
+
 log = logging.getLogger("afh.relay")
 DB_PATH = Path(os.environ.get("AFH_RELAY_DB", "/var/lib/afh-relay/relay.db"))
 STATIC = Path(__file__).parent / "static"
@@ -669,4 +671,50 @@ def mobile_file(name: str):
     return FileResponse(f, headers={"Cache-Control": "no-cache"})
 
 
+# ---- the owner's numbers (website/admin.html) ---------------------------------------------------
+
+ADMINS = {e.strip().lower() for e in os.environ.get("AFH_ADMINS", "").split(",") if e.strip()}
+INGEST_EVERY = 300  # seconds between reads of the access log
+
+
+@app.on_event("startup")
+async def start_analytics() -> None:
+    async def loop() -> None:
+        while True:
+            try:
+                await asyncio.to_thread(analytics.ingest)
+            except Exception:
+                log.exception("analytics: reading the access log failed")
+            await asyncio.sleep(INGEST_EVERY)
+
+    app.state.analytics = asyncio.create_task(loop())
+
+
+@app.get("/relay/api/admin/stats")
+async def admin_stats(request: Request, days: int = 30):
+    user = current_user(request)
+    if not user or user["email"].lower() not in ADMINS:
+        return err("Not found", 404)
+    try:
+        await asyncio.to_thread(analytics.ingest)  # up to the minute
+    except Exception:
+        log.exception("analytics: reading the access log failed")
+    data = await asyncio.to_thread(analytics.stats, max(1, min(days, 365)))
+    week = time.time() - 7 * 86400
+    with db() as con:
+        one = lambda q, *a: con.execute(q, a).fetchone()[0]  # noqa: E731
+        data["accounts"] = {
+            "users": one("SELECT COUNT(*) FROM users"),
+            "usersWeek": one("SELECT COUNT(*) FROM users WHERE created >= ?", week),
+            "computers": one("SELECT COUNT(*) FROM computers"),
+            "computersWeek": one("SELECT COUNT(*) FROM computers WHERE last_seen >= ?", week),
+            "online": len(LINKS),
+            "phones": one("SELECT COUNT(*) FROM sessions WHERE kind = 'app' AND expires > ?", time.time()),
+            "versions": [{"key": r[0] or "?", "n": r[1]} for r in con.execute(
+                "SELECT version, COUNT(*) FROM computers WHERE last_seen >= ? GROUP BY version ORDER BY 2 DESC", (week,))],
+        }
+    return data
+
+
 init_db()
+analytics.init_db()
