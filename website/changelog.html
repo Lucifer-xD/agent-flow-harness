@@ -45,8 +45,18 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.12.0" data-reveal>
-          <div class="rel-head"><h2>1.12.0</h2><time datetime="2026-11-02">Nov 2, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.12.1" data-reveal>
+          <div class="rel-head"><h2>1.12.1</h2><time datetime="2026-11-02">Nov 2, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">Goals only when you ask</p>
+          <ul>
+            <li>The agent no longer sets a <b>goal</b> for every task. It plans with the to-do list and sets a goal only when you ask for one, or tell it to keep going until something is done.</li>
+            <li><b>Autopilot</b> stops looping: if the agent is sent back to work and makes no progress, it pauses and waits for you. It continues at most 3 times per message, and marks a goal that turns out impossible as blocked instead of retrying.</li>
+            <li>Want the old behaviour? Turn on Settings → Agent → Goals for every multi-step task.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.12.0" data-reveal>
+          <div class="rel-head"><h2>1.12.0</h2><time datetime="2026-11-02">Nov 2, 2026</time></div>
           <p class="title">AFH can use your computer</p>
           <ul>
             <li><b>Computer use</b>: for work with no file, command or web route — a desktop app, a settings screen, a tool with no API — the agent looks at your screen and uses the mouse and keyboard itself. You see its own cursor glide to each spot, with every click, keystroke and scroll shown as it happens.</li>
