@@ -49,9 +49,10 @@ const LAYOUTS = {
       sphereB: { x: R.left + R.width * 0.1, y: R.top - 22, r: 22 + 8 * u },
       cube: { x: R.right - R.width * 0.1, y: R.top - 26, r: 26 + 12 * u, rot: 0.2 },
     };
-    const mr = Math.min(150, Math.max(56, side * 0.42)); // the mark: as big as the room beside the shot allows
+    // the mark is 2.5 r wide (strands plus dots): as big as the room beside the shot allows, ending before its edge
+    const mr = Math.min(150, Math.max(56, (side - 24) / 2.5));
     if (side > 70) Object.assign(out, { // beside the shot, resting against its edges: the mark on the left
-      mark: { x: Math.max(14 + mr * 1.2, R.left - mr * 1.1), y: R.top + R.height * 0.36, r: mr, rot: 0.12 },
+      mark: { x: R.left - 10 - mr * 1.25, y: R.top + R.height * 0.36, r: mr, rot: 0.12 },
       hub: { x: R.left - (30 + 20 * u), y: R.top + R.height * 0.78, r: 26 + 14 * u },
       torus: { x: R.right + (40 + 36 * u), y: R.top + 90, r: 36 + 30 * u, rot: 0.5 },
       pill: { x: R.right + (30 + 30 * u), y: R.top + R.height * 0.5, r: 34 + 26 * u, rot: 0.8 },
