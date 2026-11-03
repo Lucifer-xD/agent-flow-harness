@@ -186,6 +186,7 @@ export function applyAppearance() {
 async function setLanguage(language) {
   S.settings.ui = { ...S.settings.ui, language };
   applyAppearance();
+  syncPills(); // the pill's offsets flip with the direction
   try { S.settings = await api.put("/api/settings", { ui: { language } }); } catch (err) { toast(err.message, "err"); }
 }
 
@@ -523,11 +524,14 @@ function renderThreads() {
     if (g !== group) box.append(el("div.th-group", (group = g)));
     const seen = shownThreads.has(s.id);
     shownThreads.add(s.id);
-    const item = el(`button.th-item${S.current?.id === s.id ? ".active" : ""}`, {
+    const st = threadStatus(s);
+    const preview = threadPreview(s.id);
+    const item = el(`button.th-item.${st}${S.current?.id === s.id ? ".active" : ""}`, {
       type: "button", title: s.title || "New thread", style: seen ? { animation: "none" } : { animationDelay: `${Math.min(i, 12) * 18}ms` },
+      dataset: preview ? { preview } : null,
       on: { click: () => openThread(s.id) },
     },
-      S.busy.has(s.id) ? logoNode({ size: 18, working: true }) : null,
+      statusRing(st),
       s.metadata?.afh?.worktree ? el("span.th-wt", { title: `Worktree · ${s.metadata.afh.worktree.branch}`, html: icon("branch") }) : null,
       s.metadata?.afh?.goal ? el(`span.th-goal.${s.metadata.afh.goal.status}`, { title: `Goal (${s.metadata.afh.goal.status}): ${s.metadata.afh.goal.text}`, html: icon(s.metadata.afh.goal.status === "achieved" ? "check" : "target") }) : null,
       el("span.th-title", s.title || "New thread"),
@@ -594,11 +598,54 @@ function showHome() {
     ["checklist", "Write tests", "Add tests for the parts of this project that have none."],
     ["diff", "Review my changes", "Review the uncommitted changes and point out problems."],
   ];
-  root.append(el("div.hero", logoNode({ size: 112, working: true }),
-    el("h2", name ? `What are we building, ${name}?` : "What are we building?"),
-    el("p", el("span", "Working in"), el("span.hero-proj", ico("folder"), basename(project()))),
-    el("div.suggest", ideas.map(([icon, title, text]) => el("button", { type: "button", on: { click: () => { setInput(text); $("input").focus(); } } },
-      el("span.sg-ico", ico(icon)), el("b", title), el("span", text))))));
+  // The welcome: a greeting for the time of day, the project as a chip, the last few threads as
+  // cards with a status ring, and the suggested tasks as icon tiles. Same hooks as before (.hero,
+  // .hero-proj, .suggest, .sg-ico); only the layout around them is new.
+  const hour = new Date().getHours();
+  const greet = hour < 5 ? "Good evening" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const recent = S.sessions.slice(0, 4);
+  root.append(el("div.hero.hero-2",
+    el("div.hero-top", el("span.hero-mark", logoNode({ size: 72, working: true })),
+      el("div.hero-text",
+        el("h2", name ? `${greet}, ${name}` : greet),
+        el("p", el("span", "Working in"), el("span.hero-proj", ico("folder"), basename(project())), el("span.hero-sub", "What are we building?")))),
+    recent.length ? el("section.hero-sec.hero-recent",
+      el("h3.hero-h", ico("clock"), el("span", "Recent threads")),
+      el("div.recent-cards", recent.map((s, i) => {
+        const st = threadStatus(s);
+        return el("button.recent-card", { type: "button", title: s.title || "New thread", style: { animationDelay: `${80 + i * 45}ms` }, on: { click: () => openThread(s.id) } },
+          el("span.rc-top", statusRing(st), el("span.rc-time", ago(s.time?.updated || s.time?.created))),
+          el("span.rc-title", s.title || "New thread"),
+          el("span.rc-foot", el("span.rc-state", st === "running" ? "Working" : st === "done" ? "Done" : "New"), el("span.rc-go", ico("chev"))));
+      }))) : null,
+    el("section.hero-sec",
+      el("h3.hero-h", ico("sparkle"), el("span", "Suggested tasks")),
+      el("div.suggest", ideas.map(([icon, title, text], i) => el("button", { type: "button", dataset: { tone: String(i) }, style: { animationDelay: `${160 + i * 45}ms` }, on: { click: () => { setInput(text); $("input").focus(); } } },
+        el("span.sg-ico", ico(icon)), el("b", title), el("span", text)))))));
+}
+
+/** "running" while the engine works on it, "done" once it has produced a reply, "idle" for a fresh thread. */
+function threadStatus(s) {
+  if (S.busy.has(s.id) || s.running) return "running";
+  if (s.time?.idle || (s.tokens?.output || 0) > 0 || S.threads.get(s.id)?.messages?.some((m) => m.type === "assistant")) return "done";
+  return "idle";
+}
+
+/** The status ring drawn in the thread list and on the welcome cards: a hollow ring, a pulsing one, or a check. */
+function statusRing(status) {
+  return el(`span.st-ring.${status}`, { title: status === "running" ? "Working" : status === "done" ? "Done" : "New" }, status === "done" ? ico("check") : null);
+}
+
+/** The last thing said in a thread we already have in memory, for the hover preview (no extra requests). */
+function threadPreview(id) {
+  const t = S.threads.get(id);
+  if (!t?.messages?.length) return "";
+  for (let i = t.messages.length - 1; i >= 0; i--) {
+    const m = t.messages[i];
+    const text = m.type === "user" ? m.text : m.type === "assistant" ? m.content?.filter((p) => p.type === "text").map((p) => p.text).join(" ") : "";
+    if (text?.trim()) return text.replace(/\s+/g, " ").trim().slice(0, 160);
+  }
+  return "";
 }
 
 async function deleteThread(id) {
@@ -730,15 +777,21 @@ function renderTopbar() {
   $("btn-context").hidden = !t;
   $("btn-live").hidden = !t;
   if (!t) {
-    if (project()) box.append(el("span.tb-path", project()));
+    if (project()) box.append(el("span.tb-crumb", { title: project() }, ico("folder"), el("span.tb-path", basename(project()))));
     box.append(subChip);
     renderWork();
+    syncPills();
     return;
   }
-  const h = el("h1", { title: "Double-click to rename" }, t.session.title || "New thread");
-  h.addEventListener("dblclick", () => {
+  // The title is a pill: click (or double-click) to rename in place, Enter saves, Esc cancels.
+  const h = el("h1", { title: "Click to rename" }, el("span.tb-ttl", t.session.title || "New thread"), el("span.tb-edit", { html: icon("edit") }));
+  const edit = () => {
+    if (!h.isConnected) return;
     const input = el("input", { value: t.session.title || "" });
+    let finished = false;
     const done = async (save) => {
+      if (finished) return;
+      finished = true;
       if (save && input.value.trim() && input.value !== t.session.title) await patchSession({ title: input.value.trim() });
       else renderTopbar();
     };
@@ -747,9 +800,38 @@ function renderTopbar() {
     h.replaceWith(input);
     input.focus();
     input.select();
-  });
-  box.append(h, el("span.tb-path", basename(project())), subChip);
+  };
+  h.addEventListener("click", edit);
+  h.addEventListener("dblclick", edit);
+  box.append(h, el("span.tb-crumb", { title: project() }, el("span.tb-sep"), ico("folder"), el("span.tb-path", basename(project()))), subChip);
   renderWork();
+  syncPills();
+}
+
+// ---- the sliding pill behind the active chip of the segmented controls (top bar + workbench tabs) ----
+
+const pillFor = new WeakMap();
+function syncPill(group) {
+  if (!group) return;
+  let pill = pillFor.get(group);
+  if (!pill) {
+    pill = el("span.seg-pill", { "aria-hidden": "true" });
+    group.prepend(pill);
+    pillFor.set(group, pill);
+    group.classList.add("has-pill");
+  }
+  const on = [...group.children].find((c) => c !== pill && c.classList.contains("on") && !c.hidden);
+  if (!on) { pill.classList.remove("show"); return; }
+  const first = !pill.classList.contains("show");
+  if (first) pill.style.transition = "none"; // the first appearance lands in place instead of sliding in from the corner
+  pill.style.width = `${on.offsetWidth}px`;
+  pill.style.height = `${on.offsetHeight}px`;
+  pill.style.transform = `translate(${on.offsetLeft}px, ${on.offsetTop}px)`;
+  pill.classList.add("show");
+  if (first) requestAnimationFrame(() => { pill.style.transition = ""; });
+}
+function syncPills() {
+  requestAnimationFrame(() => { syncPill($("tb-seg")); syncPill($("wb-tabs")); });
 }
 
 // ---- message rail: one line per message of yours, click to jump back to it --------------------
@@ -1117,6 +1199,7 @@ function showTab(kind) {
   else if (was === "browser") toggleBrowser(false);
   try { localStorage.setItem(WB_TAB_KEY, kind); } catch {}
   refreshDrawer("open");
+  syncPills();
 }
 
 function closeDrawer() {
@@ -1133,6 +1216,7 @@ function closeDrawer() {
   }
   if (was === "browser") toggleBrowser(false);
   syncWatchTab();
+  syncPills();
 }
 
 /** Reopen the workbench on the tab it was last on (the close button's counterpart: Ctrl+Shift+W). */
@@ -2027,6 +2111,9 @@ function wire() {
   });
   setInterval(renderThreads, 60_000);
   wireSidebar();
+  // the segmented controls' sliding pill follows the active chip through resizes and language changes
+  if ("ResizeObserver" in window) { const ro = new ResizeObserver(() => syncPills()); ro.observe($("tb-seg")); ro.observe($("wb-tabs")); }
+  addEventListener("resize", syncPills);
 }
 
 /** The composer floats over the thread, so the thread needs room under its last message: --composer-h. */

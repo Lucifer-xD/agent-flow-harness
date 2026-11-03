@@ -86,6 +86,8 @@ const AR = {
   "Where it browses": "أين يتصفح", "Side panel in AFH (recommended)": "اللوحة الجانبية في AFH (موصى به)", "Separate Chrome or Edge": "Chrome أو Edge منفصل",
   "Show the Chrome/Edge window": "أظهر نافذة Chrome/Edge",
   // home
+  "Good morning": "صباح الخير", "Good afternoon": "مساء الخير", "Good evening": "مساء الخير", "Recent threads": "المحادثات الأخيرة", "Suggested tasks": "مهام مقترحة",
+  "New": "جديد", "Click to rename": "انقر لإعادة التسمية",
   "What are we building?": "ماذا سنبني؟", "Working in": "نعمل في", "Welcome to Agent Flow Harness": "مرحبًا بك في Agent Flow Harness",
   "Open a project folder and AFH will read, edit and run code there with any model you choose.": "افتح مجلد مشروع وسيقرأ AFH الكود ويعدّله ويشغّله فيه بأي نموذج تختاره.",
   "Explain this codebase": "اشرح هذا المشروع", "Give me a tour of the architecture and the main entry points.": "خذني في جولة على بنية المشروع ونقاط الدخول الرئيسية.",
@@ -266,6 +268,7 @@ const AR = {
 
 // Text with numbers or names in it.
 const AR_PATTERNS = [
+  [/^Good morning, (.+)$/, "صباح الخير يا $1"], [/^Good afternoon, (.+)$/, "مساء الخير يا $1"], [/^Good evening, (.+)$/, "مساء الخير يا $1"],
   [/^Thought for (.+)$/, "فكّر لمدة $1"], [/^completed in (.+)$/, "اكتمل في $1"], [/^(\d+) running$/, "$1 قيد التشغيل"], [/^(\d+) working$/, "$1 يعمل"],
   [/^(\d+) subagents?$/, "$1 وكيل فرعي"], [/^(\d+) jobs?$/, "$1 مهمة"], [/^(\d+)\/(\d+) done$/, "$1/$2 منجز"], [/^Autopilot (\d+)\/(\d+)$/, "الطيار الآلي $1/$2"],
   [/^Compacted (\d+) earlier messages? — summary$/, "ضُغطت $1 رسالة سابقة — الملخص"], [/^(.+) is working$/, "$1 يعمل"], [/^Delivered · waiting for (.+)$/, "تم الإرسال · بانتظار $1"],
