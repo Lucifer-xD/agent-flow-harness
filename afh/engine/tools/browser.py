@@ -36,7 +36,7 @@ VIEWPORT = (1280, 800)
 MAX_TEXT = 30_000
 NAV_TIMEOUT = 30.0
 ACTIONS = ("open", "screenshot", "text", "click", "double_click", "hover", "drag", "type", "press", "scroll", "back", "forward",
-           "reload", "evaluate", "console", "close")
+           "reload", "evaluate", "console", "network", "sources", "close")
 MODIFIERS = {"alt": 1, "ctrl": 2, "control": 2, "meta": 4, "cmd": 4, "command": 4, "win": 4, "shift": 8}
 
 
@@ -65,6 +65,7 @@ class Tab:
     def __init__(self):
         self.listeners: list[tuple[str, asyncio.Future]] = []
         self.console: list[str] = []
+        self.requests: dict[str, dict] = {}  # requestId -> record, insertion-ordered, capped (the Network tab)
 
     async def send(self, method: str, params: dict | None = None, timeout: float = 30) -> dict:
         raise NotImplementedError
@@ -87,6 +88,8 @@ class Tab:
         elif method == "Log.entryAdded":
             e = params.get("entry") or {}
             self._log(f"[{e.get('level', 'log')}] {e.get('text', '')} {e.get('url', '')}".rstrip())
+        elif method.startswith("Network."):
+            self._net(method, params)
         for name, fut in list(self.listeners):
             if name == method and not fut.done():
                 fut.set_result(params)
@@ -95,6 +98,43 @@ class Tab:
     def _log(self, line: str) -> None:
         self.console.append(line[:2000])
         del self.console[:-200]
+
+    def _net(self, method: str, params: dict) -> None:
+        """Keep a record per request for the `network` action (last 300, like a DevTools Network tab)."""
+        rid = params.get("requestId")
+        if not rid:
+            return
+        if method == "Network.requestWillBeSent":
+            req = params.get("request") or {}
+            prev = self.requests.pop(rid, None)  # a redirect reuses the id: keep it newest in order
+            self.requests[rid] = {
+                "id": rid, "url": req.get("url", ""), "method": req.get("method", ""), "type": params.get("type", ""),
+                "reqHeaders": req.get("headers") or {}, "start": params.get("timestamp"), "status": None, "statusText": "",
+                "mime": "", "respHeaders": {}, "size": None, "ms": None, "error": None, "fromCache": False,
+            }
+            if prev and prev.get("url"):
+                self.requests[rid]["redirectedFrom"] = prev["url"]
+            while len(self.requests) > 300:
+                self.requests.pop(next(iter(self.requests)))
+        elif method == "Network.responseReceived":
+            r = self.requests.get(rid)
+            if r:
+                resp = params.get("response") or {}
+                r["status"], r["statusText"] = resp.get("status"), resp.get("statusText") or ""
+                r["mime"], r["respHeaders"] = resp.get("mimeType", ""), resp.get("headers") or {}
+                r["fromCache"] = bool(resp.get("fromDiskCache") or resp.get("fromPrefetchCache"))
+                r["type"] = params.get("type") or r["type"]
+        elif method == "Network.loadingFinished":
+            r = self.requests.get(rid)
+            if r:
+                r["size"] = params.get("encodedDataLength")
+                if r.get("start") is not None and params.get("timestamp") is not None:
+                    r["ms"] = round((params["timestamp"] - r["start"]) * 1000)
+        elif method == "Network.loadingFailed":
+            r = self.requests.get(rid)
+            if r:
+                r["error"] = params.get("errorText") or ("canceled" if params.get("canceled") else "failed")
+                r["type"] = params.get("type") or r["type"]
 
     def wait_for(self, method: str) -> asyncio.Future:
         fut = asyncio.get_running_loop().create_future()
@@ -254,7 +294,7 @@ class BrowserManager:
                 r = await client.put(f"http://127.0.0.1:{self.port}/json/new?about:blank")
                 info = r.json()
             cdp = await CDP.connect(info["webSocketDebuggerUrl"])
-            for m in ("Page.enable", "Runtime.enable", "Log.enable"):
+            for m in ("Page.enable", "Runtime.enable", "Log.enable", "Network.enable"):
                 await cdp.send(m)
             await cdp.send("Emulation.setDeviceMetricsOverride", {"width": VIEWPORT[0], "height": VIEWPORT[1], "deviceScaleFactor": 1, "mobile": False})
             self.tabs[sid] = (info["id"], cdp)
@@ -420,7 +460,7 @@ class PanelHost:
             return self.tabs[sid]
         info = await self.request("open", 30, sid=sid) or {}
         tab = PanelTab(self, str(info.get("tab", "")))
-        for m in ("Page.enable", "Runtime.enable", "Log.enable"):
+        for m in ("Page.enable", "Runtime.enable", "Log.enable", "Network.enable"):
             await tab.send(m)
         self.tabs[sid] = tab
         return tab
@@ -470,22 +510,26 @@ class BrowserTool(BaseTool):
     spec = ToolSpec(
         name="browser",
         description=(
-            "A real web browser to check your work like a user would, or to do things on the web: open your dev server or any "
-            "page, see a screenshot, read the page text, click, type, press keys, scroll, run JavaScript, and read console errors. "
+            "A real web browser with DevTools to check your work like a user would, or to do things on the web: open your dev "
+            "server or any page, see a screenshot, read the page text, click, type, press keys, scroll, run JavaScript in the "
+            "page, read console errors, inspect network requests, and read the source files the page loaded. "
             "One tab per thread that keeps its state (and sign-ins) between calls; in the AFH app it is a side panel the user "
             "watches live and can take over. Actions: `open` (url), `screenshot`, `text`, `click` / `double_click` / `hover` "
             "(target: CSS selector or visible text, or x,y read off the latest screenshot), `drag` (x,y to to_x,to_y), `type` "
             "(text; into target or x,y if given, else the focused field; submit:true presses Enter), `press` (key, e.g. Enter, Tab, "
             "Escape, Ctrl+A), `scroll` (direction up/down/left/right, optional amount in pixels and x,y), `back`, `forward`, "
-            "`reload`, `evaluate` (script: a JS expression), `console` (messages and errors since the last call), `close`. Every "
-            "action except text/evaluate/console/close returns a fresh screenshot whose pixels are the page's coordinates. Start a "
-            "dev server with the shell tool (background: true) first when you need one."
+            "`reload`, `evaluate` (script: a JS expression, run in the page console — its value is returned), `console` (log "
+            "messages and errors since the last call), `network` (the requests the page made — method, status, type, size, "
+            "timing; pass url=<part of a URL> to get one request's headers and response body), `sources` (the files the page "
+            "loaded — the HTML document, scripts, stylesheets; pass url=<part of a URL> to read one file's contents), `close`. "
+            "Every action except text/evaluate/console/network/sources/close returns a fresh screenshot whose pixels are the "
+            "page's coordinates. Start a dev server with the shell tool (background: true) first when you need one."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "action": {"type": "string", "enum": list(ACTIONS), "description": "What to do in this thread's tab."},
-                "url": {"type": "string", "description": "For open: the page (http(s):// or file://)."},
+                "url": {"type": "string", "description": "For open: the page (http(s):// or file://). For network/sources: part of a request or file URL to drill into (omit to list)."},
                 "target": {"type": "string", "description": "For click/double_click/hover/type: a CSS selector or the element's visible text."},
                 "x": {"type": "number", "description": "For click/double_click/hover/drag/type/scroll: x on the latest screenshot (instead of target)."},
                 "y": {"type": "number", "description": "y on the latest screenshot."},
@@ -626,6 +670,12 @@ class BrowserTool(BaseTool):
             value = await self._eval(page, str_arg(input, "script"))
             out = value if isinstance(value, str) else json.dumps(value, indent=2, ensure_ascii=False, default=str)
             return ToolResult(text=str(out)[:MAX_TEXT])
+        if action == "network":
+            await show("Inspecting network")
+            return await self._network(page, input)
+        if action == "sources":
+            await show("Inspecting source files")
+            return await self._sources(page, input)
         # console
         lines, page.console = page.console[:], []
         return ToolResult(text="\n".join(lines) if lines else "No console messages since the last check.")
@@ -709,6 +759,96 @@ class BrowserTool(BaseTool):
         params = cls._keys(combo)
         await page.send("Input.dispatchKeyEvent", {"type": "keyDown" if "text" in params else "rawKeyDown", **params})
         await page.send("Input.dispatchKeyEvent", {"type": "keyUp", **{k: v for k, v in params.items() if k != "text"}})
+
+    # ---- DevTools: network & sources --------------------------------------------------------------
+
+    async def _network(self, page: Tab, input: dict) -> ToolResult:
+        """List the requests the page made, or (with url) one request's headers and response body."""
+        reqs = list(page.requests.values())
+        if not reqs:
+            return ToolResult(text="No network requests recorded for this tab yet. Open or reload a page first "
+                                   "(requests are captured from when the tab opens).")
+        want = str(input.get("url") or "").strip().lower()
+        if want:
+            matches = [r for r in reqs if want in (r.get("url") or "").lower()]
+            if not matches:
+                return ToolResult(text=f"No recorded request's URL contains {want!r}. Call `network` with no url to list them.", is_error=True)
+            blocks = [await self._request_detail(page, r) for r in matches[-5:]]
+            head = "" if len(matches) <= 5 else f"(showing the last 5 of {len(matches)} matching requests)\n\n"
+            return ToolResult(text=head + ("\n\n" + "─" * 48 + "\n\n").join(blocks), truncated=len(matches) > 5)
+        lines = [self._request_line(r) for r in reqs[-150:]]
+        extra = "" if len(reqs) <= 150 else f"(last 150 of {len(reqs)})\n"
+        return ToolResult(text=f"Network requests (oldest first) — status, method, type, size, time, URL:\n{extra}" + "\n".join(lines) +
+                               "\n\nCall `network` with url=<part of a URL> to see one request's headers and response body.")
+
+    @staticmethod
+    def _request_line(r: dict) -> str:
+        status = "ERR" if r.get("error") else (str(r["status"]) if r.get("status") is not None else "...")
+        size = r.get("size")
+        size_s = (f"{round(size / 1024)}K" if isinstance(size, (int, float)) and size >= 1024
+                  else str(int(size)) if isinstance(size, (int, float)) else "-")
+        ms = f"{r['ms']}ms" if r.get("ms") is not None else ("cache" if r.get("fromCache") else "-")
+        return f"{status:>4} {r.get('method', ''):4} {(r.get('type') or '')[:11]:11} {size_s:>6} {ms:>7}  {(r.get('url') or '')[:170]}"
+
+    async def _request_detail(self, page: Tab, r: dict) -> str:
+        def headers(h: dict) -> str:
+            return "\n".join(f"  {k}: {v}" for k, v in list((h or {}).items())[:40]) or "  (none)"
+
+        status = f"FAILED ({r['error']})" if r.get("error") else (
+            f"{r['status']} {r.get('statusText', '')}".strip() if r.get("status") is not None else "(pending)")
+        parts = [f"{r.get('method', '')} {r.get('url', '')}",
+                 f"Status: {status}   Type: {r.get('type') or '?'}   {r.get('mime') or ''}".rstrip()]
+        if r.get("redirectedFrom"):
+            parts.append(f"Redirected from: {r['redirectedFrom']}")
+        parts.append("Request headers:\n" + headers(r.get("reqHeaders")))
+        if r.get("respHeaders"):
+            parts.append("Response headers:\n" + headers(r.get("respHeaders")))
+        body = "(not fetched)"
+        try:
+            got = await page.send("Network.getResponseBody", {"requestId": r["id"]})
+            raw = got.get("body") or ""
+            body = f"(binary, {len(raw)} base64 chars)" if got.get("base64Encoded") else raw
+        except ToolError:
+            body = "(response body not available — it may have been evicted from the buffer, or the request has no body)"
+        cut = len(body) > 8000
+        parts.append("Response body:\n" + body[:8000] + ("\n[…cut]" if cut else ""))
+        return "\n".join(parts)
+
+    async def _sources(self, page: Tab, input: dict) -> ToolResult:
+        """List the files the page loaded, or (with url) read one file's contents."""
+        tree = await page.send("Page.getResourceTree")
+        res: list[dict] = []
+
+        def walk(node: dict) -> None:
+            frame = node.get("frame") or {}
+            if frame.get("url"):
+                res.append({"frameId": frame.get("id"), "url": frame["url"], "type": "Document"})
+            for item in node.get("resources") or []:
+                res.append({"frameId": frame.get("id"), "url": item.get("url"), "type": item.get("type"), "size": item.get("contentSize")})
+            for child in node.get("childFrames") or []:
+                walk(child)
+
+        walk(tree.get("frameTree") or {})
+        if not res:
+            return ToolResult(text="No source files found. Open a page first.")
+        want = str(input.get("url") or "").strip().lower()
+        if want:
+            match = next((x for x in res if want in (x.get("url") or "").lower()), None)
+            if not match:
+                return ToolResult(text=f"No loaded file's URL contains {want!r}. Call `sources` with no url to list them.", is_error=True)
+            try:
+                got = await page.send("Page.getResourceContent", {"frameId": match["frameId"], "url": match["url"]})
+            except ToolError as err:
+                return ToolResult(text=f"Couldn't read {match['url']}: {err}", is_error=True)
+            content = got.get("content") or ""
+            if got.get("base64Encoded"):
+                return ToolResult(text=f"{match['url']} ({match.get('type')}) is binary ({len(content)} base64 chars); not shown as text.")
+            cut = len(content) > MAX_TEXT
+            return ToolResult(text=f"{match['url']} ({match.get('type')}):\n\n{content[:MAX_TEXT]}" + ("\n\n[…cut]" if cut else ""), truncated=cut)
+        lines = [f"{(x.get('type') or '?'):10} {(x.get('url') or '')[:180]}" for x in res[:200]]
+        extra = "" if len(res) <= 200 else f"(first 200 of {len(res)})\n"
+        return ToolResult(text=f"Source files this page loaded (document, scripts, stylesheets, images…):\n{extra}" + "\n".join(lines) +
+                               "\n\nCall `sources` with url=<part of a URL> to read one file's contents.")
 
     async def _shot(self, page: Tab, summary: str) -> ToolResult:
         data, w, h = await page.screenshot()

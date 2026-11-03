@@ -18,21 +18,24 @@
   <div class="titlebar" id="titlebar"><span id="tb-brand"></span><span class="tb-name">Agent Flow Harness</span><span class="tb-thread" id="tb-thread"></span></div>
 
   <div id="app" class="app" hidden>
+    <!-- Studio sidebar: a 56px icon rail that expands on hover, or stays open when pinned (Ctrl+B). -->
     <aside class="sidebar" id="sidebar">
       <div class="sb-head">
         <div class="brand" id="brand"><span>AFH</span></div>
         <button class="icon-btn" id="btn-collapse" title="Hide sidebar (Ctrl+B)"></button>
       </div>
-      <button class="new-thread" id="btn-new" title="New thread (Ctrl+N)"><span class="ico" data-icon="plus"></span>New thread<kbd>Ctrl N</kbd></button>
+      <button class="new-thread" id="btn-new" title="New thread (Ctrl+N)"><span class="ico" data-icon="plus"></span><span class="lbl">New thread</span><kbd>Ctrl N</kbd></button>
+      <div class="sb-search" id="sb-search" title="Search threads (Ctrl+K)"><span class="ico" data-icon="search"></span><input id="thread-search" placeholder="Search threads" /></div>
       <button class="project-picker" id="project-picker"></button>
-      <div class="sb-search"><span class="ico" data-icon="search"></span><input id="thread-search" placeholder="Search threads" /></div>
       <nav class="threads" id="threads"></nav>
       <div class="sb-foot">
         <button class="sb-foot-btn" id="btn-account" title="AFH account — reach this PC from your phone"><span class="acct-avatar"><span class="ico" data-icon="user"></span><i class="acct-dot"></i></span><span class="acct-text"><b>Sign in</b><small>Use AFH from your phone</small></span></button>
-        <button class="icon-btn sb-mini" id="btn-settings" title="Settings"><span class="ico" data-icon="settings"></span></button>
-        <button class="icon-btn sb-mini" id="btn-lang" title="العربية / English"><span class="lang-mark">ع</span></button>
-        <button class="icon-btn sb-mini" id="btn-theme" title="Switch dark / light"></button>
-        <span class="conn" id="conn" title="Engine connection"></span>
+        <div class="sb-tools">
+          <button class="icon-btn sb-mini" id="btn-settings" title="Settings"><span class="ico" data-icon="settings"></span></button>
+          <button class="icon-btn sb-mini" id="btn-lang" title="العربية / English"><span class="lang-mark">ع</span></button>
+          <button class="icon-btn sb-mini" id="btn-theme" title="Switch dark / light"></button>
+          <span class="conn" id="conn" title="Engine connection"></span>
+        </div>
       </div>
     </aside>
 
@@ -46,11 +49,14 @@
           <button class="chip-btn" id="btn-worktree" title="This thread works in its own git worktree" hidden></button>
           <button class="chip-btn" id="btn-goal" title="Set a goal: the agent keeps working until it is achieved"><span class="ico" data-icon="target"></span>Goal</button>
           <button class="chip-btn" id="btn-memory" title="Memory: what the agent knows about this project" hidden><span class="ico" data-icon="book"></span>Memory<span class="badge" id="memory-count" hidden></span></button>
-          <button class="chip-btn" id="btn-live" title="Watch files being written or edited"><span class="ico" data-icon="eye"></span>Live</button>
-          <button class="chip-btn" id="btn-context" title="See and edit everything the model sees"><span class="ico" data-icon="list"></span>Context</button>
-          <button class="chip-btn" id="btn-harness" title="See what the model is told"><span class="ico" data-icon="scroll"></span>Prompt</button>
-          <button class="chip-btn" id="btn-changes" title="Changed files"><span class="ico" data-icon="diff"></span>Changes<span class="badge" id="changes-count" hidden></span></button>
-          <button class="chip-btn" id="btn-browser" title="Browser: browse the web and watch the agent use it" hidden><span class="ico" data-icon="globe"></span>Browser</button>
+          <!-- the workbench tabs, as a segmented control -->
+          <div class="tb-seg" id="tb-seg" role="group" aria-label="Workbench">
+            <button class="chip-btn" id="btn-live" title="Watch files being written or edited"><span class="ico" data-icon="eye"></span>Live</button>
+            <button class="chip-btn" id="btn-changes" title="Changed files"><span class="ico" data-icon="diff"></span>Changes<span class="badge" id="changes-count" hidden></span></button>
+            <button class="chip-btn" id="btn-browser" title="Browser: browse the web and watch the agent use it" hidden><span class="ico" data-icon="globe"></span>Browser</button>
+            <button class="chip-btn" id="btn-context" title="See and edit everything the model sees"><span class="ico" data-icon="list"></span>Context</button>
+            <button class="chip-btn" id="btn-harness" title="See what the model is told"><span class="ico" data-icon="scroll"></span>Prompt</button>
+          </div>
           <button class="icon-btn" id="btn-thread-menu" title="Thread actions"></button>
         </div>
       </header>
@@ -61,7 +67,8 @@
       <nav class="msg-rail" id="msg-rail" aria-label="Your messages"></nav>
       <div class="chat-resize" id="chat-resize" title="Drag to make the chat wider or narrower · double-click to reset"><i></i></div>
 
-      <div class="composer-wrap">
+      <!-- the floating glass composer; the work dock (goal + to-dos) sits above it -->
+      <div class="composer-wrap" id="composer-wrap">
         <div class="jump" id="jump" hidden><span class="ico" data-icon="arrow-down"></span></div>
         <div class="work-dock" id="work-dock"></div>
         <div class="slash-menu" id="slash-menu" hidden></div>
@@ -92,14 +99,29 @@
       </div>
     </main>
 
-    <aside class="browser-pane" id="browser-pane" aria-label="Browser"></aside>
-
-    <aside class="drawer" id="drawer" aria-hidden="true">
-      <div class="drawer-head">
-        <div class="drawer-title" id="drawer-title"></div>
+    <!-- The Workbench: one right-hand panel with tabs. Each tab keeps its own body, so switching
+         tabs never loses state; the browser's <webview>s stay in the DOM (display:none) when hidden. -->
+    <aside class="workbench drawer" id="workbench" aria-hidden="true">
+      <div class="wb-resize" id="wb-resize" title="Drag to resize · double-click to reset"></div>
+      <header class="wb-head">
+        <div class="wb-tabs" id="wb-tabs" role="tablist">
+          <button class="wb-tab" type="button" role="tab" data-tab="live" title="Live"><span class="ico" data-icon="eye"></span><span class="wb-lbl">Live</span></button>
+          <button class="wb-tab" type="button" role="tab" data-tab="changes" title="Changes"><span class="ico" data-icon="diff"></span><span class="wb-lbl">Changes</span><span class="badge wb-badge" id="wb-changes-count" hidden></span></button>
+          <button class="wb-tab" type="button" role="tab" data-tab="browser" title="Browser" hidden><span class="ico" data-icon="globe"></span><span class="wb-lbl">Browser</span></button>
+          <button class="wb-tab" type="button" role="tab" data-tab="context" title="Context"><span class="ico" data-icon="list"></span><span class="wb-lbl">Context</span></button>
+          <button class="wb-tab" type="button" role="tab" data-tab="harness" title="Prompt"><span class="ico" data-icon="scroll"></span><span class="wb-lbl">Prompt</span></button>
+          <button class="wb-tab" type="button" role="tab" data-tab="watch" title="Agents" hidden><span class="ico" data-icon="bot"></span><span class="wb-lbl">Agents</span></button>
+        </div>
         <button class="icon-btn" id="btn-drawer-close" title="Close"></button>
+      </header>
+      <div class="wb-panes" id="wb-panes">
+        <section class="wb-pane" data-pane="live" hidden><div class="drawer-head"><div class="drawer-title" data-title="live"></div></div><div class="drawer-body" data-body="live"></div></section>
+        <section class="wb-pane" data-pane="changes" hidden><div class="drawer-head"><div class="drawer-title" data-title="changes"></div></div><div class="drawer-body" data-body="changes"></div></section>
+        <section class="wb-pane wb-pane-browser" data-pane="browser" hidden><aside class="browser-pane" id="browser-pane" aria-label="Browser"></aside></section>
+        <section class="wb-pane" data-pane="context" hidden><div class="drawer-head"><div class="drawer-title" data-title="context"></div></div><div class="drawer-body" data-body="context"></div></section>
+        <section class="wb-pane" data-pane="harness" hidden><div class="drawer-head"><div class="drawer-title" data-title="harness"></div></div><div class="drawer-body" data-body="harness"></div></section>
+        <section class="wb-pane" data-pane="watch" hidden><div class="drawer-head"><div class="drawer-title" data-title="watch"></div></div><div class="drawer-body" data-body="watch"></div></section>
       </div>
-      <div class="drawer-body" id="drawer-body"></div>
     </aside>
   </div>
 

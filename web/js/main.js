@@ -2,7 +2,7 @@ import { BASE, api, connectEvents, hooks as apiHooks, native, remoteLogin } from
 import { browserHandBack, initBrowser, openBrowserTab, syncBrowserRuns, toggleBrowser } from "./browser.js";
 import { designHooks } from "./design.js";
 import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread, viewImage } from "./chat.js";
-import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
+import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsOf, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
 import { PRESETS, applyAppearance as applyTheme, themeTransition } from "./appearance.js";
 import { applyLanguage } from "./i18n.js";
 import { openPalette } from "./palette.js";
@@ -33,7 +33,7 @@ export const S = {
   current: null,
   draft: { model: null, agent: null, mode: null, files: [], goal: null, worktree: false },
   search: "",
-  drawer: null, // "changes" | "harness"
+  drawer: null, // the open workbench tab: "live" | "changes" | "browser" | "context" | "harness" | "watch", or null when closed
 };
 
 const MODES = {
@@ -156,8 +156,9 @@ async function boot() {
   applyChatWidth(S.settings.ui.chatWidth);
   initDelegate(ctx);
   initLive(ctx);
-  ctx.openLive = () => { if (S.drawer !== "live") openDrawer("live"); };
-  ctx.renderLive = () => { if (S.drawer === "live") renderLive($("drawer-body"), $("drawer-title")); };
+  // A file being written opens the Live tab, unless you are busy in the Browser, Context or Agents tab.
+  ctx.openLive = () => { if (!S.drawer || S.drawer === "changes" || S.drawer === "harness") showTab("live"); };
+  ctx.renderLive = () => { if (S.drawer === "live") renderLive(wbBody("live"), wbTitle("live")); };
   hooks.delegation = (p, o) => delegationCard(p, { ...o, onWatch: openWatch });
   wire();
   wireBrowser();
@@ -562,7 +563,8 @@ async function openThread(id) {
   view.mount(t);
   loadJobs(t).then(() => { if (S.current === t) renderWork(); });
   renderComposerState();
-  refreshDrawer();
+  refreshDrawer("thread");
+  if (sidebarMode() === "hidden") { $("app").classList.remove("sb-open"); applySidebar(); } // phones: the overlay sidebar closes once a thread is picked
   $("input").focus();
   if (S.settings.lastThread !== id) { S.settings.lastThread = id; api.put("/api/settings", { lastThread: id }).catch(() => {}); }
 }
@@ -573,7 +575,7 @@ function showHome() {
   renderThreads();
   renderTopbar();
   renderComposerState();
-  closeDrawer();
+  if (S.drawer !== "browser") closeDrawer(); // the browser is useful without a thread; the thread tabs are not
   const root = $("messages");
   view.thread = null;
   root.replaceChildren();
@@ -825,7 +827,7 @@ function jumpTo(id) {
 
 // ---- chat width: drag the handle at the column's edge ------------------------------------------
 
-const CHAT_W = 820;
+const CHAT_W = 920; // the reading column
 function applyChatWidth(w) {
   document.documentElement.style.setProperty("--chat-w", `${Math.max(560, Math.min(2400, Number(w) || CHAT_W))}px`);
 }
@@ -862,12 +864,14 @@ function wireBrowser() {
     threadTitle: (sid) => S.sessions.find((s) => s.id === sid)?.title || "",
     isBusy: (sid) => S.busy.has(sid) || !!S.threads.get(sid)?.busy,
     stop: (sid) => api.post(`/api/sessions/${sid}/interrupt`).catch((e) => toast(e.message, "err")),
-    onToggle: (open) => $("btn-browser").classList.toggle("on", open),
+    // The panel lives in the workbench's Browser tab: "open" means that tab is showing.
+    onToggle: (open) => { if (open !== (S.drawer === "browser")) (open ? showTab("browser") : closeDrawer()); },
   });
   if (!on) return;
   designHooks.openInBrowser = openBrowserTab;
   $("btn-browser").hidden = false;
-  $("btn-browser").addEventListener("click", () => toggleBrowser());
+  wbTab("browser").hidden = false;
+  $("btn-browser").addEventListener("click", () => openDrawer("browser"));
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "b") {
       e.preventDefault();
@@ -883,7 +887,7 @@ function showPalette() {
     { group: "Actions", title: document.documentElement.dataset.theme === "dark" ? "Switch to light" : "Switch to dark", icon: "sun", keywords: "theme mode dark light", run: () => toggleTheme() },
     { group: "Actions", title: S.settings.ui.language === "ar" ? "English interface" : "العربية — Arabic interface", icon: "languages", keywords: "language arabic rtl", run: () => setLanguage(S.settings.ui.language === "ar" ? "en" : "ar") },
     { group: "Actions", title: "Set a goal", icon: "target", run: () => editGoal() },
-    ...($("btn-browser").hidden ? [] : [{ group: "Actions", title: "Browser", icon: "globe", sub: "Ctrl+Shift+B", keywords: "web page internet tab", run: () => toggleBrowser() }]),
+    ...($("btn-browser").hidden ? [] : [{ group: "Actions", title: "Browser", icon: "globe", sub: "Ctrl+Shift+B", keywords: "web page internet tab", run: () => openDrawer("browser") }]),
     { group: "Actions", title: "Open folder…", icon: "folder-plus", run: chooseFolder },
     { group: "Actions", title: "Import thread…", icon: "arrow-down", run: importThread },
     ...(t ? [
@@ -891,6 +895,7 @@ function showPalette() {
       { group: "Thread", title: "Live", icon: "eye", run: () => openDrawer("live") },
       { group: "Thread", title: "Changes", icon: "diff", run: () => openDrawer("changes") },
       { group: "Thread", title: "Prompt", icon: "scroll", run: () => openDrawer("harness") },
+      { group: "Thread", title: "Context", icon: "list", run: () => openDrawer("context") },
       { group: "Thread", title: "Context editor", icon: "edit", run: editContext },
       { group: "Thread", title: "Rename", icon: "edit", run: renameThread },
       { group: "Thread", title: "Fork thread", icon: "branch", run: () => forkThread(t.messages.at(-1)?.id) },
@@ -912,32 +917,39 @@ async function applyPreset(id) {
   try { S.settings = await api.put("/api/settings", { ui: patch }); } catch (err) { toast(err.message, "err"); }
 }
 
-// ---- the side pane (Live, Watch, Changes, Prompt) can be dragged wider or narrower -------------
+// ---- the workbench can be dragged wider or narrower (its left edge); the width is remembered -------
 
+const WB_W_KEY = "afh-wb-w";
 function wireDrawerResize() {
-  const drawer = $("drawer");
-  const handle = el("div.drawer-resize", { title: "Drag to resize · double-click to reset" });
-  drawer.prepend(handle);
-  const saved = Number(S.settings.ui.drawerWidth) || 0;
-  if (saved) drawer.style.setProperty("--drawer-w", `${saved}px`);
+  const wb = $("workbench");
+  const handle = $("wb-resize");
+  let saved = 0;
+  try { saved = Number(localStorage.getItem(WB_W_KEY)) || 0; } catch {}
+  saved = saved || Number(S.settings.ui.drawerWidth) || 0;
+  if (saved) wb.style.setProperty("--wb-w", `${saved}px`);
   handle.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
     document.body.classList.add("resizing-drawer");
     const rtl = document.documentElement.dir === "rtl";
-    let w = drawer.getBoundingClientRect().width;
+    let w = wb.getBoundingClientRect().width;
     const move = (ev) => {
       w = Math.round(Math.max(320, Math.min(innerWidth - 360, rtl ? ev.clientX : innerWidth - ev.clientX)));
-      drawer.style.setProperty("--drawer-w", `${w}px`);
+      wb.style.setProperty("--wb-w", `${w}px`);
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", () => {
       handle.removeEventListener("pointermove", move);
       document.body.classList.remove("resizing-drawer");
+      try { localStorage.setItem(WB_W_KEY, String(w)); } catch {}
       saveSettings({ ui: { drawerWidth: w } }).catch(() => {});
     }, { once: true });
   });
-  handle.addEventListener("dblclick", () => { drawer.style.removeProperty("--drawer-w"); saveSettings({ ui: { drawerWidth: 0 } }).catch(() => {}); });
+  handle.addEventListener("dblclick", () => {
+    wb.style.removeProperty("--wb-w");
+    try { localStorage.removeItem(WB_W_KEY); } catch {}
+    saveSettings({ ui: { drawerWidth: 0 } }).catch(() => {});
+  });
 }
 
 // ---- goal, to-do list, background jobs, worktree ------------------------------------------
@@ -1066,52 +1078,128 @@ async function copyThread() {
   toast("Thread copied", "ok");
 }
 
-// ---- drawer ------------------------------------------------------------------------
+// ---- the workbench: one right-hand panel with tabs (Live, Changes, Browser, Context, Prompt, Agents) ----
+// Each tab keeps its own body, so switching never loses what was drawn. `openDrawer`/`closeDrawer`
+// keep their old names and toggle semantics for the chips, the palette and the live pane.
 
+const WB_TABS = ["live", "changes", "browser", "context", "harness", "watch"];
+const WB_CHIP = { live: "btn-live", changes: "btn-changes", browser: "btn-browser", context: "btn-context", harness: "btn-harness" };
+const WB_TAB_KEY = "afh-wb-tab";
+const wbTab = (kind) => document.querySelector(`#wb-tabs .wb-tab[data-tab="${kind}"]`);
+const wbPane = (kind) => document.querySelector(`#wb-panes .wb-pane[data-pane="${kind}"]`);
+const wbBody = (kind) => document.querySelector(`#wb-panes [data-body="${kind}"]`);
+const wbTitle = (kind) => document.querySelector(`#wb-panes [data-title="${kind}"]`);
+const wbDrawn = { context: null }; // which thread the Context tab was drawn for (it is a full editor; redraw only when needed)
+
+/** Toggle a tab: clicking the chip of the open tab closes the workbench, anything else shows that tab. */
 function openDrawer(kind) {
   if (S.drawer === kind) return closeDrawer();
-  if (S.drawer === "watch") closeWatch();
+  showTab(kind);
+}
+
+/** Show a tab (never closes). */
+function showTab(kind) {
+  if (!WB_TABS.includes(kind)) return;
+  const was = S.drawer;
   S.drawer = kind;
-  $("drawer").classList.add("open");
-  $("drawer").classList.toggle("watch", kind === "watch" || kind === "live");
-  $("drawer").setAttribute("aria-hidden", "false");
-  $("btn-changes").classList.toggle("on", kind === "changes");
-  $("btn-harness").classList.toggle("on", kind === "harness");
-  $("btn-live").classList.toggle("on", kind === "live");
-  refreshDrawer();
+  const wb = $("workbench");
+  wb.classList.add("open");
+  wb.setAttribute("aria-hidden", "false");
+  for (const k of WB_TABS) {
+    wbPane(k).hidden = k !== kind;
+    wbTab(k).classList.toggle("on", k === kind);
+    wbTab(k).setAttribute("aria-selected", String(k === kind));
+    const chip = WB_CHIP[k] && $(WB_CHIP[k]);
+    if (chip) chip.classList.toggle("on", k === kind);
+  }
+  if (kind === "watch") wbTab("watch").hidden = false;
+  if (kind === "browser") toggleBrowser(true); // the panel's own "open" flag (screenshots need a visible pane)
+  else if (was === "browser") toggleBrowser(false);
+  try { localStorage.setItem(WB_TAB_KEY, kind); } catch {}
+  refreshDrawer("open");
 }
 
 function closeDrawer() {
-  if (S.drawer === "watch") closeWatch();
+  const was = S.drawer;
+  if (was === "watch") closeWatch();
   S.drawer = null;
-  $("drawer").classList.remove("open", "watch");
-  $("drawer").setAttribute("aria-hidden", "true");
-  $("btn-changes").classList.remove("on");
-  $("btn-harness").classList.remove("on");
-  $("btn-live").classList.remove("on");
+  const wb = $("workbench");
+  wb.classList.remove("open");
+  wb.setAttribute("aria-hidden", "true");
+  for (const k of WB_TABS) {
+    wbTab(k).classList.remove("on");
+    const chip = WB_CHIP[k] && $(WB_CHIP[k]);
+    if (chip) chip.classList.remove("on");
+  }
+  if (was === "browser") toggleBrowser(false);
+  syncWatchTab();
+}
+
+/** Reopen the workbench on the tab it was last on (the close button's counterpart: Ctrl+Shift+W). */
+function reopenWorkbench() {
+  let last = null;
+  try { last = localStorage.getItem(WB_TAB_KEY); } catch {}
+  if (!last || !WB_TABS.includes(last) || wbTab(last).hidden) last = "live";
+  showTab(last);
+}
+
+/** The Agents tab shows only when there is something to show: a watched subagent or subagents in this thread. */
+function syncWatchTab() {
+  const t = S.current;
+  wbTab("watch").hidden = !D.watch && !(t && subagentsOf(t).length);
 }
 
 function openWatch(childId) {
   D.watch = childId;
-  if (S.drawer !== "watch") openDrawer("watch");
-  else refreshDrawer();
+  if (S.drawer !== "watch") showTab("watch");
+  else refreshDrawer("open");
 }
 
-async function refreshDrawer() {
+/** Redraw the open tab. `reason`: "open" (tab shown), "thread" (another thread), "changes" (a tool finished), "run" (a run ended). */
+async function refreshDrawer(reason = "changes") {
   const t = S.current;
   updateChangesBadge();
-  if (!S.drawer || !t) return;
-  const body = $("drawer-body");
+  syncWatchTab();
+  if (!S.drawer || S.drawer === "browser") return;
+  if (!t) {
+    for (const k of WB_TABS) if (k !== "browser") { wbBody(k).replaceChildren(el("div.drawer-empty", ico(wbTab(k).querySelector(".ico").dataset.icon || "list"), el("div", "Open a thread to use the workbench."))); wbTitle(k).replaceChildren(); }
+    wbDrawn.context = null;
+    return;
+  }
+  const body = wbBody(S.drawer), title = wbTitle(S.drawer);
   if (S.drawer === "watch") {
-    await renderWatch(body, $("drawer-title"), { onOpenAsThread: (id) => { closeDrawer(); openThread(id); } });
+    if (!D.watch) {
+      title.replaceChildren(ico("bot"), el("span", "Agents"));
+      const all = subagentsOf(t);
+      body.replaceChildren(all.length ? el("div.wb-agents", all.map((p) => delegationCard(p, { thread: t, open: new Set(), onWatch: openWatch }))) : el("div.drawer-empty", ico("bot"), el("div", "No subagents in this thread yet.")));
+      return;
+    }
+    await renderWatch(body, title, { onOpenAsThread: (id) => { closeDrawer(); openThread(id); } });
     return;
   }
   if (S.drawer === "live") {
-    renderLive(body, $("drawer-title"));
+    renderLive(body, title);
+    return;
+  }
+  if (S.drawer === "context") {
+    // A full editor: draw it when the tab opens, the thread changes or a run ends — not on every tool call.
+    if (reason === "changes" && wbDrawn.context === t.id) return;
+    wbDrawn.context = t.id;
+    title.replaceChildren(ico("list"), el("span", "Context"), el("button.btn.ghost.sm", { title: "Open in a dialog", on: { click: editContext } }, ico("external")));
+    body.replaceChildren(el("div.drawer-empty", el("span.spinner")));
+    await openContextEditor(ctx, t, { mount: body, onSaved: async (session) => {
+      if (session.id !== t.id) {
+        S.threads.delete(t.id);
+        S.sessions = S.sessions.filter((s) => s.id !== t.id);
+        S.sessions.unshift(session);
+      }
+      wbDrawn.context = null;
+      await reloadCurrent(session.id);
+    } });
     return;
   }
   if (S.drawer === "changes") {
-    $("drawer-title").replaceChildren(ico("diff"), "Changes");
+    title.replaceChildren(ico("diff"), "Changes");
     let diffs = [];
     try {
       diffs = await api.get(`/api/sessions/${t.id}/diff`);
@@ -1137,7 +1225,7 @@ async function refreshDrawer() {
       body.append(card);
     });
   } else {
-    $("drawer-title").replaceChildren(ico("scroll"), "What the model is told");
+    title.replaceChildren(ico("scroll"), "What the model is told");
     body.replaceChildren(el("div.drawer-empty", el("span.spinner")));
     try {
       const h = await api.get(`/api/sessions/${t.id}/harness`);
@@ -1171,11 +1259,12 @@ function renderHarness(h) {
 }
 
 function updateChangesBadge() {
-  const badge = $("changes-count");
   const t = S.current;
   const n = t ? collectEdits(t).length : 0;
-  badge.hidden = !n;
-  badge.textContent = n;
+  for (const badge of [$("changes-count"), $("wb-changes-count")]) {
+    badge.hidden = !n;
+    badge.textContent = n;
+  }
 }
 
 // ---- composer -----------------------------------------------------------------------
@@ -1748,7 +1837,8 @@ function onEvent(ev) {
   if (S.current === t) {
     view.update(result);
     if (result.status) renderComposerState();
-    if (result.changes || /execution\.(succeeded|failed|interrupted)/.test(type)) refreshDrawerSoon();
+    if (/execution\.(succeeded|failed|interrupted)/.test(type)) refreshDrawerSoon("run");
+    else if (result.changes) refreshDrawerSoon("changes");
   } else if (D.children.has(sid)) {
     onChildEvent(sid, result, view);
     if (D.watch === sid && result.status) refreshDrawerSoon();
@@ -1765,8 +1855,12 @@ function onEvent(ev) {
 
 let catalogTimer = 0;
 const reloadCatalogSoon = () => { clearTimeout(catalogTimer); catalogTimer = setTimeout(() => reloadCatalog().catch(() => {}), 800); };
-let drawerTimer = 0;
-const refreshDrawerSoon = () => { clearTimeout(drawerTimer); drawerTimer = setTimeout(refreshDrawer, 300); };
+let drawerTimer = 0, drawerReason = "changes";
+const refreshDrawerSoon = (reason = "changes") => {
+  if (reason === "run") drawerReason = "run"; // a run ending outranks a tool finishing
+  clearTimeout(drawerTimer);
+  drawerTimer = setTimeout(() => { const r = drawerReason; drawerReason = "changes"; refreshDrawer(r); }, 300);
+};
 
 // ---- wiring ------------------------------------------------------------------------
 
@@ -1780,16 +1874,73 @@ async function openThreadIn(id, directory) {
 export const ctx = { S, saveSettings, reloadCatalog, project, modelName, invalidateCommands, setLanguage, openThread: openThreadIn, onReady: null, onCatalogEvent: null };
 window.__afh = { S, D, ctx, view, live: liveState }; // for debugging from the devtools console
 
-function toggleSidebar() {
-  $("app").classList.toggle(innerWidth <= 980 ? "sb-open" : "sb-hidden");
-  syncSidebarButton();
+// ---- sidebar: an icon rail that expands on hover, pinned open or collapsed with Ctrl+B ----------------
+// Wide windows start expanded, windows under 1100px start as the rail; a pin (the collapse button or
+// Ctrl+B) is remembered. Phones have no rail: the sidebar hides and slides over the chat when asked.
+
+const SB_KEY = "afh-sidebar";
+const RAIL_BELOW = 1100, PHONE_BELOW = 640;
+let sbPin = "";
+try { sbPin = localStorage.getItem(SB_KEY) || ""; } catch {}
+
+function sidebarMode() {
+  if (innerWidth <= PHONE_BELOW) return "hidden";
+  if (sbPin === "open" || sbPin === "rail") return sbPin;
+  return innerWidth < RAIL_BELOW ? "rail" : "open";
 }
 
-function syncSidebarButton() {
+function applySidebar() {
   const app = $("app");
-  $("btn-expand").hidden = innerWidth <= 980 ? app.classList.contains("sb-open") : !app.classList.contains("sb-hidden");
+  const mode = sidebarMode();
+  app.classList.toggle("sb-rail", mode === "rail");
+  app.classList.toggle("sb-hidden", mode === "hidden");
+  if (mode !== "hidden") app.classList.remove("sb-open");
+  if (mode !== "rail") app.classList.remove("sb-peek");
+  $("btn-expand").hidden = mode !== "hidden" || app.classList.contains("sb-open");
+  $("btn-collapse").title = mode === "rail" ? "Show sidebar (Ctrl+B)" : "Hide sidebar (Ctrl+B)";
 }
-addEventListener("resize", syncSidebarButton);
+
+function toggleSidebar() {
+  const app = $("app");
+  if (sidebarMode() === "hidden") {
+    app.classList.toggle("sb-open");
+    $("btn-expand").hidden = app.classList.contains("sb-open");
+    return;
+  }
+  sbPin = sidebarMode() === "rail" ? "open" : "rail";
+  try { localStorage.setItem(SB_KEY, sbPin); } catch {}
+  applySidebar();
+}
+
+/** Bring the sidebar into view without pinning it (Ctrl+K, the rail's search button). */
+function revealSidebar() {
+  const app = $("app");
+  const mode = sidebarMode();
+  if (mode === "rail") app.classList.add("sb-peek");
+  if (mode === "hidden") { app.classList.add("sb-open"); $("btn-expand").hidden = true; }
+}
+
+function wireSidebar() {
+  const app = $("app"), sb = $("sidebar");
+  let timer = 0;
+  const peek = () => { clearTimeout(timer); if (app.classList.contains("sb-rail")) app.classList.add("sb-peek"); };
+  const unpeek = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (sb.matches(":hover")) return;
+      if (sb.contains(document.activeElement) && document.activeElement.matches("input, textarea")) return; // typing in the search box
+      if (document.querySelector("#overlay-root .pop")) { timer = setTimeout(unpeek, 250); return; } // a menu opened from the sidebar
+      app.classList.remove("sb-peek");
+    }, 160);
+  };
+  sb.addEventListener("pointerenter", () => { clearTimeout(timer); timer = setTimeout(peek, 150); });
+  sb.addEventListener("pointerleave", unpeek);
+  sb.addEventListener("focusin", peek);
+  sb.addEventListener("focusout", unpeek);
+  $("sb-search").addEventListener("click", () => { revealSidebar(); $("thread-search").focus(); });
+  addEventListener("resize", applySidebar);
+  applySidebar();
+}
 
 function wire() {
   const ta = $("input");
@@ -1840,8 +1991,9 @@ function wire() {
   $("btn-thread-menu").addEventListener("click", threadMenu);
   $("btn-changes").addEventListener("click", () => openDrawer("changes"));
   $("btn-harness").addEventListener("click", () => openDrawer("harness"));
-  $("btn-context").addEventListener("click", editContext);
+  $("btn-context").addEventListener("click", () => openDrawer("context"));
   $("btn-live").addEventListener("click", () => openDrawer("live"));
+  $("wb-tabs").addEventListener("click", (e) => { const tab = e.target.closest(".wb-tab"); if (tab) showTab(tab.dataset.tab); });
   $("btn-goal").addEventListener("click", () => {
     const t = S.current;
     if (t && (t.goal || t.goalHistory?.length || t.todoHistory?.length)) goalsPopover($("btn-goal"), t, { onEdit: editGoal, onNew: () => openGoalDialog({ thread: { ...t, goal: null, id: t.id }, onSaved: (g) => { t.goal = g; renderWork(); } }) });
@@ -1855,6 +2007,7 @@ function wire() {
   subChip.addEventListener("click", () => S.current && subagentsPopover(subChip, S.current, openWatch));
   wireResize();
   wireDrawerResize();
+  wireComposerHeight();
   $("btn-drawer-close").addEventListener("click", closeDrawer);
   $("btn-collapse").addEventListener("click", toggleSidebar);
   $("btn-expand").addEventListener("click", toggleSidebar);
@@ -1865,14 +2018,23 @@ function wire() {
     const mod = e.ctrlKey || e.metaKey;
     const overlay = document.querySelector(".scrim, .pop");
     if (mod && e.key.toLowerCase() === "n") { e.preventDefault(); showHome(); ta.focus(); }
-    else if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); toggleSidebar(); }
+    else if (mod && e.shiftKey && e.key.toLowerCase() === "w") { e.preventDefault(); S.drawer ? closeDrawer() : reopenWorkbench(); }
+    else if (mod && e.key.toLowerCase() === "b" && !e.shiftKey) { e.preventDefault(); toggleSidebar(); }
     else if (mod && e.key === ",") { e.preventDefault(); openSettings("general", ctx); }
-    else if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); $("thread-search").focus(); }
+    else if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); revealSidebar(); $("thread-search").focus(); }
     else if (mod && e.key.toLowerCase() === "p") { e.preventDefault(); showPalette(); }
     else if (e.key === "Escape" && !overlay && S.current && (S.current.busy || S.busy.has(S.current.id))) { e.preventDefault(); interrupt(); }
   });
   setInterval(renderThreads, 60_000);
-  syncSidebarButton();
+  wireSidebar();
+}
+
+/** The composer floats over the thread, so the thread needs room under its last message: --composer-h. */
+function wireComposerHeight() {
+  const wrap = $("composer-wrap"), main = document.querySelector(".main");
+  const set = () => main.style.setProperty("--composer-h", `${wrap.offsetHeight}px`);
+  if ("ResizeObserver" in window) new ResizeObserver(set).observe(wrap);
+  set();
 }
 
 boot();

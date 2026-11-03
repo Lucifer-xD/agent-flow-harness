@@ -61,6 +61,8 @@ const AR = {
   "From an export file, OpenCode or Zadloop": "من ملف تصدير أو OpenCode أو Zadloop", "Hide sidebar (Ctrl+B)": "إخفاء الشريط الجانبي (Ctrl+B)", "Show sidebar (Ctrl+B)": "إظهار الشريط الجانبي (Ctrl+B)",
   "Engine connection": "اتصال المحرك", "Switch dark / light": "التبديل بين الداكن والفاتح", "Switch to dark": "التبديل إلى الداكن", "Switch to light": "التبديل إلى الفاتح",
   "Goal": "الهدف", "Live": "مباشر", "Context": "السياق", "Prompt": "التعليمات", "Changes": "التغييرات", "Thread actions": "إجراءات المحادثة",
+  "Agents": "الوكلاء", "Workbench": "منضدة العمل", "Search threads (Ctrl+K)": "ابحث في المحادثات (Ctrl+K)", "Drag to resize · double-click to reset": "اسحب لتغيير الحجم · انقر مرتين للإعادة",
+  "Open a thread to use the workbench.": "افتح محادثة لاستخدام منضدة العمل.", "Open in a dialog": "افتح في نافذة",
   "Watch files being written or edited": "شاهد الملفات أثناء كتابتها أو تعديلها", "See and edit everything the model sees": "اعرض وعدّل كل ما يراه النموذج",
   "See what the model is told": "اعرض ما يُقال للنموذج", "Changed files": "الملفات المعدّلة", "Double-click to rename": "انقر مرتين لإعادة التسمية",
   "Ask anything…": "اسأل عن أي شيء…", "Attach files": "إرفاق ملفات", "Send (Enter)": "إرسال (Enter)", "Send (Ctrl+Enter)": "إرسال (Ctrl+Enter)", "Stop (Esc)": "إيقاف (Esc)",
