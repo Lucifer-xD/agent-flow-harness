@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Features · Agent Flow Harness</title>
-  <meta name="description" content="Everything Agent Flow Harness does: goals and live to-do lists, a project memory it keeps between threads, helpers working in parallel, a live view of every file, rewind, approvals, hooks, 46 themes, Arabic, MCP, skills and a local API.">
+  <meta name="description" content="Everything Agent Flow Harness does: goals and live to-do lists, a project memory it keeps between threads, helpers working in parallel, a built-in browser with DevTools, Red Team audits, rewind, approvals, hooks, 46 themes, Arabic, MCP, skills and a local API.">
   <!-- seo -->
   <link rel="canonical" href="https://agentflowharness.com/features">
   <meta property="og:url" content="https://agentflowharness.com/features">
@@ -14,14 +14,14 @@
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta property="og:title" content="Features · Agent Flow Harness">
-  <meta property="og:description" content="Everything Agent Flow Harness does: goals and live to-do lists, a project memory it keeps between threads, helpers working in parallel, a live view of every file, rewind, approvals, hooks, 46 themes, Arabic, MCP, skills and a local API.">
+  <meta property="og:description" content="Everything Agent Flow Harness does: goals and live to-do lists, a project memory it keeps between threads, helpers working in parallel, a built-in browser with DevTools, Red Team audits, rewind, approvals, hooks, 46 themes, Arabic, MCP, skills and a local API.">
   <meta property="og:type" content="website">
   <!-- /seo -->
-  <meta name="theme-color" content="#0a0807">
+  <meta name="theme-color" content="#f7f3ee">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/pages.css">
   <script type="importmap">
@@ -33,27 +33,28 @@
 </head>
 <body data-page="features" data-scene="features">
   <canvas id="scene" aria-hidden="true"></canvas>
-  <div class="grain" aria-hidden="true"></div>
   <header data-nav></header>
 
   <main>
     <section class="page-hero staged">
       <div class="page-stage" data-stage aria-hidden="true"></div>
-      <p class="kicker" data-reveal>Features</p>
-      <h1 class="display" data-reveal style="--d:.08s">Everything<br><span class="grad-text">AFH does.</span></h1>
-      <p class="lead" data-reveal style="--d:.16s">An agent that plans its own work, splits it across helpers and shows you every line as it lands — with the controls to steer it, stop it and rewind it.</p>
-      <div class="cta-row" data-reveal style="--d:.24s">
-        <a class="btn btn-primary" href="/download">Download for Windows</a>
-        <a class="btn btn-ghost" href="/docs">Getting started</a>
+      <div class="page-copy">
+        <p class="kicker" data-reveal>Features</p>
+        <h1 class="display" data-reveal style="--d:.08s">Everything<br><span class="grad-text">AFH does.</span></h1>
+        <p class="lead" data-reveal style="--d:.16s">An agent that plans its own work, splits it across helpers and shows you every line as it lands — with the controls to steer it, stop it and rewind it.</p>
+        <div class="cta-row" data-reveal style="--d:.24s">
+          <a class="btn btn-primary" href="/download">Download for Windows</a>
+          <a class="btn btn-ghost" href="/docs">Getting started</a>
+        </div>
       </div>
     </section>
 
     <nav class="subnav" aria-label="Feature groups">
-      <a href="#plan">Plans</a><a href="#agents">Agents</a><a href="#watch">Watch it work</a><a href="#control">Control</a><a href="#long">Long sessions</a><a href="#yours">Make it yours</a><a href="#build">Build on it</a>
+      <a href="#plan">Plans</a><a href="#modes">Modes</a><a href="#agents">Agents</a><a href="#watch">Watch it work</a><a href="#control">Control</a><a href="#long">Long sessions</a><a href="#yours">Make it yours</a><a href="#build">Build on it</a>
     </nav>
 
     <div class="wrap">
-      <!-- 1 · planning -->
+      <!-- 01 · planning -->
       <section class="group" id="plan" data-scene='{"plan":1,"activity":0.5}'>
         <div class="group-head" data-reveal>
           <span class="group-n">01</span>
@@ -79,7 +80,7 @@
           <article class="fcard" data-reveal>
             <div class="ficon">?</div>
             <h3>It asks instead of guessing</h3>
-            <p>When a choice is really yours — which library, which design — it pauses and asks you multiple-choice questions, then carries on with your answer.</p>
+            <p>When a choice is really yours — which library, which design — it pauses and asks you multiple-choice questions, then carries on with your answer. Before a new app or site, it shows you design options A, B and C as live screens to pick from.</p>
           </article>
           <article class="fcard" data-reveal style="--d:.06s">
             <div class="ficon">⌁</div>
@@ -87,9 +88,11 @@
             <p>Close the app mid-run, or lose power: when AFH starts again, interrupted runs resume by themselves.</p>
           </article>
           <article class="fcard wide" data-reveal>
-            <div class="ficon">❖</div>
-            <h3>It remembers your project</h3>
-            <p>How to run it, how to test it, the gotcha that cost an hour, the way you like things done: the agent saves what it learns to the project's memory, and every new thread starts knowing it. Open <b>Memory</b> beside the Goal button to add, edit or forget anything — or just say “remember…”, or type <code>/remember</code>. Your changes reach the agent on its very next step.</p>
+            <div class="fcard-copy">
+              <div class="ficon">❖</div>
+              <h3>It remembers your project</h3>
+              <p>How to run it, how to test it, the gotcha that cost an hour, the way you like things done: the agent saves what it learns to the project's memory, and every new thread starts knowing it. Open <b>Memory</b> beside the Goal button to add, edit or forget anything — or just say “remember…”, or type <code>/remember</code>. Your changes reach the agent on its very next step.</p>
+            </div>
             <div class="ui">
               <div class="ui-row"><span class="ui-dot"></span>Run the tests with <code>pnpm test</code></div>
               <div class="ui-row"><span class="ui-dot"></span>The API needs the dev server on port 4000</div>
@@ -97,31 +100,61 @@
             </div>
           </article>
           <article class="fcard wide" data-reveal>
-            <div class="ficon">▣</div>
-            <h3>Your computer, from your phone</h3>
-            <p>The AFH app for Android and iPhone does two things. <b>Chat</b> with any model straight from your phone — OpenAI, Anthropic, Gemini, OpenRouter, Groq, DeepSeek, xAI, Mistral or your own server — with your own keys, kept in the phone's secure storage. And <b>remote control</b>: your computers show who's online; tap one for its threads across every project, follow replies live step by step, approve and answer with a tap, send the next task, start a new thread or stop a run. Connect a computer once with the <b>Sign in</b> button at the bottom of AFH's sidebar and approve it on agentflowharness.com — AFH never sees your password, and there's nothing to open on your router. The account is only for remote control; chat and AFH itself need none.</p>
+            <div class="fcard-copy">
+              <div class="ficon">▣</div>
+              <h3>Your computer, from your phone</h3>
+              <p>The AFH app for Android and iPhone does two things. <b>Chat</b> with any model straight from your phone — OpenAI, Anthropic, Gemini, OpenRouter, Groq, DeepSeek, xAI, Mistral or your own server — with your own keys, kept in the phone's secure storage. And <b>remote control</b>: your computers show who's online; tap one for its threads across every project, follow replies live step by step, approve and answer with a tap, send the next task, start a new thread or stop a run.</p>
+              <p>Connect a computer once with the <b>Sign in</b> button at the bottom of AFH's sidebar and approve it on agentflowharness.com — AFH never sees your password, and there's nothing to open on your router. The account is only for remote control; chat and AFH itself need none.</p>
+            </div>
             <div class="ui">
               <div class="ui-row"><span class="ui-dot g"></span><b>Work PC</b><span class="r">Online</span></div>
               <div class="ui-row"><span class="ui-dot off"></span>Laptop<span class="r">seen 2 h ago</span></div>
-            </div>
-          </article>
-          <article class="fcard wide" data-reveal>
-            <div class="ficon">◐</div>
-            <h3>Three ways to work</h3>
-            <p>Choose a mode in the message box — or create your own agents with their own prompts, models and tools.</p>
-            <div class="modes">
-              <div class="mode on"><b>Build</b><span>Reads, edits and runs code in your project. The default.</span></div>
-              <div class="mode"><b>Plan</b><span>Investigates and proposes a plan without changing anything.</span></div>
-              <div class="mode"><b>Delegate</b><span>Leads the work and hands tasks to your delegate models.</span></div>
+              <div class="ui-row"><span class="ui-dot"></span>Login page with tests<span class="r">running</span></div>
             </div>
           </article>
         </div>
       </section>
 
-      <!-- 2 · agents -->
-      <section class="group" id="agents" data-scene='{"net":1,"activity":1.3}'>
+      <!-- 02 · modes -->
+      <section class="group" id="modes" data-scene='{"plan":1,"activity":0.8,"tilt":0.3}'>
         <div class="group-head" data-reveal>
           <span class="group-n">02</span>
+          <h2 class="h2">Four ways to work.</h2>
+          <p class="sub">Pick a mode in the message box — or create your own agents with their own prompts, models and tools.</p>
+        </div>
+        <div class="modes">
+          <article class="mode on" data-reveal>
+            <span class="mode-k">Build</span>
+            <b>Ship it.</b>
+            <p>Reads, edits, runs and tests your project. Asks before anything risky, or runs on its own when you say so. The default.</p>
+          </article>
+          <article class="mode" data-reveal style="--d:.06s">
+            <span class="mode-k">Plan</span>
+            <b>Think first.</b>
+            <p>Reads everything, writes nothing. You get a plan with the files it will touch before a line changes.</p>
+          </article>
+          <article class="mode" data-reveal style="--d:.12s">
+            <span class="mode-k">Delegate</span>
+            <b>Fan out.</b>
+            <p>A lead model briefs helpers that work at the same time, each in its own lane or worktree, and checks what they bring back.</p>
+          </article>
+          <article class="mode red" data-reveal style="--d:.18s">
+            <span class="mode-k">Red Team</span>
+            <b>Break it before they do.</b>
+            <p>Audits your own project for exploitable weaknesses and reports each one with its severity, how it's exploited and the fix. It never edits code.</p>
+            <ul>
+              <li>Auth and OTP flaws, weak sessions and tokens</li>
+              <li>Privilege escalation and admin bypass</li>
+              <li>Injection and exposed secrets</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <!-- 03 · agents -->
+      <section class="group" id="agents" data-scene='{"net":1,"activity":1.3}'>
+        <div class="group-head" data-reveal>
+          <span class="group-n">03</span>
           <h2 class="h2">It splits the work.</h2>
           <p class="sub">A lead agent hands pieces to helpers that run side by side, then checks what they bring back.</p>
         </div>
@@ -154,18 +187,33 @@
         </div>
       </section>
 
-      <!-- 3 · watch -->
+      <!-- 04 · watch -->
       <section class="group" id="watch" data-scene='{"code":1,"activity":0.9}'>
         <div class="group-head" data-reveal>
-          <span class="group-n">03</span>
+          <span class="group-n">04</span>
           <h2 class="h2">You watch it work.</h2>
           <p class="sub">Nothing happens behind a spinner. You see the thinking, the tools and the code as they happen.</p>
         </div>
         <div class="fgrid">
+          <article class="fcard wide" data-reveal>
+            <div class="fcard-copy">
+              <div class="ficon">⌕</div>
+              <h3>A built-in browser, with DevTools</h3>
+              <p>The agent opens pages in a side panel you watch live — your dev server, a docs site, the thing it just built. It clicks and types, runs JavaScript in the console, reads the console errors, inspects every network request and reads the source files the page loaded. So it debugs what it builds instead of guessing.</p>
+              <p>Click into its tab to take over; it waits until you hand it back. Sign-ins are kept between runs, and you can still choose an external Chrome or Edge.</p>
+            </div>
+            <div class="ui net">
+              <div class="ui-row"><i>200</i><b>GET</b><span>/api/session</span><em>Fetch · 13 ms</em></div>
+              <div class="ui-row"><i>200</i><b>GET</b><span>/app.js</span><em>Script · 29 ms</em></div>
+              <div class="ui-row bad"><i>500</i><b>POST</b><span>/api/login</span><em>Fetch · 212 ms</em></div>
+              <div class="ui-row log err"><i></i><span>TypeError: session is undefined · login.tsx:41</span></div>
+              <div class="ui-row log"><i></i><span>document.querySelector("form").checkValidity()</span></div>
+            </div>
+          </article>
           <article class="fcard" data-reveal>
             <div class="ficon">◉</div>
             <h3>Live file pane</h3>
-            <p>Tool arguments stream as they're generated, so code appears character by character in the Live pane — not after the fact.</p>
+            <p>Tool arguments stream as they're generated, so code appears character by character in the Live pane — not after the fact. Commands show their output live too, like a terminal.</p>
           </article>
           <article class="fcard" data-reveal style="--d:.06s">
             <div class="ficon">⏱</div>
@@ -173,16 +221,11 @@
             <p>Thinking time, each tool call, tokens per second and how long each reply took — all in the conversation.</p>
           </article>
           <article class="fcard" data-reveal>
-            <div class="ficon">◳</div>
-            <h3>It checks its work in a browser</h3>
-            <p>The browser tool drives a real Chrome or Edge, and screenshots go back to models that can see — so it notices when the page looks wrong.</p>
-          </article>
-          <article class="fcard" data-reveal style="--d:.06s">
             <div class="ficon">✎</div>
             <h3>Errors caught after edits</h3>
             <p>After the agent edits a file, AFH checks it for errors and hands the results straight back, so broken code is fixed on the spot.</p>
           </article>
-          <article class="fcard wide" data-reveal>
+          <article class="fcard" data-reveal style="--d:.06s">
             <div class="ficon">🎙</div>
             <h3>Images and voice</h3>
             <p>Paste or drop screenshots and files into the message box. Press the mic and speak — your words are typed in for you (with a Groq or OpenAI speech key).</p>
@@ -190,10 +233,10 @@
         </div>
       </section>
 
-      <!-- 4 · control -->
+      <!-- 05 · control -->
       <section class="group" id="control" data-scene='{"net":1,"activity":0.25}'>
         <div class="group-head" data-reveal>
-          <span class="group-n">04</span>
+          <span class="group-n">05</span>
           <h2 class="h2">You stay in control.</h2>
           <p class="sub">Decide what it may do alone, stop it at any moment, and undo anything — files included.</p>
         </div>
@@ -201,12 +244,12 @@
           <article class="fcard" data-reveal>
             <div class="ficon">⛨</div>
             <h3>Three approval modes</h3>
+            <p>Reading <code>.env</code> files always asks, whatever the mode.</p>
             <div class="ui">
               <div class="ui-row"><span class="ui-dot"></span><b>Ask first</b><span class="r">approve edits &amp; commands</span></div>
               <div class="ui-row"><span class="ui-dot g"></span><b>Full access</b><span class="r">works freely</span></div>
               <div class="ui-row"><span class="ui-dot off"></span><b>Read only</b><span class="r">never edits or runs</span></div>
             </div>
-            <p style="margin-top:12px">Reading <code>.env</code> files always asks, whatever the mode.</p>
           </article>
           <article class="fcard" data-reveal style="--d:.06s">
             <div class="ficon">↺</div>
@@ -221,15 +264,15 @@
           <article class="fcard" data-reveal style="--d:.06s">
             <div class="ficon">$</div>
             <h3>Cost you can see</h3>
-            <p>Tokens and cost per thread, budgets that stop a run, and prompt caching on by default for Anthropic models. Subscription plans count as no cost.</p>
+            <p>Tokens and cost per thread, budgets that stop a run, and prompt caching on by default for Anthropic models. A usage meter in the message box shows how much of your plan is left, live.</p>
           </article>
         </div>
       </section>
 
-      <!-- 5 · long sessions -->
+      <!-- 06 · long sessions -->
       <section class="group" id="long" data-scene='{"ring":1,"activity":0.6,"tilt":0.45}'>
         <div class="group-head" data-reveal>
-          <span class="group-n">05</span>
+          <span class="group-n">06</span>
           <h2 class="h2">Built for long sessions.</h2>
           <p class="sub">Jobs that take hours, threads with thousands of messages — AFH is made for them.</p>
         </div>
@@ -257,20 +300,22 @@
         </div>
       </section>
 
-      <!-- 6 · make it yours -->
+      <!-- 07 · make it yours -->
       <section class="group" id="yours" data-scene='{"mark":1,"zoom":0}'>
         <div class="group-head" data-reveal>
-          <span class="group-n">06</span>
+          <span class="group-n">07</span>
           <h2 class="h2">Make it yours.</h2>
           <p class="sub">Your colours, your language, your commands — and new abilities the agent can install for itself.</p>
         </div>
         <div class="fgrid">
           <article class="fcard wide" data-reveal>
-            <div class="ficon">◑</div>
-            <h3>46 themes</h3>
-            <p>29 dark and 17 light, from Sunset and Midnight to Dracula, Nord, Tokyo Night and Catppuccin — or build your own. Switch with a circle, diamond, wipe, fade or blur transition.</p>
+            <div class="fcard-copy">
+              <div class="ficon">◑</div>
+              <h3>46 themes</h3>
+              <p>29 dark and 17 light, from Sunset and Midnight to Dracula, Nord, Tokyo Night and Catppuccin — or build your own. Switch with a circle, diamond, wipe, fade or blur transition.</p>
+            </div>
             <div class="swatches" aria-hidden="true">
-              <i style="background:#ff6a2a"></i><i style="background:#3b5bdb"></i><i style="background:#2f9e44"></i><i style="background:#1c7ed6"></i><i style="background:#e64980"></i><i style="background:#7048e8"></i><i style="background:#bd93f9"></i><i style="background:#88c0d0"></i><i style="background:#7aa2f7"></i><i style="background:#fabd2f"></i><i style="background:#cba6f7"></i><i style="background:#f6f1e9"></i><i style="background:#e9f5ec"></i><i style="background:#fdf6e3"></i>
+              <i style="background:#ff6a2a"></i><i style="background:#3b5bdb"></i><i style="background:#2f9e44"></i><i style="background:#1c7ed6"></i><i style="background:#e64980"></i><i style="background:#7048e8"></i><i style="background:#bd93f9"></i><i style="background:#88c0d0"></i><i style="background:#7aa2f7"></i><i style="background:#fabd2f"></i><i style="background:#cba6f7"></i><i style="background:#f6f1e9"></i><i style="background:#e9f5ec"></i><i style="background:#fdf6e3"></i><i style="background:#17120f"></i><i style="background:#1a1b26"></i>
             </div>
           </article>
           <article class="fcard" data-reveal>
@@ -296,10 +341,10 @@
         </div>
       </section>
 
-      <!-- 7 · API -->
+      <!-- 08 · API -->
       <section class="group" id="build" data-scene='{"net":1,"activity":1}'>
         <div class="group-head" data-reveal>
-          <span class="group-n">07</span>
+          <span class="group-n">08</span>
           <h2 class="h2">Build on it.</h2>
           <p class="sub">Everything the app does is a local API. Start an agent from a script, a git hook or CI, and stream what it does.</p>
         </div>

@@ -17,11 +17,11 @@
   <meta property="og:description" content="Every Agent Flow Harness release, from 1.0 to today: what&#x27;s new, what changed and what was fixed.">
   <meta property="og:type" content="website">
   <!-- /seo -->
-  <meta name="theme-color" content="#0a0807">
+  <meta name="theme-color" content="#f7f3ee">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/pages.css">
   <script type="importmap">
@@ -33,7 +33,6 @@
 </head>
 <body data-page="changelog" data-scene="docs">
   <canvas id="scene" aria-hidden="true"></canvas>
-  <div class="grain" aria-hidden="true"></div>
   <header data-nav></header>
 
   <main>
@@ -45,8 +44,20 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.18.0" data-reveal>
-          <div class="rel-head"><h2>1.18.0</h2><time datetime="2026-11-03">Nov 3, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.19.0" data-reveal>
+          <div class="rel-head"><h2>1.19.0</h2><time datetime="2026-11-03">Nov 3, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">The Studio redesign, and DevTools in the built-in browser</p>
+          <ul>
+            <li><b>A new look for the app — Studio.</b> The thread list folds into a slim icon rail (hover to peek, Ctrl+B to pin), the conversation gets a wider, calmer reading column, and the message box floats as a glass card above it.</li>
+            <li><b>One Workbench on the right</b> instead of separate drawers: Live, Changes, Browser, Context, Prompt and Agents as tabs. Drag its edge to resize; it remembers its width and the tab you were on (Ctrl+Shift+W).</li>
+            <li>Tool cards are cleaner — a verb, the file as a chip, <code>+N −N</code> for edits, and browser screenshots as a thumbnail strip. All 46 themes, Arabic/RTL and compact density carry over.</li>
+            <li>The built-in browser now has <b>DevTools</b> the agent can use: it runs JavaScript in the page's console, reads console errors and warnings, inspects every network request (method, status, timing and the response body) and reads the source files the page loaded — so when a page misbehaves it sees the failing request or the exception instead of guessing from a screenshot.</li>
+            <li>A new website to match: agentflowharness.com was rebuilt in a light design with the mark in glossy 3D.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.18.0" data-reveal>
+          <div class="rel-head"><h2>1.18.0</h2><time datetime="2026-11-03">Nov 3, 2026</time></div>
           <p class="title">Chat with ChatGPT</p>
           <ul>
             <li>A second ChatGPT sign-in, beside the Codex one: connect your ChatGPT browser session and use the real GPT-6 family — GPT-6 Astra, GPT-6.1 Sol, GPT-5.6 Terra and the rest — as normal chat models, drawn from your ChatGPT plan rather than your Codex credits.</li>

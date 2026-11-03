@@ -43,9 +43,11 @@ tween({ ...base(), dim: base().dim ?? 1 }, 2.6);
 // sections that change the world while they're in view
 let current = null;
 const zones = [...document.querySelectorAll("[data-scene]:not(body)")];
+// (the world fades behind a section's text unless the section says how bright it wants it)
 const look = (el) => {
   const o = JSON.parse(el.dataset.scene || "{}");
-  return SHAPES.some((k) => k in o) ? { ...base(), ...shape(o) } : { ...base(), ...o };
+  const dim = o.dim ?? 0.3;
+  return SHAPES.some((k) => k in o) ? { ...base(), ...shape(o), dim } : { ...base(), ...o, dim };
 };
 if (zones.length) {
   const io = new IntersectionObserver((entries) => {

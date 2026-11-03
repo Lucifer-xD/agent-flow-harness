@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Agent Flow Harness (AFH) — free AI coding agent for Windows</title>
-  <meta name="description" content="Agent Flow Harness (AFH) — a desktop coding agent that runs on your machine, with your models. Goals, project memory, to-do lists, subagents and a live view of every file it writes.">
+  <meta name="description" content="Agent Flow Harness (AFH) — a desktop coding agent that runs on your machine, with your models. Goals, project memory, to-do lists, subagents, a built-in browser with DevTools, Red Team audits and a live view of every file it writes.">
   <!-- seo -->
   <link rel="canonical" href="https://agentflowharness.com/">
   <meta property="og:url" content="https://agentflowharness.com/">
@@ -15,14 +15,14 @@
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Agent Flow Harness", "alternateName": "AFH", "applicationCategory": "DeveloperApplication", "operatingSystem": "Windows 10, Windows 11, Android, iOS", "description": "A free desktop AI coding agent that runs on your own PC with the models you choose, plus a phone app to chat with any model and control your computer from anywhere.", "url": "https://agentflowharness.com/", "downloadUrl": "https://agentflowharness.com/download", "image": "https://agentflowharness.com/assets/social.png", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}</script>
   <!-- /seo -->
-  <meta name="theme-color" content="#0a0807">
+  <meta name="theme-color" content="#f7f3ee">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
-  <meta property="og:title" content="Agent Flow Harness — your agents, your machine, your flow">
+  <meta property="og:title" content="Agent Flow Harness — build with any model, on your own PC">
   <meta property="og:description" content="A desktop coding agent that plans, delegates and writes code with the models you choose.">
   <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/sections.css">
   <script type="importmap">
@@ -34,35 +34,50 @@
 </head>
 <body data-page="home">
   <canvas id="scene" aria-hidden="true"></canvas>
-  <div class="grain" aria-hidden="true"></div>
 
   <header data-nav></header>
 
   <main id="top">
     <!-- 1 · hero -->
-    <section class="hero" data-chapter="0">
-      <div class="hero-stage" data-stage aria-hidden="true"></div>
+    <section class="hero">
       <div class="hero-copy">
-        <a class="eyebrow eyebrow-link" href="/download#phone"><span class="dot"></span> New in 1.11 · The phone AI can search, set reminders and more — plus AFH on the web <span aria-hidden="true">→</span></a>
+        <a class="eyebrow eyebrow-link" href="/changelog"><span class="tag">New in 1.19</span> DevTools in the built-in browser · the real GPT-6 family in chat <span aria-hidden="true">→</span></a>
         <h1 class="display">
-          <span class="line"><span>Your agents.</span></span>
-          <span class="line"><span>Your machine.</span></span>
-          <span class="line grad"><span>Your flow.</span></span>
+          <span class="line"><span>Build with</span></span>
+          <span class="line"><span>any model.</span></span>
+          <span class="line grad"><span>On your PC.</span></span>
         </h1>
-        <p class="lead">A desktop coding agent that plans, delegates and writes code with the models you choose — and lets you watch every line as it happens.</p>
+        <p class="lead">A free desktop coding agent that plans, delegates and writes code with the models you choose — ChatGPT, Claude, Gemini, Copilot, OpenRouter or local — and shows you every line as it lands.</p>
         <div class="cta-row">
           <a class="btn btn-primary" href="/download">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
             Download for Windows
           </a>
-          <a class="btn btn-ghost" href="#flow">See how it works</a>
+          <a class="btn btn-ghost" href="#flow">Watch it work</a>
         </div>
-        <p class="fine">Free · Windows 10/11, 64-bit · version <span data-version>1.18.0</span></p>
+        <ul class="proof">
+          <li><i></i>Free, forever</li>
+          <li><i></i>No account needed</li>
+          <li><i></i>No telemetry</li>
+          <li><i></i>Version <span data-version>1.19.0</span></li>
+        </ul>
       </div>
+      <div class="hero-stage" data-stage aria-hidden="true"></div>
       <div class="scroll-hint" aria-hidden="true"><span></span>Scroll</div>
     </section>
 
-    <!-- 2 · how it works: a pinned story, the 3D world changes shape with each step -->
+    <!-- 2 · the models it talks to -->
+    <section class="logos" aria-label="Providers">
+      <p class="logos-label">Sign in or add a key. 228 providers, 7,539 models.</p>
+      <div class="marquee" aria-hidden="true">
+        <div class="marquee-track">
+          <span>ChatGPT</span><span>Anthropic</span><span>OpenAI</span><span>Google Gemini</span><span>GitHub Copilot</span><span>OpenRouter</span><span>Kimi</span><span>DeepSeek</span><span>Groq</span><span>Mistral</span><span>xAI</span><span>Ollama</span><span>LM Studio</span><span>Together AI</span><span>Fireworks AI</span><span>Cerebras</span><span>Z.AI · GLM</span><span>Perplexity</span><span>vLLM</span>
+          <span>ChatGPT</span><span>Anthropic</span><span>OpenAI</span><span>Google Gemini</span><span>GitHub Copilot</span><span>OpenRouter</span><span>Kimi</span><span>DeepSeek</span><span>Groq</span><span>Mistral</span><span>xAI</span><span>Ollama</span><span>LM Studio</span><span>Together AI</span><span>Fireworks AI</span><span>Cerebras</span><span>Z.AI · GLM</span><span>Perplexity</span><span>vLLM</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · how it works: a pinned story, the 3D world changes shape with each step -->
     <section id="flow" class="flow">
       <div class="flow-stage">
         <div class="flow-head">
@@ -112,15 +127,26 @@
       </div>
     </section>
 
-    <!-- 3 · the app, tilting up into view -->
+    <!-- 4 · the app -->
     <section class="showcase" id="app">
       <div class="showcase-copy">
         <p class="kicker">The app</p>
-        <h2 class="h2">Everything in one calm window.</h2>
-        <p class="sub">Threads on the left, the conversation in the middle, the goal and to-do list right above your message, and the file being written — live — on the right.</p>
+        <h2 class="h2">One calm window. Everything in view.</h2>
+        <p class="sub">Threads on the left, the conversation in the middle, the goal and to-do list right above your message — and a workbench on the right with the file being written, the changes, and a browser the agent drives.</p>
+      </div>
+      <div class="shot-toggle" role="group" aria-label="Theme of the screenshot">
+        <button type="button" class="on" data-shot="light">Light</button>
+        <button type="button" data-shot="dark">Dark</button>
+        <span class="shot-note">One of 46 themes</span>
       </div>
       <div class="device-wrap">
-        <div class="device">
+        <div class="device real">
+          <picture>
+            <source srcset="/assets/app-light.webp" type="image/webp" data-shot-src="light">
+            <img class="dv-shot" src="/assets/app-light.webp" width="1600" height="1000" alt="The AFH window: threads on the left, the conversation with to-do and edit cards in the middle, the Changes tab of the workbench on the right" loading="lazy" decoding="async">
+          </picture>
+        </div>
+        <div class="device mock" hidden>
           <div class="dv-bar"><i></i><i></i><i></i><span>Agent Flow Harness</span></div>
           <div class="dv-body">
             <aside class="dv-side">
@@ -137,10 +163,11 @@
             <div class="dv-chat">
               <div class="dv-msg you">Add a login page with email and password, and make sure the tests pass.</div>
               <div class="dv-msg ai">
-                <div class="dv-who"><img src="/assets/mark.svg" alt="" width="22" height="13">GPT-6.1 Sol <span>· Build</span></div>
+                <div class="dv-who"><img src="/assets/mark.svg" alt="" width="22" height="13">GPT-6.1 Sol <span class="dv-real">✓ real model</span><span>· Build</span></div>
                 <div class="dv-think">▸ Thought for 4.2s</div>
                 <div class="dv-tool"><b>read</b> src/auth/session.ts</div>
                 <div class="dv-tool"><b>write</b> src/pages/login.tsx <span class="ok">+84</span></div>
+                <div class="dv-tool"><b>browser</b> network · 12 requests, 0 errors</div>
                 <div class="dv-tool"><b>delegate</b> Helper → "write the login tests" <span class="run">running</span></div>
                 <p>The form is in place. A helper is writing tests while I wire the session cookie…</p>
               </div>
@@ -151,47 +178,156 @@
               <div class="dv-input">Message GPT-6.1 Sol…<span class="dv-send">↑</span></div>
             </div>
             <div class="dv-live">
-              <div class="dv-live-head"><span class="live-dot"></span>Live · login.tsx</div>
+              <div class="dv-tabs"><span class="on">Live</span><span>Changes</span><span>Browser</span><span>Context</span></div>
+              <div class="dv-live-head"><span class="live-dot"></span>login.tsx</div>
               <pre class="dv-code"><code data-live></code></pre>
             </div>
           </div>
         </div>
         <div class="float-card fc-1"><b>Goal achieved</b><span>Login works · 12 tests passed</span></div>
         <div class="float-card fc-2"><b>Rewound 2 messages</b><span>3 files restored on disk</span></div>
-        <div class="float-card fc-3"><b>Compacted</b><span>6,040 messages kept · summary inline</span></div>
+        <div class="float-card fc-3"><b>Red Team</b><span>2 findings · 1 critical, fixed</span></div>
       </div>
     </section>
 
-    <!-- 4 · features -->
+    <!-- 5 · features: a bento grid -->
     <section id="features" class="features">
       <div class="section-head">
         <p class="kicker">Features</p>
         <h2 class="h2">Built for the long sessions.</h2>
         <p class="sub">The parts that make an agent dependable when the job takes hours, not minutes.</p>
       </div>
-      <div class="grid">
-        <article class="card"><div class="card-ico">◎</div><h3>Goals</h3><p>The agent sets its own goal from your request and keeps going until it's met — or tells you what's blocking it. Achieved goals are kept under the Goal button.</p></article>
-        <article class="card"><div class="card-ico">❖</div><h3>It remembers your project</h3><p>What the agent learns — how to run and test it, your conventions, your preferences — goes into the project's memory, and every new thread starts knowing it. See and edit it from the Memory button.</p></article>
-        <article class="card"><div class="card-ico">☰</div><h3>A to-do list you can touch</h3><p>Every step shows live. Add, reorder or tick items yourself and the agent sees your edits on its next turn.</p></article>
-        <article class="card"><div class="card-ico">⇶</div><h3>Subagents in parallel</h3><p>A built-in Helper plus your own agents. Watch any of them work from the top bar, see what the lead asked and what came back.</p></article>
-        <article class="card"><div class="card-ico">↺</div><h3>Watch it, rewind it</h3><p>Code streams into the live file pane as it's written. Undo to any message and the thread and the files on disk go back together.</p></article>
-        <article class="card"><div class="card-ico">▣</div><h3>From your phone</h3><p>The AFH app for Android and iPhone: chat with any model using your own keys, and take over AFH on your computer from anywhere — live threads, one-tap approvals, new tasks.</p></article>
-        <article class="card"><div class="card-ico">⑂</div><h3>Git worktrees</h3><p>Give a thread or a helper its own worktree, then merge it back when you're happy. Your main branch stays clean.</p></article>
-        <article class="card"><div class="card-ico">∞</div><h3>Endless threads</h3><p>Huge histories are summarised in parts, in place — old messages stay readable, the model reads the summary. Runs cut off by a restart resume by themselves.</p></article>
-        <article class="card"><div class="card-ico">⚑</div><h3>Hooks, commands, MCP</h3><p>Run checks before or after any tool, add your own slash commands and skills, plug in MCP servers, and keep dev servers running in the background.</p></article>
-        <article class="card"><div class="card-ico">$</div><h3>Cost you can see</h3><p>Tokens and cost per thread, budgets that stop a run, prompt caching on by default for Anthropic models.</p></article>
-        <article class="card"><div class="card-ico">ع</div><h3>English &amp; Arabic</h3><p>A full Arabic interface with right-to-left layout, switchable live — plus 46 themes and a one-click light/dark toggle.</p></article>
-        <article class="card"><div class="card-ico">⌂</div><h3>Yours, locally</h3><p>Everything runs and is stored on your PC. Your keys, your providers, your files — no account needed (one is optional, for the phone app).</p></article>
+      <div class="bento">
+        <article class="tile wide">
+          <div class="tile-ico">◎</div>
+          <h3>Goals that keep it going</h3>
+          <p>The agent sets its own goal from your request and works until it's met — or tells you what's blocking it. Achieved goals stay under the Goal button.</p>
+          <div class="tile-ui goal-ui">
+            <div class="gu-row"><b>◎ Goal</b><span>All tests pass and the login page works</span></div>
+            <div class="gu-bar"><i></i></div>
+            <div class="gu-foot"><span>4 of 5 done</span><span class="gu-ok">autopilot on</span></div>
+          </div>
+        </article>
+        <article class="tile">
+          <div class="tile-ico">❖</div>
+          <h3>It remembers your project</h3>
+          <p>How to run and test it, your conventions, your preferences — kept in project memory. Every new thread starts knowing it.</p>
+        </article>
+        <article class="tile tall">
+          <div class="tile-ico">⇶</div>
+          <h3>Subagents in parallel</h3>
+          <p>A built-in Helper plus your own agents. Watch any of them work from the top bar, see what the lead asked and what came back.</p>
+          <div class="tile-ui agents-ui">
+            <div class="au"><span class="au-dot lead"></span><b>Lead</b><em>claude-opus-5-5</em></div>
+            <div class="au"><span class="au-dot"></span><b>Helper</b><em>writing tests</em></div>
+            <div class="au"><span class="au-dot"></span><b>Helper</b><em>styling the form</em></div>
+            <div class="au"><span class="au-dot"></span><b>Reviewer</b><em>checking diffs</em></div>
+          </div>
+        </article>
+        <article class="tile">
+          <div class="tile-ico">☰</div>
+          <h3>A to-do list you can touch</h3>
+          <p>Every step shows live. Add, reorder or tick items yourself and the agent sees your edits on its next turn.</p>
+        </article>
+        <article class="tile wide">
+          <div class="tile-ico">⌕</div>
+          <h3>A real browser, with DevTools</h3>
+          <p>The agent opens your dev server in a side panel you watch live: clicks, types, runs JavaScript in the console, reads the errors, inspects every network request and reads the source files the page loaded.</p>
+          <div class="tile-ui net-ui">
+            <div class="nu-row"><i>200</i><b>GET</b><span>/api/session</span><em>Fetch · 13 ms</em></div>
+            <div class="nu-row"><i>200</i><b>GET</b><span>/app.js</span><em>Script · 29 ms</em></div>
+            <div class="nu-row bad"><i>500</i><b>POST</b><span>/api/login</span><em>Fetch · 212 ms</em></div>
+          </div>
+        </article>
+        <article class="tile">
+          <div class="tile-ico">↺</div>
+          <h3>Watch it, rewind it</h3>
+          <p>Code streams into the Live pane as it's written. Undo to any message and the thread and the files on disk go back together.</p>
+        </article>
+        <article class="tile">
+          <div class="tile-ico">⑂</div>
+          <h3>Git worktrees</h3>
+          <p>Give a thread or a helper its own worktree, then merge it back when you're happy. Your main branch stays clean.</p>
+        </article>
+        <article class="tile">
+          <div class="tile-ico">∞</div>
+          <h3>Endless threads</h3>
+          <p>Huge histories are summarised in parts, in place. Runs cut off by a restart resume by themselves.</p>
+        </article>
+        <article class="tile">
+          <div class="tile-ico">⚑</div>
+          <h3>Hooks, commands, MCP</h3>
+          <p>Run checks before or after any tool, add your own slash commands and skills, plug in MCP servers.</p>
+        </article>
+        <article class="tile">
+          <div class="tile-ico">$</div>
+          <h3>Cost you can see</h3>
+          <p>Tokens and cost per thread, budgets that stop a run, prompt caching on by default.</p>
+        </article>
+        <article class="tile">
+          <div class="tile-ico">ع</div>
+          <h3>English &amp; Arabic</h3>
+          <p>A full Arabic interface with right-to-left layout — plus 46 themes and a one-click light/dark toggle.</p>
+        </article>
       </div>
       <div class="section-more"><a class="btn btn-ghost" href="/features">Explore every feature <span aria-hidden="true">→</span></a></div>
     </section>
 
-    <!-- 5 · models: a 3D ring of providers -->
+    <!-- 6 · modes -->
+    <section id="modes" class="modes">
+      <div class="section-head center">
+        <p class="kicker">Four ways to work</p>
+        <h2 class="h2">Pick the mode. The harness does the rest.</h2>
+      </div>
+      <div class="mode-grid">
+        <article class="mode-card">
+          <span class="mode-k">Build</span>
+          <h3>Ship it.</h3>
+          <p>Reads, edits, runs and tests. Asks before anything risky, or runs on its own when you say so.</p>
+        </article>
+        <article class="mode-card">
+          <span class="mode-k">Plan</span>
+          <h3>Think first.</h3>
+          <p>Reads everything, writes nothing. You get a plan with the files it will touch before a line changes.</p>
+        </article>
+        <article class="mode-card">
+          <span class="mode-k">Delegate</span>
+          <h3>Fan out.</h3>
+          <p>A lead model briefs helpers that work at the same time, each in its own lane or worktree.</p>
+        </article>
+        <article class="mode-card red">
+          <span class="mode-k">Red Team</span>
+          <h3>Break it before they do.</h3>
+          <p>Audits your own project for exploitable weaknesses — auth and OTP flaws, privilege escalation, injection, exposed secrets — and reports each with severity, exploit and fix. Never edits code.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- 7 · chat with the real GPT-6 family -->
+    <section id="chat" class="chatlane">
+      <div class="chatlane-copy" data-reveal>
+        <p class="kicker">New in 1.18</p>
+        <h2 class="h2">Chat with the real <span class="grad-text">GPT-6 family.</span></h2>
+        <p class="sub">Sign in with your ChatGPT browser session and use GPT-6 Astra, GPT-6.1 Sol, GPT-5.6 Terra and the rest as agents — drawn from your ChatGPT plan, separate from your Codex credits. They drive the whole harness, and every reply carries a badge confirming which model really answered.</p>
+        <div class="cta-row"><a class="btn btn-ghost" href="/docs#providers">How to connect it <span aria-hidden="true">→</span></a></div>
+      </div>
+      <div class="chatlane-demo" aria-hidden="true" data-reveal style="--d:.12s">
+        <div class="cl-head"><span class="cl-model">GPT-6.1 Sol</span><span class="cl-badge">✓ real model · gpt-6.1-sol-wm</span></div>
+        <div class="cl-msg me">Find why the upload test is flaky and fix it.</div>
+        <div class="cl-tool"><b>grep</b> "upload" tests/</div>
+        <div class="cl-tool"><b>read</b> tests/test_upload.py</div>
+        <div class="cl-tool"><b>edit</b> tests/test_upload.py <span>−3 +7</span></div>
+        <div class="cl-tool"><b>shell</b> pytest tests/test_upload.py <span class="ok">12 passed</span></div>
+        <div class="cl-msg ai">The test raced the temp-file cleanup. It now waits for the writer to close — green 12 runs in a row.</div>
+      </div>
+    </section>
+
+    <!-- 8 · models -->
     <section id="models" class="models">
       <div class="section-head center">
         <p class="kicker">Models</p>
         <h2 class="h2">Bring any model.<br><span class="grad-text">Mix them in one thread.</span></h2>
-        <p class="sub">228 providers and 7,539 models, plus any OpenAI-compatible endpoint. Sign in with ChatGPT, GitHub Copilot or OpenRouter, or run models on your own PC. Use a strong model to lead and a fast one to help.</p>
+        <p class="sub">228 providers and 7,539 models, plus any OpenAI-compatible endpoint. Use a strong model to lead and a fast one to help.</p>
       </div>
       <div class="ring-stage">
         <div class="ring">
@@ -203,7 +339,7 @@
       <div class="section-more center"><a class="btn btn-ghost" href="/models">Browse all 228 providers <span aria-hidden="true">→</span></a></div>
     </section>
 
-    <!-- 6 · numbers -->
+    <!-- 9 · numbers -->
     <section class="stats">
       <div class="stat"><b data-count="228">0</b><span>providers built in</span></div>
       <div class="stat"><b data-count="7539">0</b><span>models to choose from</span></div>
@@ -211,12 +347,22 @@
       <div class="stat"><b data-count="0">0</b><span>telemetry, ever</span></div>
     </section>
 
-    <!-- 6½ · your account: every computer, from any browser -->
-    <section id="account" class="acct-cta">
-      <div class="acct-cta-copy" data-reveal>
-        <p class="kicker">AFH account · free</p>
-        <h2 class="h2">Chat with any model. <span class="grad-text">Right here.</span></h2>
-        <p class="sub">Create a free account and chat with 228 providers from your browser — sign in with ChatGPT, Copilot or OpenRouter, or use your own keys. It searches the web, checks the weather, does the math, and hands bigger jobs to AFH on your computer.</p>
+    <!-- 10 · your phone and the web -->
+    <section id="account" class="acct">
+      <div class="acct-demo" aria-hidden="true" data-reveal>
+        <div class="phone">
+          <div class="ph-top"><span class="ph-dot on"></span><b>claude-opus-5-5</b></div>
+          <div class="ph-msg me">Is it going to rain in Cairo this weekend?</div>
+          <div class="ph-step"><i></i>Checked the weather in Cairo</div>
+          <div class="ph-msg ai">No rain — sunny both days, 24–29 °C. Saturday evening gets breezy.</div>
+          <div class="ph-card"><b>Your PC · online</b><span>Login page with tests · running</span></div>
+          <div class="ph-input">Message AFH…</div>
+        </div>
+      </div>
+      <div class="acct-copy" data-reveal style="--d:.12s">
+        <p class="kicker">Phone &amp; web · free account</p>
+        <h2 class="h2">Take it with you.</h2>
+        <p class="sub">The AFH app for Android and iPhone — and the same chat in your browser. Chat with any model using your own keys, and take over AFH on your computer from anywhere: live threads, one-tap approvals, new tasks.</p>
         <div class="cta-row" data-signed-out>
           <a class="btn btn-primary" href="/account?signup">Create a free account</a>
           <a class="btn btn-ghost" href="/account">Sign in</a>
@@ -224,21 +370,11 @@
         <div class="cta-row" data-signed-in>
           <a class="btn btn-primary" href="/chat">Open chat</a>
         </div>
-        <p class="fine">Optional — AFH itself never needs an account. The server keeps your email and your list of computers. Chats and keys stay in your browser.</p>
-      </div>
-      <div class="acct-cta-demo" aria-hidden="true" data-reveal style="--d:.12s">
-        <div class="demo-bar"><span class="demo-dot on"></span><b>claude-opus-5-5</b><span class="demo-tag">Anthropic</span></div>
-        <div class="demo-thread">
-          <div class="demo-msg me">Is it going to rain in Cairo this weekend?</div>
-          <div class="demo-step"><i></i>Checked the weather in Cairo</div>
-          <div class="demo-step"><i></i>Searched the web for "Cairo weekend forecast"</div>
-          <div class="demo-msg ai">No rain expected — sunny both days, 24–29 °C. Saturday evening gets breezy, so bring a light jacket if you're out late.</div>
-          <div class="demo-input">Message AFH…<span></span></div>
-        </div>
+        <p class="fine">Optional — AFH itself never needs an account. Chats and keys stay in your browser.</p>
       </div>
     </section>
 
-    <!-- 7 · download -->
+    <!-- 11 · download -->
     <section id="download" class="download">
       <div class="dl-card">
         <div class="dl-space" data-cta-stage aria-hidden="true"></div>
@@ -253,10 +389,10 @@
         </div>
         <ol class="dl-steps">
           <li><b>1</b>Download and run the installer</li>
-          <li><b>2</b>Add a key in Settings → Models</li>
+          <li><b>2</b>Sign in or add a key in Settings → Models</li>
           <li><b>3</b>Open a folder and say what you want</li>
         </ol>
-        <p class="fine center">Free · Windows 10/11, 64-bit · <span data-size>142 MB</span> · updates itself</p>
+        <p class="fine center">Free · Windows 10/11, 64-bit · <span data-size>143 MB</span> · updates itself</p>
       </div>
     </section>
   </main>
