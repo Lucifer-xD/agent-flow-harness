@@ -583,7 +583,7 @@ def test_catalog_entries_and_factory():
     required = {"name", "kind", "base_url", "env", "docs", "extra"}
     for pid, entry in catalog.KNOWN.items():
         assert required <= set(entry), pid
-        assert entry["kind"] in ("openai", "anthropic", "gemini", "responses", "antigravity"), pid
+        assert entry["kind"] in ("openai", "anthropic", "gemini", "responses", "antigravity", "chatgpt-web"), pid
     assert catalog.KNOWN["kimi"]["base_url"] == "https://api.kimi.ai/coding/v1" and catalog.KNOWN["kimi"]["name"] == "Kimi (kimi.ai coding plan)"
     assert catalog.KNOWN["zai-coding"]["extra"]["thinking"] == "zai"
     assert catalog.KNOWN["ollama"]["needs_key"] is False and catalog.KNOWN["ollama"]["base_url"] == "http://localhost:11434/v1"
@@ -595,6 +595,8 @@ def test_catalog_entries_and_factory():
     assert isinstance(make_provider(kimi), OpenAICompatProvider) and kimi.extra == {"echo_reasoning": True}
     assert isinstance(make_provider(catalog.config_from_catalog("anthropic")), AnthropicProvider)
     assert isinstance(make_provider(catalog.config_from_catalog("gemini")), GeminiProvider)
+    from afh.engine.providers.chatgpt_web import ChatGPTWebProvider
+    assert isinstance(make_provider(catalog.config_from_catalog("chatgpt-chat")), ChatGPTWebProvider)
     with pytest.raises(ValueError):
         make_provider(ProviderConfig(id="x", name="x", kind="nope", base_url=""))  # type: ignore[arg-type]
 

@@ -244,6 +244,13 @@ const AR = {
   "Speak — your words are typed here": "تحدّث — تُكتب كلماتك هنا", "Stop and transcribe": "أوقف وحوّل إلى نص", "Didn't catch any words — try again": "لم تُلتقط أي كلمات — حاول مجددًا",
   "Scheduled job started": "بدأت مهمة مجدولة",
   // 1.16: design first
+  // 1.18: ChatGPT normal-chat lane
+  "ChatGPT (Codex)": "ChatGPT (Codex)", "ChatGPT (chat)": "ChatGPT (محادثة)",
+  "Use your Plus, Pro or Team plan — no API key": "استخدم خطة Plus أو Pro أو Team — بدون مفتاح API",
+  "The real GPT-6 family (Astra, Sol, Terra…) from your browser login — uses your ChatGPT plan, not your Codex credits": "عائلة GPT-6 الحقيقية (Astra وSol وTerra…) من تسجيل دخول متصفحك — تستخدم خطة ChatGPT لديك، وليس رصيد Codex",
+  "Connect ChatGPT (chat)": "ربط ChatGPT (محادثة)", "Connect": "ربط", "Try the browser again": "جرّب المتصفح مجددًا",
+  "Uses your existing ChatGPT login from your browser for the normal chat models. These don't use your Codex/work credits.": "يستخدم تسجيل دخولك الحالي إلى ChatGPT من متصفحك لنماذج المحادثة العادية. هذه لا تستهلك رصيد Codex أو العمل.",
+  "Paste your __Secure-next-auth.session-token (or a session export JSON)": "الصق رمز __Secure-next-auth.session-token (أو ملف تصدير الجلسة JSON)",
   "Choose a design": "اختر تصميمًا", "Compare": "قارن", "Skip": "تخطَّ", "New options": "خيارات جديدة", "Full size": "الحجم الكامل", "View all": "عرض الكل",
   "Open in browser": "افتح في المتصفح", "Open full size": "افتح بالحجم الكامل", "Design": "التصميم", "Design options — skipped": "خيارات التصميم — تم التخطي",
   "Asked for new design options": "طُلبت خيارات تصميم جديدة", "Showed design options": "عرض خيارات التصميم", "Preparing design options": "جارٍ تجهيز خيارات التصميم",

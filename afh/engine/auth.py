@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from datetime import datetime
 import hashlib
 import json
 import logging
@@ -43,6 +44,14 @@ CHATGPT_TOKEN = "https://auth.openai.com/oauth/token"
 CHATGPT_PORT = 1455  # the redirect URI registered for this client
 CHATGPT_BASE = "https://chatgpt.com/backend-api/codex"
 
+# ---- ChatGPT (normal chat lane) ----
+# The ChatGPT web backend, reached with a browser session cookie instead of the Codex OAuth.
+# Gives the normal chat models (unmetered lane) and the work-mode models; the credentials are
+# imported from the user's own logged-in browser (see engine/chrome_import.py). Refreshing the
+# ~10-day access token is a GET /api/auth/session with the long-lived session cookie.
+CHATGPT_WEB_BASE = "https://chatgpt.com"
+CHATGPT_SESSION_COOKIE = "__Secure-next-auth.session-token"
+
 # ---- GitHub Copilot ----
 COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe98"
 COPILOT_BASE = "https://api.githubcopilot.com"
@@ -67,6 +76,7 @@ GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 PROVIDERS = {
     "openrouter": {"id": "openrouter", "catalog": "openrouter"},
     "chatgpt": {"id": "chatgpt", "catalog": "chatgpt"},
+    "chatgpt-web": {"id": "chatgpt-chat", "catalog": "chatgpt-chat"},
     "copilot": {"id": "github-copilot", "catalog": "github-copilot"},
     "antigravity": {"id": "antigravity", "catalog": "antigravity"},
 }
@@ -284,6 +294,44 @@ async def _chatgpt(login: Login) -> None:
     login.provider_id = _save("chatgpt", {"auth": auth})
 
 
+async def import_chatgpt_web(creds: dict) -> dict:
+    """Validate a ChatGPT web session (from Chrome or a paste) and save it as the chatgpt-chat
+    provider. ``creds`` has a ``session_token`` (preferred, refreshable) and/or an ``access`` token,
+    plus optional ``device_id``/``ua``. Returns {account, plan}."""
+    from .providers.pow import DEFAULT_UA
+
+    device_id = creds.get("device_id") or uuid.uuid4().hex
+    ua = creds.get("ua") or DEFAULT_UA
+    session_token = creds.get("session_token", "")
+    async with httpx.AsyncClient(timeout=30) as client:
+        if session_token:
+            resp = await client.get(f"{CHATGPT_WEB_BASE}/api/auth/session",
+                                    headers={"user-agent": ua, "accept": "*/*", "cookie": f"{CHATGPT_SESSION_COOKIE}={session_token}", "oai-device-id": device_id})
+            if resp.status_code != 200:
+                raise RuntimeError(f"ChatGPT did not accept that session ({resp.status_code}). Sign in to chatgpt.com again and re-copy the token.")
+            data = resp.json() if resp.content else {}
+            access = data.get("accessToken") or ""
+            if len(access) < 20:
+                raise RuntimeError("That session is not signed in to ChatGPT. Sign in at chatgpt.com, then copy the token again.")
+        else:
+            access = creds.get("access", "")
+            if len(access) < 20:
+                raise RuntimeError("No session token or access token found.")
+            resp = await client.get(f"{CHATGPT_WEB_BASE}/backend-api/me",
+                                    headers={"authorization": f"Bearer {access}", "user-agent": ua, "oai-device-id": device_id, "oai-language": "en-US"})
+            if resp.status_code != 200:
+                raise RuntimeError(f"ChatGPT did not accept that access token ({resp.status_code}). Paste a fresh one.")
+            data = {"user": resp.json() if resp.content else {}, "expires": creds.get("expires")}
+    account = data.get("account") or {}
+    account_id = account.get("id") if account.get("structure") == "workspace" and account.get("id") else ""
+    user = data.get("user") or {}
+    auth = {"type": "chatgpt-web", "session_token": session_token, "device_id": device_id, "ua": ua,
+            "access": access, "expires": _chatgpt_web_expiry(data.get("expires")), "account_id": account_id,
+            "account": user.get("email") or "", "plan": (account.get("plan") or {}).get("type") if isinstance(account, dict) else ""}
+    _save("chatgpt-web", {"auth": auth})
+    return {"account": auth["account"], "plan": auth.get("plan") or ""}
+
+
 def _chatgpt_auth(tokens: dict, old: dict) -> dict:
     claims = jwt_claims(tokens.get("id_token") or "") or jwt_claims(tokens.get("access_token") or "")
     info = claims.get("https://api.openai.com/auth") or {}
@@ -415,8 +463,34 @@ def _google_error(resp: httpx.Response) -> str:
 _locks: dict[str, asyncio.Lock] = {}
 
 
+def _chatgpt_web_expiry(expires: Any) -> float:
+    """Epoch seconds for the access token; the session reply gives an ISO date, else assume ~9 days."""
+    if isinstance(expires, str) and expires:
+        try:
+            return datetime.fromisoformat(expires.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            pass
+    return time.time() + 9 * 86400
+
+
 async def _refresh(config: ProviderConfig) -> dict:
     auth = config.auth
+    if auth.get("type") == "chatgpt-web":
+        base = (config.base_url or CHATGPT_WEB_BASE).split("/backend-api")[0]
+        headers = {"user-agent": auth.get("ua") or "", "accept": "*/*",
+                   "cookie": f"{CHATGPT_SESSION_COOKIE}={auth.get('session_token', '')}", "oai-device-id": auth.get("device_id", "")}
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(f"{base}/api/auth/session", headers=headers)
+        if resp.status_code != 200:
+            raise RuntimeError("ChatGPT session expired. Import your ChatGPT login from Chrome again in Settings → Models.")
+        data = resp.json() if resp.content else {}
+        access = data.get("accessToken") or ""
+        if len(access) < 20:
+            raise RuntimeError("ChatGPT session expired. Import your ChatGPT login from Chrome again in Settings → Models.")
+        account = data.get("account") or {}
+        account_id = account.get("id") if account.get("structure") == "workspace" and account.get("id") else auth.get("account_id", "")
+        return auth | {"access": access, "expires": _chatgpt_web_expiry(data.get("expires")),
+                       "account_id": account_id or "", "account": (data.get("user") or {}).get("email") or auth.get("account", "")}
     if auth.get("type") == "chatgpt":
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(CHATGPT_TOKEN, json={"client_id": CHATGPT_CLIENT_ID, "grant_type": "refresh_token",
@@ -436,7 +510,7 @@ async def _refresh(config: ProviderConfig) -> dict:
     return await _copilot_token(auth)
 
 
-SIGNED_IN = ("chatgpt", "copilot", "antigravity")
+SIGNED_IN = ("chatgpt", "copilot", "antigravity", "chatgpt-web")
 
 
 def signed_in(config: ProviderConfig) -> bool:
@@ -457,6 +531,13 @@ async def prepare(config: ProviderConfig, req: ChatRequest | None = None, force:
             config.auth = fresh
             provcfg.upsert(config.id, {"auth": fresh})
             auth = fresh
+    if kind == "chatgpt-web":
+        base = (config.base_url or CHATGPT_WEB_BASE).split("/backend-api")[0]
+        h = {"authorization": f"Bearer {auth['access']}", "oai-device-id": auth.get("device_id", ""), "user-agent": auth.get("ua", ""),
+             "oai-language": "en-US", "origin": base, "referer": f"{base}/"}
+        if auth.get("account_id"):
+            h["chatgpt-account-id"] = auth["account_id"]
+        return base, h
     if kind == "chatgpt":
         return config.base_url or CHATGPT_BASE, {"authorization": f"Bearer {auth['access']}", "chatgpt-account-id": auth.get("account_id", ""),
                                                  "OpenAI-Beta": "responses=experimental", "originator": "codex_cli_rs"}

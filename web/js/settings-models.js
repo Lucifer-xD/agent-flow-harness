@@ -8,7 +8,8 @@ const header = (title, lead) => [el("h2", title), lead ? el("p.lead", lead) : nu
 const field = (label, input, help) => el("div.field", el("label", label), input, help ? el("div.help", help) : null);
 
 const SIGN_INS = [
-  { method: "chatgpt", provider: "chatgpt", name: "ChatGPT", sub: "Use your Plus, Pro or Team plan — no API key", icon: "sparkle" },
+  { method: "chatgpt", provider: "chatgpt", name: "ChatGPT (Codex)", sub: "Use your Plus, Pro or Team plan — no API key", icon: "sparkle" },
+  { method: "chatgpt-web", provider: "chatgpt-chat", name: "ChatGPT (chat)", sub: "The real GPT-6 family (Astra, Sol, Terra…) from your browser login — uses your ChatGPT plan, not your Codex credits", icon: "sparkle", custom: true },
   { method: "copilot", provider: "github-copilot", name: "GitHub Copilot", sub: "Claude, GPT and Gemini through your Copilot plan", icon: "github" },
   { method: "antigravity", provider: "antigravity", name: "Google Antigravity", sub: "Gemini and Claude on your Google account's Antigravity quota", icon: "globe",
     warning: "Google has suspended Antigravity access for some accounts that signed in through apps other than Antigravity itself (OpenCode, OpenClaw). "
@@ -61,6 +62,48 @@ export async function signIn(method, { onDone } = {}) {
     }
   };
   if (login.status !== "pending") poll(); else timer = setTimeout(poll, 1500);
+}
+
+/** Connect the ChatGPT normal-chat lane: try the browser's saved login, fall back to pasting the token. */
+export async function connectChatGPTWeb(onDone) {
+  const status = el("div.signin-status");
+  const paste = el("textarea.q-other", { rows: 4, placeholder: "Paste your __Secure-next-auth.session-token (or a session export JSON)" });
+  const pasteBox = el("div", { hidden: true, style: { marginTop: "12px" } },
+    el("p.lead", "AFH couldn't read your browser login automatically. In your browser, open ",
+      el("a", { href: "#", on: { click: (e) => { e.preventDefault(); native.openExternal("https://chatgpt.com"); } } }, "chatgpt.com"),
+      ", then DevTools → Application → Cookies → chatgpt.com, and copy the value of __Secure-next-auth.session-token."),
+    paste,
+    el("div.actions", { style: { marginTop: "10px" } }, el("span", { style: { flex: 1 } }),
+      el("button.btn.primary", { on: { click: () => submit("paste") } }, ico("check"), "Connect")));
+  const retry = el("button.btn", { hidden: true, on: { click: () => submit("chrome") } }, ico("refresh"), "Try the browser again");
+  const dlg = modal(el("div.m-body.signin", { style: { padding: "24px" } },
+    el("h2", "Connect ChatGPT (chat)"),
+    el("p.lead", "Uses your existing ChatGPT login from your browser for the normal chat models. These don't use your Codex/work credits."),
+    status, pasteBox,
+    el("div.actions", el("span", { style: { flex: 1 } }), retry, el("button.btn.ghost", { on: { click: () => dlg.close() } }, "Cancel"))),
+    { small: true });
+
+  async function submit(mode) {
+    retry.hidden = true;
+    status.replaceChildren(el("span.spinner"), mode === "chrome" ? " Reading your browser login…" : " Connecting…");
+    let r;
+    try {
+      r = await api.post("/api/chatgpt-web/connect", mode === "paste" ? { mode, text: paste.value } : { mode });
+    } catch (e) {
+      status.replaceChildren(el("span.err-text", e.message));
+      return;
+    }
+    if (r.ok) {
+      dlg.close();
+      toast(`Connected ChatGPT chat${r.account ? ` · ${r.account}` : ""}${r.source ? ` (from ${r.source})` : ""}`, "ok");
+      onDone?.({ providerID: "chatgpt-chat" });
+      return;
+    }
+    status.replaceChildren(el("span.err-text", r.error || "Couldn't connect"));
+    pasteBox.hidden = false;         // offer the reliable path
+    if (r.reason === "locked") retry.hidden = false;  // closing the browser may fix it
+  }
+  submit("chrome");
 }
 
 async function guard(fn, okMsg) {
@@ -134,7 +177,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
           if (!(await confirmDialog({ title: `Sign out of ${x.name}?`, body: "AFH forgets the sign-in and removes the provider. You can sign in again any time.", confirm: "Sign out", danger: true }))) return;
           if (await guard(() => api.post(`/api/providers/${x.provider}/logout`), "Signed out")) { await ctx.reloadCatalog(); redraw(); }
         } } }, "Sign out")
-          : el("button.btn.primary.sm", { on: { click: () => signIn(x.method, { onDone: afterSignIn }) } }, "Sign in"));
+          : el("button.btn.primary.sm", { on: { click: () => (x.custom ? connectChatGPTWeb(afterSignIn) : signIn(x.method, { onDone: afterSignIn })) } }, "Sign in"));
     }))));
 
   // ---- configured providers with their models
@@ -217,7 +260,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
           el("button.btn.ghost.sm", { on: { click: () => bulk(false) } }, "Show all"), el("button.btn.ghost.sm", { on: { click: () => bulk(true) } }, "Hide all"),
           el("button.btn.ghost.sm", { title: "Fetch the model list again", on: { click: async () => { if (await guard(() => api.post(`/api/providers/${p.id}/refresh`), "Models refreshed")) { await ctx.reloadCatalog(); redraw({ open: p.id }); } } } }, ico("refresh")),
           testBtn,
-          p.login && p.signedIn && p.login !== "openrouter" ? el("button.btn.ghost.sm", { title: "Sign in again", on: { click: () => signIn(p.login, { onDone: afterSignIn }) } }, ico("refresh"), "Sign in again")
+          p.login && p.signedIn && p.login !== "openrouter" ? el("button.btn.ghost.sm", { title: "Sign in again", on: { click: () => (p.login === "chatgpt-web" ? connectChatGPTWeb(afterSignIn) : signIn(p.login, { onDone: afterSignIn })) } }, ico("refresh"), "Sign in again")
             : el("button.btn.ghost.sm", { title: "Change the key, URL or model list", on: { click: () => showForm(p) } }, ico("edit"), "Edit"),
           toggle(p.enabled !== false, async (on) => { if (await guard(() => api.post(`/api/providers/${p.id}/enabled`, { enabled: on }))) { await ctx.reloadCatalog(); redraw({ open: p.id }); } }),
           el("button.btn.ghost.sm.danger", { title: "Remove this provider and its key", on: { click: async () => {
