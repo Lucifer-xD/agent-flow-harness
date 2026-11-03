@@ -151,7 +151,7 @@ def import_session(engine, payload: dict, directory: str) -> dict:
     meta.setdefault("afh", {})
     meta["afh"].setdefault("importedFrom", payload.get("app") or "export")
     meta["afh"].setdefault("mode", "ask")
-    session = engine.store.create_session(directory, title=info.get("title") or None, agent=info.get("agent") if info.get("agent") in ("build", "plan", "delegate") else "build",
+    session = engine.store.create_session(directory, title=info.get("title") or None, agent=info.get("agent") if info.get("agent") in ("build", "plan", "redteam", "delegate") else "build",
                                           model=model, permissions=info.get("permissions") or None, metadata=meta)
     if not session.get("permissions"):
         from .engine import permissions as perm

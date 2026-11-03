@@ -207,7 +207,7 @@ def save_agent(body: dict = Body(...)):
     if not IDENT.match(agent_id):
         raise ValueError("Agent id must be lowercase letters, numbers, - or _")
     settings = store.load_settings()
-    if agent_id in {store.LEADER_ID, "build", "plan"} or any(d.get("id") == agent_id for d in settings["delegation"].get("delegates", [])):
+    if agent_id in {store.LEADER_ID, "build", "plan", "redteam"} or any(d.get("id") == agent_id for d in settings["delegation"].get("delegates", [])):
         raise ValueError("That id is taken by a built-in mode or a delegate")
     entry: dict[str, Any] = {"mode": body.get("mode", "primary"), "name": body.get("name") or agent_id.title()}
     for key in ("description", "system", "color"):
@@ -1459,7 +1459,7 @@ def put_delegation(body: dict = Body(...)):
     seen = set()
     for d in body.get("delegates", []):
         did = str(d.get("id", "")).strip().lower()
-        if not IDENT.match(did) or did in {store.LEADER_ID, "build", "plan", "general"} or did in seen:
+        if not IDENT.match(did) or did in {store.LEADER_ID, "build", "plan", "redteam", "general"} or did in seen:
             raise ValueError(f"Delegate id '{did}' is invalid or reserved")
         seen.add(did)
         delegates.append({"id": did, "name": str(d.get("name") or did)[:60], "model": d.get("model") if isinstance(d.get("model"), dict) else None,

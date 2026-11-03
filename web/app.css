@@ -2173,3 +2173,7 @@ body.resizing-browser webview { pointer-events: none; }
 :root[data-theme="light"] .dv-phone, :root[data-theme="light"] .dv-tablet, :root[data-theme="light"] .dv-watch { --bezel: #1b1b1f; --bezel-edge: #3a3a40; }
 :root[data-theme="light"] .dview { background: color-mix(in srgb, var(--bg) 92%, #3a2a1a); }
 body.electron .dview { top: 38px; }
+
+/* Red Team and other colored agents: tint the composer agent chip with the agent's color (web/js/main.js) */
+#pick-agent.has-agent-color { color: var(--agent-color); }
+#pick-agent.has-agent-color .ico { color: var(--agent-color); }

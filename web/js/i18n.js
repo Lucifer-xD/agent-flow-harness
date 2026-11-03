@@ -183,6 +183,8 @@ const AR = {
   "Font": "الخط", "Text size": "حجم النص", "Shape & layout": "الشكل والتخطيط", "Corner roundness": "استدارة الزوايا", "Density": "الكثافة", "Comfortable": "مريح", "Compact": "مضغوط",
   "type / for commands": "اكتب / للأوامر", "Build": "بناء", "Plan": "تخطيط", "Delegate": "تفويض", "The default mode. Reads, edits and runs code in the project.": "الوضع الافتراضي. يقرأ الكود ويعدّله ويشغّله في المشروع.",
   "Investigates and proposes a plan without changing anything.": "يدرس ويقترح خطة دون تغيير أي شيء.", "Leads the work and delegates tasks to your delegate models.": "يقود العمل ويفوّض المهام إلى نماذجك المفوَّضة.",
+  "Red Team": "الفريق الأحمر",
+  "Security audit of your own project: finds exploitable weaknesses (auth/OTP, access control, injection, secrets) and reports fixes. Does not change code.": "تدقيق أمني لمشروعك: يجد الثغرات القابلة للاستغلال (المصادقة/رمز OTP، التحكم في الصلاحيات، الحقن، الأسرار) ويقترح الإصلاحات. لا يغيّر الكود.",
   "Create or edit agents…": "أنشئ وكلاء أو عدّلهم…", "Effort ": "الجهد ", "Type a command, thread, model or theme…": "اكتب أمرًا أو محادثة أو نموذجًا أو سمة…", "Actions": "إجراءات", "Thread": "المحادثة",
   "Threads": "المحادثات", "Models": "النماذج", "Themes": "السمات", "English interface": "الواجهة الإنجليزية", "Compact now ": "اضغط الآن ", "Summarise older messages": "لخّص الرسائل القديمة", "Bubbles on the right, or flat with an accent bar": "فقاعات على الجانب، أو مسطحة بشريط ملوّن", "Bubbles": "فقاعات", "Flat": "مسطحة",
   "Glass effect": "تأثير زجاجي", "Translucent composer, sidebar and menus": "صندوق كتابة وشريط جانبي وقوائم شبه شفافة", "Motion": "الحركة", "Animations": "الحركات",

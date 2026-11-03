@@ -1210,7 +1210,10 @@ function renderComposerState() {
   $("pick-model").replaceChildren(ico("cpu"), el("span.lbl", modelName(ref) || "Choose model"), el("span.chev", { html: icon("chev-down") }));
   $("pick-model").title = gone ? `${gone.id} is no longer available, so ${modelName(ref) || "no model"} is used` : "";
   const agent = S.agents.find((a) => a.id === currentAgent());
-  $("pick-agent").replaceChildren(ico("bot"), el("span.lbl", agent?.name || currentAgent()), el("span.chev", { html: icon("chev-down") }));
+  const agentChip = $("pick-agent");
+  agentChip.replaceChildren(ico(agentIcon(agent)), el("span.lbl", agent?.name || currentAgent()), el("span.chev", { html: icon("chev-down") }));
+  agentChip.style.setProperty("--agent-color", agent?.color || "");
+  agentChip.classList.toggle("has-agent-color", !!agent?.color);
   const mode = MODES[currentMode()] || MODES.ask;
   const mp = $("pick-mode");
   mp.className = `pill mode-${currentMode()}`;
@@ -1435,9 +1438,11 @@ async function chooseModel(ref) {
   renderComposerState();
 }
 
+const agentIcon = (a) => (a?.id === "redteam" ? "shield" : a?.id === "plan" ? "list" : "bot");
+
 function agentMenu() {
   const items = S.agents.filter((a) => !a.hidden && a.mode !== "subagent").map((a) => ({
-    title: a.name, sub: a.description, icon: "bot", checked: a.id === currentAgent(),
+    title: a.name, sub: a.description, icon: agentIcon(a), checked: a.id === currentAgent(),
     onSelect: async () => { if (S.current) await patchSession({ agent: a.id }); else S.draft.agent = a.id; renderComposerState(); },
   }));
   items.push({ sep: true }, { title: "Create or edit agents…", icon: "sliders", onSelect: () => openSettings("prompts", ctx) });

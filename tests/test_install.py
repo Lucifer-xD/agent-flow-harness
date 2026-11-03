@@ -162,6 +162,23 @@ def test_commands_hooks_and_agents(home, tmp_path):
     assert not any(a.id == "reviewer" for a in all_agents())  # really gone (settings merges used to keep it)
 
 
+def test_redteam_is_a_builtin_audit_mode(home, tmp_path):
+    agents = {a.id: a for a in all_agents()}
+    rt = agents["redteam"]
+    assert rt.mode == "primary" and rt.kind == "builtin" and rt.color
+    # Finds and reports; never edits. Shell/browser stay available (not denied) so it can probe the local app.
+    denied = {(r["action"], r["effect"]) for r in rt.permissions}
+    assert ("edit", "deny") in denied and not any(a == "shell" and e == "deny" for a, e in denied)
+    # The audit scope is in the prompt: the issues the user cares about, and stay-in-scope / non-destructive rules.
+    low = rt.system.lower()
+    for term in ("otp", "privilege escalation", "injection", "idor", "report", "severity", "non-destructive", "scope"):
+        assert term in low, term
+
+    # redteam is reserved: a user can't create a custom agent that shadows it.
+    e = make_engine(FakeProvider([]))
+    assert run(install.HarnessTool(e), ctx(tmp_path), action="add_agent", id="redteam", name="x").is_error
+
+
 def test_replace_setting_drops_keys(home):
     appstore.save_settings({"agents": {"a": {"name": "A"}, "b": {"name": "B"}}})
     appstore.save_settings({"agents": {"b": {"name": "B"}}})

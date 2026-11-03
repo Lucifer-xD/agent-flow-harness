@@ -33,6 +33,8 @@ HELPER = {"id": HELPER_ID, "name": "Helper", "model": None, "enabled": True,
           "job": "A copy of your own model for self-contained side work: research across many files, an independent change, or one of several tasks run in parallel."}
 
 READONLY_RULES = [{"action": "edit", "resource": "*", "effect": "deny"}, {"action": "shell", "resource": "*", "effect": "deny"}]
+# Red Team audits without changing source: it may read and run (probe the local app), but not edit.
+NOEDIT_RULES = [{"action": "edit", "resource": "*", "effect": "deny"}]
 
 
 def _model_ref(m: dict | str | None) -> dict | None:
@@ -54,6 +56,8 @@ def all_agents(settings: dict | None = None) -> list[AgentConfig]:
     agents: list[AgentConfig] = [
         AgentConfig("build", "Build", "The default mode. Reads, edits and runs code in the project.", "primary", overrides.get("build") or base),
         AgentConfig("plan", "Plan", "Investigates and proposes a plan without changing anything.", "primary", overrides.get("plan") or (base + store.PLAN_RULES), permissions=READONLY_RULES),
+        AgentConfig("redteam", "Red Team", "Security audit of your own project: finds exploitable weaknesses (auth/OTP, access control, injection, secrets) and reports fixes. Does not change code.",
+                    "primary", overrides.get("redteam") or (base + store.REDTEAM_RULES), permissions=NOEDIT_RULES, color="#e5484d"),
     ]
     for aid, cfg in (s.get("agents") or {}).items():
         agents.append(AgentConfig(aid, cfg.get("name") or aid.title(), cfg.get("description", ""), cfg.get("mode", "primary"), overrides.get(aid) or cfg.get("system") or base,

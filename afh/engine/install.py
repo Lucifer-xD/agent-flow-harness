@@ -437,8 +437,8 @@ class HarnessTool:
         aid = str(input.get("id") or input.get("name") or "").strip().lower()
         aid = slug(aid) if aid else ""
         settings = store.load_settings()
-        if not IDENT.match(aid) or aid in {store.LEADER_ID, "build", "plan"} or any(d.get("id") == aid for d in settings["delegation"].get("delegates", [])):
-            raise ValueError("Agent id must be lowercase letters, numbers, - _ and not build, plan, delegate or a delegate's id")
+        if not IDENT.match(aid) or aid in {store.LEADER_ID, "build", "plan", "redteam"} or any(d.get("id") == aid for d in settings["delegation"].get("delegates", [])):
+            raise ValueError("Agent id must be lowercase letters, numbers, - _ and not build, plan, redteam, delegate or a delegate's id")
         entry: dict[str, Any] = {"mode": "primary", "name": str(input.get("name") or aid.title())}
         for key in ("description", "system", "model"):
             if input.get(key):
