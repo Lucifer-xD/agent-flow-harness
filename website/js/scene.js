@@ -110,7 +110,7 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
       mark.add(dot);
     }
   }
-  add("mark", mark, 0.6, [0.12, -0.1, 0]);
+  add("mark", mark, 0.6, [0.1, 0, 0]); // faces the page squarely, so it reads as the logo
 
   // ---- size: CSS pixels ↔ world units on the page plane ----
   const BUDGET = mobile ? [1.6, 1.1, 0.8] : lite ? [1.8, 1.3] : [2.6, 1.9, 1.4, 1.0];
