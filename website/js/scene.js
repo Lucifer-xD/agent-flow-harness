@@ -1,35 +1,31 @@
-// The 3D on every page is a studio set: glossy ceramic objects in the brand colours resting on the
-// page itself — a hex hub (the harness), a torus, a pill, two spheres and a rounded cube — with
-// tight contact shadows, so they read as things placed on the paper, not floating over it. The
-// page decides where each object sits (in CSS pixels, next to real elements) and the scene keeps
-// them there as the page scrolls; objects it doesn't place shrink away.
+// The 3D on every page is the harness line: the logo's three strands as one glossy braided cable
+// that runs through the page, behind the content. Where the page gives it a stage box it opens into
+// the mark (the three strands and their six dots); between stages it braids into one line that
+// threads down the page along the gutters and behind the cards, with light running inside it and
+// the dots riding it as you scroll. On load it draws itself in from the first mark.
 //
-//   scene.place(id, { x, y, r, rot, vis })   id: hub torus pill sphereA sphereB cube
-//                                             x,y: centre in CSS px (viewport); r: radius in px
-//                                             rot: extra turn in radians; vis: 0..1
-//   scene.hide(id) / scene.hideAll()
+// The page hands it a route in page pixels (y grows downwards, like the DOM):
+//   scene.setRoute({ marks: [box, box?], points: [{x, y}, …], radius, pageHeight })
+//     marks   stage boxes (page coordinates) the line opens into: the first at the start, the
+//             second (if any) at the end; the braid runs through `points` between them
+//   scene.state.scroll = the window's scroll position, set by the page every frame
 //
-// Built to stay smooth on integrated graphics: six small meshes, one shadow map, no post-processing,
-// and a pixel budget that steps down by itself if frames run long.
+// Built to stay smooth on integrated graphics: three static tubes, nine spheres, one shadow map
+// that follows the viewport, no post-processing.
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-const FOV = 32, DIST = 22;
-const C = { amber: "#ffb11f", orange: "#ff6a2a", coral: "#ff4a68", pink: "#ff3d8a", magenta: "#e0169a" };
+// The logo (viewBox 240×140): each strand is two cubic segments meeting in the middle, with a depth
+// per control point so the strands weave past each other. Stroke 14, dots r 15.
+const STRANDS = [
+  { pts: [[46, 28], [104, 28], [108, 74], [134, 74], [160, 74], [164, 28], [194, 28]], z: [0, 0.9, 0.9, 0.55, 0.2, -0.6, 0], from: "#ffb11f", to: "#ff7a3d" },
+  { pts: [[46, 70], [92, 70], [98, 58], [120, 60], [150, 63], [152, 82], [194, 70]], z: [0, -0.5, -0.5, 0, 0.5, 0.5, 0], from: "#ff7747", to: "#ff4a68" },
+  { pts: [[46, 112], [108, 112], [116, 66], [146, 66], [172, 66], [170, 112], [194, 112]], z: [0, -0.9, -0.9, -0.55, -0.2, 0.6, 0], from: "#ff3d8a", to: "#e0169a" },
+];
+const LOGO_W = 148, LOGO_H = 84, LOGO_X = 46, LOGO_Y = 28; // the strands' extent in the viewBox
+const TAU = Math.PI * 2;
 const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
-
-/** Paint a geometry with a gradient along one of its axes (vertex colours). */
-function gradient(geo, from, to, axis = "x") {
-  const pos = geo.attributes.position, n = pos.count, col = new Float32Array(n * 3);
-  const a = new THREE.Color(from), b = new THREE.Color(to), c = new THREE.Color();
-  const i = { x: 0, y: 1, z: 2 }[axis];
-  let lo = Infinity, hi = -Infinity;
-  for (let k = 0; k < n; k++) { const v = pos.array[k * 3 + i]; lo = Math.min(lo, v); hi = Math.max(hi, v); }
-  for (let k = 0; k < n; k++) { c.copy(a).lerp(b, (pos.array[k * 3 + i] - lo) / (hi - lo || 1)); col.set([c.r, c.g, c.b], k * 3); }
-  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
-  return geo;
-}
-const ceramic = (extra = {}) => new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.28, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, envMapIntensity: 1.05, sheen: 0.2, sheenColor: 0xffe6d6, ...extra });
+const ceramic = (extra = {}) => new THREE.MeshPhysicalMaterial({ roughness: 0.3, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.14, envMapIntensity: 1.05, sheen: 0.2, sheenColor: 0xffe6d6, ...extra });
 
 export function createScene(canvas, { mobile = false, reduced = false, lite = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
@@ -41,166 +37,183 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
   scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-  const camera = new THREE.PerspectiveCamera(FOV, innerWidth / innerHeight, 0.1, 100);
-  camera.position.set(0, 0, DIST);
-  camera.lookAt(0, 0, 0);
+  // page pixels are world units: x from the middle of the viewport, y up (page y is negated)
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -3000, 3000);
+  camera.position.z = 600;
+  let W = innerWidth, H = innerHeight;
 
-  // light: a soft key from the upper left, close to the viewing direction, so shadows hug the objects
-  const key = new THREE.DirectionalLight(0xfff4ea, 1.8);
-  key.position.set(-6, 9, 18);
+  // light: a soft key from the upper left that follows the viewport, so the shadow map covers what's on screen
+  const key = new THREE.DirectionalLight(0xfff4ea, 1.7);
+  const keyTarget = new THREE.Object3D();
+  key.target = keyTarget;
   if (shadows) {
     key.castShadow = true;
     key.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048);
-    key.shadow.radius = 4;
-    key.shadow.bias = -0.0006;
-    key.shadow.normalBias = 0.03;
-    Object.assign(key.shadow.camera, { left: -16, right: 16, top: 12, bottom: -12, near: 1, far: 50 });
+    key.shadow.radius = 5;
+    key.shadow.bias = -0.0004;
+    key.shadow.normalBias = 1.5;
+    Object.assign(key.shadow.camera, { near: 1, far: 4000 });
   }
-  const rim = new THREE.DirectionalLight(0xff6a9a, 0.4);
-  rim.position.set(6, -3, 6);
-  scene.add(key, rim, new THREE.HemisphereLight(0xffffff, 0xf0e2d6, 0.8));
-
-  // the page: an invisible plane that only shows the shadows the objects throw on it
-  const page = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.ShadowMaterial({ color: 0x2a1408, opacity: 0.2, transparent: true, depthWrite: false }));
+  const rim = new THREE.DirectionalLight(0xff6a9a, 0.35);
+  rim.position.set(400, -200, 300);
+  scene.add(key, keyTarget, rim, new THREE.HemisphereLight(0xffffff, 0xf0e2d6, 0.85));
+  // the page: an invisible plane behind the line that only shows the shadow it throws
+  const page = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShadowMaterial({ color: 0x2a1408, opacity: 0.16, transparent: true, depthWrite: false }));
   page.receiveShadow = shadows;
   page.visible = shadows;
   scene.add(page);
 
-  // ---- the objects (unit size; `depth` is how far their underside sits below their centre) ----
-  const objects = {};
-  const add = (id, mesh, depth, rest) => {
-    mesh.castShadow = shadows;
-    mesh.traverse((m) => { if (m.isMesh) m.castShadow = shadows; });
-    mesh.visible = false;
-    scene.add(mesh);
-    objects[id] = { mesh, depth, rest, cur: { x: 0, y: 0, r: 0, rot: 0, vis: 0 }, tgt: { x: 0, y: 0, r: 0, rot: 0, vis: 0 }, placed: false, seed: Math.random() * 7 };
+  // ---- the line: three tubes, rebuilt whenever the page gives a new route ----
+  const flow = { uFlow: { value: 0 }, uGlow: { value: 0.1 }, uDraw: { value: 0 } };
+  const mats = STRANDS.map(() => {
+    const m = ceramic({ vertexColors: true, emissive: 0xffffff });
+    m.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, flow);
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec2 vUvF;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvUvF = uv;");
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform float uFlow, uGlow, uDraw; varying vec2 vUvF;")
+        .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+          // light packets travelling along the line; nothing past where it has drawn itself in
+          if (vUvF.x > uDraw) discard;
+          float x = vUvF.x * 60.0 - uFlow;
+          float packet = pow(max(0.0, 1.0 - abs(fract(x) - 0.5) / 0.12), 2.0);
+          totalEmissiveRadiance = vColor.rgb * (uGlow * 0.5 + packet * uGlow * 2.2);`);
+    };
+    m.customProgramCacheKey = () => "afh-line";
+    return m;
+  });
+  const tubes = STRANDS.map((_, k) => { const m = new THREE.Mesh(new THREE.BufferGeometry(), mats[k]); m.castShadow = shadows; m.frustumCulled = false; scene.add(m); return m; });
+  const curves = [null, null, null];
+  // the dots: three stay at the first mark's left ends, three ride the line, three wait at the last mark's right ends
+  const dotGeo = new THREE.SphereGeometry(1, 36, 24);
+  const dots = Array.from({ length: 9 }, (_, i) => {
+    const s = STRANDS[i % 3];
+    const d = new THREE.Mesh(dotGeo, ceramic({ color: new THREE.Color(i < 6 ? s.from : s.to).lerp(new THREE.Color(i < 6 ? s.to : s.from), 0.25) }));
+    d.castShadow = shadows;
+    d.visible = false;
+    scene.add(d);
+    return d;
+  });
+  let route = null;
+
+  /** Paint a tube geometry with the strand's gradient along its length. */
+  const paint = (geo, from, to) => {
+    const uv = geo.attributes.uv, n = uv.count, col = new Float32Array(n * 3), a = new THREE.Color(from), b = new THREE.Color(to), c = new THREE.Color();
+    for (let i = 0; i < n; i++) { c.copy(a).lerp(b, uv.array[i * 2]); col.set([c.r, c.g, c.b], i * 3); }
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
   };
-  // Everything in the set is cut from the logo: its three strands (viewBox 240x140, each strand two
-  // cubic segments meeting in the middle, with a depth per control point so they weave) and its dots.
-  const STRANDS = [
-    { pts: [[46, 28], [104, 28], [108, 74], [134, 74], [160, 74], [164, 28], [194, 28]], z: [0, 0.9, 0.9, 0.55, 0.2, -0.6, 0], from: C.amber, to: "#ff7a3d" },
-    { pts: [[46, 70], [92, 70], [98, 58], [120, 60], [150, 63], [152, 82], [194, 70]], z: [0, -0.5, -0.5, 0, 0.5, 0.5, 0], from: "#ff7747", to: C.coral },
-    { pts: [[46, 112], [108, 112], [116, 66], [146, 66], [172, 66], [170, 112], [194, 112]], z: [0, -0.9, -0.9, -0.55, -0.2, 0.6, 0], from: C.pink, to: C.magenta },
-  ];
-  const toV = ([x, y], z) => new THREE.Vector3((x - 120) / 74, -(y - 70) / 74, z * 0.42);
-  const curve = (s) => {
-    const P = s.pts.map((p, i) => toV(p, s.z[i]));
+  /** Strand k of the mark fitted into a page box: 48 points along it, in world units. */
+  const markPoints = (k, box) => {
+    const sc = Math.min(box.width / LOGO_W, box.height / LOGO_H) * 0.86;
+    const ox = box.left + box.width / 2 - (LOGO_X + LOGO_W / 2) * sc, oy = box.top + box.height / 2 - (LOGO_Y + LOGO_H / 2) * sc;
+    const s = STRANDS[k];
+    const P = s.pts.map(([x, y], i) => new THREE.Vector3(ox + x * sc - W / 2, -(oy + y * sc), s.z[i] * 7 * sc * 0.7));
     const path = new THREE.CurvePath();
     path.add(new THREE.CubicBezierCurve3(P[0], P[1], P[2], P[3]));
     path.add(new THREE.CubicBezierCurve3(P[3], P[4], P[5], P[6]));
-    return path;
+    return path.getSpacedPoints(48);
   };
-  const dotMesh = (col, r = 0.2) => new THREE.Mesh(gradient(new THREE.SphereGeometry(r, 32, 20), col, col), ceramic());
-  /** A piece of strand `k` between u0 and u1 (0 = left dot, 1 = right dot), with dots on the ends asked for, centred on itself. */
-  const piece = (k, u0, u1, { dot0 = false, dot1 = false, radius = 0.1, dotR = 0.2 } = {}) => {
-    const s = STRANDS[k], full = curve(s);
-    const pts = Array.from({ length: 64 }, (_, i) => full.getPointAt(u0 + ((u1 - u0) * i) / 63));
-    const path = new THREE.CatmullRomCurve3(pts);
-    const g = new THREE.Group();
-    const tube = new THREE.Mesh(gradient(new THREE.TubeGeometry(path, 80, radius, 18, false), s.from, s.to), ceramic());
-    g.add(tube);
-    if (dot0) { const d = dotMesh(s.from, dotR); d.position.copy(pts[0]); g.add(d); }
-    if (dot1) { const d = dotMesh(s.to, dotR); d.position.copy(pts[pts.length - 1]); g.add(d); }
-    // centre the piece on its own bounds, so x/y place its middle
-    const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
-    g.children.forEach((m) => m.position.sub(c));
-    const scale = 2 / Math.max(size.x, size.y); // two units across, like a unit sphere: `r` is half its longest side
-    g.scale.setScalar(scale);
-    const inner = new THREE.Group();
-    inner.add(g);
-    return inner;
+  const build = () => {
+    if (!route) return;
+    const { marks, points, radius } = route.spec;
+    const a = marks[0], b = marks[1];
+    const braid = points.length >= 2 ? new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(p.x - W / 2, -p.y, 0)), false, "centripetal") : null;
+    const N = braid ? Math.max(120, Math.min(900, Math.round(braid.getLength() / 14))) : 0;
+    const samples = braid ? braid.getSpacedPoints(N) : [];
+    const tangents = braid ? samples.map((_, i) => braid.getTangentAt(i / N)) : [];
+    const lengths = braid ? braid.getLengths(N) : [];
+    const spacing = radius * 2.3, twist = TAU / 520; // the braid: the strands circle the line every 520px
+    route.u = { hero: [0, 0, 0], cta: [1, 1, 1] };
+    STRANDS.forEach((s, k) => {
+      const pts = [];
+      if (a) pts.push(...markPoints(k, a));
+      samples.forEach((p, i) => {
+        const ph = lengths[i] * twist + (k * TAU) / 3, t = tangents[i], nx = -t.y, ny = t.x;
+        pts.push(new THREE.Vector3(p.x + nx * spacing * Math.sin(ph), p.y + ny * spacing * Math.sin(ph), spacing * 0.8 * Math.cos(ph)));
+      });
+      if (b) pts.push(...markPoints(k, b));
+      if (pts.length < 4) return;
+      const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
+      curves[k] = curve;
+      const segs = Math.min(2600, Math.max(200, Math.round(curve.getLength() / 9)));
+      const geo = new THREE.TubeGeometry(curve, segs, radius, 14, false);
+      paint(geo, s.from, s.to);
+      tubes[k].geometry.dispose();
+      tubes[k].geometry = geo;
+      // where the marks end along the strand (by arc length), for the dots
+      const L = curve.getLengths(600), total = L[L.length - 1];
+      const at = (idx) => L[Math.round((idx / (pts.length - 1)) * 600)] / total;
+      route.u.hero[k] = a ? at(47) : 0;
+      route.u.cta[k] = b ? at(pts.length - 49) : 1;
+    });
+    route.radius = radius;
+    route.dotR = radius * 15 / 7;
+    route.startY = a ? a.top + a.height : 0;
+    route.endY = b ? b.top - H * 0.45 : (route.spec.pageHeight || 4000);
+    const ph = route.spec.pageHeight || H;
+    page.scale.set(W * 3, ph * 1.2 + H * 3, 1);
+    page.position.set(0, -ph / 2, -70);
   };
-  // the whole mark: all three strands with all six dots, 2.4 units wide (so r is half its width)
-  const mark = new THREE.Group();
-  STRANDS.forEach((s, k) => {
-    mark.add(new THREE.Mesh(gradient(new THREE.TubeGeometry(curve(s), 110, 0.1, 18, false), s.from, s.to), ceramic()));
-    const P = [toV(s.pts[0], 0), toV(s.pts[6], 0)];
-    [[P[0], s.from], [P[1], s.to]].forEach(([p, col]) => { const d = dotMesh(col); d.position.copy(p); mark.add(d); });
-  });
-  add("mark", mark, 0.6, [0.1, 0, 0]); // faces the page squarely, so it reads as the logo
-  // the pieces: the hub is the crossing in the middle of the mark (all three strands, middle third)
-  const knot = new THREE.Group();
-  STRANDS.forEach((s, k) => knot.add(piece(k, 0.3, 0.7, { radius: 0.15 })));
-  { const box = new THREE.Box3().setFromObject(knot), size = box.getSize(new THREE.Vector3()); knot.scale.setScalar(2 / Math.max(size.x, size.y)); }
-  add("hub", knot, 0.3, [0.15, 0, 0]);
-  add("torus", piece(0, 0, 0.5, { dot0: true, radius: 0.16, dotR: 0.3 }), 0.3, [0.2, 0, 0.5]);   // the amber hook: a strand's left half with its dot
-  add("pill", piece(2, 0.5, 1, { dot1: true, radius: 0.16, dotR: 0.3 }), 0.3, [0.2, 0, -0.4]);   // the magenta hook: a strand's right half with its dot
-  add("sphereA", dotMesh(C.magenta, 1), 1, [0, 0, 0]);  // two of the dots on their own
-  add("sphereB", dotMesh(C.amber, 1), 1, [0, 0, 0]);
-  add("cube", piece(1, 0, 0.42, { dot0: true, dot1: true, radius: 0.17, dotR: 0.32 }), 0.3, [0.3, 0, 0.9]); // the coral link: a short run of strand between two dots
 
-  // ---- size: CSS pixels ↔ world units on the page plane ----
-  const BUDGET = mobile ? [1.6, 1.1, 0.8] : lite ? [1.8, 1.3] : [2.6, 1.9, 1.4, 1.0];
-  let level = 0, ppu = 1;
   const resize = () => {
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2, Math.sqrt((BUDGET[level] * 1e6) / (innerWidth * innerHeight))));
-    renderer.setSize(innerWidth, innerHeight, false);
-    camera.aspect = innerWidth / innerHeight;
+    W = innerWidth; H = innerHeight;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2));
+    renderer.setSize(W, H, false);
+    camera.left = -W / 2; camera.right = W / 2; camera.top = H / 2; camera.bottom = -H / 2;
     camera.updateProjectionMatrix();
-    ppu = innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * DIST); // px per unit at z = 0
+    if (shadows) { Object.assign(key.shadow.camera, { left: -W * 0.8, right: W * 0.8, top: H * 0.8, bottom: -H * 0.8 }); key.shadow.camera.updateProjectionMatrix(); }
+    build();
   };
   addEventListener("resize", resize);
   resize();
-  const perf = { samples: [], wait: 1.5 };
-  const watchFrames = (ms) => {
-    if (perf.wait > 0) { perf.wait -= ms / 1000; return; }
-    if (ms > 120) return;
-    perf.samples.push(ms);
-    if (perf.samples.length < 60) return;
-    const median = perf.samples.sort((a, b) => a - b)[30];
-    perf.samples.length = 0;
-    if (median > 18.5 && level < BUDGET.length - 1) { level++; resize(); perf.wait = 0.8; }
-  };
 
-  // ---- pointer: the set leans a little towards the pointer ----
+  const state = { scroll: 0, activity: 0.3, dim: 1 };
   const mouse = { x: 0, y: 0, sx: 0, sy: 0 };
-  addEventListener("pointermove", (e) => { mouse.x = e.clientX / innerWidth - 0.5; mouse.y = e.clientY / innerHeight - 0.5; }, { passive: true });
-
-  const state = { dim: 1, activity: 0.3 };
+  addEventListener("pointermove", (e) => { mouse.x = e.clientX / W - 0.5; mouse.y = e.clientY / H - 0.5; }, { passive: true });
+  const clock = { last: performance.now(), t: 0, draw: 0, lastScroll: 0, vel: 0 };
   let lastFade = -1;
-  const clock = { last: performance.now(), t: 0 };
+  const tmp = new THREE.Vector3();
   const frame = (now) => {
     requestAnimationFrame(frame);
     const ms = now - clock.last;
     clock.last = now;
-    if (document.hidden) return;
-    watchFrames(ms);
-    const dt = Math.min(ms / 1000, 0.05) * (reduced ? 0.3 : 1);
+    if (document.hidden || !route) return;
+    const dt = Math.min(ms / 1000, 0.05);
     clock.t += dt;
-    const t = clock.t;
+    clock.draw = Math.min(1, clock.draw + (reduced ? 1 : Math.min(ms, 100) / 2600));
+    const sy = state.scroll;
+    clock.vel += ((sy - clock.lastScroll) / Math.max(1, ms) - clock.vel) * Math.min(1, dt * 6);
+    clock.lastScroll = sy;
     mouse.sx += (mouse.x - mouse.sx) * Math.min(1, dt * 3);
     mouse.sy += (mouse.y - mouse.sy) * Math.min(1, dt * 3);
-    const k = 1 - Math.exp(-Math.min(0.1, ms / 1000) * 18); // follows the page closely, eases between layouts
-    camera.position.set(mouse.sx * 0.5, -mouse.sy * 0.35, DIST);
-    camera.lookAt(mouse.sx * 0.15, -mouse.sy * 0.1, 0);
-    key.position.set(-6 + mouse.sx * 2, 9 - mouse.sy * 2, 18);
-    for (const id in objects) {
-      const o = objects[id], c = o.cur, g = o.tgt;
-      c.x += (g.x - c.x) * k; c.y += (g.y - c.y) * k; c.r += (g.r - c.r) * k; c.rot += (g.rot - c.rot) * k; c.vis += (g.vis - c.vis) * k;
-      const s = (c.r / ppu) * smooth(c.vis);
-      o.mesh.visible = s > 0.004;
-      if (!o.mesh.visible) continue;
-      const wx = (c.x - innerWidth / 2) / ppu, wy = -(c.y - innerHeight / 2) / ppu;
-      o.mesh.position.set(wx, wy, o.depth * s);
-      o.mesh.scale.setScalar(s * (1 + Math.sin(t * 1.3 + o.seed) * 0.012));
-      const [rx, ry, rz] = o.rest;
-      const spin = id === "mark" || id === "hub" ? Math.sin(t * 0.25 + o.seed) * 0.03 : Math.sin(t * 0.3 + o.seed) * 0.06;
-      o.mesh.rotation.set(rx + Math.sin(t * 0.5 + o.seed) * (id === "mark" ? 0.03 : 0.06), ry + Math.sin(t * 0.37 + o.seed * 2) * (id === "mark" ? 0.05 : 0.08), rz + c.rot + spin);
-    }
+    // the camera follows the page; the light follows the camera
+    camera.position.set(mouse.sx * 6, -(sy + H / 2) - mouse.sy * 4, 600);
+    key.position.set(camera.position.x - W * 0.35, camera.position.y + H * 0.55, 900);
+    keyTarget.position.set(camera.position.x, camera.position.y, 0);
+    flow.uFlow.value += dt * (0.5 + state.activity * 0.4) + clock.vel * 0.02;
+    flow.uGlow.value = 0.08 + state.activity * 0.05 + Math.min(0.25, Math.abs(clock.vel) * 0.08);
+    flow.uDraw.value = smooth(clock.draw);
+    // the dots
+    const p = smooth((sy - route.startY) / Math.max(1, route.endY - route.startY));
+    const grow = smooth(clock.draw * 1.4);
+    dots.forEach((d, i) => {
+      const k = i % 3, c = curves[k];
+      if (!c || (i < 3 && !route.spec.marks[0]) || (i >= 6 && !route.spec.marks[1])) { d.visible = false; return; }
+      const u = i < 3 ? 0 : i < 6 ? route.u.hero[k] + (route.u.cta[k] - route.u.hero[k]) * p : 1;
+      const q = Math.min(1, Math.max(0, u));
+      if (q > flow.uDraw.value + 0.001) { d.visible = false; return; }
+      c.getPointAt(q, tmp);
+      d.visible = true;
+      d.position.copy(tmp);
+      d.scale.setScalar(route.dotR * grow * (i >= 3 && i < 6 ? 1 + Math.sin(clock.t * 2 + i) * 0.04 : 1));
+    });
     const fade = Math.round(Math.min(1, Math.max(0, state.dim)) * 200) / 200;
     if (fade !== lastFade) canvas.style.opacity = lastFade = fade;
     renderer.render(scene, camera);
   };
   requestAnimationFrame(frame);
 
-  const place = (id, { x, y, r, rot = 0, vis = 1 }) => {
-    const o = objects[id];
-    if (!o) return;
-    if (!o.placed) { o.placed = true; Object.assign(o.cur, { x, y, r: 0, rot, vis: 0 }); } // a new object grows where it is put
-    Object.assign(o.tgt, { x, y, r, rot, vis });
-  };
-  const hide = (id) => { const o = objects[id]; if (o) { o.tgt.vis = 0; o.tgt.r = o.cur.r; o.placed = false; } };
-  const hideAll = () => Object.keys(objects).forEach(hide);
-  const ids = Object.keys(objects);
-  return { state, place, hide, hideAll, ids, three: { renderer, scene, camera, objects, quality: () => [`${BUDGET[level]} MP`, `${renderer.getPixelRatio().toFixed(2)}x`, shadows ? "shadows" : "no shadows"] } };
+  /** Give the line its route (page pixels). Call again after the layout changes. */
+  const setRoute = (spec) => { route = { spec, u: { hero: [0, 0, 0], cta: [1, 1, 1] } }; build(); };
+  return { state, setRoute, three: { renderer, scene, camera, tubes, dots, curves, quality: () => [`${renderer.getPixelRatio().toFixed(2)}x`, shadows ? "shadows" : "no shadows", tubes.map((t) => t.geometry.attributes.position?.count || 0).join("+") + " verts"] } };
 }

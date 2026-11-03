@@ -1,8 +1,7 @@
-// The studio set on every page but the home page (which scripts its own in main.js): the ceramic
-// objects rest round the hero's stage box (`[data-stage]`), measured every frame so they scroll
-// with the page and shrink away as the hero leaves the screen. Pages without a stage (docs, the
-// changelog) get a small group in the top-right corner of the hero. Also: magnetic primary buttons.
-// (Entrances and section menus are in layout.js, so the page never waits on WebGL.)
+// The harness line on every page but the home page (which scripts its own route in main.js): on a
+// page with a hero stage box (`[data-stage]`) the line opens into the mark there and runs down the
+// page's outer gutter, the dots riding it as you scroll. Pages without a stage show no line.
+// Also: magnetic primary buttons. (Entrances and section menus are in layout.js.)
 import { createScene } from "./scene.js";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -10,64 +9,35 @@ const mobile = matchMedia("(max-width: 760px)").matches;
 const { gsap } = window;
 
 const name = document.body.dataset.scene || "docs";
-const lite = name === "docs";
-const scene = createScene(document.querySelector("#scene"), { mobile, reduced, lite });
-window.afhScene = scene; // for poking at the set from the console
-
-// how each page arranges the set in its stage box (CSS px placements)
-const LAYOUTS = {
-  features: (B) => { const s = Math.min(B.width, B.height), cx = B.left + B.width / 2, cy = B.top + B.height / 2; return {
-    hub: { x: cx, y: cy, r: s * 0.17 },
-    sphereA: { x: cx - s * 0.34, y: cy - s * 0.2, r: s * 0.13 },
-    sphereB: { x: cx + s * 0.34, y: cy - s * 0.26, r: s * 0.09 },
-    cube: { x: cx + s * 0.32, y: cy + s * 0.2, r: s * 0.13, rot: 0.5 },
-    pill: { x: cx - s * 0.3, y: cy + s * 0.26, r: s * 0.15, rot: 0.7 },
-    torus: { x: cx + s * 0.02, y: cy - s * 0.42, r: s * 0.1, rot: 1 },
-  }; },
-  models: (B) => { const s = Math.min(B.width, B.height), cx = B.left + B.width / 2, cy = B.top + B.height / 2; return {
-    torus: { x: cx, y: cy, r: s * 0.34, rot: 0.2 },
-    sphereA: { x: cx - s * 0.38, y: cy + s * 0.3, r: s * 0.12 },
-    sphereB: { x: cx + s * 0.4, y: cy - s * 0.3, r: s * 0.08 },
-    cube: { x: cx + s * 0.4, y: cy + s * 0.32, r: s * 0.11, rot: 0.4 },
-    pill: { x: cx - s * 0.4, y: cy - s * 0.3, r: s * 0.13, rot: 0.3 },
-  }; },
-  download: (B) => { const s = Math.min(B.width, B.height), cx = B.left + B.width / 2, cy = B.top + B.height / 2; return {
-    mark: { x: cx, y: cy - s * 0.04, r: s * 0.46, rot: 0.08 },
-    sphereA: { x: cx - s * 0.42, y: cy + s * 0.36, r: s * 0.11 },
-    sphereB: { x: cx + s * 0.44, y: cy - s * 0.38, r: s * 0.07 },
-    cube: { x: cx + s * 0.42, y: cy + s * 0.36, r: s * 0.1, rot: 0.4 },
-  }; },
-  lost: (B) => { const s = Math.min(B.width, B.height), cx = B.left + B.width / 2, cy = B.top + B.height / 2; return {
-    mark: { x: cx, y: cy, r: s * 0.42, rot: -0.35 },
-    sphereA: { x: cx + s * 0.4, y: cy + s * 0.34, r: s * 0.12 },
-  }; },
-  // no stage: a small group in the hero's top-right corner (docs, api, changelog, account pages)
-  corner: (B) => { const x = B.right - 150, y = B.top + 120, s = 120; return {
-    torus: { x, y, r: s * 0.3, rot: 0.4 },
-    sphereB: { x: x - s * 0.5, y: y + s * 0.3, r: s * 0.12 },
-    cube: { x: x + s * 0.5, y: y - s * 0.3, r: s * 0.14, rot: 0.3 },
-  }; },
-};
 const stage = document.querySelector("[data-stage]");
-const hero = stage || document.querySelector("main > :first-child");
-const layout = stage && LAYOUTS[name] ? LAYOUTS[name] : LAYOUTS.corner;
-const visibility = (r) => { // 1 with the box well inside the screen, 0 once it has left
-  const edge = Math.min(160, innerHeight * 0.2);
-  return Math.min(1, Math.max(0, (r.bottom - 20) / edge)) * Math.min(1, Math.max(0, (innerHeight - r.top - 20) / edge));
-};
-const intro = { k: 0 };
-gsap.to(intro, { k: 1, duration: reduced ? 0.01 : 1.6, ease: "power2.out", delay: 0.3 });
-gsap.ticker.add(() => {
-  if (!hero) return;
-  const r = hero.getBoundingClientRect();
-  const B = stage ? r : { left: r.left, right: Math.min(r.right, innerWidth), top: Math.max(r.top, 0), bottom: r.bottom, width: r.width, height: r.height };
-  const vis = visibility(r) * intro.k * (stage ? 1 : 0.9);
-  const out = layout(B);
-  for (const id of scene.ids) {
-    if (out[id] && (!mobile || stage)) scene.place(id, { ...out[id], vis });
-    else scene.hide(id);
-  }
-});
+const scene = createScene(document.querySelector("#scene"), { mobile, reduced, lite: !stage });
+window.afhScene = scene; // for poking at the line from the console
+
+const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top + scrollY, width: r.width, height: r.height, right: r.right, bottom: r.top + scrollY + r.height }; };
+function buildRoute() {
+  if (!stage) return;
+  const W = innerWidth, S = box(stage), pageH = document.documentElement.scrollHeight;
+  const main = document.querySelector("main .wrap, main section") || document.body;
+  const M = box(main);
+  const side = S.left + S.width / 2 < W / 2 ? "left" : "right"; // the stage's side of the page: the line runs down that gutter
+  const gx = side === "left" ? Math.max(mobile ? 22 : 44, M.left - 60) : Math.min(W - (mobile ? 22 : 44), M.right + 60);
+  const pts = [];
+  const P = (x, y) => pts.push({ x, y });
+  if (side === "left") { P(S.right + 24, S.top + S.height * 0.5); P(S.right - S.width * 0.1, S.bottom + 90); P(gx, S.bottom + 260); }
+  else { P(S.right + 20, S.top + S.height * 0.5); P(W - 30, S.bottom + 100); P(gx, S.bottom + 260); }
+  // down the gutter, with a slow wave so it reads as a cable, off the bottom of the page
+  for (let y = S.bottom + 600; y < pageH + 300; y += 520) P(gx + (side === "left" ? 1 : -1) * Math.sin(y / 700) * 12, y);
+  P(gx, pageH + 400);
+  scene.setRoute({ marks: [S], points: pts, radius: Math.max(6, Math.min(11, W * 0.0082)), pageHeight: pageH });
+}
+gsap.ticker.add(() => { scene.state.scroll = scrollY; });
+buildRoute();
+addEventListener("load", buildRoute);
+addEventListener("resize", buildRoute);
+let routeTimer = 0; // the layout moves as fonts and images arrive
+new ResizeObserver(() => { clearTimeout(routeTimer); routeTimer = setTimeout(buildRoute, 120); }).observe(document.body);
+document.fonts?.ready.then(buildRoute);
+if (name === "lost") scene.state.activity = 0.1;
 
 // magnetic primary buttons
 if (!mobile && !reduced) document.querySelectorAll(".btn-primary").forEach((b) => {
