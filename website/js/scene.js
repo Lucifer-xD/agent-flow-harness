@@ -150,7 +150,7 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
 
   // lights: a soft warm key from above left (it casts the shadow), a cool fill and a pink rim
   const key = new THREE.DirectionalLight(0xfff4ea, 1.9);
-  key.position.set(-5, 9, 7);
+  key.position.set(-3, 5.5, 16); // mostly from the front, so the shadow sits just behind the shapes
   if (shadows) {
     key.castShadow = true;
     key.shadow.mapSize.set(1536, 1536);
@@ -167,7 +167,7 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
 
   // the shadow catcher: an invisible wall behind the shapes (the page itself), so they float in
   // front of the page and throw a soft drop shadow onto it — onto whatever the page shows there
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ color: 0x2a1408, opacity: 0.16, transparent: true, depthWrite: false }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ color: 0x2a1408, opacity: 0.13, transparent: true, depthWrite: false }));
   floor.receiveShadow = shadows;
   floor.visible = shadows;
   world.add(floor);
@@ -455,7 +455,7 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   // where the hub stands in each shape (hidden in the mark, the ring and lost — it stays near the middle)
   const hubAt = { mark: new THREE.Vector3(0, 0, 0), core: new THREE.Vector3(0, 0, 0), plan: new THREE.Vector3(), net: NET.c, code: CODE_C.c, ring: RC, spread: new THREE.Vector3(0, -0.4, 0) };
   // how far behind each shape the wall (the shadow) sits
-  const floorAt = { mark: -1.4, core: -2.9, plan: -1.3, net: -2.2, code: -2.2, ring: -3.4, spread: -1.8 };
+  const floorAt = { mark: -1.2, core: -1.7, plan: -1.1, net: -1.5, code: -1.5, ring: -2.4, spread: -1.4 };
   const hubPos = new THREE.Vector3();
   const pointAt = (k, u, o) => { // a point along cable k as it is now
     const x = Math.min(M - 1e-4, Math.max(0, u * M)), i = Math.floor(x), f = x - i, P = pts[k], a = i * 3, b = a + 3;

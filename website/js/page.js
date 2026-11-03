@@ -36,7 +36,13 @@ const scene = createScene(document.querySelector("#scene"), { mobile, reduced, l
 const { state } = scene;
 window.afhScene = scene; // for poking at the world from the console
 const base = () => ({ ...(SCENES[name] || SCENES.docs)() });
-const strip = ({ dim, ...rest }) => rest; // brightness is handled below, not by the looks
+// Pages with a stage box pin the world to it: every frame it is framed into the box where the box
+// is right now, so it scrolls with the page and fades as the box leaves the screen.
+const STAGE = { features: ["net", 0.92], models: ["ring", 1], download: ["mark", 0.94], lost: ["mark", 0.8] };
+const stageEl = document.querySelector("[data-stage]");
+const pinned = STAGE[name] && stageEl ? { name: STAGE[name][0], fill: STAGE[name][1] } : null;
+// brightness (and, when pinned, framing) is handled per frame below, not by the looks
+const strip = ({ dim, zoom, shiftX, shiftY, ...rest }) => (pinned ? rest : { zoom, shiftX, shiftY, ...rest });
 Object.assign(state, strip(base()), shape({ spread: 1 }), { dim: 0 }); // the light gathers into the page's shape
 const tween = (to, duration = 1.6) => gsap.to(state, { ...strip(to), duration: reduced ? 0.01 : duration, ease: "power3.inOut", overwrite: "auto" });
 tween(base(), 2.6);
@@ -58,7 +64,7 @@ const brightness = () => {
   const fade = Math.min(1, Math.max(0, (bottom - 80) / (innerHeight * 0.3))); // gone once the hero's bottom nears the top
   return (base().dim ?? 1) * intro.k * fade;
 };
-if (zones.length) {
+if (zones.length && !pinned) {
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (e.isIntersecting && current !== e.target) { current = e.target; tween(look(e.target)); }
@@ -70,11 +76,22 @@ if (zones.length) {
 
 // scrolling turns the world a little; the pointer leans it (in scene.js)
 let spin = 0;
-gsap.ticker.add(() => {
+const visibility = (r) => { // 1 with the box well inside the screen, 0 once it has left
+  const edge = Math.min(140, innerHeight * 0.18);
+  return Math.min(1, Math.max(0, (r.bottom - 30) / edge)) * Math.min(1, Math.max(0, (innerHeight - r.top - 30) / edge));
+};
+gsap.ticker.add((_, dtMs) => {
   const target = (scrollY / Math.max(1, innerHeight)) * 0.45;
   spin += (target - spin) * 0.06;
   state.spin = spin;
-  state.dim = brightness();
+  if (!pinned) { state.dim = brightness(); return; }
+  const r = stageEl.getBoundingClientRect();
+  const f = scene.fit(r, pinned.fill, pinned.name);
+  const k = 1 - Math.exp(-Math.min(0.1, dtMs / 1000) * 14);
+  state.zoom += (f.zoom - state.zoom) * k;
+  state.shiftX += (f.shiftX - state.shiftX) * k;
+  state.shiftY += (f.shiftY - state.shiftY) * k;
+  state.dim = (base().dim ?? 1) * intro.k * visibility(r);
 });
 addEventListener("resize", () => { if (!current) tween(base(), 0.6); });
 
