@@ -73,6 +73,11 @@ KNOWN: dict[str, dict] = {
         "env": [], "docs": "https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan",
         "extra": {}, "login": "chatgpt", "login_only": True, "needs_key": False,
     },
+    "chatgpt-chat": {
+        "name": "ChatGPT (chat — unmetered)", "kind": "chatgpt-web", "base_url": "https://chatgpt.com",
+        "env": [], "docs": "https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan",
+        "extra": {}, "login": "chatgpt-web", "login_only": True, "needs_key": False,
+    },
     "github-copilot": {
         "name": "GitHub Copilot", "kind": "openai", "base_url": "https://api.githubcopilot.com",
         "env": [], "docs": "https://docs.github.com/en/copilot", "extra": {"max_tokens_param": "max_tokens"},
@@ -452,6 +457,10 @@ def make_provider(config: ProviderConfig, transport: httpx.AsyncBaseTransport | 
 
     if config.kind == "responses":
         return OpenAIResponsesProvider(config, transport=transport)
+    if config.kind == "chatgpt-web":
+        from afh.engine.providers.chatgpt_web import ChatGPTWebProvider
+
+        return ChatGPTWebProvider(config, transport=transport)
     if config.kind == "anthropic":
         return AnthropicProvider(config, transport=transport)
     if config.kind == "gemini":
