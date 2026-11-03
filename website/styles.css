@@ -55,8 +55,9 @@ b, strong { font-weight: 650; }
 kbd { display: inline-block; min-width: 22px; padding: 2px 7px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 7px; font: 500 12.5px var(--mono); color: var(--ink); background: var(--surface); text-align: center; }
 ::selection { background: rgba(255, 106, 42, 0.22); }
 
-/* The WebGL scene sits behind the whole page, over a soft warm wash. */
-#scene { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; display: block; }
+/* The WebGL scene floats in front of the page (its shadow falls onto whatever is under it); the
+   page fades it out wherever text lives. It never takes the pointer. */
+#scene { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 5; display: block; pointer-events: none; }
 .wash {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
@@ -69,17 +70,15 @@ main, footer { position: relative; z-index: 2; }
 
 /* ---- nav ---- */
 .nav {
-  position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 20;
-  width: min(1180px, calc(100% - 2 * var(--gutter)));
-  display: flex; align-items: center; gap: 22px; padding: 8px 8px 8px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.7); border-radius: 999px;
-  background: rgba(255, 253, 250, 0.62); backdrop-filter: blur(20px) saturate(1.5);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, var(--sh-1);
-  transition: background 0.4s var(--ease), box-shadow 0.4s var(--ease);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20; height: 64px;
+  display: flex; align-items: center; gap: 18px; padding: 0 var(--gutter);
+  border-bottom: 1px solid transparent;
+  background: rgba(247, 243, 238, 0.7); backdrop-filter: blur(18px) saturate(1.4);
+  transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
 }
-.nav.scrolled { background: rgba(255, 253, 250, 0.86); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, var(--sh-2); }
+.nav.scrolled { background: rgba(247, 243, 238, 0.92); border-bottom-color: var(--line); }
 .brand { display: flex; align-items: center; gap: 10px; font: 650 15px var(--display); letter-spacing: -0.015em; white-space: nowrap; }
-.nav-links { display: flex; gap: 4px; margin-left: auto; font-size: 14.5px; color: var(--ink-2); }
+.nav-links { display: flex; gap: 2px; margin: 0 auto; font-size: 14.5px; color: var(--ink-2); }
 .nav-links a { position: relative; padding: 8px 12px; border-radius: 999px; transition: color 0.2s, background 0.2s; font-weight: 500; }
 .nav-links a:hover { color: var(--ink); background: rgba(23, 18, 15, 0.05); }
 .nav-links a.active { color: var(--ink); background: rgba(23, 18, 15, 0.06); }
@@ -180,9 +179,10 @@ main, footer { position: relative; z-index: 2; }
 [data-reveal].in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { [data-reveal] { opacity: 1; transform: none; transition: none; } }
 
-/* ---- footer ---- */
-.footer { margin-top: 10vh; padding: 0 var(--gutter) 40px; }
-.footer-top { width: min(1180px, 100%); margin: 0 auto; display: grid; grid-template-columns: 1.3fr 2fr; gap: 48px; padding: 56px 0 40px; border-top: 1px solid var(--line); }
+/* ---- footer: a dark band ---- */
+.footer { --ink: #fff; --ink-2: rgba(255, 255, 255, 0.72); --ink-3: rgba(255, 255, 255, 0.45); --line: rgba(255, 255, 255, 0.12); --surface: rgba(255, 255, 255, 0.06); --sh-1: none;
+  margin-top: 0; padding: 24px var(--gutter) 40px; background: #17120f; color: #fff; }
+.footer-top { width: min(1180px, 100%); margin: 0 auto; display: grid; grid-template-columns: 1.3fr 2fr; gap: 48px; padding: 56px 0 40px; border-top: 0; }
 .footer-brand p { max-width: 360px; margin: 16px 0 0; color: var(--ink-2); font-size: 15px; }
 .footer-release { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 6px 12px 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font: 500 13px var(--body); color: var(--ink-2); box-shadow: var(--sh-1); }
 .footer-release .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
@@ -195,7 +195,7 @@ main, footer { position: relative; z-index: 2; }
 
 /* ---- responsive ---- */
 @media (max-width: 900px) {
-  .nav { gap: 10px; padding: 7px 7px 7px 14px; }
+  .nav { gap: 10px; height: 58px; }
   .nav-links, .nav .nav-signin { display: none; }
   .burger { display: block; }
   .footer-top { grid-template-columns: 1fr; gap: 32px; }

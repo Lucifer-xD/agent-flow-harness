@@ -26,7 +26,7 @@ const SCENES = {
   features: () => shape({ net: 1, activity: 0.7, tilt: 0.18, ...framed("net") }),
   models: () => shape({ ring: 1, activity: 0.6, tilt: 0.55, ...framed("ring", 1) }),
   download: () => shape({ mark: 1, activity: 0.4, ...framed("mark", 0.94) }),
-  docs: () => shape({ net: 1, activity: 0.35, zoom: -5, tilt: 0.2, shiftX: wide() ? 5 : 0, shiftY: wide() ? 0 : 4, dim: 0.4 }),
+  docs: () => shape({ net: 1, activity: 0.35, zoom: -10, tilt: 0.2, shiftX: wide() ? 9.2 : 0, shiftY: wide() ? 3.8 : 5.8, dim: 0.6 }),
   lost: () => shape({ mark: 0.6, spread: 0.6, activity: 0.2, ...framed("mark", 0.8), dim: 0.8 }),
 };
 
@@ -36,18 +36,27 @@ const scene = createScene(document.querySelector("#scene"), { mobile, reduced, l
 const { state } = scene;
 window.afhScene = scene; // for poking at the world from the console
 const base = () => ({ ...(SCENES[name] || SCENES.docs)() });
-Object.assign(state, base(), shape({ spread: 1 }), { dim: 0 }); // the light gathers into the page's shape
-const tween = (to, duration = 1.6) => gsap.to(state, { ...to, duration: reduced ? 0.01 : duration, ease: "power3.inOut", overwrite: "auto" });
-tween({ ...base(), dim: base().dim ?? 1 }, 2.6);
+const strip = ({ dim, ...rest }) => rest; // brightness is handled below, not by the looks
+Object.assign(state, strip(base()), shape({ spread: 1 }), { dim: 0 }); // the light gathers into the page's shape
+const tween = (to, duration = 1.6) => gsap.to(state, { ...strip(to), duration: reduced ? 0.01 : duration, ease: "power3.inOut", overwrite: "auto" });
+tween(base(), 2.6);
 
 // sections that change the world while they're in view
 let current = null;
 const zones = [...document.querySelectorAll("[data-scene]:not(body)")];
-// (the world fades behind a section's text unless the section says how bright it wants it)
 const look = (el) => {
   const o = JSON.parse(el.dataset.scene || "{}");
-  const dim = o.dim ?? 0.3;
-  return SHAPES.some((k) => k in o) ? { ...base(), ...shape(o), dim } : { ...base(), ...o, dim };
+  return SHAPES.some((k) => k in o) ? { ...base(), ...shape(o) } : { ...base(), ...o };
+};
+// The world floats in front of the page, so it only shows in the hero: it fades in on load and
+// out as the hero scrolls away, and never sits on the text below.
+const intro = { k: 0 };
+gsap.to(intro, { k: 1, duration: reduced ? 0.01 : 2.2, ease: "power2.out" });
+const brightness = () => {
+  const hero = document.querySelector("[data-stage]")?.closest("section, header") || document.querySelector("main > :first-child");
+  const bottom = hero ? hero.getBoundingClientRect().bottom : innerHeight;
+  const fade = Math.min(1, Math.max(0, (bottom - 80) / (innerHeight * 0.3))); // gone once the hero's bottom nears the top
+  return (base().dim ?? 1) * intro.k * fade;
 };
 if (zones.length) {
   const io = new IntersectionObserver((entries) => {
@@ -65,6 +74,7 @@ gsap.ticker.add(() => {
   const target = (scrollY / Math.max(1, innerHeight)) * 0.45;
   spin += (target - spin) * 0.06;
   state.spin = spin;
+  state.dim = brightness();
 });
 addEventListener("resize", () => { if (!current) tween(base(), 0.6); });
 
