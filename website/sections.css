@@ -5,6 +5,7 @@
 .hero-copy { max-width: 820px; margin: 0 auto; }
 .hero-copy .display { font-size: clamp(42px, 6.4vw, 92px); }
 .hero-shot { position: relative; max-width: 1040px; margin: 84px auto 0; perspective: 1800px; }
+@media (min-width: 1100px) { .hero-shot { max-width: min(1040px, calc(100% - 470px)); } } /* room for the mark and the set beside it */
 .hero-stage { display: none; }
 .shot { margin: 0; border-radius: 22px; overflow: hidden; background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--sh-3), 0 0 0 8px rgba(255, 255, 255, 0.55); transform-origin: 50% 0; line-height: 0; }
 .dv-shot { width: 100%; height: auto; display: block; }
