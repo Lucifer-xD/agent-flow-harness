@@ -157,7 +157,7 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
     key.shadow.radius = 6;
     key.shadow.bias = -0.0008;
     key.shadow.normalBias = 0.02;
-    Object.assign(key.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 40 });
+    Object.assign(key.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 45 });
   }
   const rim = new THREE.DirectionalLight(0xff5a8a, 0.55);
   rim.position.set(5, -2, -6);
@@ -165,9 +165,9 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   const hubLight = new THREE.PointLight(0xffa050, 0, 0, 2);
   world.add(hubLight);
 
-  // the shadow catcher: an invisible floor that only shows the shadow the shapes throw on the page
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.ShadowMaterial({ color: 0x2a1408, opacity: 0.14, transparent: true, depthWrite: false }));
-  floor.rotation.x = -Math.PI / 2;
+  // the shadow catcher: an invisible wall behind the shapes (the page itself), so they float in
+  // front of the page and throw a soft drop shadow onto it — onto whatever the page shows there
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ color: 0x2a1408, opacity: 0.16, transparent: true, depthWrite: false }));
   floor.receiveShadow = shadows;
   floor.visible = shadows;
   world.add(floor);
@@ -454,8 +454,8 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   };
   // where the hub stands in each shape (hidden in the mark, the ring and lost — it stays near the middle)
   const hubAt = { mark: new THREE.Vector3(0, 0, 0), core: new THREE.Vector3(0, 0, 0), plan: new THREE.Vector3(), net: NET.c, code: CODE_C.c, ring: RC, spread: new THREE.Vector3(0, -0.4, 0) };
-  // where the floor (the shadow) lies under each shape
-  const floorAt = { mark: -markH / 2 - 0.35, core: -2.5, plan: -2.4, net: -3.2, code: -3.2, ring: -2.3, spread: -3.6 };
+  // how far behind each shape the wall (the shadow) sits
+  const floorAt = { mark: -1.4, core: -2.9, plan: -1.3, net: -2.2, code: -2.2, ring: -3.4, spread: -1.8 };
   const hubPos = new THREE.Vector3();
   const pointAt = (k, u, o) => { // a point along cable k as it is now
     const x = Math.min(M - 1e-4, Math.max(0, u * M)), i = Math.floor(x), f = x - i, P = pts[k], a = i * 3, b = a + 3;
@@ -508,7 +508,7 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
     hubPos.set(0, 0, 0);
     let floorY = 0;
     SHAPES.forEach((s, i) => { if (W[i]) { hubPos.addScaledVector(hubAt[s], W[i] / total); floorY += floorAt[s] * (W[i] / total); } });
-    floor.position.y = floorY - (narrow && (wP || wK) ? 3 : 0);
+    floor.position.z = floorY;
 
     // the cables: every point's place is the blend of its places in every shape
     const taper = 0.35 * wHub; // thinner towards the hub, where the six gather
