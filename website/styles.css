@@ -55,9 +55,8 @@ b, strong { font-weight: 650; }
 kbd { display: inline-block; min-width: 22px; padding: 2px 7px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 7px; font: 500 12.5px var(--mono); color: var(--ink); background: var(--surface); text-align: center; }
 ::selection { background: rgba(255, 106, 42, 0.22); }
 
-/* The WebGL scene floats in front of the page (its shadow falls onto whatever is under it); the
-   page fades it out wherever text lives. It never takes the pointer. */
-#scene { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 5; display: block; pointer-events: none; }
+/* The WebGL line runs behind the page's content (cards cover it; it threads through the gutters). */
+#scene { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; display: block; pointer-events: none; }
 .wash {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
