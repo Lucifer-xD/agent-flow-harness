@@ -10,7 +10,7 @@
 .adm-range { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); box-shadow: var(--sh-1); }
 .adm-range button { padding: 7px 14px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: 500 13px var(--body); cursor: pointer; transition: color 0.2s, background 0.2s; }
 .adm-range button:hover { color: var(--ink); }
-.adm-range button.on { background: var(--ink); color: #fff; }
+.adm-range button.on { background: var(--ink); color: var(--on-ink); }
 
 .adm-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 .adm-card { min-width: 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--sh-1); }
@@ -30,10 +30,10 @@
 
 .adm-chart { position: relative; min-height: 170px; }
 .adm-chart svg { display: block; width: 100%; height: 170px; overflow: visible; }
-.adm-chart .grid { stroke: rgba(23, 18, 15, 0.08); stroke-width: 1; }
+.adm-chart .grid { stroke: rgb(var(--ink-rgb) / 0.08); stroke-width: 1; }
 .adm-chart .axis { fill: var(--ink-3); font: 11px var(--mono); }
 .adm-chart .hit { fill: transparent; cursor: default; }
-.adm-chart .hit:hover { fill: rgba(23, 18, 15, 0.04); }
+.adm-chart .hit:hover { fill: rgb(var(--ink-rgb) / 0.04); }
 .adm-tip { position: absolute; z-index: 3; pointer-events: none; min-width: 120px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--surface); box-shadow: var(--sh-2); color: var(--ink); font-size: 12.5px; line-height: 1.6; white-space: nowrap; }
 .adm-tip b { display: block; margin-bottom: 2px; color: var(--ink-2); font: 500 11.5px var(--mono); }

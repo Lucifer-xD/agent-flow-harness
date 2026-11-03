@@ -16,7 +16,8 @@
   <script>
     // the theme before anything paints: no flash of the wrong colours
     try {
-      const t = JSON.parse(localStorage.getItem("afh.web.v1") || "{}").theme;
+      const c = JSON.parse(localStorage.getItem("afh.web.v1") || "{}").theme;
+      const t = c === "light" || c === "dark" ? c : localStorage.getItem("afh-theme"); // "system": the site's choice, if any
       if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
     } catch {}
   </script>

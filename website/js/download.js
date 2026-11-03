@@ -1,7 +1,7 @@
 // The Download page: the checksum in a form PowerShell prints (hex), copy buttons, and what
-// happens when you press Download — the page turns into next steps while the world comes
-// apart into a busy network and settles back into the mark, as if assembling your copy.
-import { scene, tween, base, shape } from "./page.js";
+// happens when you press Download — the page turns into next steps while light races down the
+// line, as if bringing your copy.
+import { scene } from "./page.js";
 
 const hex = (b64) => [...atob(b64)].map((c) => c.charCodeAt(0).toString(16).padStart(2, "0")).join("").toUpperCase();
 let sha = "";
@@ -23,8 +23,6 @@ document.querySelector("[data-copy-cmd]")?.addEventListener("click", (e) => copy
 const main = document.querySelector(".dl-main");
 document.querySelectorAll("[data-download]").forEach((a) => a.addEventListener("click", () => {
   main.classList.add("downloading");
-  scene.burst(1.6);
-  tween({ ...shape({ net: 1 }), activity: 1.8, zoom: 1.2 }, 1.2);
-  setTimeout(() => tween({ ...base(), activity: 0.6 }, 2.4), 3200);
+  window.gsap.timeline().to(scene.state, { activity: 4, duration: 1.2, ease: "power2.out" }).to(scene.state, { activity: 0.3, duration: 2.4, ease: "power2.inOut" }, "+=2");
   scrollTo({ top: 0, behavior: "smooth" });
 }));

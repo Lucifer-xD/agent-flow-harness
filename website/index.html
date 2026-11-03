@@ -20,6 +20,7 @@
   <meta property="og:title" content="Agent Flow Harness — build with any model, on your own PC">
   <meta property="og:description" content="A desktop coding agent that plans, delegates and writes code with the models you choose.">
   <meta property="og:type" content="website">
+  <script src="/js/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -58,10 +59,7 @@
       <div class="hero-shot">
         <div class="hero-stage" data-stage aria-hidden="true"></div>
         <figure class="shot">
-          <picture>
-            <source srcset="/assets/app-light.webp" type="image/webp" data-shot-src="light">
-            <img class="dv-shot" src="/assets/app-light.webp" width="1600" height="1000" alt="The AFH window: threads on the left, the conversation with to-do and edit cards in the middle, the Changes tab of the workbench on the right" decoding="async">
-          </picture>
+          <img class="dv-shot" src="/assets/app-light.webp" data-dark="/assets/app-dark.webp" width="1600" height="1000" alt="The AFH window: threads on the left, the conversation with to-do and edit cards in the middle, the Changes tab of the workbench on the right" decoding="async">
         </figure>
         <div class="shot-toggle" role="group" aria-label="Theme of the screenshot">
           <button type="button" class="on" data-shot="light">Light</button>
@@ -91,7 +89,7 @@
             <p>Type it like you'd tell a teammate. No setup, no special commands — AFH reads your project and gets moving.</p>
             <div class="ch-world" aria-hidden="true"></div>
           </div>
-          <figure class="ch-shot wide"><img src="/assets/crop-composer.webp" alt="The message box of AFH with a request typed in" loading="lazy" decoding="async"></figure>
+          <figure class="ch-shot wide"><img src="/assets/crop-composer.webp" data-dark="/assets/crop-composer-dark.webp" alt="The message box of AFH with a request typed in" loading="lazy" decoding="async"></figure>
         </article>
         <article class="chapter" data-shape="plan" style="--i:1">
           <div class="ch-copy">
@@ -100,7 +98,7 @@
             <p>The agent writes down what "done" means, then breaks the work into a to-do list you can watch tick off — and edit any time.</p>
             <div class="ch-world" aria-hidden="true"></div>
           </div>
-          <figure class="ch-shot wide"><img src="/assets/crop-todo.webp" alt="A to-do card in the thread, two of three items done" loading="lazy" decoding="async"></figure>
+          <figure class="ch-shot wide"><img src="/assets/crop-todo.webp" data-dark="/assets/crop-todo-dark.webp" alt="A to-do card in the thread, two of three items done" loading="lazy" decoding="async"></figure>
         </article>
         <article class="chapter" data-shape="net" style="--i:2">
           <div class="ch-copy">
@@ -109,7 +107,7 @@
             <p>Reads, edits, runs and tests, each step a card in the thread. A lead can hand pieces to helpers that run side by side, each in its own lane or git worktree.</p>
             <div class="ch-world" aria-hidden="true"></div>
           </div>
-          <figure class="ch-shot"><img src="/assets/crop-thread.webp" alt="The conversation with edit, run and to-do cards" loading="lazy" decoding="async"></figure>
+          <figure class="ch-shot"><img src="/assets/crop-thread.webp" data-dark="/assets/crop-thread-dark.webp" alt="The conversation with edit, run and to-do cards" loading="lazy" decoding="async"></figure>
         </article>
         <article class="chapter" data-shape="code" style="--i:3">
           <div class="ch-copy">
@@ -118,7 +116,7 @@
             <p>The Workbench shows the file being written, the diff of everything changed, and the browser the agent drives. Don't like a turn? Rewind the thread <em>and</em> the files.</p>
             <div class="ch-world" aria-hidden="true"></div>
           </div>
-          <figure class="ch-shot"><img src="/assets/crop-changes.webp" alt="The Changes tab of the workbench with a diff" loading="lazy" decoding="async"></figure>
+          <figure class="ch-shot"><img src="/assets/crop-changes.webp" data-dark="/assets/crop-changes-dark.webp" alt="The Changes tab of the workbench with a diff" loading="lazy" decoding="async"></figure>
         </article>
       </div>
     </section>
@@ -139,7 +137,7 @@
         </article>
         <article class="wb-card">
           <header><span class="wb-ico">⇅</span><b>Changes</b><span>working tree vs. thread start</span></header>
-          <div class="wb-mock"><img src="/assets/crop-changes.webp" alt="" loading="lazy" decoding="async"></div>
+          <div class="wb-mock"><img src="/assets/crop-changes.webp" data-dark="/assets/crop-changes-dark.webp" alt="" loading="lazy" decoding="async"></div>
         </article>
         <article class="wb-card">
           <header><span class="wb-ico">⌕</span><b>Browser</b><span>with DevTools</span></header>
