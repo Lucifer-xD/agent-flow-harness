@@ -151,7 +151,8 @@
 .empty { grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--ink-2); }
 .more-row { display: flex; justify-content: center; margin-top: 22px; }
 .mix { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: center; padding: 48px; }
-.mix-ui { display: grid; gap: 8px; }
+.mix-ui { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+@media (max-width: 420px) { .mix-ui .ui-row { flex-wrap: wrap; gap: 4px 10px; } }
 .mix-ui .ui { margin-top: 0; background: var(--surface); box-shadow: var(--sh-1); }
 .mix-ui .ui:first-child { background: var(--grad-soft); border-color: rgba(255, 106, 42, 0.2); }
 
