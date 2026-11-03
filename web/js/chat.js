@@ -428,6 +428,37 @@ function renderQuestionTool(p) {
 
 const LIVE_LINES = 14; // lines of a running command's output shown under its card
 
+/**
+ * Streaming text, block by block: blocks that are already on screen keep their nodes (so a block
+ * fades in once, when it starts, instead of flickering on every delta), the growing last block is
+ * updated in place and carries the caret, and only brand-new blocks arrive with the entrance.
+ */
+function patchBlocks(target, html) {
+  const tpl = document.createElement("template");
+  tpl.innerHTML = html;
+  const fresh = [...tpl.content.children];
+  if (!fresh.length || tpl.content.childNodes.length !== fresh.length) { // bare text, or text mixed with elements: no block structure to keep
+    target.innerHTML = html;
+    (target.lastElementChild || target).classList.add("caret");
+    return;
+  }
+  target.classList.remove("caret");
+  const olds = [...target.children];
+  fresh.forEach((n, i) => {
+    const o = olds[i];
+    const lastOne = i === fresh.length - 1;
+    if (o && o.tagName === n.tagName) {
+      if (o.innerHTML !== n.innerHTML) o.innerHTML = n.innerHTML;
+      o.classList.toggle("caret", lastOne);
+    } else {
+      n.classList.add("blk-in");
+      if (lastOne) n.classList.add("caret");
+      if (o) o.replaceWith(n); else target.append(n);
+    }
+  });
+  while (target.children.length > fresh.length) target.lastElementChild.remove();
+}
+
 /** The last lines of a running command's output, or "" when the tool isn't streaming any. */
 function liveTail(p) {
   const out = p.state?.metadata?.live ? toolText(p.state.content) : "";
@@ -658,10 +689,7 @@ export class ChatView {
         const target = node.querySelector(`[data-part="${p.type}:${p.ordinal}"]`);
         if (!target) return false;
         if (p.type === "reasoning") target.textContent = p.text || "…";
-        else {
-          target.innerHTML = markdown(p.text);
-          (target.lastElementChild || target).classList.add("caret");
-        }
+        else patchBlocks(target, markdown(p.text));
       }
     }
     return true;
