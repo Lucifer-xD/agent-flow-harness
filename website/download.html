@@ -18,11 +18,11 @@
   <meta property="og:type" content="website">
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Agent Flow Harness", "alternateName": "AFH", "applicationCategory": "DeveloperApplication", "operatingSystem": "Windows 10, Windows 11, Android, iOS", "description": "A free desktop AI coding agent that runs on your own PC with the models you choose, plus a phone app to chat with any model and control your computer from anywhere.", "url": "https://agentflowharness.com/", "downloadUrl": "https://agentflowharness.com/download", "image": "https://agentflowharness.com/assets/social.png", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}</script>
   <!-- /seo -->
-  <meta name="theme-color" content="#0a0807">
+  <meta name="theme-color" content="#f7f3ee">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/pages.css">
   <script type="importmap">
@@ -34,75 +34,74 @@
 </head>
 <body data-page="download" data-scene="download">
   <canvas id="scene" aria-hidden="true"></canvas>
-  <div class="grain" aria-hidden="true"></div>
   <header data-nav></header>
 
   <main class="wrap">
+    <!-- the download card is the hero; the 3D mark sits beside it (above it on portrait screens) -->
     <section class="dl-hero">
       <div class="page-stage" data-stage aria-hidden="true"></div>
       <div class="dl-main">
-        <p class="kicker" data-reveal>Download</p>
-        <h1 class="display" data-reveal style="--d:.08s">Get AFH<br><span class="grad-text">for Windows.</span></h1>
-        <p class="lead" data-reveal style="--d:.16s">Free, no account needed. Install it, sign in or add a key, open a folder and say what you want built.</p>
-        <div class="cta-row" data-reveal style="--d:.24s">
-          <a class="btn btn-primary btn-big" data-download href="/downloads/AFH-Setup-1.18.0.exe">
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
-            Download AFH <span data-version>1.18.0</span>
-          </a>
+        <div class="dl-card" data-reveal>
+          <p class="kicker">Download · free</p>
+          <h1 class="display">Get AFH<br><span class="grad-text">for Windows.</span></h1>
+          <p class="lead">No account needed. Install it, sign in or add a key, open a folder and say what you want built.</p>
+          <div class="cta-row">
+            <a class="btn btn-primary btn-big" data-download href="/downloads/AFH-Setup-1.19.0.exe">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
+              Download AFH <span data-version>1.19.0</span>
+            </a>
+          </div>
+          <ul class="dl-meta">
+            <li>Version <b data-version>1.19.0</b></li>
+            <li><b data-size>143 MB</b></li>
+            <li>Released <b data-date>Nov 3, 2026</b></li>
+            <li>Windows 10 &amp; 11, 64-bit</li>
+          </ul>
+          <ol class="dl-steps">
+            <li><span>Run <b data-file>AFH-Setup-1.19.0.exe</b>. If Windows says it protected your PC, choose <b>More info → Run anyway</b>.</span></li>
+            <li><span>Sign in or add a key in <b>Settings → Models &amp; providers</b> — ChatGPT, Copilot, an API key, or a model on your PC.</span></li>
+            <li><span>Open a folder and say what you want, like you'd tell a teammate.</span></li>
+          </ol>
+          <div class="hash"><span class="k">SHA-512</span><code data-sha-hex title="SHA-512 of the installer">loading…</code><button class="icon-btn" type="button" data-copy-hash>Copy</button></div>
         </div>
-        <ul class="dl-meta" data-reveal style="--d:.3s">
-          <li>Windows 10 &amp; 11, 64-bit</li>
-          <li><span data-size>143 MB</span></li>
-          <li>Released <span data-date>Oct 31, 2026</span></li>
-        </ul>
 
         <div class="started" aria-live="polite">
           <p class="progress-ring"><i></i>Your download is starting…</p>
           <h2 class="display">Almost<br><span class="grad-text">there.</span></h2>
           <ol class="next">
-            <li><span>Open <b data-file>AFH-Setup-1.18.0.exe</b> from your Downloads.</span></li>
+            <li><span>Open <b data-file>AFH-Setup-1.19.0.exe</b> from your Downloads.</span></li>
             <li><span>If Windows says it protected your PC, choose <b>More info → Run anyway</b>. AFH is new, so Windows doesn't know it yet.</span></li>
             <li><span>AFH opens when it's installed. Go to <b>Settings → Models &amp; providers</b> to sign in or add a key.</span></li>
             <li><span>Pick a folder, type what you want, and watch it work. <a href="/docs#first-thread">Your first thread →</a></span></li>
           </ol>
-          <p class="retry">Download didn't start? <a data-download href="/downloads/AFH-Setup-1.18.0.exe">Try again</a> · <a href="/docs">Read the guide</a></p>
+          <p class="retry">Download didn't start? <a data-download href="/downloads/AFH-Setup-1.19.0.exe">Try again</a> · <a href="/docs">Read the guide</a></p>
         </div>
       </div>
-
     </section>
 
     <section class="panel release" data-reveal aria-label="This release">
-      <div>
-        <div class="release-head"><b>AFH <span data-version>1.18.0</span></b><span class="badge green">Latest</span></div>
-        <dl class="kv">
-          <dt>File</dt><dd class="mono" data-file>AFH-Setup-1.18.0.exe</dd>
-          <dt>Size</dt><dd data-size>143 MB</dd>
-          <dt>Released</dt><dd data-date>Nov 2, 2026</dd>
-          <dt>SHA-512</dt><dd class="hash"><code data-sha-hex title="SHA-512 of the installer">loading…</code><button class="icon-btn" type="button" data-copy-hash>Copy</button></dd>
-        </dl>
-      </div>
-      <div>
-        <h4>New in 1.18</h4>
-        <ul>
-          <li>Chat with ChatGPT inside AFH: sign in with your ChatGPT browser session to use the real GPT-6 family (Astra, Sol, Terra…) as normal chat models that drive the whole agent — separate from your Codex credits. Every reply shows a badge confirming the real model answered.</li>
-          <li>Red Team mode: a new mode beside Build, Plan and Delegate that audits your own project for real security holes — OTP and login flaws, admin bypass, injection, exposed secrets — and reports each with how it’s exploited and how to fix it, without changing your code.</li>
-          <li>Design first: before building an app or website, the agent shows you design options A, B and C as live example screens in phone, tablet, desktop and app-window frames. Pick one, mix them, or ask for new ones.</li>
-          <li>A built-in browser in a side panel: watch the agent browse, click and type, and take over whenever you want.</li>
-          <li>A new, cleaner look across the whole app: sharper type, calmer colors and more polished cards, menus and settings, in dark and light.</li>
-          <li>Usage meter: see your plan's 5-hour and weekly limits, quota or balance right in the message box, live from ChatGPT, Copilot, Antigravity, Kimi, Z.AI, OpenRouter and more.</li>
-          <li>Sign in with Google Antigravity to use its Gemini and Claude models.</li>
-          <li>1.13.1: Antigravity works with every tool, and each model has one entry with the effort picker.</li>
-          <li>1.12.1: goals only when you ask, and autopilot no longer retries a task it can't finish.</li>
-          <li>Computer use: AFH can see your screen and use the mouse and keyboard in desktop apps, or teach you how, one step at a time. Press Esc any time to stop it.</li>
-          <li>1.10.2: see a command's output live while the agent runs it, and Stop ends a run right away.</li>
-          <li>A brand-new AFH app for Android and iPhone: chat directly with OpenAI, Anthropic, Gemini, OpenRouter and more using your own keys — and take over AFH on your computer from anywhere.</li>
-          <li>Your AFH account has its own button at the bottom of the sidebar; Settings moved next to the theme and language buttons.</li>
-          <li>Since 1.9: an optional AFH account, only for the phone — create it and manage your computers at <a href="/account">agentflowharness.com/account</a>.</li>
-          <li>Project memory: the agent remembers how your project works, and keeps credentials you give it out of git.</li>
-          <li>Since 1.8: sign in with ChatGPT, GitHub Copilot or OpenRouter, and 228 providers built in.</li>
-        </ul>
-        <a class="more" href="/changelog">Full changelog →</a>
-      </div>
+      <div class="release-head"><b>AFH <span data-version>1.19.0</span></b><span class="badge green">Latest</span><time datetime="2026-11-03" data-date>Nov 3, 2026</time></div>
+      <h4>What's in this release</h4>
+      <ul>
+        <li><b>The Studio redesign</b>: a slim thread rail, a wider reading column, a floating message box and one Workbench on the right with Live, Changes, Browser, Context, Prompt and Agents as tabs. All 46 themes, Arabic and compact density carry over.</li>
+        <li><b>DevTools in the built-in browser</b>: the agent runs JavaScript in the console, reads console errors, inspects every network request and reads the source files a page loaded — so it debugs what it builds instead of guessing.</li>
+        <li>Chat with ChatGPT inside AFH: sign in with your ChatGPT browser session to use the real GPT-6 family (Astra, Sol, Terra…) as normal chat models that drive the whole agent — separate from your Codex credits. Every reply shows a badge confirming the real model answered.</li>
+        <li>Red Team mode: a new mode beside Build, Plan and Delegate that audits your own project for real security holes — OTP and login flaws, admin bypass, injection, exposed secrets — and reports each with how it's exploited and how to fix it, without changing your code.</li>
+        <li>Design first: before building an app or website, the agent shows you design options A, B and C as live example screens in phone, tablet, desktop and app-window frames. Pick one, mix them, or ask for new ones.</li>
+        <li>A built-in browser in a side panel: watch the agent browse, click and type, and take over whenever you want.</li>
+        <li>A new, cleaner look across the whole app: sharper type, calmer colors and more polished cards, menus and settings, in dark and light.</li>
+        <li>Usage meter: see your plan's 5-hour and weekly limits, quota or balance right in the message box, live from ChatGPT, Copilot, Antigravity, Kimi, Z.AI, OpenRouter and more.</li>
+        <li>Sign in with Google Antigravity to use its Gemini and Claude models.</li>
+        <li>1.13.1: Antigravity works with every tool, and each model has one entry with the effort picker.</li>
+        <li>1.12.1: goals only when you ask, and autopilot no longer retries a task it can't finish.</li>
+        <li>Computer use: AFH can see your screen and use the mouse and keyboard in desktop apps, or teach you how, one step at a time. Press Esc any time to stop it.</li>
+        <li>1.10.2: see a command's output live while the agent runs it, and Stop ends a run right away.</li>
+        <li>A brand-new AFH app for Android and iPhone: chat directly with OpenAI, Anthropic, Gemini, OpenRouter and more using your own keys — and take over AFH on your computer from anywhere.</li>
+        <li>Since 1.9: an optional AFH account, only for the phone — create it and manage your computers at <a href="/account">agentflowharness.com/account</a>.</li>
+        <li>Project memory: the agent remembers how your project works, and keeps credentials you give it out of git.</li>
+        <li>Since 1.8: sign in with ChatGPT, GitHub Copilot or OpenRouter, and 228 providers built in.</li>
+      </ul>
+      <a class="more" href="/changelog">Full changelog →</a>
     </section>
 
     <section class="section" id="phone" data-scene='{"net":1,"activity":0.6,"shiftX":0}'>
@@ -117,20 +116,20 @@
           <h3>Android</h3>
           <p>Android 7 or later. Open the file on your phone and allow installing from your browser when Android asks. It updates the earlier AFH app in place.</p>
           <p style="margin-top:16px"><a class="btn btn-primary" href="/downloads/AFH-Remote-1.11.0.apk" download>Download the APK</a></p>
-          <p class="mono" style="margin-top:12px;font-size:12px;color:var(--text-3)">AFH-Remote-1.11.0.apk · 61 MB</p>
+          <p class="mono" style="margin-top:12px;font-size:12px;color:var(--ink-3)">AFH-Remote-1.11.0.apk · 61 MB</p>
         </article>
         <article class="fcard" data-reveal style="--d:.08s">
           <div class="ficon">◫</div>
           <h3>iPhone &amp; iPad</h3>
           <p>Until AFH is on the App Store, install the app with <b>AltStore</b> or <b>Sideloadly</b>, which sign it with your own Apple ID.</p>
           <p style="margin-top:16px"><a class="btn btn-ghost" href="/downloads/AFH-Remote-1.11.0.ipa" download>Download the IPA</a></p>
-          <p class="mono" style="margin-top:12px;font-size:12px;color:var(--text-3)">AFH-Remote-1.11.0.ipa · iOS 15 or later</p>
+          <p class="mono" style="margin-top:12px;font-size:12px;color:var(--ink-3)">AFH-Remote-1.11.0.ipa · iOS 15 or later</p>
         </article>
       </div>
       <div class="steps3" style="margin-top:14px">
         <article class="fcard" data-reveal>
           <h3>Chat right away</h3>
-          <p>Open the app and add an API key under <b>Providers</b>. Chats go straight from your phone to the provider. For remote control, create an account on <a href="/account?signup" style="color:var(--orange)">agentflowharness.com/account</a> or in the app.</p>
+          <p>Open the app and add an API key under <b>Providers</b>. Chats go straight from your phone to the provider. For remote control, create an account on <a href="/account?signup">agentflowharness.com/account</a> or in the app.</p>
         </article>
         <article class="fcard" data-reveal style="--d:.08s">
           <h3>Connect the computer</h3>
@@ -183,7 +182,7 @@
             <tr><td>Disk</td><td>About <b>430 MB</b> once installed, plus your threads</td></tr>
             <tr><td>Models</td><td>A ChatGPT or Copilot plan, any API key, or a model running on your PC</td></tr>
             <tr><td>Internet</td><td>Needed for online models. Local models work offline.</td></tr>
-            <tr><td>Optional</td><td>Git for worktrees · Chrome or Edge for the browser tool</td></tr>
+            <tr><td>Optional</td><td>Git for worktrees · Chrome or Edge if you'd rather not use the built-in browser</td></tr>
           </table>
         </div>
         <div class="fcard" data-reveal style="--d:.08s">
@@ -192,8 +191,8 @@
           <p>AFH checks this site for new versions and downloads them in the background. When one is ready you'll see <b>Restart to update</b> — or it installs the next time you quit.</p>
           <p>Turn it off, or check by hand, in <b>Settings → About → Updates</b>.</p>
           <h3 style="margin-top:22px">Check the file</h3>
-          <p>To make sure the installer arrived intact, compare its SHA-512 with the one above:</p>
-          <div class="code-line"><code>Get-FileHash .\<span data-file>AFH-Setup-1.18.0.exe</span> -Algorithm SHA512</code><button class="icon-btn" type="button" data-copy-cmd>Copy</button></div>
+          <p>To make sure the installer arrived intact, compare its SHA-512 with the one on the download card:</p>
+          <div class="code-line"><code>Get-FileHash .\<span data-file>AFH-Setup-1.19.0.exe</span> -Algorithm SHA512</code><button class="icon-btn" type="button" data-copy-cmd>Copy</button></div>
         </div>
       </div>
     </section>

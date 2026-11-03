@@ -17,11 +17,11 @@
   <meta property="og:description" content="Install Agent Flow Harness, connect a model, and run your first thread. Modes, goals, helpers, approvals, undo, worktrees, commands, hooks, shortcuts and more.">
   <meta property="og:type" content="website">
   <!-- /seo -->
-  <meta name="theme-color" content="#0a0807">
+  <meta name="theme-color" content="#f7f3ee">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/docs.css">
   <script type="importmap">
@@ -33,11 +33,10 @@
 </head>
 <body class="docs" data-page="docs" data-scene="docs">
   <canvas id="scene" aria-hidden="true"></canvas>
-  <div class="grain" aria-hidden="true"></div>
   <header data-nav></header>
 
   <section class="docs-hero">
-    <p class="eyebrow"><span class="dot"></span> Guide · AFH <span data-version>1.18.0</span></p>
+    <p class="eyebrow"><span class="dot"></span> Guide · AFH <span data-version>1.19.0</span></p>
     <h1 class="display"><span class="grad-text">Getting started.</span></h1>
     <p class="lead">From download to your first finished task in a few minutes — and everything you'll want to know after that.</p>
     <div class="cta-row">
@@ -59,6 +58,7 @@
         <a href="#memory">Project memory</a>
         <a href="#helpers">Helpers</a>
         <a href="#live">Live pane &amp; undo</a>
+        <a href="#browser">Browser &amp; DevTools</a>
         <a href="#approvals">Approvals</a>
         <a href="#worktrees">Worktrees</a>
         <a href="#phone">From your phone</a>
@@ -94,6 +94,14 @@
           <div class="mini"><b>Add a provider</b><span>Search the catalogue of 228 providers, pick one and paste its API key. Keys are stored only on this computer.</span></div>
           <div class="mini"><b>Models on this computer</b><span>Running Ollama, LM Studio, vLLM, llama.cpp or Jan? AFH finds them — no key needed.</span></div>
         </div>
+        <h3 id="chatgpt-chat">ChatGPT (chat): the real GPT-6 family</h3>
+        <p>Besides the Codex sign-in, <b>Settings → Models → ChatGPT (chat)</b> connects the models you talk to on chatgpt.com — <b>GPT-6 Astra</b>, <b>GPT-6.1 Sol</b>, <b>GPT-5.6 Terra</b> and the rest of the family — and lets them drive the whole harness as agents. Usage is drawn from your ChatGPT plan, not from Codex credits.</p>
+        <ol class="steps">
+          <li>Sign in to chatgpt.com in your browser as usual.</li>
+          <li>In AFH choose <b>ChatGPT (chat) → Import from browser</b>, which copies the session from the browser you pick — or open <code>https://chatgpt.com/api/auth/session</code> in that browser and paste the JSON it shows into the box.</li>
+          <li>Pick a GPT-6 model in the message box. Every reply carries a green <b>real model</b> badge naming the model that actually answered, so you can tell it apart from a fallback.</li>
+        </ol>
+        <p class="note">The session stays on this computer like any other key. When it expires, import it again — nothing else changes.</p>
         <h3>Custom endpoint</h3>
         <p>For any other server, choose <b>Custom endpoint</b> and fill in the <b>API format</b> (OpenAI-compatible, Anthropic or Gemini), a <b>Base URL</b>, an <b>API key</b> if it needs one, and the <b>Model ids</b>.</p>
         <p class="note">Claude Pro/Max plans can't be used by sign-in in other apps — use an Anthropic API key instead.</p>
@@ -118,6 +126,7 @@
           <tr><td><b>Build</b></td><td>The default. Reads, edits and runs code in the project.</td></tr>
           <tr><td><b>Plan</b></td><td>Investigates and proposes a plan without changing anything. Editing and commands are off.</td></tr>
           <tr><td><b>Delegate</b></td><td>Leads the work and hands tasks to your delegate models.</td></tr>
+          <tr><td><b>Red Team</b></td><td>Audits your own project for exploitable weaknesses — auth and OTP flaws, privilege escalation, injection, exposed secrets — and reports each with its severity, how it is exploited and the fix. Never edits code.</td></tr>
         </table>
         <p>Create your own agents — with their own prompt, model and tools — from <b>Create or edit agents…</b> at the bottom of the mode menu. Each can be a main mode, a subagent, or both, and can be made read-only.</p>
       </section>
@@ -155,6 +164,24 @@
         <h2>Live pane &amp; undo</h2>
         <p>Open <b>Live</b> in the header to watch each file as it's written, character by character.</p>
         <p>Don't like where a turn went? Hover your message and choose <b>Undo to here</b>. The thread <i>and</i> the files on disk go back to just before that message, and your message returns to the box so you can change it and send again. Choose <b>Put it back</b> if you change your mind. <b>Fork thread from here</b> starts a copy instead.</p>
+      </section>
+
+      <section id="browser">
+        <h2>Built-in browser &amp; DevTools</h2>
+        <p>The agent has a <code>browser</code> tool that drives a real browser in the <b>Browser</b> tab of the workbench, next to Live and Changes. You watch what it does as it happens — open your dev server, click through a flow, read the errors — and you can take over the page yourself at any time.</p>
+        <table class="ref">
+          <tr><th>Action</th><th>What it does</th></tr>
+          <tr><td><code>open</code></td><td>Loads a URL in the panel.</td></tr>
+          <tr><td><code>screenshot</code></td><td>Sends the model a picture of the page.</td></tr>
+          <tr><td><code>text</code></td><td>Reads the page as text — cheaper and more exact than a screenshot.</td></tr>
+          <tr><td><code>click</code>, <code>type</code>, <code>press</code>, <code>scroll</code></td><td>Clicks an element, types into a field, presses a key, scrolls.</td></tr>
+          <tr><td><code>evaluate</code></td><td>Runs JavaScript in the page, as if typed into the console, and returns the result.</td></tr>
+          <tr><td><code>console</code></td><td>The page's console: log messages, warnings and errors since it loaded.</td></tr>
+          <tr><td><code>network</code></td><td>Every request the page made, with status, type, size and timing. Add <code>url=&lt;part&gt;</code> to get one request's headers and response body.</td></tr>
+          <tr><td><code>sources</code></td><td>The files the page loaded — scripts, styles, data. Add <code>url=&lt;part&gt;</code> to read one.</td></tr>
+        </table>
+        <p>So when a page breaks, the agent can do what you would: check the console, find the request that answered <code>500</code>, read its response, open the source file that sent it and fix the code. Ask for it directly — <i>"open localhost:3000, try the login form and tell me why it fails"</i> — or let it reach for the browser on its own when it is testing something it built.</p>
+        <p class="note">The browser is a separate profile inside AFH: sign-ins you make there stay there, and nothing from your everyday browser is shared with it.</p>
       </section>
 
       <section id="approvals">
