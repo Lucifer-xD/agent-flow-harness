@@ -232,7 +232,7 @@ def migrate_sessions(engine: "Engine", ids: list[str] | None = None, *, director
                 afh_pid = OPENCODE_TO_AFH.get(model["providerID"], model["providerID"])
                 model = {"providerID": afh_pid, "id": model.get("id"), **({"variant": model["variant"]} if model.get("variant") else {})} if afh_pid else None
             directory = (directory_map or {}).get(info["directory"], info["directory"])
-            agent = info["agent"] if info["agent"] in ("build", "plan", "delegate") else "build"
+            agent = info["agent"] if info["agent"] in ("build", "plan", "redteam", "delegate") else "build"
             s = engine.store.create_session(directory, title=info["title"] or None, agent=agent, model=model, permissions=perm.rules_for_mode("ask"),
                                             metadata={"afh": {"mode": "ask", "importedFrom": "opencode", "importedId": sid}}, parent_id=parent_new)
             for m in msgs:
