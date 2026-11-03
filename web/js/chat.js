@@ -362,9 +362,9 @@ const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name
 
 function pathNode(target) {
   const i = Math.max(target.lastIndexOf("/"), target.lastIndexOf("\\"));
-  if (i < 0) return el("span.tool-target", { title: target }, el("span.name", target));
+  if (i < 0) return el("span.tool-target.path", { title: target }, el("span.name", target));
   const dir = target.slice(0, i + 1).split(/[\\/]/).filter(Boolean).slice(-2).join("/");
-  return el("span.tool-target", { title: target }, el("span.dir", dir ? dir + "/" : ""), el("span.name", target.slice(i + 1)));
+  return el("span.tool-target.path", { title: target }, el("span.dir", dir ? dir + "/" : ""), el("span.name", target.slice(i + 1)));
 }
 
 const TODO_MARK = { completed: "check", cancelled: "x", in_progress: "zap", pending: null };
@@ -486,10 +486,12 @@ function renderTool(p, openSet, thread) {
 
   // The card style: icon tile, verb, target, outcome — expandable.
   const card = el(`div.tool.${kind}.${status}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
+  // Header: icon tile · verb · target chip · (status, checks, hooks) at the right · chevron.
   const head = el("button.tool-head", { type: "button", on: { click: () => { card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
     el("span.tool-ico", live ? el("span.spinner") : ico(status === "error" ? "alert" : name === "jobs" ? "activity" : info.icon)),
     el("span.tool-name", live ? verbs[1] : verbs[0]),
-    targetNode, stat, diagChip, hookChip);
+    targetNode,
+    el("span.tool-right", stat, diagChip, hookChip, el("span.tool-chev", { html: icon("chev-down") })));
   const sections = [];
   if (patches.length) for (const x of patches) sections.push(el("div.tool-section", patches.length > 1 ? el("div.tool-section-label", basename(x.file)) : null, diffView(x.patch)));
   else {
@@ -502,7 +504,7 @@ function renderTool(p, openSet, thread) {
   if (p.state?.error) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", p.state.error.message || JSON.stringify(p.state.error))));
   // Browser screenshots stay visible under the card's header; click one to see it full size.
   const shots = (p.state?.content || []).filter((c) => c.type === "image" && c.uri);
-  const gallery = shots.length ? el("div.tool-shots", shots.map((c) => el("img.tool-shot", { src: c.uri, alt: "Browser screenshot", loading: "lazy", on: { click: () => viewImage(c.uri) } }))) : null;
+  const gallery = shots.length ? el("div.tool-shots", { dataset: { n: String(shots.length) } }, shots.map((c) => el("img.tool-shot", { src: c.uri, alt: "Browser screenshot", loading: "lazy", on: { click: () => viewImage(c.uri) } }))) : null;
   // A running command shows its latest output under the header as it arrives, no click needed.
   const tail = live ? liveTail(p) : "";
   const liveOut = tail ? el("div.tool-live", el("pre.tool-live-pre", tail)) : null;

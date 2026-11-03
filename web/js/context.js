@@ -8,11 +8,19 @@ import { confirmDialog, el, ico, icon, modal, toast } from "./ui.js";
 const TYPES = { user: "You", assistant: "Model", system: "System notice", idle: "Run ended", compaction: "Compaction summary", shell: "Shell", synthetic: "Injected", skill: "Skill" };
 const PAGE = 60;
 
-export async function openContextEditor(ctx, thread, { onSaved }) {
+/** Opens the editor in a dialog, or draws it inside `mount` (the workbench's Context tab). */
+export async function openContextEditor(ctx, thread, { onSaved, mount = null }) {
   const body = el("div.m-body");
-  const m = modal([el("div.ctx-side"), body]);
-  m.box.classList.add("ctx-modal");
-  body.append(el("button.icon-btn.m-close", { title: "Close", html: icon("x"), on: { click: () => m.close() } }));
+  let m;
+  if (mount) {
+    mount.replaceChildren(el("div.ctx-inline", el("div.ctx-side"), body));
+    m = { box: mount.firstChild, close: () => {} };
+  } else {
+    m = modal([el("div.ctx-side"), body]);
+    m.box.classList.add("ctx-modal");
+    body.append(el("button.icon-btn.m-close", { title: "Close", html: icon("x"), on: { click: () => m.close() } }));
+  }
+  const scroller = mount || body; // what scrolls: the tab's body, or the dialog's
   const loading = el("div.drawer-empty", el("span.spinner"));
   body.append(loading);
   let messages;
@@ -22,6 +30,7 @@ export async function openContextEditor(ctx, thread, { onSaved }) {
     loading.replaceWith(el("div.error-card", ico("alert"), el("div", e.message)));
     return;
   }
+  if (!body.isConnected) return; // the tab moved on while loading
   loading.remove();
   let start = 0;
   for (let i = messages.length - 1; i >= 0; i--) if (messages[i].type === "compaction") { start = i; break; }
@@ -47,7 +56,8 @@ export async function openContextEditor(ctx, thread, { onSaved }) {
     counter);
 
   const list = el("div.ctx-list");
-  body.append(el("h2", thread.session.title || "Thread context"), list, el("div.actions", { style: { marginTop: "16px", position: "sticky", bottom: 0, background: "var(--bg)", padding: "10px 0" } }, el("span", { style: { flex: 1 } }), el("button.btn.ghost", { on: { click: () => m.close() } }, "Cancel"), saveBtn));
+  body.append(mount ? null : el("h2", thread.session.title || "Thread context"), list,
+    el("div.actions.ctx-actions", { style: { marginTop: "16px", position: "sticky", bottom: 0, padding: "10px 0" } }, el("span", { style: { flex: 1 } }), mount ? null : el("button.btn.ghost", { on: { click: () => m.close() } }, "Cancel"), saveBtn));
 
   const ta = (get, set, cls = "") => {
     const t = el(`textarea.ta.ctx-ta${cls}`, { value: get() ?? "", on: { input: (e) => { set(e.target.value); markDirty(); autosize(e.target); } } });
@@ -102,7 +112,7 @@ export async function openContextEditor(ctx, thread, { onSaved }) {
   list.append(more);
   for (const w of work.slice(shownFrom)) list.append(block(w));
   drawMore();
-  requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
+  requestAnimationFrame(() => { scroller.scrollTop = scroller.scrollHeight; });
 
   saveBtn.addEventListener("click", async () => {
     const kept = work.filter((w) => !w.deleted).map((w) => w.msg);

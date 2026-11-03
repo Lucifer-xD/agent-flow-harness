@@ -14,6 +14,23 @@ from afh.engine.types import ToolContext
 
 from tests.test_tools import FakeGate, FakeSnapshots
 
+# What DevTools reports for a page that loaded a document, a script, and a fetch that 404s.
+NETWORK_EVENTS = [
+    ("Network.requestWillBeSent", {"requestId": "r1", "type": "Document", "timestamp": 1.0,
+                                   "request": {"url": "https://shop.test/", "method": "GET", "headers": {"Accept": "text/html"}}}),
+    ("Network.responseReceived", {"requestId": "r1", "type": "Document",
+                                  "response": {"status": 200, "statusText": "OK", "mimeType": "text/html", "headers": {"content-type": "text/html"}}}),
+    ("Network.loadingFinished", {"requestId": "r1", "timestamp": 1.12, "encodedDataLength": 2048}),
+    ("Network.requestWillBeSent", {"requestId": "r2", "type": "Fetch", "timestamp": 1.2,
+                                   "request": {"url": "https://shop.test/api/data.json", "method": "GET", "headers": {}}}),
+    ("Network.responseReceived", {"requestId": "r2", "type": "Fetch",
+                                  "response": {"status": 200, "statusText": "OK", "mimeType": "application/json", "headers": {}}}),
+    ("Network.loadingFinished", {"requestId": "r2", "timestamp": 1.23, "encodedDataLength": 30}),
+    ("Network.requestWillBeSent", {"requestId": "r3", "type": "Image", "timestamp": 1.3,
+                                   "request": {"url": "https://shop.test/missing.png", "method": "GET", "headers": {}}}),
+    ("Network.loadingFailed", {"requestId": "r3", "type": "Image", "errorText": "net::ERR_ABORTED"}),
+]
+
 
 class FakePanel:
     """A socket whose other end acts like the AFH window's browser panel."""
@@ -40,6 +57,8 @@ class FakePanel:
         if "id" in msg:
             self.inbox.put_nowait({"id": msg["id"], "result": self.answer(msg)})
             if msg.get("method") == "Page.navigate":
+                for method, params in NETWORK_EVENTS:  # the page's requests, as DevTools would report them
+                    self.inbox.put_nowait({"event": {"tab": "7", "method": method, "params": params}})
                 self.inbox.put_nowait({"event": {"tab": "7", "method": "Page.loadEventFired", "params": {}}})
 
     def answer(self, msg):
@@ -58,6 +77,14 @@ class FakePanel:
             else:
                 value = 42
             return {"result": {"value": value}}
+        if msg["op"] == "cdp" and msg["method"] == "Page.getResourceTree":
+            return {"frameTree": {"frame": {"id": "F1", "url": "https://shop.test/"},
+                                  "resources": [{"url": "https://shop.test/app.js", "type": "Script", "contentSize": 20},
+                                                {"url": "https://shop.test/style.css", "type": "Stylesheet", "contentSize": 10}]}}
+        if msg["op"] == "cdp" and msg["method"] == "Page.getResourceContent":
+            return {"content": "console.log('hi')", "base64Encoded": False}
+        if msg["op"] == "cdp" and msg["method"] == "Network.getResponseBody":
+            return {"body": '{"ok": true}', "base64Encoded": False}
         return {}
 
     def cdp(self, method):
@@ -214,3 +241,55 @@ def test_the_host_socket_needs_the_windows_own_token(panel, monkeypatch):
     assert err.value.code == 4401
     with client.websocket_connect("/api/browser/host?token=t") as ws:
         ws.send_json({"op": "handback", "sid": "x"})
+
+
+def test_network_lists_requests_and_drills_into_one(panel):
+    async def go():
+        fake = FakePanel()
+        task = await connected(fake)
+        tool = BrowserTool()
+        await tool.run(ctx(), {"action": "open", "url": "shop.test"})
+        await asyncio.sleep(0.01)  # let the Network.* events be processed
+
+        listed = await tool.run(ctx(), {"action": "network"})
+        assert not listed.is_error, listed.text
+        assert listed.images == []  # a DevTools read, not a screenshot
+        assert "Document" in listed.text and "Fetch" in listed.text
+        assert "data.json" in listed.text
+        assert "ERR" in listed.text and "missing.png" in listed.text
+
+        detail = await tool.run(ctx(), {"action": "network", "url": "data.json"})
+        assert "GET https://shop.test/api/data.json" in detail.text
+        assert "Status: 200 OK" in detail.text
+        assert "Response body:" in detail.text and '{"ok": true}' in detail.text
+
+        miss = await tool.run(ctx(), {"action": "network", "url": "nope.js"})
+        assert miss.is_error and "No recorded request" in miss.text
+        fake.inbox.put_nowait(None)
+        await task
+
+    asyncio.run(go())
+
+
+def test_sources_lists_files_and_reads_one(panel):
+    async def go():
+        fake = FakePanel()
+        task = await connected(fake)
+        tool = BrowserTool()
+        await tool.run(ctx(), {"action": "open", "url": "shop.test"})
+
+        listed = await tool.run(ctx(), {"action": "sources"})
+        assert not listed.is_error, listed.text
+        assert "Document" in listed.text and "https://shop.test/" in listed.text
+        assert "Script" in listed.text and "https://shop.test/app.js" in listed.text
+        assert "Stylesheet" in listed.text and "https://shop.test/style.css" in listed.text
+
+        read = await tool.run(ctx(), {"action": "sources", "url": "app.js"})
+        assert "https://shop.test/app.js (Script)" in read.text and "console.log('hi')" in read.text
+
+        miss = await tool.run(ctx(), {"action": "sources", "url": "nope"})
+        assert miss.is_error and "No loaded file" in miss.text
+        fake.inbox.put_nowait(None)
+        await task
+
+    asyncio.run(go())
