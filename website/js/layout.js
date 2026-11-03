@@ -25,6 +25,10 @@
       <span class="nav-auth" data-auth>
         <a class="nav-signin" href="/account">Sign in</a>
       </span>
+      <button class="theme-btn" type="button" aria-label="Switch between light and dark">
+        <svg class="moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.6 14.4A8.6 8.6 0 0 1 9.6 3.4a.6.6 0 0 0-.8-.7 9.8 9.8 0 1 0 12.5 12.5.6.6 0 0 0-.7-.8Z"/></svg>
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
+      </button>
       <a class="btn btn-small nav-cta${page === "download" ? " active" : ""}" href="/download">Download</a>
       <button class="burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu"><i></i><i></i></button>`;
     const menu = document.createElement("div");
@@ -35,6 +39,7 @@
       <div class="menu-auth" data-auth-menu><a class="btn btn-ghost" href="/account">Sign in</a><a class="btn btn-primary" href="/account?signup">Create account</a></div>
       <p class="menu-foot">AFH <span data-version>1.19.1</span> · Windows 10/11</p>`;
     nav.after(menu);
+    nav.querySelector(".theme-btn").addEventListener("click", () => window.afhTheme.set(window.afhTheme.get() === "dark" ? "light" : "dark"));
     const burger = nav.querySelector(".burger");
     const toggle = (open) => {
       document.documentElement.classList.toggle("menu-open", open);
@@ -89,6 +94,15 @@
         <p>Runs on your PC · no account needed · no telemetry</p>
       </div>`;
   }
+
+  // pictures of the app match the theme: <img src="light" data-dark="dark">
+  const themed = () => document.querySelectorAll("img[data-dark]").forEach((img) => {
+    img.dataset.light ||= img.getAttribute("src");
+    const src = window.afhTheme.get() === "dark" ? img.dataset.dark : img.dataset.light;
+    if (img.getAttribute("src") !== src) img.src = src;
+  });
+  themed();
+  document.addEventListener("afh:theme", themed);
 
   // entrances
   const io = new IntersectionObserver((entries) => {

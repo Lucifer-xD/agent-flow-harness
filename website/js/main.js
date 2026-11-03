@@ -2,7 +2,7 @@
 // line behind the page. The line opens into the mark beside the product shot, threads down the page
 // along the gutters and behind the cards (never under text), and opens into the mark again on the
 // closing call; its route is measured from the real elements, so it follows the layout on any screen.
-import { createScene } from "./scene.js";
+import { createScene, markBounds } from "./scene.js";
 import { CODE } from "./code-sample.js";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -33,14 +33,26 @@ $$('a[href^="#"]').forEach((a) => a.addEventListener("click", (e) => {
 const scrub = (trigger, start, end, opts = {}) => gsap.timeline({ defaults: { ease: "none" }, scrollTrigger: { trigger, start, end, scrub: reduced ? true : 1, ...opts } });
 
 // ---- the line's route, in page pixels ----
-const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top + scrollY, width: r.width, height: r.height, right: r.right, bottom: r.top + scrollY + r.height }; };
+// Layout boxes, not painted ones: entrances, sticky cards and transforms don't move the route.
+const box = (el) => {
+  let left = 0, top = 0;
+  for (let e = el; e; e = e.offsetParent) { left += e.offsetLeft; top += e.offsetTop; }
+  return { left, top, width: el.offsetWidth, height: el.offsetHeight, right: left + el.offsetWidth, bottom: top + el.offsetHeight };
+};
 function buildRoute() {
-  const W = innerWidth, wide = W >= 1100;
-  const gL = (b, pad = 70) => Math.max(mobile ? 22 : 44, b.left - pad);
-  const gR = (b, pad = 70) => Math.min(W - (mobile ? 22 : 44), b.right + pad);
+  const W = innerWidth, narrow = W <= 760;
+  const beside = box($("[data-stage]")).right <= box($(".shot")).left; // the mark sits beside the shot, or above it where the page is too narrow
+  // the line keeps to the gutter: on anything narrower than a laptop it's a thin one, hugging the screen's edge
+  const edge = beside ? 44 : Math.max(7, Math.min(64, Math.max(18, W * 0.045)) * 0.42);
+  const gL = (b, pad = 70) => Math.max(edge, b.left - pad);
+  const gR = (b, pad = 70) => Math.min(W - edge, b.right + pad);
   const stage = box($("[data-stage]")), shot = box($(".shot")), cta = box($("[data-cta-stage]"));
-  const chap = $$(".chapter").map(box), c0 = chap[0], cl = chap[chap.length - 1];
-  const wb = box($(".wb-track")), modes = box($(".mode-explorer")), wall = box($(".logo-wall")), stats = box($(".stats")), si = box($(".si-grid")), phone = box($(".phone"));
+  const mA = markBounds(stage), mB = markBounds(cta);
+  const card = box($(".chapter")), wb = box($(".wb-track")), modes = box($(".mode-explorer")), wall = box($(".logo-wall")), stats = box($(".stats")), si = box($(".si-grid")), phone = box($(".phone"));
+  const stack = { ...box($(".stack")), left: card.left, right: card.right, width: card.width }; // sticky cards: the column they stack in
+  // the line changes sides behind each card, starting from the side the first mark sends it down
+  const A = beside ? "left" : "right", B = beside ? "right" : "left";
+  const g = (side, b, pad) => (side === "left" ? gL(b, pad) : gR(b, pad));
   const pts = [];
   const P = (x, y) => pts.push({ x, y });
   // Crossing behind a card: in at one side's gutter, across inside the card's own bounds (where
@@ -51,30 +63,30 @@ function buildRoute() {
     const xOut = from === "left" ? b.right - b.width * 0.12 : b.left + b.width * 0.12;
     P(gIn, b.top + b.height * y0); P(xIn, b.top + b.height * (y0 + 0.08)); P(xOut, b.top + b.height * (y1 - 0.08)); P(gOut, b.top + b.height * y1);
   };
-  // out of the hero mark's right side, then down beside the product shot
-  if (wide) { P(stage.right + 24, stage.top + stage.height * 0.5); P(gL(shot, 34), shot.top + shot.height * 0.62); }
-  else { P(stage.right + 10, stage.top + stage.height * 0.5); P(gR(shot, 16), shot.top + shot.height * 0.3); }
-  // the chapters: down the left gutter, then behind the stack of cards to the right gutter
-  P(gL(c0, 56), c0.top - 140);
-  behind({ ...c0, bottom: cl.bottom, height: cl.bottom - c0.top }, "left", 0.15, 0.85);
-  // the workbench: across behind the gallery (seen in the gaps between the cards), right to left
-  behind(wb, "right", 0.3, 0.8);
+  // the strands gather below the first mark, then the line runs down beside the product shot
+  if (beside) { const y = mA.bottom + mA.dot + 70; P(mA.right + 24, y); P(mA.right + 6, y + 100); }
+  else { P(gR(shot, 16), mA.bottom + mA.dot + 24); P(gR(shot, 16), shot.top + shot.height * 0.3); }
+  // the chapters: down the gutter, then behind the stack of cards to the other side
+  P(g(A, stack, 56), stack.top - 140);
+  behind(stack, A, 0.15, 0.85);
+  // the workbench: across behind the gallery (seen in the gaps between the cards)
+  behind(wb, B, 0.3, 0.8);
   // the modes: behind the explorer
-  behind(modes, "left");
-  // the model wall: down the right gutter past the heading and the chips, then behind the numbers
-  P(gR(wall, 40), wall.top - 80);
-  P(gR(wall, 10), wall.top + wall.height * 0.5);
-  behind(stats, "right", 0.25, 0.75);
+  behind(modes, A);
+  // the model wall: down the gutter past the heading and the chips, then behind the numbers
+  P(g(B, wall, 40), wall.top - 80);
+  P(g(B, wall, 10), wall.top + wall.height * 0.5);
+  behind(stats, B, 0.25, 0.75);
   // the sign-in cards: through the gaps
-  behind(si, "left", 0.25, 0.8);
-  // round the phone, keeping to its side of the page
-  P(gR(phone, 20), phone.top - 40);
+  behind(si, A, 0.25, 0.8);
+  // round the phone
+  P(g(B, phone, 20), phone.top + (narrow ? 24 : -40));
   P(phone.left + phone.width * 0.5, phone.top + phone.height * 0.5);
   P(gL(phone, 30), phone.bottom + 30);
-  // into the closing mark from its left
-  P(cta.left - 60, cta.top - 60);
-  P(cta.left - 20, cta.top + cta.height * 0.3);
-  scene.setRoute({ marks: [stage, cta], points: pts, radius: Math.max(6, Math.min(11, W * 0.0082)), pageHeight: document.documentElement.scrollHeight });
+  // the strands part above and left of the closing mark and sweep into its three dots
+  const out = mB.left - mB.dot;
+  if (out > 200) P(out - 110, mB.top - mB.dot - 34); else P(Math.max(edge + 14, out - 34), mB.top - mB.dot - 80);
+  scene.setRoute({ marks: [stage, cta], points: pts, radius: narrow ? 4.5 : beside ? Math.max(6, Math.min(11, W * 0.0082)) : Math.min(8, W * 0.0075), tight: !beside, pageHeight: document.documentElement.scrollHeight });
 }
 gsap.ticker.add(() => { scene.state.scroll = lenis ? lenis.scroll : scrollY; });
 ScrollTrigger.addEventListener("refresh", buildRoute);
@@ -94,7 +106,7 @@ gsap.from(".proof", { y: 16, opacity: 0, duration: 1, ease: "power3.out", delay:
 const chapters = $$(".chapter");
 chapters.forEach((card, i) => {
   const next = chapters[i + 1];
-  if (next) scrub(next, "top 80%", "top 20%").to(card, { scale: 0.96, opacity: 0.85 }, 0);
+  if (next && getComputedStyle(card).position === "sticky") scrub(next, "top 80%", "top 20%").to(card, { scale: 0.96, opacity: 0.85 }, 0);
 });
 
 // code streams into the Workbench's Live card
@@ -130,13 +142,14 @@ $$(".mode-tabs button").forEach((b) => b.addEventListener("click", () => {
   $$(".mode-pane").forEach((p) => p.classList.toggle("on", p.dataset.mode === b.dataset.mode));
 }));
 
-// the screenshot in a light or a dark theme
-$$(".shot-toggle button").forEach((b) => b.addEventListener("click", () => {
-  $$(".shot-toggle button").forEach((x) => x.classList.toggle("on", x === b));
-  const src = `/assets/app-${b.dataset.shot}.webp`;
-  $("[data-shot-src]").srcset = src;
-  $(".dv-shot").src = src;
-}));
+// the screenshot in a light or a dark theme; it starts on the page's own
+const showShot = (theme) => {
+  $$(".shot-toggle button").forEach((x) => x.classList.toggle("on", x.dataset.shot === theme));
+  $(".dv-shot").src = `/assets/app-${theme}.webp`;
+};
+$$(".shot-toggle button").forEach((b) => b.addEventListener("click", () => showShot(b.dataset.shot)));
+showShot(window.afhTheme.get());
+document.addEventListener("afh:theme", (e) => showShot(e.detail));
 
 // ---- 5 · entrances and numbers ----
 gsap.set(".si-card, .logo-wall span, .stat", { autoAlpha: 0 });

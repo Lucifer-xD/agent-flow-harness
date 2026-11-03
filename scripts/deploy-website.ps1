@@ -1,6 +1,10 @@
 # Deploy the AFH website to the VPS (https://agentflowharness.com, proxied by Cloudflare).
 #
 #   powershell -ExecutionPolicy Bypass -File scripts/deploy-website.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts/deploy-website.ps1 -PagesOnly
+#
+# -PagesOnly is for a change to the site alone: it leaves out downloads/, keeps the files already
+# on the VPS, and so uploads a few MB instead of the installers.
 #
 # Packs website/ (pages, SDKs, downloads/ with the installer and latest.yml, plus the installer's
 # .blockmap from desktop/dist), unpacks it into /var/www/afh, keeps only the current installer,
@@ -8,6 +12,8 @@
 # The first deploy to a new domain also gets its Let's Encrypt certificate (the domain's A record
 # must already point at the VPS); if that fails, the running nginx config is left as it was.
 # Uses this computer's SSH key for user@your-server.
+
+param([switch]$PagesOnly)
 
 $ErrorActionPreference = "Continue"  # ssh/tar write progress to stderr; exit codes are checked instead
 $root = Split-Path -Parent $PSScriptRoot
@@ -39,7 +45,7 @@ foreach ($page in Get-ChildItem $website -Filter "*.html" | Where-Object { -not 
   $html = $html -replace '"imports": \{', ('"imports": {' + "`n      ""/js/"": ""/v/$stamp/js/"",")
   [IO.File]::WriteAllText((Join-Path $stage $page.Name), $html, (New-Object Text.UTF8Encoding $false))
 }
-$entries = @(Get-ChildItem $website -Name | Where-Object { $_ -ne "README.md" -and -not $_.StartsWith(".") -and -not $_.EndsWith(".html") })
+$entries = @(Get-ChildItem $website -Name | Where-Object { $_ -ne "README.md" -and -not $_.StartsWith(".") -and -not $_.EndsWith(".html") -and -not ($PagesOnly -and $_ -eq "downloads") })
 $pages = @(Get-ChildItem $stage -Name)
 # Windows tar: Git's GNU tar reads "C:" as a remote host
 & (Join-Path $env:SystemRoot "System32\tar.exe") -czf $tmp -C $website @entries -C $stage @pages
@@ -68,10 +74,13 @@ scp @ssh -q (Join-Path $root "deploy\afh-website.nginx") "${hostname}:/tmp/"
 if ($LASTEXITCODE -ne 0) { throw "scp failed" }
 
 Write-Host "==> Installing on the VPS"
+$keepDownloads = if ($PagesOnly) { "sudo cp -a $site/downloads $site.new/downloads" } else { "" }
 $remote = @"
 set -e
+sudo rm -rf $site.new
 sudo mkdir -p $site.new
 sudo tar -xzf /tmp/afh-website.tgz -C $site.new
+$keepDownloads
 sudo chown -R www-data:www-data $site.new
 sudo find $site.new -type d -exec chmod 755 {} +
 sudo find $site.new -type f -exec chmod 644 {} +

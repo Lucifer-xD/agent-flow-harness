@@ -896,7 +896,8 @@ function dataView() {
 }
 
 function applyTheme() {
-  const t = settings.theme;
+  let t = settings.theme;
+  if (t !== "light" && t !== "dark") { try { t = localStorage.getItem("afh-theme"); } catch {} } // "system": the site's choice, if any
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
 }
 

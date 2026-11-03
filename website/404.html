@@ -7,6 +7,7 @@
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#f7f3ee">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+  <script src="/js/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -28,7 +29,7 @@
       <div class="lost-stage" data-stage aria-hidden="true"></div>
       <p class="kicker" data-reveal>404</p>
       <h1 class="display" data-reveal style="--d:.08s">Lost the<br><span class="grad-text">thread.</span></h1>
-      <p class="lead" data-reveal style="--d:.16s">This page doesn't exist — or it moved. Hold the button below and the strands will find each other again.</p>
+      <p class="lead" data-reveal style="--d:.16s">This page doesn't exist — or it moved. Hold the button below and light runs through the line again.</p>
       <div class="cta-row" data-reveal style="--d:.24s">
         <a class="btn btn-primary" href="/">Back to the start</a>
         <button class="btn btn-ghost" type="button" data-mend>Mend the mark</button>
@@ -40,11 +41,11 @@
   <script src="/js/layout.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script type="module">
-    import { scene, tween } from "/js/page.js";
-    // holding the button pulls the scattered mark back together; letting go lets it drift apart
+    import { scene } from "/js/page.js";
+    // holding the button runs light through the line; letting go lets it settle
     const mend = document.querySelector("[data-mend]");
-    const hold = () => { tween({ mark: 1, spread: 0, dim: 1, activity: 0.8 }, 1.4); scene.burst(0.6); };
-    const drop = () => tween({ mark: 0.6, spread: 0.6, dim: 0.8, activity: 0.2 }, 2.2);
+    const hold = () => window.gsap.to(scene.state, { activity: 4, duration: 1.4, ease: "power2.out", overwrite: true });
+    const drop = () => window.gsap.to(scene.state, { activity: 0.1, duration: 2.2, ease: "power2.out", overwrite: true });
     mend.addEventListener("pointerdown", hold);
     mend.addEventListener("pointerup", drop);
     mend.addEventListener("pointerleave", drop);
