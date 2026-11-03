@@ -127,6 +127,11 @@ export function applyEvent(t, ev) {
       t.phase = "working"; // the model has the request and is producing the reply
       return { all: true, status: true };
     }
+    case "session.served": {
+      const m = assistant(t, d.assistantMessageID);
+      m.served = { slug: d.slug, experience: d.experience };
+      return { msg: m.id };
+    }
     case "session.step.failed": {
       const m = assistant(t, d.assistantMessageID);
       m.retrying = false;
@@ -799,6 +804,9 @@ export class ChatView {
     const turnDone = last && m.turnMs ? m.turnMs : null;
     const meta = el("div.msg-meta",
       el("span.model", this.opts.modelName(m.model) || m.model?.id || "Assistant"),
+      m.served?.slug ? (m.served.slug === m.model?.id
+        ? el("span.served-tag.ok", { title: `Confirmed by ChatGPT: this reply came from the real model ${m.served.slug}${m.served.experience ? ` (${m.served.experience})` : ""}` }, ico("check"), "real model")
+        : el("span.served-tag.warn", { title: `ChatGPT served ${m.served.slug} instead of ${m.model?.id} (a fallback)` }, `served as ${m.served.slug}`)) : null,
       m.agent ? [el("span.dot"), el("span", m.agent)] : null,
       tokens ? [el("span.dot"), el("span", { title: m.tokens.cache?.read ? `${fmtTokens(m.tokens.cache.read)} read from the prompt cache` : null }, tokens)] : null,
       cost ? [el("span.dot"), el("span", { title: "cost of this step" }, cost)] : null,

@@ -162,6 +162,8 @@ class ChatGPTWebProvider:
                                 yield {"type": "reasoning.delta", "text": ev["reasoning"]}
                             elif "served" in ev:
                                 self.last_served = ev["served"]
+                                if ev["served"].get("slug"):
+                                    yield {"type": "served", "slug": ev["served"].get("slug"), "experience": ev["served"].get("experience")}
                             elif "error" in ev:
                                 stream_err = ev["error"]
                                 break

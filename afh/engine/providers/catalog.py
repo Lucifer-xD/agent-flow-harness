@@ -74,7 +74,7 @@ KNOWN: dict[str, dict] = {
         "extra": {}, "login": "chatgpt", "login_only": True, "needs_key": False,
     },
     "chatgpt-chat": {
-        "name": "ChatGPT (chat — unmetered)", "kind": "chatgpt-web", "base_url": "https://chatgpt.com",
+        "name": "ChatGPT (chat)", "kind": "chatgpt-web", "base_url": "https://chatgpt.com",
         "env": [], "docs": "https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan",
         "extra": {}, "login": "chatgpt-web", "login_only": True, "needs_key": False,
     },
