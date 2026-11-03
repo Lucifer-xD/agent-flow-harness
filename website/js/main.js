@@ -18,6 +18,7 @@ window.afhScene = scene; // for poking at the world from the console
 const SHAPES = ["mark", "core", "net", "plan", "code", "ring", "spread"];
 const only = (name) => Object.fromEntries(SHAPES.map((k) => [k, k === name ? 1 : 0]));
 const tween = (to, duration = 1.2) => gsap.to(state, { ...to, duration: reduced ? 0.01 : duration, ease: "power3.inOut", overwrite: "auto" });
+const intro = { k: 0 }; // the light gathers into the mark on load (drives `dim` and `spread`)
 
 // ---- smooth scroll ----
 let lenis = null;
@@ -42,15 +43,31 @@ gsap.from(".hero .display .line > span", { yPercent: 110, rotate: 3, duration: 1
 gsap.from([".hero .eyebrow", ".hero .lead", ".hero .cta-row"], { y: 24, opacity: 0, duration: 1.1, ease: "power3.out", stagger: 0.08, delay: 0.5 });
 gsap.fromTo(".shot", { rotateX: 16, y: 70, opacity: 0 }, { rotateX: 0, y: 0, opacity: 1, duration: 1.6, ease: "expo.out", delay: 0.65 });
 gsap.from(".proof", { y: 16, opacity: 0, duration: 1, ease: "power3.out", delay: 1.1 });
-/** The hero stage box, where it is with the page at the top (the mark is fitted into it on load). */
-const heroFit = () => {
-  const r = $("[data-stage]").getBoundingClientRect(), y = scrollNow();
-  return scene.fit({ left: r.left, top: r.top + y, width: r.width, height: r.height }, 0.92);
+// ---- the mark is pinned to a box on the page ----
+// Every frame the world is framed into the anchor box where it is *right now*, so the mark scrolls
+// with the page like anything else in it, and it fades as its box leaves the screen. Sections only
+// hand the anchor over (and change the shape); they never place the world themselves.
+const anchor = { el: null, name: "mark", fill: 0.92 };
+const setAnchor = (el, name, fill) => { anchor.el = el; anchor.name = name; anchor.fill = fill; };
+const heroStage = $("[data-stage]");
+setAnchor(heroStage, "mark", 0.92);
+Object.assign(state, { ...only("mark"), spin: 0, tilt: 0.08, activity: 0.3, dim: 0 });
+{ const f = scene.fit(heroStage.getBoundingClientRect(), 0.92, "mark"); Object.assign(state, f); }
+const visibility = (r) => { // 1 with the box well inside the screen, 0 once it has left
+  const edge = Math.min(140, innerHeight * 0.18);
+  return Math.min(1, Math.max(0, (r.bottom - 30) / edge)) * Math.min(1, Math.max(0, (innerHeight - r.top - 30) / edge));
 };
-const showHero = () => Object.assign(state, { ...only("mark"), ...heroFit(), spin: 0, tilt: 0.08, activity: 0.3, dim: 1 });
-showHero();
-// scrolling away from the hero fades the mark before any text can run under it
-ScrollTrigger.create({ trigger: ".hero-shot", start: "top 25%", onEnter: () => tween({ dim: 0 }, 0.8), onLeaveBack: () => tween({ ...only("mark"), ...heroFit(), spin: 0, tilt: 0.08, dim: 1 }) });
+gsap.ticker.add((_, dtMs) => {
+  if (!anchor.el) return;
+  const r = anchor.el.getBoundingClientRect();
+  const f = scene.fit(r, anchor.fill, anchor.name);
+  const k = 1 - Math.exp(-Math.min(0.1, dtMs / 1000) * 14); // quick, but no jitter
+  state.zoom += (f.zoom - state.zoom) * k;
+  state.shiftX += (f.shiftX - state.shiftX) * k;
+  state.shiftY += (f.shiftY - state.shiftY) * k;
+  state.dim = visibility(r) * intro.k;
+});
+ScrollTrigger.create({ trigger: ".hero-shot", start: "top 40%", onLeaveBack: () => { setAnchor(heroStage, "mark", 0.92); tween({ ...only("mark"), spin: 0, tilt: 0.08, activity: 0.3 }); } });
 
 // ---- 2 · chapters: each card sticks; while it is the one in front, the mark is its shape ----
 const chapters = $$(".chapter");
@@ -60,17 +77,11 @@ const LOOK = {
   net: { spin: 0.9, tilt: 0.2, activity: 1.1, fill: 0.84 },
   code: { spin: 0.2, tilt: 0.15, activity: 0.9, fill: 0.8 },
 };
-/** The chapter's world box as it will sit once the card is stuck at its sticky top. */
-const chapterFit = (card, name) => {
-  const stuckTop = parseFloat(getComputedStyle(card).top) || 0;
-  const cr = card.getBoundingClientRect(), wr = $(".ch-world", card).getBoundingClientRect();
-  const delta = Math.max(0, cr.top - stuckTop);
-  return scene.fit({ left: wr.left, top: wr.top - delta, width: wr.width, height: wr.height }, LOOK[name].fill, name);
-};
 const showChapter = (card) => {
   const name = card.dataset.shape;
   const { fill, ...look } = LOOK[name];
-  tween({ ...only(name), ...chapterFit(card, name), ...look, dim: 1 });
+  setAnchor($(".ch-world", card), name, fill);
+  tween({ ...only(name), ...look });
 };
 chapters.forEach((card, i) => {
   const next = chapters[i + 1];
@@ -78,8 +89,6 @@ chapters.forEach((card, i) => {
     trigger: card, start: "top 62%",
     endTrigger: next || card, end: next ? "top 62%" : "bottom 35%",
     onEnter: () => showChapter(card), onEnterBack: () => showChapter(card),
-    onLeave: () => { if (!next) tween({ dim: 0 }, 0.8); },
-    onLeaveBack: () => { if (!i) tween({ dim: 0 }, 0.8); },
   });
   // the cards behind shrink back a little as the next one slides over them
   if (next) scrub(next, "top 80%", "top 20%").to(card, { scale: 0.96, opacity: 0.85 }, 0);
@@ -141,15 +150,10 @@ $$("[data-count]").forEach((el) => {
 // ---- 6 · the closing call: the mark comes back whole, in the middle of the card ----
 gsap.from(".cta-title .line > span", { yPercent: 110, rotate: 3, duration: 1.2, ease: "expo.out", stagger: 0.1, scrollTrigger: { trigger: ".cta", start: "top 70%" } });
 gsap.from([".cta .lead", ".cta .cta-row", ".cta .fine"], { y: 30, autoAlpha: 0, duration: 1, ease: "power3.out", stagger: 0.08, scrollTrigger: { trigger: ".cta", start: "top 70%" } });
-/** The CTA's stage box where it will be when the section is centred on screen. */
-const ctaFit = () => {
-  const sec = $(".cta").getBoundingClientRect(), r = $("[data-cta-stage]").getBoundingClientRect();
-  const delta = sec.top + sec.height / 2 - innerHeight / 2;
-  return scene.fit({ left: r.left, top: r.top - delta, width: r.width, height: r.height }, 0.94);
-};
-ScrollTrigger.create({ trigger: ".cta", start: "top 70%",
-  onEnter: () => tween({ ...only("mark"), ...ctaFit(), spin: 2 * Math.PI, tilt: 0.08, activity: 0.3, dim: 1 }, 1.4),
-  onLeaveBack: () => tween({ dim: 0 }, 0.8) });
+const lastChapter = chapters[chapters.length - 1];
+ScrollTrigger.create({ trigger: ".cta", start: "top 85%",
+  onEnter: () => { setAnchor($("[data-cta-stage]"), "mark", 0.94); tween({ ...only("mark"), spin: 2 * Math.PI, tilt: 0.08, activity: 0.3 }, 1.4); },
+  onLeaveBack: () => { if (lastChapter) showChapter(lastChapter); } });
 
 // magnetic primary buttons
 if (!mobile) $$(".btn-primary").forEach((b) => {
@@ -163,12 +167,9 @@ addEventListener("pointerdown", (e) => {
 });
 
 // the mark gathers out of the dark into place, then everything is laid out again once fonts and images settle
-const intro = { k: 0 };
 gsap.to(intro, { k: 1, duration: 2.4, ease: "power3.out", onUpdate: () => { state.spread = (1 - intro.k) * 1.2; } });
-addEventListener("resize", () => { if (scrollNow() < innerHeight * 0.3) showHero(); });
 addEventListener("load", () => {
   ScrollTrigger.refresh();
-  if (scrollNow() < innerHeight * 0.3) showHero();
   const at = new URLSearchParams(location.search).get("at"); // ?at=.selector: jump straight to a section (for screenshots)
   const el = at && document.querySelector(at);
   if (el) setTimeout(() => scrollTo(0, el.getBoundingClientRect().top + scrollY - 84), 80);
