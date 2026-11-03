@@ -32,16 +32,14 @@ const LAYOUTS = {
     pill: { x: cx - s * 0.4, y: cy - s * 0.3, r: s * 0.13, rot: 0.3 },
   }; },
   download: (B) => { const s = Math.min(B.width, B.height), cx = B.left + B.width / 2, cy = B.top + B.height / 2; return {
-    hub: { x: cx - s * 0.1, y: cy - s * 0.02, r: s * 0.2 },
-    torus: { x: cx + s * 0.3, y: cy - s * 0.2, r: s * 0.22, rot: 0.6 },
-    pill: { x: cx + s * 0.26, y: cy + s * 0.3, r: s * 0.18, rot: 0.2 },
-    sphereA: { x: cx - s * 0.36, y: cy + s * 0.3, r: s * 0.13 },
-    sphereB: { x: cx - s * 0.38, y: cy - s * 0.3, r: s * 0.08 },
+    mark: { x: cx, y: cy - s * 0.04, r: s * 0.46, rot: 0.08 },
+    sphereA: { x: cx - s * 0.42, y: cy + s * 0.36, r: s * 0.11 },
+    sphereB: { x: cx + s * 0.44, y: cy - s * 0.38, r: s * 0.07 },
+    cube: { x: cx + s * 0.42, y: cy + s * 0.36, r: s * 0.1, rot: 0.4 },
   }; },
   lost: (B) => { const s = Math.min(B.width, B.height), cx = B.left + B.width / 2, cy = B.top + B.height / 2; return {
-    cube: { x: cx - s * 0.2, y: cy + s * 0.1, r: s * 0.18, rot: 0.9 },
-    sphereA: { x: cx + s * 0.24, y: cy + s * 0.18, r: s * 0.14 },
-    pill: { x: cx + s * 0.1, y: cy - s * 0.26, r: s * 0.18, rot: 1.3 },
+    mark: { x: cx, y: cy, r: s * 0.42, rot: -0.35 },
+    sphereA: { x: cx + s * 0.4, y: cy + s * 0.34, r: s * 0.12 },
   }; },
   // no stage: a small group in the hero's top-right corner (docs, api, changelog, account pages)
   corner: (B) => { const x = B.right - 150, y = B.top + 120, s = 120; return {
