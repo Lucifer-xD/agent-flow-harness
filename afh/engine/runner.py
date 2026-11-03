@@ -360,6 +360,10 @@ class Run:
                     elif t == "usage":
                         tokens = {"input": ev.get("input", 0), "output": ev.get("output", 0), "reasoning": ev.get("reasoning", 0),
                                   "cache": {"read": ev.get("cache_read", 0), "write": ev.get("cache_write", 0)}}
+                    elif t == "served":
+                        # which model the backend actually served (ChatGPT web lane): proof of the real model
+                        msg["served"] = {"slug": ev.get("slug"), "experience": ev.get("experience")}
+                        self.emit("session.served", assistantMessageID=msg["id"], slug=ev.get("slug"), experience=ev.get("experience"))
                     elif t == "finish":
                         finish = ev.get("reason", "stop")
                     elif t == "error":
