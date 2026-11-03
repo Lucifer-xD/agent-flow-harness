@@ -49,20 +49,22 @@ const LAYOUTS = {
       sphereB: { x: R.left + R.width * 0.1, y: R.top - 22, r: 22 + 8 * u },
       cube: { x: R.right - R.width * 0.1, y: R.top - 26, r: 26 + 12 * u, rot: 0.2 },
     };
-    if (side > 70) Object.assign(out, { // beside the shot, resting against its edges
-      hub: { x: R.left - (30 + 26 * u), y: R.top + 90, r: 30 + 18 * u },
-      torus: { x: R.left - (40 + 40 * u), y: R.top + R.height * 0.64, r: 44 + 40 * u },
-      pill: { x: R.right + (34 + 30 * u), y: R.top + 110, r: 36 + 30 * u, rot: 0.1 },
-      sphereA: { x: R.right + (32 + 34 * u), y: R.top + R.height * 0.68, r: 32 + 28 * u },
+    const mr = Math.min(150, Math.max(60, side * 0.75)); // the mark: as big as the room beside the shot allows
+    if (side > 70) Object.assign(out, { // beside the shot, resting against its edges: the mark on the left
+      mark: { x: Math.max(8 + mr, R.left - mr * 0.5), y: R.top + R.height * 0.36, r: mr, rot: 0.12 },
+      hub: { x: R.left - (30 + 20 * u), y: R.top + R.height * 0.78, r: 26 + 14 * u },
+      torus: { x: R.right + (40 + 36 * u), y: R.top + 90, r: 36 + 30 * u, rot: 0.5 },
+      pill: { x: R.right + (30 + 30 * u), y: R.top + R.height * 0.5, r: 34 + 26 * u, rot: 0.8 },
+      sphereA: { x: R.right + (32 + 34 * u), y: R.top + R.height * 0.84, r: 30 + 24 * u },
     });
+    else out.mark = { x: R.left + R.width / 2, y: R.top - 8, r: Math.min(64, R.width * 0.14), rot: 0.05 }; // phones: on the top edge
     return out;
   },
   // 01 · the hub takes the request: the hub with the torus and a sphere round it
   core: (B) => { const s = Math.min(B.width, B.height), cx = B.left + B.width / 2, cy = B.top + B.height / 2; return {
-    hub: { x: cx - s * 0.12, y: cy + s * 0.02, r: s * 0.2 },
-    torus: { x: cx + s * 0.26, y: cy - s * 0.14, r: s * 0.22, rot: 0.6 },
-    sphereB: { x: cx - s * 0.36, y: cy - s * 0.26, r: s * 0.09 },
-    sphereA: { x: cx + s * 0.18, y: cy + s * 0.3, r: s * 0.12 },
+    mark: { x: cx - s * 0.04, y: cy - s * 0.04, r: s * 0.4, rot: 0.08 },
+    hub: { x: cx + s * 0.38, y: cy + s * 0.3, r: s * 0.12 },
+    sphereB: { x: cx - s * 0.42, y: cy + s * 0.32, r: s * 0.08 },
   }; },
   // 02 · the plan: a cube, a pill and spheres laid in a row, like steps
   plan: (B) => { const s = Math.min(B.width, B.height), cx = B.left + B.width / 2, cy = B.top + B.height / 2; return {
@@ -88,12 +90,12 @@ const LAYOUTS = {
   }; },
   // the closing call: the whole set gathered round the title
   cta: (B) => { const s = Math.min(B.width * 0.6, B.height), cx = B.left + B.width / 2, cy = B.top + B.height / 2; return {
-    hub: { x: cx, y: cy - s * 0.08, r: s * 0.22 },
-    torus: { x: cx - s * 0.7, y: cy + s * 0.06, r: s * 0.26, rot: 0.5 },
-    pill: { x: cx + s * 0.66, y: cy - s * 0.04, r: s * 0.22, rot: 0.2 },
-    sphereA: { x: cx + s * 0.38, y: cy + s * 0.36, r: s * 0.14 },
-    sphereB: { x: cx - s * 0.36, y: cy - s * 0.38, r: s * 0.09 },
-    cube: { x: cx + s * 0.3, y: cy - s * 0.4, r: s * 0.12, rot: 0.4 },
+    mark: { x: cx, y: cy, r: s * 0.55, rot: 0.06 },
+    torus: { x: cx - s * 0.98, y: cy + s * 0.16, r: s * 0.2, rot: 0.5 },
+    pill: { x: cx + s * 0.96, y: cy - s * 0.1, r: s * 0.18, rot: 0.2 },
+    sphereA: { x: cx + s * 0.78, y: cy + s * 0.4, r: s * 0.12 },
+    sphereB: { x: cx - s * 0.8, y: cy - s * 0.36, r: s * 0.08 },
+    cube: { x: cx + s * 0.7, y: cy - s * 0.46, r: s * 0.1, rot: 0.4 },
   }; },
 };
 let active = { el: $(".shot"), layout: "hero" };

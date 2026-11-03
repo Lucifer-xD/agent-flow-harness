@@ -89,6 +89,28 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
   add("sphereA", new THREE.Mesh(gradient(new THREE.SphereGeometry(1, 48, 32), C.coral, C.magenta, "y"), ceramic()), 1, [0, 0, 0]);
   add("sphereB", new THREE.Mesh(gradient(new THREE.SphereGeometry(1, 40, 28), C.amber, C.orange, "y"), ceramic()), 1, [0, 0, 0]);
   add("cube", new THREE.Mesh(gradient(new RoundedBoxGeometry(1.5, 1.5, 1.5, 4, 0.32), C.orange, C.pink), ceramic()), 0.75, [0.55, 0.75, 0.1]);
+  // the mark itself: the logo's three strands as thick ceramic tubes that weave past each other,
+  // with the six dots — two units wide, so `r` is half its width
+  const STRANDS = [
+    { pts: [[46, 28], [104, 28], [108, 74], [134, 74], [160, 74], [164, 28], [194, 28]], z: [0, 0.9, 0.9, 0.55, 0.2, -0.6, 0], from: C.amber, to: "#ff7a3d" },
+    { pts: [[46, 70], [92, 70], [98, 58], [120, 60], [150, 63], [152, 82], [194, 70]], z: [0, -0.5, -0.5, 0, 0.5, 0.5, 0], from: "#ff7747", to: C.coral },
+    { pts: [[46, 112], [108, 112], [116, 66], [146, 66], [172, 66], [170, 112], [194, 112]], z: [0, -0.9, -0.9, -0.55, -0.2, 0.6, 0], from: C.pink, to: C.magenta },
+  ];
+  const mark = new THREE.Group();
+  const toV = ([x, y], z) => new THREE.Vector3((x - 120) / 74, -(y - 70) / 74, z * 0.42);
+  for (const s of STRANDS) {
+    const P = s.pts.map((p, i) => toV(p, s.z[i]));
+    const path = new THREE.CurvePath();
+    path.add(new THREE.CubicBezierCurve3(P[0], P[1], P[2], P[3]));
+    path.add(new THREE.CubicBezierCurve3(P[3], P[4], P[5], P[6]));
+    mark.add(new THREE.Mesh(gradient(new THREE.TubeGeometry(path, 110, 0.1, 18, false), s.from, s.to), ceramic()));
+    for (const [p, col] of [[P[0], s.from], [P[6], s.to]]) {
+      const dot = new THREE.Mesh(gradient(new THREE.SphereGeometry(0.2, 32, 20), col, col), ceramic());
+      dot.position.copy(p);
+      mark.add(dot);
+    }
+  }
+  add("mark", mark, 0.6, [0.12, -0.1, 0]);
 
   // ---- size: CSS pixels ↔ world units on the page plane ----
   const BUDGET = mobile ? [1.6, 1.1, 0.8] : lite ? [1.8, 1.3] : [2.6, 1.9, 1.4, 1.0];
@@ -145,7 +167,8 @@ export function createScene(canvas, { mobile = false, reduced = false, lite = fa
       o.mesh.position.set(wx, wy, o.depth * s);
       o.mesh.scale.setScalar(s * (1 + Math.sin(t * 1.3 + o.seed) * 0.012));
       const [rx, ry, rz] = o.rest;
-      o.mesh.rotation.set(rx + Math.sin(t * 0.5 + o.seed) * 0.06, ry + Math.sin(t * 0.37 + o.seed * 2) * 0.08, rz + c.rot + (id === "torus" || id === "hub" ? t * 0.12 : Math.sin(t * 0.3 + o.seed) * 0.05));
+      const spin = id === "torus" || id === "hub" ? t * 0.12 : id === "mark" ? Math.sin(t * 0.25) * 0.03 : Math.sin(t * 0.3 + o.seed) * 0.05;
+      o.mesh.rotation.set(rx + Math.sin(t * 0.5 + o.seed) * (id === "mark" ? 0.03 : 0.06), ry + Math.sin(t * 0.37 + o.seed * 2) * (id === "mark" ? 0.05 : 0.08), rz + c.rot + spin);
     }
     core.material.emissiveIntensity = 0.7 + 0.3 * Math.sin(t * 2.4) + state.activity * 0.3;
     const fade = Math.round(Math.min(1, Math.max(0, state.dim)) * 200) / 200;
