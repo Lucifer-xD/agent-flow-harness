@@ -7,6 +7,7 @@ import asyncio
 import difflib
 import json
 import logging
+import os
 import threading
 import time
 from pathlib import Path
@@ -135,8 +136,10 @@ class Engine:
             self.error = str(err)
         self.ready.set()
         self.publish(event("afh.ready"))
-        asyncio.ensure_future(self.resume_interrupted())
         asyncio.ensure_future(self._refresh_catalog())
+        if os.environ.get("AFH_CLI_BACKEND") == "1":
+            return  # a private backend for one afh command: schedules and interrupted runs stay the app's job
+        asyncio.ensure_future(self.resume_interrupted())
         from .schedules import Scheduler
 
         self.scheduler = Scheduler(self._start_scheduled, lambda ev: self.publish(event(ev["type"], None, **ev["data"])))

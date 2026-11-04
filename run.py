@@ -3,16 +3,24 @@
     python run.py            desktop window
     python run.py --browser  open in your default browser instead
     python run.py --headless only print the URL (for development / Electron)
+    python run.py cli ...    the afh command (see afh/cli.py)
 """
 
 from __future__ import annotations
 
+import sys
+
+if __name__ == "__main__" and sys.argv[1:2] == ["cli"]:  # before the imports below: they start the engine
+    from afh import cli
+
+    sys.exit(cli.main(sys.argv[2:]))
+
 import argparse
 import asyncio
 import logging
+import os
 import secrets
 import socket
-import sys
 import threading
 import time
 import webbrowser
@@ -74,7 +82,9 @@ def main() -> None:
     if sys.stderr is None:  # pythonw.exe has no console; keep a log file instead
         sys.stdout = sys.stderr = open(store.AFH_DIR / "afh.log", "w", encoding="utf-8", buffering=1)
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO, format="%(name)s: %(message)s")
-    log_to_file()
+    for_cli = os.environ.get("AFH_CLI_BACKEND") == "1"  # a private backend for one afh command
+    if not for_cli:
+        log_to_file()
     logging.getLogger("afh").info("AFH %s starting", __version__)
 
     try:
@@ -95,19 +105,20 @@ def main() -> None:
             sys.exit(f"AFH couldn't listen on port {port}; try --port with another number.")
         time.sleep(0.05)
     engine.ready.wait(timeout=30)
-    devapi.write_discovery(port, __version__)
-    try:  # resume remote control if it was left on
-        from afh import remote
+    if not for_cli:
+        devapi.write_discovery(port, __version__)
+        try:  # resume remote control if it was left on
+            from afh import remote
 
-        remote.apply(remote.settings())
-    except Exception as exc:
-        logging.getLogger("afh").warning("remote control not started: %s", exc)
-    try:  # reconnect to the AFH account for the phone apps if it was left on
-        from afh import cloud
+            remote.apply(remote.settings())
+        except Exception as exc:
+            logging.getLogger("afh").warning("remote control not started: %s", exc)
+        try:  # reconnect to the AFH account for the phone apps if it was left on
+            from afh import cloud
 
-        cloud.start()
-    except Exception as exc:
-        logging.getLogger("afh").warning("AFH account connection not started: %s", exc)
+            cloud.start()
+        except Exception as exc:
+            logging.getLogger("afh").warning("AFH account connection not started: %s", exc)
 
     url = f"http://127.0.0.1:{port}/#token={token}"
     try:
