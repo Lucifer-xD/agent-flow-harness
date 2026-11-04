@@ -38,7 +38,7 @@ BLOCKED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "M
 _SCHEMA_KEEP = {"type", "format", "description", "nullable", "enum", "items", "properties", "required", "anyOf",
                 "minimum", "maximum", "minItems", "maxItems", "minLength", "maxLength", "pattern", "propertyOrdering"}
 _FORMATS = {"enum", "date-time", "int32", "int64", "float", "double"}
-# Constraints validated function calling rejects; kept as description hints.
+# Constraints validated function calling (Claude behind Antigravity) rejects; kept as description hints.
 _STRICT_HINTS = ("minLength", "maxLength", "pattern", "minItems", "maxItems", "format")
 _CACHE_LIMIT = 512
 

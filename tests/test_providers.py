@@ -583,7 +583,7 @@ def test_catalog_entries_and_factory():
     required = {"name", "kind", "base_url", "env", "docs", "extra"}
     for pid, entry in catalog.KNOWN.items():
         assert required <= set(entry), pid
-        assert entry["kind"] in ("openai", "anthropic", "gemini", "responses", "chatgpt-web"), pid
+        assert entry["kind"] in ("openai", "anthropic", "gemini", "responses", "antigravity", "chatgpt-web"), pid
     assert catalog.KNOWN["kimi"]["base_url"] == "https://api.kimi.ai/coding/v1" and catalog.KNOWN["kimi"]["name"] == "Kimi (kimi.ai coding plan)"
     assert catalog.KNOWN["zai-coding"]["extra"]["thinking"] == "zai"
     assert catalog.KNOWN["ollama"]["needs_key"] is False and catalog.KNOWN["ollama"]["base_url"] == "http://localhost:11434/v1"
@@ -645,13 +645,3 @@ def test_live_provider_smoke():
 
     models = run(p.list_models())
     assert models and all(isinstance(m, ModelInfo) for m in models)
-
-
-def test_a_retired_sign_in_is_removed_from_the_saved_providers(tmp_path, monkeypatch):
-    from afh.engine import config
-
-    path = tmp_path / "providers.json"
-    monkeypatch.setattr(config, "PATH", path)
-    path.write_text(json.dumps({"providers": {"antigravity": {"kind": "antigravity", "auth": {"refresh": "r"}}, "kimi": {"kind": "openai"}}}), encoding="utf-8")
-    assert list(config.load()["providers"]) == ["kimi"]
-    assert "antigravity" not in path.read_text(encoding="utf-8")

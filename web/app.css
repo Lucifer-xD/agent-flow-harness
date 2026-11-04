@@ -2157,28 +2157,23 @@ body.electron .dview { top: 38px; }
 .served-tag.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 
 /* ==== 3.0: Studio ==================================================================================
-   One calm canvas: a collapsible icon rail, a 920px reading column, a floating glass composer and
+   One calm canvas: a sidebar that hides completely, a 920px reading column, a floating glass composer and
    one right-hand Workbench with tabs (Live, Changes, Browser, Context, Prompt, Agents). Everything
    below derives from the theme tokens, so all presets, custom themes, light/dark and RTL keep working. */
 
-:root { --sidebar-w: 268px; --rail-w: 56px; --wb-w: 460px; --fs-bump: 0px; }
+:root { --sidebar-w: 268px; --wb-w: 460px; --fs-bump: 0px; }
 @media (min-width: 1280px) { :root { --fs-bump: 0.5px; } } /* wide windows read a touch larger */
 body { font-size: calc(var(--fs) + var(--fs-bump)); }
 
 /* ---- layout: sidebar | main | workbench ---- */
 .app { grid-template-columns: var(--sb-col, var(--sidebar-w)) minmax(0, 1fr) auto; }
-.app.sb-rail { --sb-col: var(--rail-w); }
 .app.sb-hidden { --sb-col: 0px; }
 .main { min-width: 0; }
 
-/* ---- sidebar: expanded, rail, peeking, hidden (phones) ---- */
+/* ---- sidebar: open or hidden; hidden, it can slide over the chat ---- */
 .sidebar { position: relative; z-index: 12; width: 100%; min-width: 0; background: var(--bg-side); border-right: 1px solid var(--line);
   transition: width 0.22s var(--ease), box-shadow 0.22s, opacity 0.2s, transform 0.3s var(--ease); }
 .sidebar > * { min-width: 0; }
-.app.sb-rail .sidebar { width: var(--rail-w); }
-.app.sb-rail.sb-peek .sidebar { width: var(--sidebar-w); box-shadow: 0 0 0 1px var(--line), 24px 0 60px -24px rgba(0, 0, 0, 0.55); }
-[dir="rtl"] .app.sb-rail.sb-peek .sidebar { box-shadow: 0 0 0 1px var(--line), -24px 0 60px -24px rgba(0, 0, 0, 0.55); }
-:root[data-theme="light"] .app.sb-rail.sb-peek .sidebar { box-shadow: 0 0 0 1px var(--line), 24px 0 60px -24px rgba(24, 18, 12, 0.25); }
 .sb-head { height: 52px; padding: 0 8px 0 14px; flex: none; }
 .brand { white-space: nowrap; }
 .new-thread { margin: 6px 10px 4px; height: 36px; white-space: nowrap; }
@@ -2191,26 +2186,6 @@ body { font-size: calc(var(--fs) + var(--fs-bump)); }
 .sb-tools { display: flex; align-items: center; gap: 2px; flex: none; }
 .sb-tools .conn { margin: 0 6px 0 4px; }
 
-/* the rail: icons only, the thread list hidden, tools stacked at the bottom */
-.app.sb-rail:not(.sb-peek) .brand,
-.app.sb-rail:not(.sb-peek) .new-thread .lbl, .app.sb-rail:not(.sb-peek) .new-thread kbd,
-.app.sb-rail:not(.sb-peek) .sb-search input,
-.app.sb-rail:not(.sb-peek) .project-picker .pp-name, .app.sb-rail:not(.sb-peek) .project-picker > .ico:last-child,
-.app.sb-rail:not(.sb-peek) .threads,
-.app.sb-rail:not(.sb-peek) .acct-text { display: none; }
-.app.sb-rail:not(.sb-peek) .sb-head { justify-content: center; padding: 0; }
-.app.sb-rail:not(.sb-peek) .new-thread, .app.sb-rail:not(.sb-peek) .sb-search, .app.sb-rail:not(.sb-peek) .project-picker {
-  width: 36px; height: 36px; margin: 4px 10px; padding: 0; justify-content: center; gap: 0; cursor: pointer; }
-.app.sb-rail:not(.sb-peek) .sb-search { border-color: transparent; background: transparent; color: var(--text-2); }
-.app.sb-rail:not(.sb-peek) .sb-search:hover { background: var(--hover); color: var(--text); }
-.app.sb-rail:not(.sb-peek) .sb-search .ico { width: 16px; height: 16px; }
-.app.sb-rail:not(.sb-peek) .project-picker .ico { width: 16px; height: 16px; color: var(--text-2); }
-.app.sb-rail:not(.sb-peek) .sb-foot { flex-direction: column; margin-top: auto; padding: 8px 10px 10px; gap: 4px; }
-.app.sb-rail:not(.sb-peek) #btn-account { width: 36px; height: 36px; padding: 0; justify-content: center; flex: none; }
-.app.sb-rail:not(.sb-peek) .sb-tools { flex-direction: column; gap: 4px; }
-.app.sb-rail:not(.sb-peek) .sb-tools .conn { margin: 6px 0 0; }
-.app.sb-rail:not(.sb-peek) .sb-mini { width: 32px; height: 32px; }
-.app.sb-rail:not(.sb-peek) .th-item { animation: none; }
 
 /* phones: no rail; the sidebar hides and slides over the chat when asked */
 .app.sb-hidden.sb-open .sidebar { position: fixed; top: 0; bottom: 0; left: 0; width: min(var(--sidebar-w), 86vw); z-index: 30; opacity: 1; pointer-events: auto; transform: none; box-shadow: var(--sh-3); }
@@ -2445,7 +2420,6 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 .th-item[data-preview]:hover::after { content: attr(data-preview); position: absolute; z-index: 5; left: 8px; right: 8px; top: calc(100% + 3px); padding: 6px 10px; border-radius: 9px;
   background: var(--panel); border: 1px solid var(--line-2); box-shadow: var(--sh-2); color: var(--text-2); font-size: 11.8px; line-height: 1.4; font-weight: 400; text-align: start;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; animation: fade 0.18s both; animation-delay: 0.25s; unicode-bidi: plaintext; }
-.app.sb-rail:not(.sb-peek) .th-item::after { display: none; }
 
 /* ---- top bar: the title as an editable pill, the project as a breadcrumb beside it ---- */
 .tb-title { gap: 6px; align-items: center; }
@@ -2483,9 +2457,6 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 .btn.primary > * { position: relative; }
 .btn.primary:hover { background: var(--accent); filter: brightness(1.06); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 10px 26px -8px color-mix(in srgb, var(--accent) 70%, transparent); }
 .send:not(:disabled) { background: var(--accent-grad); box-shadow: var(--accent-glow); }
-.app.sb-rail:not(.sb-peek) .new-thread { background: var(--accent-grad); border-color: transparent; color: var(--accent-ink); box-shadow: var(--accent-glow); }
-.app.sb-rail:not(.sb-peek) .new-thread .ico { color: var(--accent-ink); }
-.app.sb-rail:not(.sb-peek) .new-thread:hover { filter: brightness(1.06); }
 
 /* ---- messages: assistant turns as a document, your messages as compact accent cards ---- */
 .msg.assistant { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
@@ -2528,16 +2499,42 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 .tool.open:hover { transform: none; }
 .deleg:hover, .step-box:hover, .file-diff:hover { box-shadow: var(--lift); }
 
-/* ---- panels: the workbench content slides and fades with the width; the peeking sidebar's list glides in ---- */
+/* ---- panels: the workbench content slides and fades with the width ---- */
 .workbench .wb-head, .workbench .wb-panes { opacity: 0; transform: translateX(14px); transition: opacity 0.22s var(--ease-out), transform 0.3s var(--ease-out); }
 .workbench.open .wb-head, .workbench.open .wb-panes { opacity: 1; transform: none; transition-delay: 0.04s; }
 [dir="rtl"] .workbench .wb-head, [dir="rtl"] .workbench .wb-panes { transform: translateX(-14px); }
 [dir="rtl"] .workbench.open .wb-head, [dir="rtl"] .workbench.open .wb-panes { transform: none; }
-.app.sb-rail .threads { display: block; opacity: 0; visibility: hidden; transform: translateX(-10px); pointer-events: none; transition: opacity 0.2s var(--ease-out), transform 0.26s var(--ease-out), visibility 0s linear 0.26s; }
-.app.sb-rail.sb-peek .threads { opacity: 1; visibility: visible; transform: none; pointer-events: auto; transition-delay: 0s; }
-[dir="rtl"] .app.sb-rail .threads { transform: translateX(10px); }
-[dir="rtl"] .app.sb-rail.sb-peek .threads { transform: none; }
-.app.sb-rail:not(.sb-peek) .threads { display: block; }
-.app.sb-rail .sb-foot { margin-top: 0; }
 .wb-tab { transition: background 0.12s, color 0.15s, transform 0.15s var(--ease-out); }
 .wb-tab:active, .tb-seg .chip-btn:active { transform: scale(0.97); }
+
+/* ---- a hidden sidebar takes no room at all ---- */
+.app.sb-hidden:not(.sb-open) .sidebar { visibility: hidden; border: 0; }
+
+/* ---- primary buttons: the gradient stays behind the label, a bare text node included ---- */
+.btn.primary { isolation: isolate; }
+.btn.primary::before { z-index: -1; }
+
+/* ---- sign-in tiles: the title leads, the description is quieter ---- */
+.signin-tile .li-title { font-size: 13.4px; font-weight: 600; line-height: 1.3; }
+.signin-tile .li-sub { margin-top: 2px; color: var(--text-3); font-size: 12.2px; line-height: 1.45; }
+.signin-tile .btn { flex: none; }
+.card.welcome { padding: 20px 22px 4px; }
+
+/* ---- settings use the room a large window has ---- */
+@media (min-width: 1400px) and (min-height: 860px) {
+  .modal:not(.small):not(.wide) { width: min(1240px, calc(100vw - 96px)); height: min(880px, calc(100vh - 96px)); }
+  body.electron .modal:not(.small):not(.wide) { max-height: calc(100vh - 38px - 72px); }
+}
+
+/* ---- card headers: a button keeps its size, and a header with nothing under it has no rule ---- */
+.card-head > .btn { flex: none; }
+.card-head > div:first-child { min-width: 0; }
+.card > .help:empty { display: none; }
+.card-head:last-child, .card-head:has(+ .help:empty:last-child) { border-bottom: 0; }
+
+/* ---- long paths wrap inside a settings card ---- */
+.modal code.mono, .card-head p, .card-head code { overflow-wrap: anywhere; white-space: normal; min-width: 0; }
+@media (max-width: 640px) {
+  .card-head { flex-wrap: wrap; }
+  .card-head > div:first-child { flex: 1 1 200px; }
+}

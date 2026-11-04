@@ -1,6 +1,6 @@
 """The ChatGPT normal-chat lane, in-harness (no middleman).
 
-Drives ChatGPT's own web backend with a browser session (pasted in by the user),
+Drives ChatGPT's own web backend with a browser session (imported from the user's Chrome),
 the way shadowgate does: session cookie → access token (``auth.prepare``) → sentinel
 requirements + proof-of-work (``pow.py``) → ``POST /backend-api/conversation`` SSE. The bare
 chat slugs are the unmetered lane (they do not spend Codex / work credits); ``-wm`` slugs with
@@ -120,7 +120,7 @@ class ChatGPTWebProvider:
                     req_tok = await self._requirements(client, base)
                 except _AuthExpired:
                     if refreshed:
-                        yield {"type": "error", "message": "ChatGPT session expired. Connect it again in Settings → Models.", "status": 401, "kind": "auth", "response": ""}
+                        yield {"type": "error", "message": "ChatGPT session expired. Import your Chrome login again.", "status": 401, "kind": "auth", "response": ""}
                         return
                     refreshed = True
                     base, signed = await self._reprepare(req)

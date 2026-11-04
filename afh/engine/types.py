@@ -61,7 +61,7 @@ class ProviderConfig:
 
     id: str  # e.g. "kimi", "zai-coding", "openai", "ollama", or a user id for custom endpoints
     name: str
-    kind: Literal["openai", "anthropic", "gemini", "responses", "chatgpt-web"]  # wire protocol ("responses" = OpenAI Responses API; "chatgpt-web" = ChatGPT normal-chat lane)
+    kind: Literal["openai", "anthropic", "gemini", "responses", "antigravity", "chatgpt-web"]  # wire protocol ("responses" = OpenAI Responses API; "chatgpt-web" = ChatGPT normal-chat lane)
     base_url: str
     api_key: str = ""
     headers: dict[str, str] = field(default_factory=dict)

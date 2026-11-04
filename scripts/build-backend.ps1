@@ -86,6 +86,7 @@ $PyArgs = @(
     '--hidden-import', 'qrcode',
     '--hidden-import', 'PIL.ImageGrab',  # the computer tool captures the screen
     '--hidden-import', 'PIL._imaging',
+    '--hidden-import', 'win32crypt',  # DPAPI, for importing a ChatGPT session from Chrome
     '--hidden-import', 'pywintypes',
     # the desktop shell is Electron now; never pull pywebview or Tk into the exe
     '--exclude-module', 'webview',

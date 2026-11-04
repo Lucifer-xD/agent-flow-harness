@@ -1958,70 +1958,50 @@ async function openThreadIn(id, directory) {
 export const ctx = { S, saveSettings, reloadCatalog, project, modelName, invalidateCommands, setLanguage, openThread: openThreadIn, onReady: null, onCatalogEvent: null };
 window.__afh = { S, D, ctx, view, live: liveState }; // for debugging from the devtools console
 
-// ---- sidebar: an icon rail that expands on hover, pinned open or collapsed with Ctrl+B ----------------
-// Wide windows start expanded, windows under 1100px start as the rail; a pin (the collapse button or
-// Ctrl+B) is remembered. Phones have no rail: the sidebar hides and slides over the chat when asked.
+// ---- sidebar: open, or hidden completely with a button in the top bar to bring it back ---------------
+// Wide windows start open, windows under 1100px start hidden; the collapse button or Ctrl+B is
+// remembered. Phones always start hidden, and the sidebar slides over the chat when asked.
 
 const SB_KEY = "afh-sidebar";
-const RAIL_BELOW = 1100, PHONE_BELOW = 640;
+const HIDE_BELOW = 1100, PHONE_BELOW = 640;
 let sbPin = "";
 try { sbPin = localStorage.getItem(SB_KEY) || ""; } catch {}
 
 function sidebarMode() {
   if (innerWidth <= PHONE_BELOW) return "hidden";
-  if (sbPin === "open" || sbPin === "rail") return sbPin;
-  return innerWidth < RAIL_BELOW ? "rail" : "open";
+  if (sbPin === "open") return "open";
+  if (sbPin) return "hidden";
+  return innerWidth < HIDE_BELOW ? "hidden" : "open";
 }
 
 function applySidebar() {
   const app = $("app");
   const mode = sidebarMode();
-  app.classList.toggle("sb-rail", mode === "rail");
   app.classList.toggle("sb-hidden", mode === "hidden");
   if (mode !== "hidden") app.classList.remove("sb-open");
-  if (mode !== "rail") app.classList.remove("sb-peek");
   $("btn-expand").hidden = mode !== "hidden" || app.classList.contains("sb-open");
-  $("btn-collapse").title = mode === "rail" ? "Show sidebar (Ctrl+B)" : "Hide sidebar (Ctrl+B)";
 }
 
 function toggleSidebar() {
   const app = $("app");
-  if (sidebarMode() === "hidden") {
-    app.classList.toggle("sb-open");
-    $("btn-expand").hidden = app.classList.contains("sb-open");
-    return;
+  if (app.classList.contains("sb-open")) app.classList.remove("sb-open");
+  else if (innerWidth <= PHONE_BELOW) app.classList.add("sb-open");
+  else {
+    sbPin = sidebarMode() === "hidden" ? "open" : "closed";
+    try { localStorage.setItem(SB_KEY, sbPin); } catch {}
   }
-  sbPin = sidebarMode() === "rail" ? "open" : "rail";
-  try { localStorage.setItem(SB_KEY, sbPin); } catch {}
   applySidebar();
 }
 
-/** Bring the sidebar into view without pinning it (Ctrl+K, the rail's search button). */
+/** Bring the sidebar into view over the chat without changing what is remembered (Ctrl+K). */
 function revealSidebar() {
-  const app = $("app");
-  const mode = sidebarMode();
-  if (mode === "rail") app.classList.add("sb-peek");
-  if (mode === "hidden") { app.classList.add("sb-open"); $("btn-expand").hidden = true; }
+  if (sidebarMode() !== "hidden") return;
+  $("app").classList.add("sb-open");
+  applySidebar();
 }
 
 function wireSidebar() {
-  const app = $("app"), sb = $("sidebar");
-  let timer = 0;
-  const peek = () => { clearTimeout(timer); if (app.classList.contains("sb-rail")) app.classList.add("sb-peek"); };
-  const unpeek = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (sb.matches(":hover")) return;
-      if (sb.contains(document.activeElement) && document.activeElement.matches("input, textarea")) return; // typing in the search box
-      if (document.querySelector("#overlay-root .pop")) { timer = setTimeout(unpeek, 250); return; } // a menu opened from the sidebar
-      app.classList.remove("sb-peek");
-    }, 160);
-  };
-  sb.addEventListener("pointerenter", () => { clearTimeout(timer); timer = setTimeout(peek, 150); });
-  sb.addEventListener("pointerleave", unpeek);
-  sb.addEventListener("focusin", peek);
-  sb.addEventListener("focusout", unpeek);
-  $("sb-search").addEventListener("click", () => { revealSidebar(); $("thread-search").focus(); });
+  $("sb-search").addEventListener("click", () => $("thread-search").focus());
   addEventListener("resize", applySidebar);
   applySidebar();
 }
