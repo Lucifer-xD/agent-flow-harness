@@ -2,6 +2,12 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.19.5 (2026-11-04)
+
+**Worktree merges on a fresh PC**
+
+- **Merging a worktree works on a PC where git has no name or email set.** It used to stop with an error. Your own git name is still used when you have one.
+
 ## 1.19.4 (2026-11-04)
 
 **Sign-ins are back, and a cleaner first run**
