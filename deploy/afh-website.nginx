@@ -2,9 +2,6 @@
 # auto-update feed (/downloads/latest.yml). Isolated site; other sites unchanged.
 # Installed by scripts/deploy-website.ps1 to /etc/nginx/sites-available/afh-website; that script
 # also gets the Let's Encrypt certificate the first time (webroot /var/www/afh, renewed by certbot).
-#
-# old.example.com, the first home, still serves /downloads/: apps built before the move update
-# from it, and it is every app's fallback feed (desktop/main.js). Keep it.
 
 # WebSocket upgrades for the relay (its own name, so it can't clash with another site's map)
 map $http_upgrade $afh_connection {
@@ -12,41 +9,17 @@ map $http_upgrade $afh_connection {
     ""      close;
 }
 
+# whatever this server adds of its own; optional, and not part of the repository
+include /etc/nginx/afh-extra.con[f];
+
 server {
     listen 80;
     listen [::]:80;
-    server_name agentflowharness.com www.agentflowharness.com old.example.com;
+    server_name agentflowharness.com www.agentflowharness.com;
 
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/afh;
         default_type text/plain;
-    }
-    location / {
-        return 301 https://agentflowharness.com$request_uri;
-    }
-}
-
-# the old address: app updates keep working from it; everything else moves to the new domain
-server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
-    server_name old.example.com;
-
-    ssl_certificate     /etc/nginx/ssl/legacy.crt;
-    ssl_certificate_key /etc/nginx/ssl/legacy.key;
-
-    root  /var/www/afh;
-    access_log /var/log/nginx/afh-website.access.log;
-
-    location /downloads/ {
-        location ~ \.yml$ {
-            default_type text/yaml;
-            add_header Cache-Control "no-cache" always;
-        }
-        location ~ \.(exe|blockmap)$ {
-            add_header Cache-Control "public, max-age=86400" always;
-        }
     }
     location / {
         return 301 https://agentflowharness.com$request_uri;

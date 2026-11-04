@@ -28,7 +28,7 @@ from urllib.parse import urlsplit
 
 LOG = Path(os.environ.get("AFH_ACCESS_LOG", "/var/log/nginx/afh-website.access.log"))
 DB_PATH = Path(os.environ.get("AFH_ANALYTICS_DB", "/var/lib/afh-relay/analytics.db"))
-OWN_HOSTS = {"agentflowharness.com", "www.agentflowharness.com", "old.example.com"}
+OWN_HOSTS = {"agentflowharness.com", "www.agentflowharness.com"}
 
 LINE = re.compile(r'^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d{3}) \S+ "([^"]*)" "([^"]*)"')
 BOT = re.compile(r"bot|crawl|spider|slurp|curl|wget|python|go-http|httpx|okhttp|java/|headless|lighthouse|inspectiontool|"

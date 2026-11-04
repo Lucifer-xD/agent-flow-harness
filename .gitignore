@@ -10,3 +10,7 @@ website/downloads/*.blockmap
 backups/
 website/downloads/*.apk
 website/downloads/*.ipa
+
+# this deployment's own details
+deploy/server.local
+website/google*.html

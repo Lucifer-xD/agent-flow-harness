@@ -385,12 +385,8 @@ async function openExternal(url) {
 // installer that `npm run dist` writes. The address is Settings → About → Updates (updates.feed in
 // ~/.afh/settings.json), else AFH_UPDATE_URL, else the AFH website. New versions download in the
 // background when updates.auto is on; the page offers "Restart to update", and quitting installs it anyway.
-// Without an address of its own, a check that can't reach the website tries FALLBACK_FEED, which
-// serves the same files: losing one domain (or a network that can't reach it) must not strand
-// installed copies on an old version.
 
 const DEFAULT_FEED = "https://agentflowharness.com/downloads/";
-const FALLBACK_FEED = "https://old.example.com/downloads/";
 let autoUpdater = null;
 const update = { state: "idle", version: null, progress: 0, error: null, feed: "", current: app.getVersion() };
 const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -408,7 +404,7 @@ function updateSettings() {
   const u = afhSettings().updates || {};
   const custom = String(u.feed || process.env.AFH_UPDATE_URL || "").trim();
   const feed = custom || DEFAULT_FEED;
-  return { auto: u.auto !== false, custom: !!custom, feed: feed && !feed.endsWith("/") ? feed + "/" : feed };
+  return { auto: u.auto !== false, feed: feed && !feed.endsWith("/") ? feed + "/" : feed };
 }
 
 const firstLine = (err) => String(err?.message || err).split(/\r?\n/)[0].slice(0, 300);
@@ -449,23 +445,18 @@ function initUpdater() {
 async function checkForUpdates(manual) {
   if (!autoUpdater) return { ...update };
   if (["checking", "downloading", "ready"].includes(update.state)) return { ...update };
-  const { auto, custom, feed } = updateSettings();
+  const { auto, feed } = updateSettings();
   if (!manual && !auto) return { ...update };
   if (!feed) {
     setUpdate({ state: "nofeed", feed: "" });
     return { ...update };
   }
-  const feeds = custom ? [feed] : [feed, FALLBACK_FEED];
-  for (const [i, url] of feeds.entries()) {
-    update.feed = url;
-    autoUpdater.setFeedURL({ provider: "generic", url });
-    try {
-      await autoUpdater.checkForUpdates();
-      break;
-    } catch (err) {
-      if (i === feeds.length - 1) setUpdate({ state: "error", error: firstLine(err) });
-      else log("update:", url, "unreachable, trying", feeds[i + 1]);
-    }
+  update.feed = feed;
+  autoUpdater.setFeedURL({ provider: "generic", url: feed });
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (err) {
+    setUpdate({ state: "error", error: firstLine(err) });
   }
   return { ...update };
 }
