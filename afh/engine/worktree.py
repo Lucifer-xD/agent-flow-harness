@@ -107,7 +107,9 @@ async def merge(wt: dict, message: str) -> dict:
     committed = await commit_all(wt, message)
     root = wt["repo"]
     current = await git("rev-parse", "--abbrev-ref", "HEAD", cwd=root)
-    out = await git("merge", "--no-ff", "--no-edit", "-m", f"Merge {wt['branch']}: {message}", wt["branch"], cwd=root, check=False)
+    # Git refuses to write the merge commit without an identity, which a fresh PC doesn't have.
+    identity = [] if await git("config", "user.email", cwd=root, check=False) else ["-c", "user.name=Agent Flow Harness", "-c", "user.email=afh@localhost"]
+    out = await git(*identity, "merge", "--no-ff", "--no-edit", "-m", f"Merge {wt['branch']}: {message}", wt["branch"], cwd=root, check=False)
     if "CONFLICT" in out or "Automatic merge failed" in out:
         await git("merge", "--abort", cwd=root, check=False)
         raise GitError(f"Merging {wt['branch']} into {current} has conflicts; nothing was changed. Resolve them by hand (git merge {wt['branch']}) or ask the agent to rebase its branch.")
