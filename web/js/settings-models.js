@@ -11,17 +11,12 @@ const SIGN_INS = [
   { method: "chatgpt", provider: "chatgpt", name: "ChatGPT (Codex)", sub: "Use your Plus, Pro or Team plan — no API key", icon: "sparkle" },
   { method: "chatgpt-web", provider: "chatgpt-chat", name: "ChatGPT (chat)", sub: "The real GPT-6 family (Astra, Sol, Terra…) from your browser login — uses your ChatGPT plan, not your Codex credits", icon: "sparkle", custom: true },
   { method: "copilot", provider: "github-copilot", name: "GitHub Copilot", sub: "Claude, GPT and Gemini through your Copilot plan", icon: "github" },
-  { method: "antigravity", provider: "antigravity", name: "Google Antigravity", sub: "Gemini and Claude on your Google account's Antigravity quota", icon: "globe",
-    warning: "Google has suspended Antigravity access for some accounts that signed in through apps other than Antigravity itself (OpenCode, OpenClaw). "
-      + "AFH signs in the same way, so your Google account's Antigravity access could be suspended. Your other Google services were not reported affected. "
-      + "Use an account you can afford to lose Antigravity on." },
   { method: "openrouter", provider: "openrouter", name: "OpenRouter", sub: "Hundreds of models on one account; creates a key for you", icon: "globe" },
 ];
 
 /** Sign-in dialog: opens the provider's page (or shows GitHub's device code) and waits for it. */
 export async function signIn(method, { onDone } = {}) {
   const meta = SIGN_INS.find((x) => x.method === method) || { name: method };
-  if (meta.warning && !(await confirmDialog({ title: `Sign in to ${meta.name}?`, body: meta.warning, confirm: "I understand, sign in", danger: true }))) return;
   const status = el("div.signin-status", el("span.spinner"), " Starting…");
   const bodyBox = el("div.signin-body");
   let login = null;
@@ -298,7 +293,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
   const search = el("input.inp", { placeholder: `Search ${available.length} providers — OpenAI, Anthropic, Gemini, Azure, Bedrock, Mistral, Kimi, DeepSeek, OpenRouter…` });
   const results = el("div", { style: { maxHeight: "360px", overflowY: "auto", marginTop: "8px" } });
   const formBox = el("div");
-  const featured = ["openai", "anthropic", "gemini", "chatgpt", "github-copilot", "antigravity", "openrouter", "kimi", "zai-coding", "deepseek", "xai", "mistral", "groq", "azure", "amazon-bedrock", "ollama", "lmstudio"];
+  const featured = ["openai", "anthropic", "gemini", "chatgpt", "github-copilot", "openrouter", "kimi", "zai-coding", "deepseek", "xai", "mistral", "groq", "azure", "amazon-bedrock", "ollama", "lmstudio"];
   const subFor = (c) => {
     if (c.login && !c.needsKey) return "sign in with your account";
     if (!c.needsKey) return "local server · no key needed";

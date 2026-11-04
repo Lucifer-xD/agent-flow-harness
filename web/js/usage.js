@@ -1,7 +1,6 @@
 // The usage meter by the message box: the current provider's plan limits, live. ChatGPT shows its
-// 5-hour and weekly windows, Copilot its monthly premium requests, Antigravity the quota left per
-// model family, coding plans (Kimi, Z.AI) their 5-hour and weekly windows, OpenRouter, DeepSeek and
-// Moonshot their balance; any other API key shows the rate limits from its last answer and what AFH
+// 5-hour and weekly windows, Copilot its monthly premium requests, coding plans (Kimi, Z.AI) their
+// 5-hour and weekly windows, OpenRouter, DeepSeek and Moonshot their balance; any other API key shows the rate limits from its last answer and what AFH
 // sent through it. Click for the details and every other provider. Data: GET /api/usage/limits.
 
 import { api } from "./api.js";

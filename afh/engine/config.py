@@ -12,6 +12,7 @@ from .types import ModelInfo, ProviderConfig
 
 PATH = store.AFH_DIR / "providers.json"
 _lock = threading.RLock()
+RETIRED_KINDS = {"antigravity"}  # no longer in AFH: a saved sign-in is removed, with its tokens
 
 
 def load() -> dict:
@@ -21,6 +22,11 @@ def load() -> dict:
         except (FileNotFoundError, json.JSONDecodeError):
             data = {}
         data.setdefault("providers", {})
+        retired = [pid for pid, p in data["providers"].items() if p.get("kind") in RETIRED_KINDS]
+        if retired:
+            for pid in retired:
+                del data["providers"][pid]
+            save(data)
         return data
 
 
@@ -76,7 +82,7 @@ def _model(d: dict) -> ModelInfo:
 
 
 OVERRIDABLE = ("context", "output", "variants", "input", "reasoning")
-SELF_DESCRIBING = {"chatgpt", "antigravity"}  # providers whose model list carries context, effort levels and inputs
+SELF_DESCRIBING = {"chatgpt"}  # providers whose model list carries context, effort levels and inputs
 
 
 def models_of(p: dict, pid: str | None = None) -> list[ModelInfo]:
