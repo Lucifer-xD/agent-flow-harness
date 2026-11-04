@@ -6,7 +6,7 @@ import { delegationPane } from "./delegate.js";
 import { logoNode } from "./logo.js";
 import { modelsPane } from "./settings-models.js";
 import { agentPane, commandsPane, hooksPane, usagePane } from "./settings-power.js";
-import { bugPane, developerPane, schedulesPane } from "./settings-dev.js";
+import { bugPane, developerPane, githubPane, schedulesPane } from "./settings-dev.js";
 import { remotePane } from "./settings-remote.js";
 import { updatesCard } from "./updates.js";
 import { skillsPane } from "./settings-skills.js";
@@ -26,6 +26,7 @@ const TABS = [
   ["commands", "Commands", "slash"],
   ["hooks", "Hooks", "hook"],
   ["schedules", "Schedules", "clock"],
+  ["github", "GitHub", "github"],
   ["developer", "Developer", "code"],
   ["remote", "Remote control", "globe"],
   ["bug", "Report a bug", "bug"],
@@ -109,6 +110,7 @@ const PANES = {
   usage: (pane, ctx) => usagePane(pane, ctx),
   schedules: (pane, ctx) => schedulesPane(pane, ctx),
   developer: (pane, ctx) => developerPane(pane, ctx),
+  github: (pane) => githubPane(pane),
   bug: (pane) => bugPane(pane),
 
   async general(pane, ctx) {

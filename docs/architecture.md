@@ -79,6 +79,18 @@ Before building a new app, site or set of screens, the agent can show 2 to 4 des
 
 `redteam` is a primary agent with the same no-edit permissions as Plan and its own rules (`store.REDTEAM_RULES`). It audits the user's own project and reports what it finds. It stays in scope and never changes the code.
 
+## The command line
+
+`afh/cli.py` is a client of the local API, and it imports only the standard library so it starts fast. `run.py cli ...` reaches it before any server code loads. It finds the running app through `~/.afh/api.json`, which holds a key that lasts until AFH quits. Otherwise it starts a backend with `AFH_CLI_BACKEND=1`, which writes no discovery file, connects to no account, and leaves schedules and interrupted runs alone. See [cli.md](cli.md).
+
+## Model races
+
+`afh/engine/race.py` gives one task to several models, each in a worktree thread. A check command scores the results, and nothing is merged until the user picks one. Races are kept in `~/.afh/races.json`.
+
+## The GitHub agent
+
+`afh/engine/github.py` polls with the user's `gh` login, so it stores no token and nothing listens on the internet. It takes one task at a time, in a worktree from the remote branch. Because a public comment can lead to code running on the user's computer, it has its own rules: an allow list, issue text marked as untrusted, no forks, no force pushes and no merging.
+
 ## Accounts and the relay
 
 The optional AFH account lives in `relay/app.py`. `afh/cloud.py` keeps one outgoing connection from the computer to the relay, so nothing has to be opened on a router. The phone app and the website reach a computer through `/r/<computer>/…`. The server passes those requests on and stores no threads, files or keys.

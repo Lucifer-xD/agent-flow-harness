@@ -3,7 +3,9 @@
     afh                                chat in this folder
     afh run "fix the failing tests"    one task, then exit (the answer on stdout, progress on stderr)
     afh run --json "..."               the same, every event as one JSON line
-    afh threads | show | diff | models | providers | provider add | serve | status
+    afh race "add caching" -m a/x -m b/y --check "pytest -q"     several models, you pick the winner
+    afh github add owner/repo          /afh on issues and pull requests (needs the app or afh serve)
+    afh threads | show | diff | models | provider | serve | status | install
 
 It talks to AFH's local API. When the desktop app is open it uses that, so threads show up there
 live. Otherwise it starts a private backend for as long as the command runs. That backend leaves
@@ -639,6 +641,105 @@ def cmd_providers(client: Client, a: argparse.Namespace) -> int:
     return OK
 
 
+def show_race(race: dict) -> None:
+    def outcome(e: dict) -> str:
+        if e.get("error"):
+            return f"error: {clip(e['error'], 40)}"
+        if not e.get("changed"):
+            return "no changes"
+        return {True: "check passed", False: "check failed", None: "not checked"}[e.get("passed")]
+
+    table([[str(i), e["model"], outcome(e), f"{e.get('files', 0)} files", f"{e.get('lines', 0)} lines", f"${e.get('cost') or 0:.4f}", f"{e.get('seconds', 0)}s"]
+          for i, e in enumerate(race["entries"], 1)])
+
+
+def cmd_race(client: Client, a: argparse.Namespace) -> int:
+    if a.prompt[:1] in (["pick"], ["discard"], ["show"]):
+        return race_action(client, a)
+    text = " ".join(a.prompt).strip()
+    if not text or len(a.model or []) < 2:
+        raise CliError('Say what to do and name two or more models: afh race "add caching" -m a/x -m b/y', USAGE)
+    race = client.request("POST", "/api/races", {"directory": str(Path(a.dir).resolve()), "prompt": text, "models": a.model, "check": a.check or "", "mode": mode_of(a.mode) or "full"}, timeout=120)
+    note(f"Racing {len(race['entries'])} models." + ("" if client.backend else f" Ctrl+C leaves them running: afh race show {race['id']}"))
+    done: set[str] = set()
+    while race["status"] == "running":
+        time.sleep(1.5)
+        race = client.get(f"/api/races/{race['id']}")
+        for e in race["entries"]:
+            if e["status"] == "finished" and e["session"] not in done:
+                done.add(e["session"])
+                note(dim(f"  {e['model']} finished"))
+    if a.json:
+        print(json.dumps(race, ensure_ascii=False))
+        return OK
+    show_race(race)
+    if not at_terminal():
+        print(f"\nMerge one: afh race pick {race['id']} <number>   Throw them away: afh race discard {race['id']}")
+        return OK
+    answer = input("\nMerge which one? Number, or Enter to decide later: ").strip()
+    if answer.isdigit():
+        pick_entry(client, race, int(answer))
+    return OK
+
+
+def pick_entry(client: Client, race: dict, number: int) -> None:
+    if not 0 < number <= len(race["entries"]):
+        raise CliError(f"Pick a number from 1 to {len(race['entries'])}", USAGE)
+    entry = race["entries"][number - 1]
+    done = client.request("POST", f"/api/races/{race['id']}/pick", {"session": entry["session"]}, timeout=120)
+    print(f"Merged {entry['model']} into {done['merged']['into']}.")
+
+
+def race_action(client: Client, a: argparse.Namespace) -> int:
+    action, *rest = a.prompt
+    if not rest:
+        raise CliError(f"Which race? afh race {action} <id>", USAGE)
+    race = client.get(f"/api/races/{rest[0]}")
+    if action == "show":
+        print(f"{race['status']}: {clip(race['prompt'], 80)}")
+        show_race(race)
+    elif action == "discard":
+        client.request("POST", f"/api/races/{race['id']}/discard", {})
+        print("Thrown away. Your checkout is unchanged.")
+    elif len(rest) < 2 or not rest[1].isdigit():
+        raise CliError(f"Which one? afh race pick {race['id']} <number>", USAGE)
+    else:
+        pick_entry(client, race, int(rest[1]))
+    return OK
+
+
+def cmd_github(client: Client, a: argparse.Namespace) -> int:
+    info = client.get("/api/github")
+    repos = list(info.get("repos") or [])
+    change: dict[str, Any] = {}
+    if a.action in ("on", "off"):
+        change["enabled"] = a.action == "on"
+    elif a.action == "add":
+        if not a.values:
+            raise CliError("Which repository? afh github add owner/name [--path folder]", USAGE)
+        change["repos"] = [r for r in repos if r["repo"] != a.values[0]] + [{"repo": a.values[0], "path": str(Path(a.path).resolve())}]
+        change["enabled"] = True
+    elif a.action == "remove":
+        change["repos"] = [r for r in repos if r["repo"] not in a.values]
+    elif a.action == "allow":
+        change["allowed"] = a.values
+    elif a.action == "mode":
+        change["mode"] = a.values[0] if a.values else "ask"
+    if change:
+        info = client.request("PUT", "/api/github", change)
+    print(f"GitHub agent: {'on' if info.get('enabled') else 'off'}, approvals: {info.get('mode')}")
+    if info.get("problem"):
+        print(f"Problem: {info['problem']}")
+    print("Who can start work: " + (", ".join(info.get("who") or []) or "nobody yet"))
+    for r in info.get("repos") or []:
+        print(f"  {r['repo']}  {r['path']}")
+    for t in (info.get("recent") or [])[:8]:
+        print(f"  {ago(t.get('time'))}  {t.get('repo')}#{t.get('number')}  {t.get('status')}  {t.get('link') or ''}".rstrip())
+    if client.backend and info.get("enabled"):
+        note(dim("It watches while the AFH app or afh serve is running."))
+    return OK
+
+
 def cmd_status(client: Client, a: argparse.Namespace) -> int:
     info = client.get("/api/models")
     print(f"AFH {__version__}")
@@ -753,6 +854,17 @@ def parser() -> argparse.ArgumentParser:
     pr = sub.add_parser("provider", help="list providers, or add one with an API key")
     pr.add_argument("action", nargs="?", choices=["list", "add"], default="list")
     pr.add_argument("name", nargs="?")
+    rc = sub.add_parser("race", help="several models on one task, you pick the winner (also: pick, show, discard)")
+    rc.add_argument("prompt", nargs="*")
+    rc.add_argument("-m", "--model", action="append", help="provider/model, twice or more")
+    rc.add_argument("-d", "--dir", default=".")
+    rc.add_argument("--check", help="a command that scores each result, like \"pytest -q\"")
+    rc.add_argument("--mode", help="approvals for the models: full (default), ask or read")
+    rc.add_argument("--json", action="store_true")
+    g = sub.add_parser("github", help="work from /afh comments on issues and pull requests")
+    g.add_argument("action", nargs="?", choices=["status", "on", "off", "add", "remove", "allow", "mode"], default="status")
+    g.add_argument("values", nargs="*", help="owner/repo, logins, or ask/full")
+    g.add_argument("--path", default=".", help="the local clone (default: here)")
     sv = sub.add_parser("serve", help="run the backend in this terminal, for SSH or a server")
     sv.add_argument("--port", type=int)
     sub.add_parser("install", help="put the afh command on your PATH")
@@ -776,7 +888,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.command in offline:
         return offline[a.command](a)
     commands: dict[str, Callable] = {"run": cmd_run, "threads": cmd_threads, "show": cmd_show, "diff": cmd_diff, "models": cmd_models,
-                                     "provider": cmd_providers, "status": cmd_status}
+                                     "provider": cmd_providers, "status": cmd_status, "race": cmd_race, "github": cmd_github}
     client = None
     try:
         client = connect()

@@ -128,7 +128,8 @@ async function boot() {
   if (native.electron()) {
     document.body.classList.add("electron");
     $("tb-brand").append(logoNode({ size: 22 }));
-    if (window.afh?.platform !== "darwin") mountWindowControls();
+    if (window.afh?.platform === "darwin") document.body.classList.add("mac");
+    else mountWindowControls();
   }
   for (const [id, name] of [["btn-collapse", "sidebar"], ["btn-expand", "sidebar"], ["btn-thread-menu", "more"], ["btn-attach", "paperclip"], ["btn-mic", "mic"], ["btn-drawer-close", "x"]]) $(id).innerHTML = icon(name);
   let data;
