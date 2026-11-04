@@ -71,6 +71,20 @@ function backendCommand() {
   return { cmd: python, args: [path.join(repoRoot, "run.py"), "--headless"], cwd: repoRoot };
 }
 
+/**
+ * An app opened from Finder or the Dock gets a bare PATH, so Homebrew's git, node and gh would be
+ * missing for the agent. Ask the user's own login shell, and fall back to the usual folders.
+ */
+function macPath() {
+  const usual = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", process.env.PATH || "/usr/bin:/bin:/usr/sbin:/sbin"];
+  try {
+    const r = spawnSync(process.env.SHELL || "/bin/zsh", ["-ilc", 'printf "__AFH__%s__AFH__" "$PATH"'], { encoding: "utf8", timeout: 4000 });
+    const m = /__AFH__(.*?)__AFH__/.exec(r.stdout || "");
+    if (m && m[1]) return [m[1], ...usual].join(":");
+  } catch {}
+  return usual.join(":");
+}
+
 function startBackend() {
   const { cmd, args, cwd } = backendCommand();
   log("starting backend:", cmd, args.join(" "), "(cwd:", cwd + ")");
@@ -82,7 +96,7 @@ function startBackend() {
   try {
     backend = spawn(cmd, args, {
       cwd,
-      env: { ...process.env, PYTHONUNBUFFERED: "1", PYTHONIOENCODING: "utf-8" }, // AFH_HOME etc. pass through
+      env: { ...process.env, ...(IS_MAC ? { PATH: macPath() } : {}), PYTHONUNBUFFERED: "1", PYTHONIOENCODING: "utf-8" }, // AFH_HOME etc. pass through
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
       detached: !IS_WIN, // own process group on POSIX so we can signal the whole tree
@@ -419,6 +433,11 @@ function initUpdater() {
     update.state = "dev"; // a development run has nothing to update
     return;
   }
+  if (IS_MAC) {
+    setTimeout(() => checkForUpdates(false), 20_000).unref();
+    setInterval(() => checkForUpdates(false), UPDATE_EVERY_MS).unref();
+    return;
+  }
   try {
     ({ autoUpdater } = require("electron-updater"));
   } catch (err) {
@@ -442,8 +461,23 @@ function initUpdater() {
   setInterval(() => checkForUpdates(false), UPDATE_EVERY_MS).unref();
 }
 
+/** An app without an Apple signature can't replace itself, so a Mac only hears that a new version is out. */
+async function checkMacUpdate(feed) {
+  setUpdate({ state: "checking", error: null });
+  try {
+    const res = await fetch(feed + "latest.yml");
+    const version = /^version:\s*(\S+)/m.exec(await res.text())?.[1];
+    if (!res.ok || !version) throw new Error("the update feed gave no version");
+    const newer = version.localeCompare(app.getVersion(), undefined, { numeric: true }) > 0;
+    setUpdate(newer ? { state: "available", version, checked: Date.now() } : { state: "latest", checked: Date.now() });
+  } catch (err) {
+    setUpdate({ state: "error", error: firstLine(err) });
+  }
+  return { ...update };
+}
+
 async function checkForUpdates(manual) {
-  if (!autoUpdater) return { ...update };
+  if (!autoUpdater && !(IS_MAC && app.isPackaged)) return { ...update };
   if (["checking", "downloading", "ready"].includes(update.state)) return { ...update };
   const { auto, feed } = updateSettings();
   if (!manual && !auto) return { ...update };
@@ -452,6 +486,7 @@ async function checkForUpdates(manual) {
     return { ...update };
   }
   update.feed = feed;
+  if (IS_MAC) return checkMacUpdate(feed);
   autoUpdater.setFeedURL({ provider: "generic", url: feed });
   try {
     await autoUpdater.checkForUpdates();
@@ -464,6 +499,10 @@ async function checkForUpdates(manual) {
 ipcMain.handle("afh:update:state", () => ({ ...update }));
 ipcMain.handle("afh:update:check", () => checkForUpdates(true));
 ipcMain.handle("afh:update:download", async () => {
+  if (IS_MAC && update.state === "available") {
+    await shell.openExternal("https://agentflowharness.com/download");
+    return { ...update };
+  }
   if (autoUpdater && update.state === "available") await autoUpdater.downloadUpdate().catch(() => {});
   return { ...update };
 });
@@ -544,7 +583,8 @@ ipcMain.handle("afh:window:set-title-bar-overlay", () => false);
 
 function onReady() {
   log("app ready; version", app.getVersion(), "packaged:", app.isPackaged, "userData:", app.getPath("userData"));
-  Menu.setApplicationMenu(null);
+  // A Mac's copy, paste, select all and quit shortcuts live in the menu, so it has to have one.
+  Menu.setApplicationMenu(IS_MAC ? Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]) : null);
   createTray();
   initUpdater();
   // The computer-use overlay listens to the backend itself (it works while this window is minimized).

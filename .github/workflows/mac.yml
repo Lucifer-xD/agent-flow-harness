@@ -1,0 +1,70 @@
+name: Mac build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [next-features]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest tests -q
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15, arch: arm64 }
+          - { runner: macos-15-intel, arch: x64 }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: pip install -r requirements.txt pyinstaller
+      - run: PYTHON=python bash scripts/build-backend.sh
+      - name: Backend starts
+        run: bash scripts/smoke-mac.sh desktop/backend-dist/afh-backend/afh-backend --headless
+      - name: Build the app
+        working-directory: desktop
+        run: |
+          npm ci
+          npx electron-builder --mac dmg --${{ matrix.arch }} --publish never
+      - name: The app from the DMG starts
+        env:
+          SHOT: ${{ github.workspace }}/desktop/dist/screen-${{ matrix.arch }}.png
+        run: |
+          hdiutil attach desktop/dist/*.dmg -mountpoint /tmp/afh-dmg -nobrowse
+          cp -R "/tmp/afh-dmg/Agent Flow Harness.app" /tmp/
+          hdiutil detach /tmp/afh-dmg
+          codesign --verify --deep "/tmp/Agent Flow Harness.app" && echo "signature valid"
+          bash scripts/smoke-mac.sh "/tmp/Agent Flow Harness.app/Contents/MacOS/Agent Flow Harness"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: afh-mac-${{ matrix.arch }}
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.png
+          if-no-files-found: warn
