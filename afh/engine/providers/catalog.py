@@ -83,11 +83,6 @@ KNOWN: dict[str, dict] = {
         "env": [], "docs": "https://docs.github.com/en/copilot", "extra": {"max_tokens_param": "max_tokens"},
         "login": "copilot", "login_only": True, "needs_key": False,
     },
-    "antigravity": {
-        "name": "Google Antigravity", "kind": "antigravity", "base_url": "https://REMOVED",
-        "env": [], "docs": "https://antigravity.google", "extra": {"effort_ids": {"gemini-3.1-pro": ["low", "high"]}},
-        "login": "antigravity", "login_only": True, "needs_key": False,
-    },
     "mistral": {
         "name": "Mistral", "kind": "openai", "base_url": "https://api.mistral.ai/v1",
         "env": ["MISTRAL_API_KEY"], "docs": "https://docs.mistral.ai/api", "extra": {},
@@ -271,13 +266,6 @@ _LHM = ["low", "high", "max"]
 _LMH = ["low", "medium", "high"]
 
 STATIC_MODELS: dict[str, list[ModelInfo]] = {
-    # Until the account's own list arrives (fetchAvailableModels replaces these).
-    "antigravity": [
-        _m("gemini-3.1-pro", "Gemini 3.1 Pro", 1_048_576, 65_535, reasoning=True, variants=["low", "high"]),  # sent as -low / -high
-        _m("gemini-3-flash", "Gemini 3 Flash", 1_048_576, 65_536, reasoning=True),
-        _m("claude-sonnet-4-6", "Claude Sonnet 4.6", 200_000, 64_000),
-        _m("claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)", 200_000, 64_000, reasoning=True, variants=["low", "high", "max"]),
-    ],
     "kimi": [
         _m("k3.1-pro", "Kimi K3.1 Pro", 1_000_000, 65_536, reasoning=True, variants=_LHM),
         _m("k3.1-pro-highspeed", "Kimi K3.1 Pro (high speed)", 1_000_000, 65_536, reasoning=True, variants=_LHM),
@@ -382,7 +370,7 @@ def default_variants(model_id: str, kind: str) -> list[str]:
     if not is_reasoning(model_id):
         return []
     key = model_id.lower()
-    if kind in ("anthropic", "gemini", "antigravity") or "k3" in key or "kimi" in key:
+    if kind in ("anthropic", "gemini") or "k3" in key or "kimi" in key:
         return list(_LHM)
     if "glm" in key:
         return ["high"]
@@ -450,7 +438,6 @@ def config_from_catalog(provider_id: str, api_key: str = "", base_url: str | Non
 
 def make_provider(config: ProviderConfig, transport: httpx.AsyncBaseTransport | None = None) -> Provider:
     from afh.engine.providers.anthropic import AnthropicProvider
-    from afh.engine.providers.antigravity import AntigravityProvider
     from afh.engine.providers.gemini import GeminiProvider
     from afh.engine.providers.openai_compat import OpenAICompatProvider
     from afh.engine.providers.openai_responses import OpenAIResponsesProvider
@@ -465,8 +452,6 @@ def make_provider(config: ProviderConfig, transport: httpx.AsyncBaseTransport | 
         return AnthropicProvider(config, transport=transport)
     if config.kind == "gemini":
         return GeminiProvider(config, transport=transport)
-    if config.kind == "antigravity":
-        return AntigravityProvider(config, transport=transport)
     if config.kind == "openai":
         return OpenAICompatProvider(config, transport=transport)
     raise ValueError(f"Unknown provider kind: {config.kind!r}")
