@@ -129,6 +129,7 @@ body.electron .titlebar .tb-thread::before { content: "·"; margin: 0 8px 0 0; }
 body.electron .titlebar button { -webkit-app-region: no-drag; }
 /* Page-drawn window controls (Windows/Linux): part of the page, so the border and theme changes span the full width. */
 body.win-controls .titlebar { padding-right: 0; }
+body.electron.mac .titlebar { padding-left: 84px; } /* a Mac's own window buttons sit at the top left */
 .wc-space { flex: 1; }
 .win-controls { display: flex; align-self: stretch; margin-left: 8px; -webkit-app-region: no-drag; }
 .wc-btn { width: 46px; height: 100%; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-2); cursor: default; transition: background 0.12s, color 0.12s; }

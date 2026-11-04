@@ -51,21 +51,21 @@ def slug(text: str) -> str:
     return s or "thread"
 
 
-async def create(directory: str, name: str = "") -> dict:
-    """New worktree on a new branch from the current HEAD of `directory`'s repository."""
+async def create(directory: str, name: str = "", start: str = "HEAD") -> dict:
+    """New worktree on a new branch from `start` (by default the current HEAD) of `directory`'s repository."""
     root = await repo_root(directory)
     if not root:
         raise GitError("This project is not a git repository, so it cannot get its own worktree. Run `git init` and commit first.")
     try:
-        head = await git("rev-parse", "HEAD", cwd=root, timeout=15)
+        head = await git("rev-parse", start, cwd=root, timeout=15)
     except GitError:
         raise GitError("The repository has no commits yet; make a first commit before using worktrees.") from None
-    base = await git("rev-parse", "--abbrev-ref", "HEAD", cwd=root, timeout=15)
+    base = await git("rev-parse", "--abbrev-ref", start, cwd=root, timeout=15)
     short = new_id("wt")[-6:].lower()
     branch = f"afh/{slug(name)}-{short}"
     path = ROOT / f"{Path(root).name}-{short}"
     ROOT.mkdir(parents=True, exist_ok=True)
-    await git("worktree", "add", "-b", branch, str(path), "HEAD", cwd=root)
+    await git("worktree", "add", "--no-track", "-b", branch, str(path), start, cwd=root)
     # Keep the same sub-folder when the project is a folder inside the repository.
     sub = Path(directory).resolve().relative_to(Path(root)) if Path(directory).resolve() != Path(root) else Path(".")
     work_dir = (path / sub).resolve()

@@ -151,12 +151,67 @@ export async function developerPane(pane, ctx) {
     row("Fixed port", "Optional, for tools that need a stable address (empty = random)", portInput),
     row("Interactive reference", "Every endpoint with its fields, generated from this version", el("button.btn.ghost.sm", { on: { click: () => window.open(`${BASE}/api/docs?token=${encodeURIComponent(sessionStorage.getItem("afh-token") || "")}`, "_blank") } }, ico("book"), "Open"))));
 
+  const cliResult = el("div");
+  const cliInstall = el("button.btn.sm", { on: { click: async () => {
+    try {
+      const out = await api.post("/api/cli/install", {});
+      cliResult.replaceChildren(el("div.note", out.pathChanged ? "Installed. Open a new terminal and type afh." : "Installed, and it's already on your PATH."));
+    } catch (e) { toast(e.message, "err"); }
+  } } }, ico("download"), "Install");
+  pane.append(card("Command line", "Use the agent from any terminal, or from a script with afh run.", null,
+    row("The afh command", "Adds it for your account only, no administrator needed", cliInstall), cliResult));
+
   const py = `# copy sdk/python/afh_sdk.py next to your script\nfrom afh_sdk import AFH\nafh = AFH()   # reads AFH_API_KEY and finds the app\nout = afh.run("Add a /health endpoint with a test", directory=r"C:\\code\\api")\nprint(out["reply"])`;
   const js = `import { AFH } from "./afh.mjs";\nconst afh = await AFH.connect();\nconst out = await afh.run("Add a /health endpoint with a test", { directory: "C:/code/api" });\nconsole.log(out.reply);`;
   const curl = `curl -X POST ${location.origin}/api/v1/run \\\n  -H "Authorization: Bearer $AFH_API_KEY" -H "Content-Type: application/json" \\\n  -d '{"directory": "C:/code/api", "prompt": "Run the tests and fix what fails"}'`;
   const snip = (title, code) => el("div.snippet", el("div.snip-head", el("span", title), el("button.btn.ghost.sm", { on: { click: () => copyText(code).then(() => toast("Copied", "ok", 1200)) } }, ico("copy"))), el("pre", el("code", code)));
   pane.append(card("Quick start", "Set AFH_API_KEY to one of your keys. The SDKs are single files in the sdk/ folder of the AFH repository; the API guide on the AFH website covers every call.", null,
     snip("Python", py), snip("JavaScript (Node 18+)", js), snip("curl", curl)));
+}
+
+// ---- GitHub -------------------------------------------------------------------------------------
+
+export async function githubPane(pane) {
+  pane.append(...header("GitHub", "Write /afh and what to do on an issue or pull request. AFH does the work on this computer in its own worktree, then opens a draft pull request or pushes to the pull request. Merging stays with you."));
+  const body = el("div");
+  pane.append(body);
+  let info;
+  const save = async (patch) => {
+    try { info = await api.put("/api/github", patch); draw(); } catch (e) { toast(e.message, "err"); }
+  };
+  const draw = () => {
+    body.replaceChildren();
+    if (info.problem) body.append(el("div.error-card", ico("alert"), el("div", info.problem)));
+    const mode = el("select.sel", { style: { width: "260px" }, on: { change: (e) => save({ mode: e.target.value }) } },
+      el("option", { value: "ask", selected: info.mode !== "full" }, "Ask first (recommended)"),
+      el("option", { value: "full", selected: info.mode === "full" }, "Full access"));
+    const allowed = el("input.inp", { value: (info.allowed || []).join(", "), placeholder: (info.who || []).join(", ") || "your GitHub login", style: { width: "260px" } });
+    allowed.addEventListener("change", () => save({ allowed: allowed.value.split(/[,\s]+/).filter(Boolean) }));
+    body.append(card("Agent", "It uses your gh login, so nothing to paste, and it watches while AFH is open.", null,
+      row("Watch for /afh", "Checks your repositories about once a minute", toggle(!!info.enabled, (v) => save({ enabled: v }))),
+      row("Who can start work", "GitHub logins. Comments from anyone else are ignored. Empty means only you.", allowed),
+      row("Approvals", "With Ask first, edits and commands wait for you in AFH or on your phone. Full access runs without asking, so an issue's text could steer it. Use it only on repositories you trust.", mode)));
+
+    const list = el("div");
+    if (!(info.repos || []).length) list.append(el("div.empty-row", "No repositories yet."));
+    for (const r of info.repos || []) {
+      list.append(el("div.list-item", ico("github"), el("div.li-main", el("div.li-title", r.repo), el("div.li-sub", r.path)),
+        el("button.btn.ghost.sm.danger", { title: "Remove", on: { click: () => save({ repos: info.repos.filter((x) => x.repo !== r.repo) }) } }, ico("trash"))));
+    }
+    const name = el("input.inp", { placeholder: "owner/name", style: { width: "180px" } });
+    const folder = el("input.inp", { placeholder: "Local clone folder", style: { width: "240px" } });
+    const add = el("button.btn.primary.sm", { on: { click: () => save({ repos: [...(info.repos || []), { repo: name.value.trim(), path: folder.value.trim() }] }) } }, ico("plus"), "Add");
+    body.append(card("Repositories", "Each one needs a clone on this computer.", el("div.inline", name, folder, add), list));
+
+    const recent = el("div");
+    if (!(info.recent || []).length) recent.append(el("div.empty-row", info.active ? "Working on the first one." : "Nothing yet."));
+    for (const t of info.recent || []) {
+      recent.append(el("div.list-item", ico("github"), el("div.li-main", el("div.li-title", `${t.repo}#${t.number}`, el("span.pill-tag", t.status)),
+        el("div.li-sub", `${t.author} · ${ago(t.time)}${t.detail ? ` · ${t.detail}` : ""}`))));
+    }
+    body.append(card("Recent work", info.active ? `Working on ${info.active.repo}#${info.active.number}${info.queued ? `, ${info.queued} waiting` : ""}` : null, null, recent));
+  };
+  try { info = await api.get("/api/github"); draw(); } catch (e) { body.append(el("div.error-card", ico("alert"), el("div", e.message))); }
 }
 
 // ---- Report a bug --------------------------------------------------------------------------

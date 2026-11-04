@@ -24,7 +24,9 @@ from . import pricing
 from . import prompt as promptmod
 from . import state as statemod
 from . import worktree as wtmod
+from .github import GithubAgent
 from .install import HarnessTool
+from .race import Races
 from .design import DesignTool
 from .design import prompt_section as design_prompt
 from .questions import QuestionTool
@@ -122,6 +124,8 @@ class Engine:
         self.stashes: dict[str, dict] = {}  # staged undos per session
         self.jobs = JobManager(self.publish)  # background shell commands
         self.compact_failed: dict[str, float] = {}  # session -> time of the last failed automatic compaction
+        self.github = GithubAgent(self)  # /afh on issues and pull requests
+        self.races = Races(self)  # one task for several models, each in its own worktree
 
     # ---- lifecycle ---------------------------------------------------------------------
 
@@ -144,6 +148,7 @@ class Engine:
 
         self.scheduler = Scheduler(self._start_scheduled, lambda ev: self.publish(event(ev["type"], None, **ev["data"])))
         self.scheduler.start()
+        self.github.start()
 
     async def _start_scheduled(self, job: dict) -> str:
         """One run of a scheduled job: a new thread in the job's folder, with the job's prompt."""
@@ -228,6 +233,7 @@ class Engine:
     async def stop(self) -> None:
         if getattr(self, "scheduler", None):
             self.scheduler.stop()
+        self.github.stop()
         from .tools.browser import MANAGER as browser
 
         await browser.shutdown()

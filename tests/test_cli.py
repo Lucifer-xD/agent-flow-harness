@@ -18,12 +18,14 @@ ROOT = Path(__file__).resolve().parent.parent
 RUN = [sys.executable, str(ROOT / "run.py")]
 
 
-def script_for(messages: list[dict]) -> dict:
+def script_for(messages: list[dict], model: str = "") -> dict:
     """What the scripted model does next: the first keyword of the latest user message picks it."""
     if messages[-1].get("role") == "tool":
         return {"text": "All done."}
     last = next(m for m in reversed(messages) if m.get("role") == "user")
     text = last["content"] if isinstance(last["content"], str) else json.dumps(last["content"])
+    if "RACE" in text:
+        return {"tool": ("write", {"path": "answer.txt", "content": f"from {model}\n"})}
     if "WRITE" in text:
         return {"tool": ("write", {"path": "hello.txt", "content": "hi\n"})}
     if "SHELL" in text:
@@ -52,7 +54,7 @@ class Model(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        step = script_for(body["messages"])
+        step = script_for(body["messages"], body.get("model", ""))
         if step.get("status"):
             return self.reply(step["status"], "application/json", json.dumps({"error": {"message": "scripted failure"}}))
         if not body.get("stream"):
@@ -109,7 +111,8 @@ def home(model, tmp_path_factory):
     try:
         r = httpx.post(f"{url}/api/providers", headers={"x-afh-token": token}, timeout=30, trust_env=False, json={
             "id": "demo", "name": "Demo", "kind": "openai", "base_url": model, "api_key": "x",
-            "models": [{"id": "demo-model", "name": "Demo model", "context": 200000, "output": 16000}]})
+            "models": [{"id": "demo-model", "name": "Demo model", "context": 200000, "output": 16000},
+                       {"id": "demo-two", "name": "Demo two", "context": 200000, "output": 16000}]})
         assert r.status_code < 300, r.text
         httpx.put(f"{url}/api/settings", headers={"x-afh-token": token}, timeout=30, trust_env=False,
                   json={"defaultModel": {"providerID": "demo", "id": "demo-model"}})
@@ -188,6 +191,44 @@ def test_continue_uses_the_latest_thread(home, project):
     second = json.loads(afh(home, project, "run", "--json", "-c", "two").stdout.splitlines()[-1])
     assert first["sessionID"] == second["sessionID"]
     assert first["sessionID"] in afh(home, project, "threads").stdout
+
+
+def make_repo(folder: Path) -> None:
+    def git(*args):
+        subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@t", *args], cwd=folder, check=True, capture_output=True)
+
+    git("init", "-b", "main")
+    (folder / "a.txt").write_text("a\n")
+    git("add", "-A")
+    git("commit", "-m", "first")
+
+
+def test_race_scores_models_and_merges_only_the_pick(home, project):
+    (project / "check.py").write_text("import pathlib, sys\nsys.exit(0 if 'two' in pathlib.Path('answer.txt').read_text() else 1)\n")
+    make_repo(project)
+    r = afh(home, project, "race", "RACE it", "-m", "demo/demo-model", "-m", "demo/demo-two", "--check", f"{sys.executable} check.py", "--json")
+    assert r.returncode == 0, r.stderr
+    race = json.loads(r.stdout.splitlines()[-1])
+    assert race["status"] == "finished"
+    assert [(e["model"], e["passed"]) for e in race["entries"]] == [("demo/demo-two", True), ("demo/demo-model", False)], race["entries"]
+    assert not (project / "answer.txt").exists()  # nothing lands until you pick
+
+    assert "check passed" in afh(home, project, "race", "show", race["id"]).stdout
+    r = afh(home, project, "race", "pick", race["id"], "1")
+    assert r.returncode == 0, r.stderr
+    assert (project / "answer.txt").read_text() == "from demo-two\n"
+    assert afh(home, project, "race", "pick", race["id"], "1").returncode == 1  # already closed
+
+
+def test_github_settings_through_the_command(home, project):
+    r = afh(home, project, "github", "add", "me/project", "--path", str(project))
+    assert r.returncode == 0, r.stderr
+    assert "me/project" in r.stdout and "approvals: ask" in r.stdout
+    assert "No such folder" in afh(home, project, "github", "add", "me/other", "--path", str(project / "nope")).stderr
+    assert afh(home, project, "github", "add", "not a repo").returncode == 1
+    assert afh(home, project, "github", "mode", "bad").returncode == 1
+    assert "me/project" not in afh(home, project, "github", "remove", "me/project").stdout
+    afh(home, project, "github", "off")
 
 
 def test_private_backend_leaves_no_discovery_file(home, project):

@@ -104,6 +104,9 @@
 - **Helpers in parallel:** the built-in Helper and your own subagents run side by side, and you can watch any of them live.
 - **Mix models:** lead with your strongest model, hand tests to a fast one and styles to another, across providers.
 - **Git worktrees:** give a thread or a delegate its own branch and folder, then merge it back with one click.
+- **Model races:** give one task to several models at once, each in its own worktree. Your tests score them, and you merge the winner.
+- **GitHub agent:** write `/afh` and a task on an issue or pull request. AFH does the work on your computer and opens a draft pull request. Only people you allow can start it.
+- **The `afh` command:** chat in a terminal, or run one task from a script or CI with `afh run`. See the [command line guide](docs/cli.md).
 
 **Works beyond the code**
 - **A built-in browser:** a tabbed browser in the side panel with DevTools. Watch the agent click and type, or take over any time.

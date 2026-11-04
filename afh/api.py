@@ -1639,6 +1639,72 @@ def developer_info():
             "discovery": str(store.AFH_DIR / devapi.DISCOVERY_FILE)}
 
 
+@app.post("/api/cli/install")
+def cli_install():
+    """Put the afh command on this user's PATH."""
+    from . import cli
+
+    return cli.install_shim()
+
+
+@app.get("/api/races")
+def races_list():
+    return engine.races.read()
+
+
+@app.post("/api/races")
+async def race_start(body: dict = Body(...)):
+    directory = str(body.get("directory") or "")
+    if not Path(directory).is_dir():
+        raise ValueError("directory must be an existing folder")
+    from .engine import worktree as wtmod
+
+    try:
+        return await engine.races.start(directory, str(body.get("prompt") or ""), list(body.get("models") or []),
+                                        str(body.get("check") or ""), body.get("mode") or "full")
+    except wtmod.GitError as err:
+        raise ValueError(str(err)) from None
+
+
+@app.get("/api/races/{rid}")
+def race_get(rid: str):
+    return engine.races.get(rid)
+
+
+@app.post("/api/races/{rid}/pick")
+async def race_pick(rid: str, body: dict = Body(...)):
+    from .engine import worktree as wtmod
+
+    try:
+        return await engine.races.pick(rid, str(body.get("session") or ""))
+    except wtmod.GitError as err:
+        raise ValueError(str(err)) from None
+
+
+@app.post("/api/races/{rid}/discard")
+async def race_discard(rid: str):
+    return await engine.races.discard(rid)
+
+
+@app.get("/api/github")
+async def github_status():
+    return await engine.github.status()
+
+
+@app.put("/api/github")
+async def github_save(body: dict = Body(...)):
+    keep = {k: body[k] for k in ("enabled", "repos", "allowed", "mode", "model", "interval") if k in body}
+    for entry in keep.get("repos", []):
+        if not re.fullmatch(r"[\w.-]+/[\w.-]+", str(entry.get("repo"))):
+            raise ValueError("Write the repository as owner/name")
+        if not Path(str(entry.get("path"))).is_dir():
+            raise ValueError(f"No such folder: {entry.get('path')}")
+    if keep.get("mode", "ask") not in ("ask", "full"):
+        raise ValueError("mode is ask or full")
+    store.save_settings({"github": {**(store.load_settings().get("github") or {}), **keep}})
+    return await engine.github.status()
+
+
 @app.post("/api/developer/keys")
 def developer_create_key(body: dict = Body(default={})):
     rec, raw = devapi.create_key(str(body.get("name") or "API key"))
