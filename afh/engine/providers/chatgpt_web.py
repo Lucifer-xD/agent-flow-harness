@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from typing import Any, AsyncIterator
+from typing import AsyncIterator
 
 import httpx
 

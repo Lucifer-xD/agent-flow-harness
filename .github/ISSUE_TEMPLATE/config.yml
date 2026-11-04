@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security problem
+    url: https://github.com/Lucifer-xD/agent-flow-harness/security/advisories/new
+    about: Please report security problems privately.
+  - name: Docs
+    url: https://agentflowharness.com/docs
+    about: Getting started, and answers to common questions.

@@ -1,16 +1,24 @@
 # How AFH works
 
-```
-┌──────────────────────────────┐        HTTP + SSE         ┌─────────────────────────────────────────┐
-│  Electron window / browser   │ ◄───────────────────────► │  afh backend (FastAPI, one process)     │
-│  web/  (HTML, CSS, JS)       │   x-afh-token header      │  127.0.0.1:<random port>                │
-└──────────────────────────────┘                           │  + optional 0.0.0.0:<port> for remote   │
-         phone / other PC  ────── password login ────────► │                                         │
-                                                           │  AFH Engine (afh/engine/)               │
-                                                           │   runner ─ tools ─ permissions ─ MCP    │
-                                                           │   providers: OpenAI / Anthropic / Gemini│
-                                                           │   sessions.db (SQLite)                  │
-                                                           └─────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    UI["Electron window or browser<br/>web/ (HTML, CSS, JS)"]
+    SDK["Your scripts<br/>sdk/ and the REST API"]
+    subgraph Backend["afh backend: one FastAPI process on 127.0.0.1"]
+        API["afh/api.py<br/>HTTP + SSE"]
+        ENGINE["AFH Engine (afh/engine)<br/>runner, tools, permissions, MCP"]
+        DB[("~/.afh/afh.db<br/>SQLite")]
+        API --> ENGINE --> DB
+    end
+    Models["Model providers<br/>OpenAI, Anthropic, Gemini wire formats"]
+    Relay["AFH account server<br/>relay/"]
+    Phone["Phone app and website<br/>app/, website/"]
+
+    UI <-->|"x-afh-token"| API
+    SDK <-->|"API key"| API
+    ENGINE --> Models
+    Backend -->|"outgoing connection"| Relay
+    Phone <--> Relay
 ```
 
 ## Processes
@@ -52,6 +60,28 @@ Delegates are agents defined in Settings → Delegation. The leader (`delegate` 
 ## Session transfer and migration
 
 `afh/transfer.py` exports `{format: "afh-session", info, messages}` and imports AFH files, raw OpenCode exports, and Zadloop/DeepSeek Harness logs (`~/.dsh/sessions/**/session.v4.jsonl.zstd`, converted to AFH messages with tool calls paired to their results). `afh/engine/migrate.py` reads an OpenCode install read-only (its SQLite database and `opencode.json`) and copies API keys, custom endpoints, MCP servers and threads into AFH.
+
+## The Workbench and the browser
+
+The Workbench is the panel on the right of a thread: Live, Changes, Browser, Context, Prompt and Agents as tabs (`web/js/main.js`, `web/js/livefile.js`, `web/js/browser.js`). Live follows the streamed arguments of `write` and `edit` calls and the output of running commands.
+
+The `browser` tool (`afh/engine/tools/browser.py`) drives a real browser over the DevTools protocol. In the desktop app the page runs in the built-in side panel, where the user can watch or take over, and each thread has its own tab. Outside the app it uses Chrome or Edge with its own profile. Screenshots go back to models that accept images.
+
+## Computer use
+
+The `computer` tool (`afh/engine/tools/computer.py`) is for work with no file, command or web route. It's only offered on Windows. It asks before it uses an app, once for everything a task needs, and a thin frame around the screen shows while it's working.
+
+## Design first
+
+Before building a new app, site or set of screens, the agent can show 2 to 4 design options as live screens in device frames (`afh/engine/design.py`, `web/js/design.js`). The user picks one and the agent builds from it.
+
+## Red Team mode
+
+`redteam` is a primary agent with the same no-edit permissions as Plan and its own rules (`store.REDTEAM_RULES`). It audits the user's own project and reports what it finds. It stays in scope and never changes the code.
+
+## Accounts and the relay
+
+The optional AFH account lives in `relay/app.py`. `afh/cloud.py` keeps one outgoing connection from the computer to the relay, so nothing has to be opened on a router. The phone app and the website reach a computer through `/r/<computer>/…`. The server passes those requests on and stores no threads, files or keys.
 
 ## Remote control
 

@@ -7,11 +7,6 @@ if not exist ".venv\Scripts\pythonw.exe" (
   ".venv\Scripts\python.exe" -m pip install --upgrade pip >nul
   ".venv\Scripts\python.exe" -m pip install -r requirements.txt || goto :fail
 )
-where opencode >nul 2>nul || (
-  echo OpenCode CLI not found. Install it with:  npm install -g @opencode/cli
-  pause
-  exit /b 1
-)
 start "" ".venv\Scripts\pythonw.exe" run.py %*
 exit /b 0
 

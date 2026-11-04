@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import fnmatch
-from typing import Any, Callable
+from typing import Callable
 
 from .types import PermissionDenied, event, new_id
 

@@ -1,6 +1,6 @@
 # AFH for your phone
 
-The AFH app for Android and iPhone, built with Flutter. Two halves:
+The AFH app for Android and iPhone, built with Flutter. Two halves, plus tools for the assistant:
 
 - **Chats** — talk to model providers straight from the phone with the user's own API keys
   (`lib/ai.dart`: OpenAI-compatible, Anthropic and Gemini streaming). Keys live in the system

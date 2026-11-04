@@ -21,9 +21,8 @@ from .engine import agents as agentmod
 from .engine import memory as memmod
 from .engine import config as provcfg
 from .engine import migrate
-from .engine import permissions as perm
 from .engine.core import engine
-from .engine.providers.catalog import STATIC_MODELS, config_from_catalog, entries as catalog_entries, make_provider
+from .engine.providers.catalog import STATIC_MODELS, entries as catalog_entries
 from .engine.types import ChatMessage, ChatRequest
 
 log = logging.getLogger("afh.api")

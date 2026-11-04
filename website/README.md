@@ -3,10 +3,10 @@
 https://agentflowharness.com — plain HTML/CSS/JS, no build step. Three.js draws the 3D world behind
 every page; GSAP (and on the home page ScrollTrigger and Lenis) drive the motion. All from CDNs.
 
-Design: "Luminous Light" (Nov 2026) — a warm ivory page, white cards with soft warm shadows, the
-amber→magenta gradient for accents, Plus Jakarta Sans for display type. The 3D is the mark as glossy
-ceramic that throws real shadows onto the page (`js/scene.js`; shadows are off on phones and the
-docs pages). Tokens live in `styles.css`; `js/layout.js` adds the `.wash` backdrop behind the canvas.
+Design: "Luminous Light": a warm ivory page in light mode, a dark mode, white cards with soft warm
+shadows, the amber to magenta gradient for accents, and Plus Jakarta Sans for display type. The 3D is
+"the harness line", a single glossy line that runs through the page (`js/scene.js`). Tokens live in
+`styles.css`, and `js/layout.js` adds the `.wash` backdrop behind the canvas.
 
 ## Pages
 

@@ -854,7 +854,7 @@ class BrowserTool(BaseTool):
         data, w, h = await page.screenshot()
         uri = "data:image/jpeg;base64," + data
         errors = [line for line in page.console if line.startswith(("[error]", "[exception]"))]
-        note = f"\n\nConsole errors on this page:\n" + "\n".join(errors[-10:]) if errors else ""
+        note = "\n\nConsole errors on this page:\n" + "\n".join(errors[-10:]) if errors else ""
         size = len(base64.b64decode(data)) // 1024
         return ToolResult(text=f"{summary}. Screenshot attached ({w}×{h}, {size} KB; x,y on it are page coordinates).{note}",
                           images=[uri], metadata={"screenshot": True})
