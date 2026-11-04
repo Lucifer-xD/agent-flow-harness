@@ -44,7 +44,7 @@ CHATGPT_BASE = "https://chatgpt.com/backend-api/codex"
 # ---- ChatGPT (normal chat lane) ----
 # The ChatGPT web backend, reached with a browser session cookie instead of the Codex OAuth.
 # Gives the normal chat models (unmetered lane) and the work-mode models; the credentials are
-# imported from the user's own logged-in browser (see engine/chrome_import.py). Refreshing the
+# pasted in from the user's own logged-in browser (see engine/chatgpt_session.py). Refreshing the
 # ~10-day access token is a GET /api/auth/session with the long-lived session cookie.
 CHATGPT_WEB_BASE = "https://chatgpt.com"
 CHATGPT_SESSION_COOKIE = "__Secure-next-auth.session-token"
@@ -279,7 +279,7 @@ async def _chatgpt(login: Login) -> None:
 
 
 async def import_chatgpt_web(creds: dict) -> dict:
-    """Validate a ChatGPT web session (from Chrome or a paste) and save it as the chatgpt-chat
+    """Validate a ChatGPT web session (pasted in) and save it as the chatgpt-chat
     provider. ``creds`` has a ``session_token`` (preferred, refreshable) and/or an ``access`` token,
     plus optional ``device_id``/``ua``. Returns {account, plan}."""
     from .providers.pow import DEFAULT_UA
@@ -393,11 +393,11 @@ async def _refresh(config: ProviderConfig) -> dict:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(f"{base}/api/auth/session", headers=headers)
         if resp.status_code != 200:
-            raise RuntimeError("ChatGPT session expired. Import your ChatGPT login from Chrome again in Settings → Models.")
+            raise RuntimeError("ChatGPT session expired. Connect ChatGPT (chat) again in Settings → Models.")
         data = resp.json() if resp.content else {}
         access = data.get("accessToken") or ""
         if len(access) < 20:
-            raise RuntimeError("ChatGPT session expired. Import your ChatGPT login from Chrome again in Settings → Models.")
+            raise RuntimeError("ChatGPT session expired. Connect ChatGPT (chat) again in Settings → Models.")
         account = data.get("account") or {}
         account_id = account.get("id") if account.get("structure") == "workspace" and account.get("id") else auth.get("account_id", "")
         return auth | {"access": access, "expires": _chatgpt_web_expiry(data.get("expires")),

@@ -10,7 +10,8 @@
 
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
-$hostname = "user@your-server"
+$serverFile = Join-Path $root "deploy\server.local"
+$hostname = if ($env:AFH_SERVER) { $env:AFH_SERVER } elseif (Test-Path $serverFile) { (Get-Content $serverFile -Raw).Trim() } else { throw "Set AFH_SERVER, or put user@host in deploy\server.local" }
 $ssh = @("-o", "BatchMode=yes", "-o", "ConnectTimeout=15")
 
 $tmp = Join-Path $env:TEMP "afh-relay.tgz"

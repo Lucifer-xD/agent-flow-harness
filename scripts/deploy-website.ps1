@@ -11,13 +11,14 @@
 # and installs deploy/afh-website.nginx as its own nginx site — reloaded only if `nginx -t` passes.
 # The first deploy to a new domain also gets its Let's Encrypt certificate (the domain's A record
 # must already point at the VPS); if that fails, the running nginx config is left as it was.
-# Uses this computer's SSH key for user@your-server.
+# Uses this computer's SSH key for the server in AFH_SERVER or deploy\server.local (user@host).
 
 param([switch]$PagesOnly)
 
 $ErrorActionPreference = "Continue"  # ssh/tar write progress to stderr; exit codes are checked instead
 $root = Split-Path -Parent $PSScriptRoot
-$hostname = "user@your-server"
+$serverFile = Join-Path $root "deploy\server.local"
+$hostname = if ($env:AFH_SERVER) { $env:AFH_SERVER } elseif (Test-Path $serverFile) { (Get-Content $serverFile -Raw).Trim() } else { throw "Set AFH_SERVER, or put user@host in deploy\server.local" }
 $ssh = @("-o", "BatchMode=yes", "-o", "ConnectTimeout=15")
 $site = "/var/www/afh"
 $domain = "agentflowharness.com"
