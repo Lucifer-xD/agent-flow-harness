@@ -46,6 +46,12 @@ jobs:
       - run: PYTHON=python bash scripts/build-backend.sh
       - name: Backend starts
         run: bash scripts/smoke-mac.sh desktop/backend-dist/afh-backend/afh-backend --headless
+      - name: The afh command works from the build
+        env:
+          AFH_HOME: ${{ runner.temp }}/afh-cli
+        run: |
+          desktop/backend-dist/afh-backend/afh-backend cli --version
+          desktop/backend-dist/afh-backend/afh-backend cli status
       - name: Build the app
         working-directory: desktop
         run: |

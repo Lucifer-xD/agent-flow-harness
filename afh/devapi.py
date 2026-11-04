@@ -5,7 +5,8 @@ and other tools use API keys instead: created in Settings → Developer, shown o
 only as SHA-256 hashes. Keys work on this machine only (never through Remote access).
 
 While AFH runs, ``~/.afh/api.json`` says where the API is ({url, version, pid}); the SDKs read it,
-so a script needs no port number.
+so a script needs no port number. It also holds a key that lasts until AFH quits, for the ``afh``
+command: only this user can read the file, the same as the provider keys next to it.
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from . import store
 KEYS_FILE = "api-keys.json"
 DISCOVERY_FILE = "api.json"
 PREFIX = "afh_"
+LOCAL_KEY = PREFIX + secrets.token_urlsafe(32)  # lives as long as this process, for the afh command
 _lock = threading.Lock()
 _last_used_saved: dict[str, float] = {}
 
@@ -81,6 +83,8 @@ def check(token: str | None) -> bool:
     """True when `token` is one of the API keys (constant-time compare)."""
     if not token or not token.startswith(PREFIX):
         return False
+    if hmac.compare_digest(token, LOCAL_KEY):
+        return True
     h = _hash(token)
     for k in list_keys():
         if hmac.compare_digest(h, str(k.get("hash", ""))):
@@ -109,8 +113,11 @@ def write_discovery(port: int, version: str) -> None:
     p = _path(DISCOVERY_FILE)
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"url": f"http://127.0.0.1:{port}", "version": version, "pid": os.getpid(),
-                                 "started": int(time.time() * 1000)}, indent=2), encoding="utf-8")
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"url": f"http://127.0.0.1:{port}", "version": version, "pid": os.getpid(), "key": LOCAL_KEY,
+                       "started": int(time.time() * 1000)}, f, indent=2)
+        os.chmod(p, 0o600)  # a file left by an older version keeps its old mode otherwise
     except OSError:
         pass
 

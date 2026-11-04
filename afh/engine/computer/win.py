@@ -14,10 +14,25 @@ import subprocess
 import time
 from dataclasses import dataclass
 
-user32 = ctypes.WinDLL("user32", use_last_error=True)
-kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-dwmapi = ctypes.WinDLL("dwmapi")
-version = ctypes.WinDLL("version")
+
+
+class NoLibrary:
+    """Stands in for a Windows DLL elsewhere, so this module still imports. is_supported() keeps its code from running."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def __getattr__(self, name: str) -> "NoLibrary":
+        return NoLibrary()
+
+
+WinDLL = getattr(ctypes, "WinDLL", NoLibrary)
+WINFUNCTYPE = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
+
+user32 = WinDLL("user32", use_last_error=True)
+kernel32 = WinDLL("kernel32", use_last_error=True)
+dwmapi = WinDLL("dwmapi")
+version = WinDLL("version")
 
 LRESULT = ctypes.c_ssize_t
 ULONG_PTR = ctypes.c_size_t
@@ -35,7 +50,7 @@ def init_dpi() -> None:
         user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
     except Exception:
         try:
-            ctypes.WinDLL("shcore").SetProcessDpiAwareness(2)
+            WinDLL("shcore").SetProcessDpiAwareness(2)
         except Exception:
             pass
 
@@ -65,7 +80,7 @@ class Display:
         return {"index": self.index, "left": self.left, "top": self.top, "width": self.width, "height": self.height, "primary": self.primary, "name": self.name}
 
 
-MonitorEnumProc = ctypes.WINFUNCTYPE(W.BOOL, W.HMONITOR, W.HDC, ctypes.POINTER(W.RECT), W.LPARAM)
+MonitorEnumProc = WINFUNCTYPE(W.BOOL, W.HMONITOR, W.HDC, ctypes.POINTER(W.RECT), W.LPARAM)
 user32.EnumDisplayMonitors.argtypes = [W.HDC, ctypes.c_void_p, MonitorEnumProc, W.LPARAM]
 user32.GetMonitorInfoW.argtypes = [W.HMONITOR, ctypes.POINTER(MONITORINFOEXW)]
 
@@ -350,7 +365,7 @@ def paste_text(text: str) -> bool:
 
 # ---- windows and processes ------------------------------------------------------------------
 
-EnumWindowsProc = ctypes.WINFUNCTYPE(W.BOOL, W.HWND, W.LPARAM)
+EnumWindowsProc = WINFUNCTYPE(W.BOOL, W.HWND, W.LPARAM)
 user32.EnumWindows.argtypes = [EnumWindowsProc, W.LPARAM]
 user32.EnumChildWindows.argtypes = [W.HWND, EnumWindowsProc, W.LPARAM]
 user32.GetWindowThreadProcessId.argtypes = [W.HWND, ctypes.POINTER(W.DWORD)]
@@ -756,7 +771,7 @@ class BITMAPINFOHEADER(ctypes.Structure):
                 ("biClrUsed", W.DWORD), ("biClrImportant", W.DWORD)]
 
 
-gdi32 = ctypes.WinDLL("gdi32")
+gdi32 = WinDLL("gdi32")
 gdi32.CreateCompatibleDC.argtypes = [W.HDC]
 gdi32.CreateCompatibleDC.restype = W.HDC
 gdi32.CreateDIBSection.argtypes = [W.HDC, ctypes.c_void_p, W.UINT, ctypes.POINTER(ctypes.c_void_p), W.HANDLE, W.DWORD]
