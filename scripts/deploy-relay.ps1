@@ -6,6 +6,7 @@
 # under systemd (deploy/afh-relay.service, 127.0.0.1:8840) and checks it answers. The accounts
 # database lives in /var/lib/afh-relay and is never touched by a deploy. nginx routes to it from
 # the agentflowharness.com site (deploy/afh-website.nginx, installed by deploy-website.ps1).
+# Who may open /admin is set on the server, in /etc/afh-relay.env, and a deploy leaves it alone.
 
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
@@ -34,6 +35,11 @@ if [ ! -x /opt/afh-relay/venv/bin/uvicorn ]; then sudo python3 -m venv /opt/afh-
 sudo /opt/afh-relay/venv/bin/pip install --quiet --disable-pip-version-check -r /opt/afh-relay/requirements.txt
 sudo chown -R root:root /opt/afh-relay
 sudo find /opt/afh-relay -path /opt/afh-relay/venv -prune -o -type f -exec chmod 644 {} +
+if [ ! -f /etc/afh-relay.env ]; then
+  sudo sed -n 's/^Environment=AFH_ADMINS=/AFH_ADMINS=/p' /etc/systemd/system/afh-relay.service 2>/dev/null | sudo tee /etc/afh-relay.env >/dev/null
+  sudo chmod 600 /etc/afh-relay.env
+fi
+sudo test -s /etc/afh-relay.env || echo 'warning: /etc/afh-relay.env is empty, so nobody can open /admin'
 sudo install -m 644 /tmp/afh-relay.service /etc/systemd/system/afh-relay.service
 rm -f /tmp/afh-relay.service
 sudo systemctl daemon-reload

@@ -9,8 +9,9 @@ User=afh-relay
 Group=afh-relay
 WorkingDirectory=/opt/afh-relay
 Environment=AFH_RELAY_DB=/var/lib/afh-relay/relay.db
-# the account that may open /admin, and read access to the website's nginx log it counts from
-Environment=AFH_ADMINS=owner@example.com
+# the accounts that may open /admin: AFH_ADMINS=a@example.com,b@example.com in a file kept on the
+# server only, and read access to the website's nginx log it counts from
+EnvironmentFile=-/etc/afh-relay.env
 SupplementaryGroups=adm
 ExecStart=/opt/afh-relay/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8840 --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log
 Restart=always

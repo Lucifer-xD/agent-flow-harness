@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 from itertools import islice
 from pathlib import Path
 
@@ -12,7 +13,7 @@ import zstandard
 
 from afh import transfer as t
 
-SCRATCH = Path(r"C:\Users\you\AppData\Local\Temp\afh-transfer-test\pytest")
+SCRATCH = Path(tempfile.gettempdir()) / "afh-transfer-test" / "pytest"
 REAL_DSH = Path.home() / ".dsh" / "sessions"
 
 

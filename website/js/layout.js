@@ -91,7 +91,7 @@
       </div>
       <div class="footer-bottom">
         <p>© 2026 Agent Flow Harness</p>
-        <p>Runs on your PC · no account needed · no telemetry</p>
+        <p>Runs on your PC · no account needed · no tracking scripts</p>
       </div>`;
   }
 
