@@ -55,7 +55,7 @@
 - **You see everything.** Code streams into the Live pane character by character. Every thought, tool call, command and diff is in the thread, and the Context view shows exactly what the model sees.
 - **Any model, mixed freely.** 228 providers, local models, or sign in with the ChatGPT, GitHub Copilot or OpenRouter plan you already pay for. Lead with a strong model and hand work to fast, cheap ones.
 - **You stay in control.** Ask first, Full access or Read only. Stop is instant. Undo rewinds the thread *and the files on disk*.
-- **It's yours.** Everything runs and is stored on your PC. No account needed, no telemetry. The engine is written from scratch in this repo, in plain Python.
+- **It's yours.** Everything runs and is stored on your PC. No account needed, and the app sends no telemetry. The engine is written from scratch in this repo, in plain Python.
 
 ## Get it
 
@@ -205,6 +205,7 @@ The JavaScript SDK is `sdk/js/afh.mjs`. Full reference: [agentflowharness.com/ap
 - API keys are stored only on your computer (or in your phone's secure storage).
 - Your code goes only to the model providers you choose.
 - The only other calls: the update check, the model catalog refresh, and web search or voice if you turn them on.
+- The website's server log counts downloads, visits and apps in use (from update checks and phone sign-ins) as daily totals. Your code and chats are never part of that.
 
 ## For developers
 
