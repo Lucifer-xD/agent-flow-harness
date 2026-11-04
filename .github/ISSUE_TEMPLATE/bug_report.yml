@@ -1,0 +1,55 @@
+name: Bug report
+description: Something in AFH doesn't work as it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please don't paste API keys, tokens or passwords. For a security problem, use the private report in the Security tab instead.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it happen?
+      options:
+        - Desktop app
+        - Phone app (Android)
+        - Phone app (iPhone)
+        - AFH Chat on the web
+        - Website
+        - API or SDK
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings → About shows it.
+      placeholder: "1.19.4"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings
+        2. Click ...
+        3. See ...
+  - type: input
+    id: model
+    attributes:
+      label: Provider and model
+      description: If it's about a model or a run.
+      placeholder: "OpenRouter, gpt-5"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or bug report zip
+      description: Settings → Report a bug makes a zip with every key, token and password removed. You can attach it here.

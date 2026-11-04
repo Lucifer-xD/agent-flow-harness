@@ -5,7 +5,6 @@ from __future__ import annotations
 import copy
 import json
 import threading
-from typing import Any
 
 from .. import store
 from .types import ModelInfo, ProviderConfig

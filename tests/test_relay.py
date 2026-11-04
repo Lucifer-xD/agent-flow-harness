@@ -3,7 +3,6 @@
 import base64
 import importlib.util
 import json
-import os
 import sys
 import threading
 from pathlib import Path

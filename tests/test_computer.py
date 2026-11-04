@@ -279,7 +279,7 @@ def test_long_text_is_pasted_and_short_text_typed(monkeypatch):
     import asyncio
 
     from afh.engine.computer import win
-    from afh.engine.computer.control import Controller, Shot
+    from afh.engine.computer.control import Controller
     from afh.engine.tools import computer as comp
 
     calls = []

@@ -3,7 +3,7 @@
 The Electron app is a thin shell around the Python backend in the repo root. It starts
 the backend, waits for its `AFH is running at http://127.0.0.1:<port>/#token=<token>` line,
 opens that URL in a `BrowserWindow`, and exposes native dialogs to the page as `window.afh`
-(see `preload.js`). On quit it kills the whole backend process tree (python + `opencode serve`).
+(see `preload.js`). On quit it kills the whole backend process tree.
 
 ```
 desktop/
@@ -24,7 +24,6 @@ scripts/
 - Node 20+ (tested with 24) and npm
 - The repo's Python venv at `.venv` with `requirements.txt` installed (run `AFH.bat` once,
   or `python -m venv .venv` + `.venv\Scripts\python -m pip install -r requirements.txt`)
-- The `opencode` CLI on `PATH` (`npm install -g @opencode/cli`); the backend spawns `opencode serve`
 
 ## Run in development
 
@@ -114,4 +113,4 @@ window.afh.onEvent(cb): () => void                    // e.g. { type: "maximized
   existing window.
 - **Leftover processes** - quitting runs `taskkill /PID <backend> /T /F` on Windows (SIGINT then
   SIGTERM to the process group elsewhere). Check with
-  `Get-CimInstance Win32_Process | ? { $_.CommandLine -match 'run.py|afh-backend|opencode' }`.
+  `Get-CimInstance Win32_Process | ? { $_.CommandLine -match 'run.py|afh-backend' }`.
