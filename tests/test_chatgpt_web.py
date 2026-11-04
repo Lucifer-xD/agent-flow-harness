@@ -238,9 +238,13 @@ def test_stream_nudges_when_model_announces_without_block():
     assert evs[-1]["reason"] == "tool_calls"
 
 
-# ---- paste parsing ----
+# ---- chrome import: paste parsing + cookie decryption ----
 
-from afh.engine import chatgpt_session as ci
+import os
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from afh.engine import chrome_import as ci
 
 
 def test_parse_paste_bare_token():
@@ -263,3 +267,18 @@ def test_parse_paste_rejects_junk():
     for bad in ("", "hello world", "{not json"):
         with pytest.raises(ci.ImportError_):
             ci.parse_paste(bad)
+
+
+def test_decrypt_v10_roundtrip():
+    key = os.urandom(32)
+    nonce = os.urandom(12)
+    secret = "session-value-é\U0001f600"
+    enc = b"v10" + nonce + AESGCM(key).encrypt(nonce, secret.encode(), None)
+    assert ci._decrypt(enc, key) == secret
+
+
+def test_decrypt_v20_is_rejected_cleanly():
+    import pytest
+    with pytest.raises(ci.ImportError_) as e:
+        ci._decrypt(b"v20" + os.urandom(40), os.urandom(32))
+    assert e.value.reason == "app_bound"

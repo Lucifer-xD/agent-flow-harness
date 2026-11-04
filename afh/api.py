@@ -1197,15 +1197,17 @@ def auth_login_cancel(lid: str):
 
 @app.post("/api/chatgpt-web/connect")
 async def chatgpt_web_connect(body: dict = Body(...)):
-    """Connect the ChatGPT normal-chat lane from {text}, a pasted session token or export. Returns
-    {ok, account, plan} or {ok:false, reason, error}."""
+    """Connect the ChatGPT normal-chat lane. mode "chrome" imports the session from the browser's
+    cookie store; mode "paste" takes {text} (a session token or export). Returns {ok, account, plan,
+    source} or {ok:false, reason, error} so the UI can offer paste when auto-import can't work."""
     from .engine import auth as provider_auth
-    from .engine import chatgpt_session
+    from .engine import chrome_import
 
+    mode = str(body.get("mode") or "chrome")
     try:
-        creds = chatgpt_session.parse_paste(str(body.get("text") or ""))
+        creds = chrome_import.parse_paste(str(body.get("text") or "")) if mode == "paste" else chrome_import.read_browser_session(body.get("browser"))
         info = await provider_auth.import_chatgpt_web(creds)
-    except chatgpt_session.ImportError_ as exc:
+    except chrome_import.ImportError_ as exc:
         return {"ok": False, "reason": exc.reason, "error": str(exc)}
     except Exception as exc:
         return {"ok": False, "reason": "failed", "error": str(exc)}
@@ -1215,7 +1217,7 @@ async def chatgpt_web_connect(body: dict = Body(...)):
     except Exception as err:
         log.info("refresh after chatgpt-web connect: %s", err)
     engine.publish({"type": "model.updated", "data": {}})
-    return {"ok": True, **info}
+    return {"ok": True, **info, "source": creds.get("source", "")}
 
 
 @app.post("/api/providers/{pid}/logout")

@@ -11,12 +11,17 @@ const SIGN_INS = [
   { method: "chatgpt", provider: "chatgpt", name: "ChatGPT (Codex)", sub: "Use your Plus, Pro or Team plan — no API key", icon: "sparkle" },
   { method: "chatgpt-web", provider: "chatgpt-chat", name: "ChatGPT (chat)", sub: "The real GPT-6 family (Astra, Sol, Terra…) from your browser login — uses your ChatGPT plan, not your Codex credits", icon: "sparkle", custom: true },
   { method: "copilot", provider: "github-copilot", name: "GitHub Copilot", sub: "Claude, GPT and Gemini through your Copilot plan", icon: "github" },
+  { method: "antigravity", provider: "antigravity", name: "Google Antigravity", sub: "Gemini and Claude on your Google account's Antigravity quota", icon: "globe",
+    warning: "Google has suspended Antigravity access for some accounts that signed in through apps other than Antigravity itself (OpenCode, OpenClaw). "
+      + "AFH signs in the same way, so your Google account's Antigravity access could be suspended. Your other Google services were not reported affected. "
+      + "Use an account you can afford to lose Antigravity on." },
   { method: "openrouter", provider: "openrouter", name: "OpenRouter", sub: "Hundreds of models on one account; creates a key for you", icon: "globe" },
 ];
 
 /** Sign-in dialog: opens the provider's page (or shows GitHub's device code) and waits for it. */
 export async function signIn(method, { onDone } = {}) {
   const meta = SIGN_INS.find((x) => x.method === method) || { name: method };
+  if (meta.warning && !(await confirmDialog({ title: `Sign in to ${meta.name}?`, body: meta.warning, confirm: "I understand, sign in", danger: true }))) return;
   const status = el("div.signin-status", el("span.spinner"), " Starting…");
   const bodyBox = el("div.signin-body");
   let login = null;
@@ -59,39 +64,46 @@ export async function signIn(method, { onDone } = {}) {
   if (login.status !== "pending") poll(); else timer = setTimeout(poll, 1500);
 }
 
-/** Connect the ChatGPT normal-chat lane: the user pastes their session from the browser. */
+/** Connect the ChatGPT normal-chat lane: try the browser's saved login, fall back to pasting the token. */
 export async function connectChatGPTWeb(onDone) {
   const status = el("div.signin-status");
   const paste = el("textarea.q-other", { rows: 4, placeholder: "Paste your __Secure-next-auth.session-token (or a session export JSON)" });
+  const pasteBox = el("div", { hidden: true, style: { marginTop: "12px" } },
+    el("p.lead", "AFH couldn't read your browser login automatically. In your browser, open ",
+      el("a", { href: "#", on: { click: (e) => { e.preventDefault(); native.openExternal("https://chatgpt.com"); } } }, "chatgpt.com"),
+      ", then DevTools → Application → Cookies → chatgpt.com, and copy the value of __Secure-next-auth.session-token."),
+    paste,
+    el("div.actions", { style: { marginTop: "10px" } }, el("span", { style: { flex: 1 } }),
+      el("button.btn.primary", { on: { click: () => submit("paste") } }, ico("check"), "Connect")));
+  const retry = el("button.btn", { hidden: true, on: { click: () => submit("chrome") } }, ico("refresh"), "Try the browser again");
   const dlg = modal(el("div.m-body.signin", { style: { padding: "24px" } },
     el("h2", "Connect ChatGPT (chat)"),
     el("p.lead", "Uses your existing ChatGPT login from your browser for the normal chat models. These don't use your Codex/work credits."),
-    el("p.lead", "In your browser, open ",
-      el("a", { href: "#", on: { click: (e) => { e.preventDefault(); native.openExternal("https://chatgpt.com"); } } }, "chatgpt.com"),
-      ", then DevTools → Application → Cookies → chatgpt.com, and copy the value of __Secure-next-auth.session-token."),
-    paste, status,
-    el("div.actions", { style: { marginTop: "10px" } }, el("span", { style: { flex: 1 } }),
-      el("button.btn.ghost", { on: { click: () => dlg.close() } }, "Cancel"),
-      el("button.btn.primary", { on: { click: submit } }, ico("check"), "Connect"))),
+    status, pasteBox,
+    el("div.actions", el("span", { style: { flex: 1 } }), retry, el("button.btn.ghost", { on: { click: () => dlg.close() } }, "Cancel"))),
     { small: true });
 
-  async function submit() {
-    status.replaceChildren(el("span.spinner"), " Connecting…");
+  async function submit(mode) {
+    retry.hidden = true;
+    status.replaceChildren(el("span.spinner"), mode === "chrome" ? " Reading your browser login…" : " Connecting…");
     let r;
     try {
-      r = await api.post("/api/chatgpt-web/connect", { text: paste.value });
+      r = await api.post("/api/chatgpt-web/connect", mode === "paste" ? { mode, text: paste.value } : { mode });
     } catch (e) {
       status.replaceChildren(el("span.err-text", e.message));
       return;
     }
     if (r.ok) {
       dlg.close();
-      toast(`Connected ChatGPT chat${r.account ? ` · ${r.account}` : ""}`, "ok");
+      toast(`Connected ChatGPT chat${r.account ? ` · ${r.account}` : ""}${r.source ? ` (from ${r.source})` : ""}`, "ok");
       onDone?.({ providerID: "chatgpt-chat" });
       return;
     }
     status.replaceChildren(el("span.err-text", r.error || "Couldn't connect"));
+    pasteBox.hidden = false;         // offer the reliable path
+    if (r.reason === "locked") retry.hidden = false;  // closing the browser may fix it
   }
+  submit("chrome");
 }
 
 async function guard(fn, okMsg) {
@@ -286,7 +298,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
   const search = el("input.inp", { placeholder: `Search ${available.length} providers — OpenAI, Anthropic, Gemini, Azure, Bedrock, Mistral, Kimi, DeepSeek, OpenRouter…` });
   const results = el("div", { style: { maxHeight: "360px", overflowY: "auto", marginTop: "8px" } });
   const formBox = el("div");
-  const featured = ["openai", "anthropic", "gemini", "chatgpt", "github-copilot", "openrouter", "kimi", "zai-coding", "deepseek", "xai", "mistral", "groq", "azure", "amazon-bedrock", "ollama", "lmstudio"];
+  const featured = ["openai", "anthropic", "gemini", "chatgpt", "github-copilot", "antigravity", "openrouter", "kimi", "zai-coding", "deepseek", "xai", "mistral", "groq", "azure", "amazon-bedrock", "ollama", "lmstudio"];
   const subFor = (c) => {
     if (c.login && !c.needsKey) return "sign in with your account";
     if (!c.needsKey) return "local server · no key needed";

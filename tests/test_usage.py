@@ -1,4 +1,4 @@
-"""Usage meter (engine/usage.py), all offline."""
+"""Usage meter (engine/usage.py) and the Antigravity sign-in adapter, all offline."""
 
 from __future__ import annotations
 
@@ -9,7 +9,13 @@ import time
 import httpx
 
 from afh.engine import auth, usage
-from afh.engine.types import ProviderConfig
+from afh.engine.providers import catalog
+from afh.engine.providers.antigravity import AntigravityProvider
+from afh.engine.types import ChatMessage, ChatRequest, ProviderConfig, ToolCall, ToolSpec
+
+
+def _sse(events):
+    return "".join(f"data: {json.dumps(e)}\n\n" for e in events).encode()
 
 
 def _client(handler):
@@ -21,6 +27,12 @@ def _run(coro_fn, handler, cfg):
         async with _client(handler) as c:
             return await coro_fn(cfg, c)
     return asyncio.run(go())
+
+
+def _ag_config(**auth_extra):
+    return ProviderConfig(id="antigravity", name="Google Antigravity", kind="antigravity", base_url="https://cc.example.com",
+                          auth={"type": "antigravity", "access": "tok", "refresh": "r", "expires": time.time() + 3600,
+                                "account": "me@example.com", "project": "proj-1", **auth_extra})
 
 
 # ---- parsing ----------------------------------------------------------------------------------------
@@ -153,10 +165,27 @@ def test_openrouter_spend_limit_and_balance():
 
 
 def test_live_source_picks_by_sign_in_then_host():
+    assert usage.live_source(_ag_config()) is usage._antigravity
     plain = ProviderConfig(id="x", name="x", kind="openai", base_url="https://api.example.com/v1", api_key="k")
     assert usage.live_source(plain) is None
     assert usage.live_source(ProviderConfig(id="ds", name="ds", kind="openai", base_url="https://api.deepseek.com", api_key="k")) is usage._deepseek
     assert usage.live_source(ProviderConfig(id="no-key", name="n", kind="openai", base_url="https://openrouter.ai/api/v1")) is None
+
+
+def test_antigravity_quota_groups_by_family(monkeypatch):
+    async def available(self):
+        return {"models": {
+            "claude-sonnet-4-6": {"quotaInfo": {"remainingFraction": 0.8, "resetTime": "2030-01-01T00:00:00Z"}},
+            "claude-opus-4-6-thinking": {"quotaInfo": {"remainingFraction": 0.4, "resetTime": "2030-01-02T00:00:00Z"}},
+            "gemini-3-flash": {"quotaInfo": {"remainingFraction": 1}},
+            "gemini-3.1-pro-high": {"quotaInfo": {}},  # no fraction left = exhausted
+            "gemini-3-pro-image": {"quotaInfo": {"remainingFraction": 0.1}},
+        }}
+
+    monkeypatch.setattr(AntigravityProvider, "available", available)
+    out = asyncio.run(usage._antigravity(_ag_config(), None))
+    got = {w["label"]: (w["usedPercent"], w["resetsAt"]) for w in out["windows"]}
+    assert got == {"Claude": (60.0, 1_893_542_400_000), "Gemini Flash": (0.0, None), "Gemini Pro": (100.0, None)}
 
 
 # ---- local tracking and the report ------------------------------------------------------------------
@@ -211,7 +240,125 @@ def test_report_caches_live_answers_and_falls_back_to_headers(monkeypatch):
     usage._headers.pop("live-p", None)
 
 
-# ---- Gemini tool schemas -------------------------------------------------------------------------
+# ---- the Antigravity adapter -----------------------------------------------------------------------
+
+
+def test_antigravity_catalog_entry_is_sign_in_only():
+    e = catalog.entries()["antigravity"]
+    assert e["login"] == "antigravity" and e["needs_key"] is False and e["kind"] == "antigravity"
+    assert "antigravity" in auth.PROVIDERS and auth.signed_in(_ag_config())
+
+
+def test_antigravity_wraps_claude_requests_and_unwraps_the_stream():
+    seen = {}
+    events = [
+        {"response": {"candidates": [{"content": {"parts": [{"text": "Hi"}]}}]}},
+        {"response": {"candidates": [{"content": {"parts": [{"functionCall": {"id": "c1", "name": "read", "args": {"path": "a"}}}]},
+                                      "finishReason": "STOP"}],
+                      "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 3}}},
+    ]
+
+    def handler(request):
+        seen["url"], seen["auth"] = str(request.url), request.headers.get("authorization")
+        seen["ua"], seen["body"] = request.headers.get("user-agent"), json.loads(request.content)
+        return httpx.Response(200, content=_sse(events), headers={"content-type": "text/event-stream", "x-ratelimit-limit-requests": "10",
+                                                                  "x-ratelimit-remaining-requests": "9"})
+
+    p = AntigravityProvider(_ag_config(), transport=httpx.MockTransport(handler))
+    req = ChatRequest(model="claude-opus-4-6-thinking", system="sys", reasoning=True, variant="high",
+                      tools=[ToolSpec("read", "Read", {"type": "object", "properties": {"path": {"type": "string"}}}), ToolSpec("noop", "Nothing", {"type": "object"})],
+                      messages=[ChatMessage("user", "go"), ChatMessage("assistant", "", tool_calls=[ToolCall("c0", "read", {"path": "b"})]),
+                                ChatMessage("tool", "content", tool_call_id="c0")])
+
+    async def collect():
+        return [ev async for ev in p.stream(req)]
+
+    out = asyncio.run(collect())
+    assert seen["url"] == "https://cc.example.com/v1internal:streamGenerateContent?alt=sse"
+    assert seen["auth"] == "Bearer tok" and seen["ua"].startswith("antigravity/")
+    body = seen["body"]
+    assert body["project"] == "proj-1" and body["model"] == "claude-opus-4-6-thinking" and body["requestId"].startswith("agent-")
+    inner = body["request"]
+    assert inner["toolConfig"] == {"functionCallingConfig": {"mode": "VALIDATED"}}
+    decls = inner["tools"][0]["functionDeclarations"]
+    assert all("parameters" in d for d in decls)
+    think = inner["generationConfig"]["thinkingConfig"]
+    assert think["include_thoughts"] is True and inner["generationConfig"]["maxOutputTokens"] >= think["thinking_budget"] + 8192
+    parts = [p for c in inner["contents"] for p in c["parts"]]
+    assert next(p for p in parts if "functionCall" in p)["functionCall"]["id"] == "c0"
+    assert next(p for p in parts if "functionResponse" in p)["functionResponse"]["id"] == "c0"
+    types = [e["type"] for e in out]
+    assert "text.delta" in types and "tool.end" in types and types[-1] == "finish"
+    assert next(e for e in out if e["type"] == "tool.end")["input"] == {"path": "a"}
+    assert usage._headers["antigravity"][1]["x-ratelimit-remaining-requests"] == "9"
+    usage._headers.pop("antigravity", None)
+
+
+def test_antigravity_lists_only_visible_chat_models():
+    def handler(request):
+        assert request.url.path.endswith("fetchAvailableModels") and json.loads(request.content) == {"project": "proj-1"}
+        return httpx.Response(200, json={
+            "models": {
+                "gemini-3-flash": {"displayName": "Gemini 3 Flash", "maxTokens": 1048576, "maxOutputTokens": 65536, "supportsThinking": True},
+                "claude-opus-4-6-thinking": {"displayName": "Claude Opus 4.6 (Thinking)", "maxTokens": 200000, "supportsThinking": True},
+                "gemini-3-pro-image": {"displayName": "Image"},
+                "chat_20706": {"displayName": "internal"},
+                "gemini-2.5-pro": {"displayName": "hidden", "disabled": True},
+                "gpt-oss-120b-medium": {"displayName": "GPT-OSS"},
+            },
+            "agentModelSorts": [{"groups": [{"modelIds": ["gemini-3-flash", "claude-opus-4-6-thinking"]}]}],
+        })
+
+    p = AntigravityProvider(_ag_config(), transport=httpx.MockTransport(handler))
+    models = {m.id: m for m in asyncio.run(p.list_models())}
+    assert "gemini-3-flash" in models and "claude-opus-4-6-thinking" in models
+    assert not {"gemini-3-pro-image", "chat_20706", "gemini-2.5-pro", "gpt-oss-120b-medium"} & set(models)
+    assert models["claude-opus-4-6-thinking"].variants == ["low", "high", "max"]
+    assert models["gemini-3-flash"].context == 1048576
+
+
+def test_antigravity_groups_models_listed_once_per_effort(monkeypatch):
+    from afh.engine import config as provcfg
+
+    saved = {}
+    monkeypatch.setattr(provcfg, "upsert", lambda pid, patch: saved.update({pid: patch}))
+
+    def handler(request):
+        if request.url.path.endswith("fetchAvailableModels"):
+            return httpx.Response(200, json={"models": {
+                "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash (Low)", "maxTokens": 1048576},
+                "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash (High)", "maxTokens": 1048576},
+                "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash (Medium)", "maxTokens": 1048576},
+                "gpt-oss-120b-medium": {"displayName": "GPT-OSS 120B (Medium)"},
+                "gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash Lite"},
+                "claude-opus-4-6-thinking": {"displayName": "Claude Opus 4.6 (Thinking)"},
+            }})
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, content=_sse([{"response": {"candidates": [{"content": {"parts": [{"text": "ok"}]}, "finishReason": "STOP"}]}}]),
+                              headers={"content-type": "text/event-stream"})
+
+    seen = {}
+    p = AntigravityProvider(_ag_config(), transport=httpx.MockTransport(handler))
+    models = {m.id: m for m in asyncio.run(p.list_models())}
+    assert set(models) == {"gemini-3.8-flash", "gpt-oss-120b", "gemini-3.5-flash-lite", "claude-opus-4-6-thinking"}
+    flash = models["gemini-3.8-flash"]
+    assert flash.name == "Gemini 3.8 Flash" and flash.variants == ["low", "medium", "high"] and flash.reasoning
+    assert models["gpt-oss-120b"].name == "GPT-OSS 120B" and models["gpt-oss-120b"].variants == []
+    assert saved["antigravity"]["extra"]["effort_ids"] == {"gemini-3.8-flash": ["low", "medium", "high"], "gpt-oss-120b": ["medium"]}
+
+    def send(model, variant):
+        async def go():
+            return [ev async for ev in p.stream(ChatRequest(model=model, system="", variant=variant, reasoning=True, messages=[ChatMessage("user", "hi")]))]
+        asyncio.run(go())
+        return seen["body"]
+
+    body = send("gemini-3.8-flash", "medium")
+    assert body["model"] == "gemini-3.8-flash-medium"
+    assert body["request"]["generationConfig"]["thinkingConfig"] == {"includeThoughts": True}  # the level is in the id
+    assert send("gemini-3.8-flash", "max")["model"] == "gemini-3.8-flash-high"  # an effort it doesn't have: the default
+    assert send("gpt-oss-120b", None)["model"] == "gpt-oss-120b-medium"
+    assert send("gemini-3.8-flash-low", "high")["model"] == "gemini-3.8-flash-low"  # an old thread's full id still works
+    assert send("gemini-3.5-flash-lite", "low")["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "low"
 
 
 def test_gemini_schemas_keep_only_what_google_accepts():
@@ -235,3 +382,42 @@ def test_gemini_schemas_keep_only_what_google_accepts():
     strict = clean_schema(schema, strict=True)["properties"]
     assert strict["name"] == {"type": "string", "nullable": True, "description": "(minLength: 1)"}
     assert strict["count"]["minimum"] == 0
+
+
+def test_antigravity_project_from_load_or_onboarding(monkeypatch):
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(auth.asyncio, "sleep", no_sleep)
+
+    def loaded(request):
+        return httpx.Response(200, json={"cloudaicompanionProject": {"id": " p-1 "}})
+
+    async def go(handler):
+        async with _client(handler) as c:
+            return await auth._antigravity_project(c, "tok")
+
+    assert asyncio.run(go(loaded)) == "p-1"
+    polls = []
+
+    def onboard(request):
+        if request.url.path.endswith("loadCodeAssist"):
+            return httpx.Response(200, json={"allowedTiers": [{"id": "standard-tier"}, {"id": "free-tier", "isDefault": True}]})
+        body = json.loads(request.content)
+        assert body["tier_id"] == "free-tier"
+        polls.append(1)
+        if len(polls) < 2:
+            return httpx.Response(200, json={"done": False})
+        return httpx.Response(200, json={"done": True, "response": {"cloudaicompanionProject": {"id": "p-new"}}})
+
+    assert asyncio.run(go(onboard)) == "p-new" and len(polls) == 2
+
+    def refused(request):
+        return httpx.Response(403, json={"error": {"message": "This account is not eligible"}})
+
+    try:
+        asyncio.run(go(refused))
+    except RuntimeError as exc:
+        assert "not eligible" in str(exc)
+    else:
+        raise AssertionError("expected a refusal")

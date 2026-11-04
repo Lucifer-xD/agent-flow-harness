@@ -3,9 +3,10 @@
 Three sources, best first:
 
 * **live**: the provider's own usage endpoint. Sign-ins: ChatGPT (``/wham/usage``: the 5-hour
-  and weekly windows), Copilot (``copilot_internal/user``: monthly premium requests). API keys: OpenRouter
-  (credits and daily/weekly/monthly spend), Kimi coding plan (5-hour and monthly), Z.AI coding
-  plan (5-hour and weekly/monthly), DeepSeek and Moonshot (balance).
+  and weekly windows), Copilot (``copilot_internal/user``: monthly premium requests), Antigravity
+  (``fetchAvailableModels``: quota left per model family). API keys: OpenRouter (credits and
+  daily/weekly/monthly spend), Kimi coding plan (5-hour and monthly), Z.AI coding plan (5-hour
+  and weekly/monthly), DeepSeek and Moonshot (balance).
 * **headers**: rate-limit headers the provider sent on the last answer (``x-ratelimit-*``,
   ``anthropic-ratelimit-*``, ``x-codex-*``), recorded by the adapters through ``observe``.
 * **local**: what AFH itself sent through this provider in the last 5 hours and 7 days.
@@ -184,6 +185,30 @@ async def _copilot(config: ProviderConfig, client: httpx.AsyncClient) -> dict:
     return {"windows": windows, "plan": data.get("copilot_plan") or ""}
 
 
+_FAMILIES = (("claude", "Claude"), ("flash", "Gemini Flash"), ("gemini", "Gemini Pro"), ("gpt-oss", "GPT-OSS"))
+
+
+async def _antigravity(config: ProviderConfig, client: httpx.AsyncClient) -> dict:
+    from .providers.antigravity import AntigravityProvider
+
+    data = await AntigravityProvider(config).available()
+    groups: dict[str, dict] = {}
+    for mid, m in (data.get("models") or {}).items():
+        q = (m or {}).get("quotaInfo") if isinstance(m, dict) else None
+        if not isinstance(q, dict) or m.get("disabled") or any(x in mid for x in ("image", "imagen", "chat_", "tab_")):
+            continue
+        family = next((label for key, label in _FAMILIES if key in mid.lower()), None)
+        if not family:
+            continue
+        left = q.get("remainingFraction")
+        left = 0.0 if not isinstance(left, (int, float)) else max(0.0, min(1.0, float(left)))
+        g = groups.setdefault(family, {"left": 1.0, "reset": None})
+        if left <= g["left"]:
+            g["left"], g["reset"] = left, q.get("resetTime") or g["reset"]
+    windows = [_window(label.lower().replace(" ", "-"), label, 100 * (1 - g["left"]), g["reset"]) for label, g in groups.items()]
+    return {"windows": windows}
+
+
 async def _openrouter(config: ProviderConfig, client: httpx.AsyncClient) -> dict:
     data = (await _get(client, "https://openrouter.ai/api/v1/key", headers={"authorization": f"Bearer {config.api_key}"})).get("data") or {}
     out: dict = {"windows": [], "spend": {k: data.get(f"usage_{k}") for k in ("daily", "weekly", "monthly") if data.get(f"usage_{k}") is not None}}
@@ -287,6 +312,8 @@ def live_source(config: ProviderConfig):
         return _chatgpt
     if kind == "copilot":
         return _copilot
+    if kind == "antigravity":
+        return _antigravity
     if not config.api_key:
         return None
     cat = config.id
