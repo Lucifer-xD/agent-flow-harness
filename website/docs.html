@@ -62,6 +62,9 @@
         <a href="#browser">Browser &amp; DevTools</a>
         <a href="#approvals">Approvals</a>
         <a href="#worktrees">Worktrees</a>
+        <a href="#cli">Command line</a>
+        <a href="#github">GitHub agent</a>
+        <a href="#races">Model races</a>
         <a href="#phone">From your phone</a>
         <p class="toc-title">Make it yours</p>
         <a href="#commands">Commands &amp; skills</a>
@@ -202,6 +205,44 @@
         <p>Turn on <b>Work in a separate git worktree</b> when starting a thread and it gets its own branch and folder. When you're happy, open the <b>Worktree</b> menu and choose <b>Merge into</b> your base branch — or remove it. Your main checkout is never touched. Needs Git.</p>
       </section>
 
+      <section id="cli">
+        <h2>Command line</h2>
+        <p>Use the agent from any terminal, over SSH or in a script. Open <b>Settings → Developer → Command line</b>, choose <b>Install</b>, then open a new terminal.</p>
+        <div class="code" data-lang="bash"><pre><code>afh                                  # chat in this folder
+afh run "fix the failing tests"      # one task, then exit
+git diff | afh run "review this" -q &gt; review.md</code></pre></div>
+        <p>When the app is open, <code>afh</code> uses it, so threads show up there live. When it isn't, <code>afh</code> starts a private backend for as long as the command runs.</p>
+        <p class="note">Every flag and exit code is in the <a href="https://github.com/Lucifer-xD/agent-flow-harness/blob/main/docs/cli.md">command line guide</a>.</p>
+      </section>
+
+      <section id="github">
+        <h2>GitHub agent</h2>
+        <p>Write <code>/afh</code> and what to do at the start of a line in a comment on an issue or pull request. AFH does the work on your computer, then opens a draft pull request or pushes to the pull request.</p>
+        <p>It needs the <a href="https://cli.github.com">GitHub CLI</a> signed in, a local clone, and the app or <code>afh serve</code> running. Turn it on in <b>Settings → GitHub</b>, or from a terminal:</p>
+        <div class="code" data-lang="bash"><pre><code>afh github add owner/repo --path ~/code/repo
+afh github allow your-login a-teammate
+afh github mode ask</code></pre></div>
+        <p>A comment can end up running code on your computer, so AFH is careful with it:</p>
+        <ul>
+          <li>Only logins you allow can start work. By default that's just you.</li>
+          <li>The words after <code>/afh</code> are the instruction. The issue's own text reaches the model as untrusted content.</li>
+          <li>Pull requests from forks are refused.</li>
+          <li>It pushes only an <code>afh/...</code> branch or the pull request's own branch. It never force-pushes and never merges.</li>
+          <li>In <b>ask</b> mode, the default, edits and commands wait for your approval in the app or on your phone.</li>
+        </ul>
+        <p class="note"><b>full</b> mode runs without asking, so an issue's text could steer it. Use it only on repositories you trust.</p>
+      </section>
+
+      <section id="races">
+        <h2>Model races</h2>
+        <p>Give one task to several models. Each works in its own git worktree, your <code>--check</code> command scores each result, and you pick which one to merge. Races run from the command line.</p>
+        <div class="code" data-lang="bash"><pre><code>afh race "add caching to the API" -m openai/gpt-5 -m anthropic/claude-opus-5-5 --check "pytest -q"
+afh race show &lt;id&gt;
+afh race pick &lt;id&gt; &lt;number&gt;
+afh race discard &lt;id&gt;</code></pre></div>
+        <p class="note">The models run with Full access unless you pass <code>--mode</code>. A worktree holds only what's committed, so a check may need to install things first, like <code>npm ci &amp;&amp; npm test</code>.</p>
+      </section>
+
       <section id="commands">
         <h2>Commands &amp; skills</h2>
         <p>Type <code>/</code> in the message box for commands. Built in: <code>/goal</code>, <code>/todo</code>, <code>/memory</code>, <code>/remember</code>, <code>/compact</code>, <code>/jobs</code>, <code>/new</code>, <code>/cost</code>, plus <code>/review</code>, <code>/fix-tests</code>, <code>/explain</code> and <code>/commit</code>.</p>
@@ -294,7 +335,7 @@
         <h3>Mac or Linux?</h3>
         <p>AFH runs on Windows and Mac. Computer use is Windows only. There's no Linux version yet.</p>
         <h3>Is there a command line?</h3>
-        <p>Yes: chat in a terminal with <code>afh</code>, or run one task with <code>afh run</code>. Turn it on in <b>Settings → Developer</b>, then read the <a href="https://github.com/Lucifer-xD/agent-flow-harness/blob/main/docs/cli.md">command line guide</a>.</p>
+        <p>Yes: chat in a terminal with <code>afh</code>, or run one task with <code>afh run</code>. See <a href="#cli">Command line</a>.</p>
       </section>
     </main>
   </div>

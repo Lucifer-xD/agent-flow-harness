@@ -51,7 +51,7 @@
     </section>
 
     <nav class="subnav" aria-label="Feature groups">
-      <a href="#plan">Plans</a><a href="#modes">Modes</a><a href="#agents">Agents</a><a href="#watch">Watch it work</a><a href="#control">Control</a><a href="#long">Long sessions</a><a href="#yours">Make it yours</a><a href="#build">Build on it</a>
+      <a href="#plan">Plans</a><a href="#modes">Modes</a><a href="#agents">Agents</a><a href="#watch">Watch it work</a><a href="#control">Control</a><a href="#long">Long sessions</a><a href="#yours">Make it yours</a><a href="#build">Build on it</a><a href="#reach">Terminal &amp; GitHub</a>
     </nav>
 
     <div class="wrap">
@@ -360,6 +360,40 @@
             <h3>Python &amp; JavaScript SDKs</h3>
             <p>Each is a single file with no dependencies. Live events stream every token and tool call as it happens.</p>
             <div class="chips"><a class="badge hot" href="/sdk/afh_sdk.py" download>afh_sdk.py</a><a class="badge hot" href="/sdk/afh.mjs" download>afh.mjs</a><a class="badge" href="/api">API reference →</a></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="group" id="reach" data-scene='{"code":1,"activity":0.9}'>
+        <div class="group-head" data-reveal>
+          <span class="group-n">09</span>
+          <h2 class="h2">Outside the app.</h2>
+          <p class="sub">Use the agent from a terminal or from GitHub, race models against each other, and run it on a Mac.</p>
+        </div>
+        <div class="fgrid">
+          <article class="fcard" data-reveal>
+            <div class="ficon">&gt;_</div>
+            <h3>The afh command</h3>
+            <p>Chat in any terminal, or run one task from a script or CI with <code>afh run</code>. When the app is open, threads show up there live. Turn it on in Settings → Developer.</p>
+            <div class="chips"><a class="badge" href="/docs#cli">How to use it →</a></div>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">/</div>
+            <h3>GitHub agent</h3>
+            <p>Write <code>/afh</code> and a task on an issue or pull request. AFH does the work on your computer and opens a draft pull request. Only people you allow can start it, and merging stays with you.</p>
+            <div class="chips"><a class="badge" href="/docs#github">Set it up →</a></div>
+          </article>
+          <article class="fcard" data-reveal>
+            <div class="ficon">⇄</div>
+            <h3>Model races</h3>
+            <p><code>afh race</code> gives one task to several models, each in its own worktree. Your tests score them, and nothing is merged until you pick one.</p>
+            <div class="chips"><a class="badge" href="/docs#races">Run a race →</a></div>
+          </article>
+          <article class="fcard" data-reveal style="--d:.06s">
+            <div class="ficon">⌘</div>
+            <h3>AFH for Mac</h3>
+            <p>Runs on Apple Silicon and Intel. Computer use stays on Windows, and new versions on a Mac are a download rather than an automatic update.</p>
+            <div class="chips"><a class="badge" href="/download">Download →</a></div>
           </article>
         </div>
       </section>

@@ -71,7 +71,7 @@
         <li><i></i>Free, forever</li>
         <li><i></i>No account needed</li>
         <li><i></i>No telemetry in the app</li>
-        <li><i></i>Windows and Mac · version <span data-version>1.20.0</span></li>
+        <li><i></i>Windows and <a href="/download">Mac</a> · version <span data-version>1.20.0</span></li>
       </ul>
     </section>
 
@@ -230,6 +230,44 @@
             </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- 4b · outside the app -->
+    <section id="reach" class="reach">
+      <div class="section-head center">
+        <p class="kicker">Terminal · GitHub · Races</p>
+        <h2 class="h2">The agent, wherever you work.</h2>
+        <p class="sub">Run it from a terminal, hand it an issue, or give one task to several models and keep the best result.</p>
+      </div>
+      <div class="reach-grid">
+        <article class="reach-card" data-reveal>
+          <h3>In your terminal</h3>
+          <p>Chat with <code>afh</code>, or run one task from a script or CI with <code>afh run</code>.</p>
+          <div class="mp-mock" aria-hidden="true">
+            <div class="dv-tool"><b>$</b> afh run "fix the tests"</div>
+            <div class="dv-tool"><b>edit</b> src/api.py <span class="ok">+12 −4</span></div>
+            <div class="dv-tool"><b>shell</b> pytest <span class="ok">48 passed</span></div>
+          </div>
+        </article>
+        <article class="reach-card" data-reveal style="--d:.08s">
+          <h3>On GitHub</h3>
+          <p>Write <code>/afh</code> and a task on an issue. AFH does the work on your computer and opens a draft pull request.</p>
+          <div class="mp-mock" aria-hidden="true">
+            <div class="dv-tool"><b>you</b> /afh fix the login redirect</div>
+            <div class="dv-tool"><b>afh</b> on its own branch <span class="run">running</span></div>
+            <div class="dv-tool"><b>draft PR</b> ready to review <span class="ok">#42</span></div>
+          </div>
+        </article>
+        <article class="reach-card" data-reveal style="--d:.16s">
+          <h3>Model races</h3>
+          <p><code>afh race</code> gives one task to several models, each in its own worktree. Your tests score them, and you merge the one you pick.</p>
+          <div class="mp-mock" aria-hidden="true">
+            <div class="dv-tool"><b>model 1</b> tests <span class="ok">12 passed</span></div>
+            <div class="dv-tool warn"><b>model 2</b> 2 tests failed</div>
+            <div class="dv-tool"><b>pick 1</b> merged into main</div>
+          </div>
+        </article>
       </div>
     </section>
 
