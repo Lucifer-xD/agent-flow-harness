@@ -76,9 +76,9 @@ def providers_info() -> list[dict]:
     return out
 
 
-def log_tail() -> str:
+def log_tail(pattern: str = "afh-backend.log*") -> str:
     folder = store.AFH_DIR / "logs"
-    files = sorted(folder.glob("afh-backend.log*"), key=lambda f: f.stat().st_mtime) if folder.is_dir() else []
+    files = sorted(folder.glob(pattern), key=lambda f: f.stat().st_mtime) if folder.is_dir() else []
     data = b""
     for f in reversed(files):  # newest first, until the budget is used
         try:
@@ -126,4 +126,5 @@ def build(description: str, include_log: bool = True) -> Path:
         z.writestr("providers.json", json.dumps(providers_info(), indent=2, ensure_ascii=False))
         if include_log:
             z.writestr("afh-backend.log", log)
+            z.writestr("updates.log", log_tail("updates.log*"))
     return path
