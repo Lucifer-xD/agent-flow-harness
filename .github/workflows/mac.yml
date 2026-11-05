@@ -3,7 +3,7 @@ name: Mac build
 on:
   workflow_dispatch:
   push:
-    branches: [next-features]
+    tags: ["v*"]
 
 permissions:
   contents: read
@@ -33,6 +33,8 @@ jobs:
           - { runner: macos-15-intel, arch: x64 }
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
+    permissions:
+      contents: write  # adds the installers to the release
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -66,6 +68,11 @@ jobs:
           hdiutil detach /tmp/afh-dmg
           codesign --verify --deep "/tmp/Agent Flow Harness.app" && echo "signature valid"
           bash scripts/smoke-mac.sh "/tmp/Agent Flow Harness.app/Contents/MacOS/Agent Flow Harness"
+      - name: Add the installer to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" desktop/dist/*.dmg --clobber
       - uses: actions/upload-artifact@v7
         if: always()
         with:
