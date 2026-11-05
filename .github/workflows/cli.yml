@@ -78,6 +78,17 @@ jobs:
           "$AFH_HOME/bin/afh" --version
           "$AFH_HOME/bin/afh" status
 
+      - name: The installer's animation runs in a real terminal (Mac, Linux)
+        if: runner.os != 'Windows'
+        env:
+          AFH_DOWNLOAD_BASE: http://127.0.0.1:8765
+          AFH_HOME: ${{ runner.temp }}/afh-home-tty
+          LANG: C.UTF-8
+          TERM: xterm-256color
+        run: |
+          python -c "import pty, sys; sys.exit(pty.spawn(['bash', 'website/install.sh']) >> 8)" | tail -n 8
+          "$AFH_HOME/bin/afh" --version
+
       - name: The full-screen app starts from the build
         shell: bash
         env:
