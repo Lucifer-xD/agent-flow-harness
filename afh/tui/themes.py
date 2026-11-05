@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from textual.theme import Theme
 
+from .look import hexed, parse, stops
+
 PRESETS: dict[str, tuple] = {
     'sunset': ('Sunset', '#ff6a2a', True, ('#0e0d0d', '#121010', '#171515', '#1e1b1a', '#292524', '#2a2625', '#3a3533', '#f2efec', '#b4ada6', '#7e776f', '#0b0a0a')),
     'midnight': ('Midnight', '#7c8cff', True, ('#0b0d14', '#0e1019', '#13161f', '#191d28', '#222735', '#242936', '#343a4b', '#e9ecf5', '#aab0c2', '#737a8e', '#080a10')),
@@ -63,8 +65,9 @@ GRADIENT = ("#f5a623", "#ff6a2a", "#ff3d71")  # the brand: amber, orange, pink
 
 def build(theme_id: str, name: str, accent: str, dark: bool, colors: tuple) -> Theme:
     bg, side, panel, panel2, panel3, border, border2, text, text2, text3, code = colors
+    near, _, far = stops(parse(accent))
     return Theme(
-        name=f"afh-{theme_id}", primary=accent, secondary=accent, accent=accent, foreground=text, background=bg, surface=panel, panel=panel2,
+        name=f"afh-{theme_id}", primary=accent, secondary=hexed(near), accent=hexed(far), foreground=text, background=bg, surface=panel, panel=panel2,
         boost=panel3, success=GOOD[dark], error=BAD[dark], warning=WARN[dark], dark=dark,
         variables={
             "afh-side": side, "afh-panel3": panel3, "afh-border": border, "afh-border2": border2, "afh-text2": text2, "afh-text3": text3, "afh-code": code,

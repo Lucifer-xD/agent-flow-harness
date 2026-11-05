@@ -935,12 +935,11 @@ def main(argv: list[str] | None = None) -> int:
         if a.command:
             client = connect()
             return commands[a.command](client, a)
-        full_screen = not a.plain and tui_ready()
-        client = connect(full_screen)
-        if full_screen:
+        if not a.plain and tui_ready():
             from . import tui
 
-            return tui.run(client, a)
+            return tui.run(lambda: connect(True), a)
+        client = connect()
         return Chat(client, a).loop()
     except CliError as err:
         note(paint("31", str(err)))

@@ -24,6 +24,8 @@ def check() -> int:
     import asyncio
     import queue
 
+    from pygments.lexers import get_lexer_by_name
+
     from .app import AFH
 
     class Quiet:
@@ -37,17 +39,22 @@ def check() -> int:
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause(1)
             assert app.composer.box.has_focus
+        assert get_lexer_by_name("python")  # a build without lexers would show code uncoloured and say nothing
         print("ok")
 
     asyncio.run(go())
     return 0
 
 
-def run(client: Any, a: Any) -> int:
-    from ..cli import Events
+def run(opener: Any, a: Any) -> int:
+    """Full screen at once: the app connects behind its own boot screen, not before it."""
     from .app import AFH
 
-    app = AFH(client, Events(client), str(Path(getattr(a, "dir", None) or ".").resolve()), model=getattr(a, "model", None), agent=getattr(a, "agent", None),
-              mode=getattr(a, "mode", None), thread=getattr(a, "thread", None), resume=bool(getattr(a, "resume", False)))
-    app.run()
+    app = AFH(None, None, str(Path(getattr(a, "dir", None) or ".").resolve()), model=getattr(a, "model", None), agent=getattr(a, "agent", None),
+              mode=getattr(a, "mode", None), thread=getattr(a, "thread", None), resume=bool(getattr(a, "resume", False)), opener=opener)
+    try:
+        app.run()
+    finally:
+        if app.client:
+            app.client.close()
     return app.return_code or 0

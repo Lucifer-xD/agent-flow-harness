@@ -21,8 +21,10 @@ from . import state as S
 from . import themes
 from .actions import SIGN_INS, ThemePicker
 from .dialogs import Confirm, Field, Form, Item, Picker, Prompt, Viewer
-from .widgets import bar
+from .look import keys
+from .widgets import bar, gradient
 
+SPEEDS = (0.5, 1.0, 1.5, 2.0)
 TABS = [("general", "General"), ("appearance", "Appearance"), ("personalization", "Personalization"), ("agent", "Agent"), ("delegation", "Delegation"), ("models", "Models & providers"),
         ("usage", "Usage & cost"), ("skills", "Skills"), ("mcp", "MCP servers"), ("prompts", "Prompts & agents"), ("commands", "Commands"), ("hooks", "Hooks"), ("schedules", "Schedules"),
         ("github", "GitHub"), ("developer", "Developer"), ("remote", "Remote control"), ("bug", "Report a bug"), ("about", "About")]
@@ -92,15 +94,20 @@ class SettingsScreen(Screen):
 
     DEFAULT_CSS = """
     SettingsScreen { background: $background; }
-    SettingsScreen #top { height: 1; padding: 0 2; color: $afh-text2; }
     SettingsScreen #panes { height: 1fr; }
-    SettingsScreen #nav { width: 24; height: 1fr; border: none; background: $afh-side; padding: 1 0; scrollbar-size-vertical: 1; }
+    SettingsScreen #side { width: 30; height: 1fr; background: $afh-side; }
+    SettingsScreen #s-top { height: 1; padding: 0 2; margin: 1 0 1 0; }
+    SettingsScreen #nav { height: 1fr; border: none; background: transparent; padding: 0; scrollbar-size-vertical: 1; }
     SettingsScreen #nav:focus { background-tint: transparent; }
-    SettingsScreen #right { width: 1fr; height: 1fr; padding: 1 2 0 2; }
+    SettingsScreen #nav > .option-list--option { padding: 0 2; color: $afh-text2; }
+    SettingsScreen #nav > .option-list--option-highlighted { padding: 0 2; background: $panel; color: $foreground; text-style: bold; }
+    SettingsScreen #nav:focus > .option-list--option-highlighted { background: $primary 18%; }
+    SettingsScreen #right { width: 1fr; height: 1fr; padding: 1 3 0 3; }
     SettingsScreen #heading { height: auto; text-style: bold; padding: 0 0 1 0; }
     SettingsScreen #rows { height: 1fr; border: none; background: transparent; scrollbar-size-vertical: 1; }
     SettingsScreen #rows:focus { background-tint: transparent; }
-    SettingsScreen #keys { height: 1; padding: 0 2; color: $afh-text3; }
+    SettingsScreen #rows > .option-list--option-highlighted { background: $primary 14%; color: $foreground; text-style: none; }
+    SettingsScreen #keys { height: 1; margin: 1 0 1 0; }
     """
     BINDINGS = [Binding("escape", "leave", show=False), Binding("tab", "swap", show=False, priority=True), Binding("shift+tab", "swap", show=False, priority=True),
                 Binding("left", "to_nav", show=False), Binding("right", "to_rows", show=False)]
@@ -113,13 +120,14 @@ class SettingsScreen(Screen):
         self.busy = False
 
     def compose(self):
-        yield Static(Content.assemble(("Settings", "bold"), ("   saved as you change them, shared with the desktop app", "$afh-text3")), id="top")
         with Horizontal(id="panes"):
-            yield OptionList(*[Option(label, id=tid) for tid, label in TABS], id="nav")
+            with Vertical(id="side"):
+                yield Static(gradient("Settings"), id="s-top")
+                yield OptionList(*[Option(label, id=tid) for tid, label in TABS], id="nav")
             with Vertical(id="right"):
                 yield Static("", id="heading")
                 yield OptionList(id="rows")
-        yield Static("↑↓ move   Enter change   Tab sections   Esc back", id="keys")
+                yield Static(keys("↑↓ move   Enter change   Tab sections   Esc back"), id="keys")
 
     def on_mount(self) -> None:
         nav = self.query_one("#nav", OptionList)
@@ -178,23 +186,23 @@ class SettingsScreen(Screen):
 
     def option(self, r: R) -> Option:
         if r.kind == "head":
-            return Option(Content.assemble("\n", (r.label, "$primary bold")), disabled=True)
+            return Option(Content.assemble("\n", (r.label.upper(), "$afh-text3 bold")), disabled=True)
         if r.kind == "note":
             return Option(Content.styled(r.label, "$afh-text2"), disabled=True)
-        hint = Content.assemble("\n  ", (r.hint, "$afh-text3")) if r.hint else Content("")
+        hint = Content.assemble("\n    ", (r.hint, "$afh-text3")) if r.hint else Content("")
         style = "$error" if r.danger else ""
         if r.kind == "toggle":
-            return Option(Content.assemble(("[x] " if r.value else "[ ] ", "$primary" if r.value else "$afh-text3"), r.label, hint))
+            return Option(Content.assemble(("━● " if r.value else "●━ ", "$primary" if r.value else "$afh-text3"), " ", r.label, hint))
         if r.kind in ("button", "item"):
             right = (f"  {r.value}", "$afh-text2") if r.value not in (None, "") else ""
-            return Option(Content.assemble(("› " if r.kind == "button" else "  ", "$primary"), (r.label, style), right, hint))
+            return Option(Content.assemble(("›   " if r.kind == "button" else "    ", "$primary"), (r.label, style), right, hint))
         value = r.value
         if r.kind == "choice":
             value = next((a for a, b in r.options if b == r.value), r.value)
         if r.kind == "secret":
             value = "set" if r.value else "not set"
         shown = S.one_line(str(value if value not in (None, "") else "not set"), 60)
-        return Option(Content.assemble("  ", r.label, ("  ", ""), (shown, "$primary" if value not in (None, "") else "$afh-text3"), hint))
+        return Option(Content.assemble("    ", r.label.ljust(30), ("  ", ""), (shown, "$primary" if value not in (None, "") else "$afh-text3"), hint))
 
     async def activate(self, r: R) -> None:
         if self.busy or r.run is None:
@@ -275,7 +283,7 @@ class Panes:
             self.toggle("ui", "showMeta", "Show model, tokens and time under replies"),
             R("choice", "Send key", u.get("sendKey") or "enter", "Ctrl+J always adds a new line", self.send_key, [("Enter", "enter"), ("Ctrl+Enter", "ctrl-enter")]),
             self.toggle("ui", "confirmDelete", "Ask before deleting a thread"),
-            self.toggle("ui", "liveFiles", "Open the live panel while files are written", "Needs a terminal at least 120 columns wide; Ctrl+B opens it anywhere"),
+            self.toggle("ui", "liveFiles", "Open the live panel while files are written", "When the terminal has room for it; Ctrl+B opens it anywhere"),
             head("Alerts"),
             self.toggle("ui", "sounds", "Ring the terminal bell when a run ends"),
             self.toggle("ui", "notify", "Desktop notifications from the app"),
@@ -298,8 +306,13 @@ class Panes:
             R("choice", "Dark or light", "dark" if current in themes.PRESETS and themes.PRESETS[current][2] else "light", "Switches to your favourite theme of that kind", self.dark_light, [("Dark", "dark"), ("Light", "light")]),
             head("Your own colors"),
             R("text", "Background", u.get("bg") or "", "A color like #101014", self.custom("bg")), R("text", "Text", u.get("text") or "", "", self.custom("text")), R("text", "Accent", u.get("accent") or "", "", self.custom("accent")),
-            head("Everything else"), note("Font, font size and window transparency come from your terminal. Corners, glass, animations and custom CSS only exist in the desktop app; your choices there are kept."),
+            head("Motion"), self.toggle("ui", "logoAnim", "Logo flows while a model works"),
+            R("choice", "Animation speed", str(min(SPEEDS, key=lambda v: abs(v - float(u.get("animSpeed") or 1)))), "", self.anim_speed, [(f"{v:g}×", str(v)) for v in SPEEDS]),
+            head("Everything else"), note("Font, font size and window transparency come from your terminal. Corners, glass and custom CSS only exist in the desktop app; your choices there are kept."),
         ]
+
+    async def anim_speed(self, value: str) -> None:
+        await self.ui.save_settings({"ui": {"animSpeed": float(value)}})
 
     async def pick_theme(self) -> None:
         await self.ui.cmd_theme("")

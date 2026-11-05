@@ -18,81 +18,146 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 from .. import __version__
-from ..cli import HOME, CliError
+from ..cli import HOME, CliError, Events
 from . import state as S
 from . import themes
 from .actions import Actions
 from .composer import Box, Composer, History
 from .dialogs import Approval, Question
-from .panels import Dock, LivePane
-from .widgets import SPINNER, Row, Transcript, bar, gradient, logo
+from .look import SPINE_X, Palette, Spine, keys, shimmer, unless_gone
+from .mark import STRANDS, Mark
+from .panels import RAIL_WIDTH, Dock, LivePane, Rail
+from .widgets import MARKDOWN_CSS, SPINNER, Row, Transcript, bar, gradient
 
 MODE_ORDER = ["ask", "full", "readonly"]
-MODE_LABEL = {"ask": "ask first", "full": "full access", "readonly": "read only"}
+MODE_LABEL = {"ask": "Ask first", "full": "Full access", "readonly": "Read only"}
 COMPACT_AT = 80
+STRAND_ENDS = [s[2] for s in STRANDS]
+TIGHT_HEIGHT = 20  # rows under which the deck gives up its mark
+TIGHT_WIDTH = 56  # and columns
+TABS = [("Goal", "goal", 0), ("Memory", "memory", 92), ("Live", "live", 74), ("Changes", "diff", 0), ("Context", "cost", 84), ("Prompt", "prompt", 100)]
 
 CSS = """
 Main { background: $background; }
 SettingsScreen { background: $background; }
-Toast { background: $panel; border-left: outer $primary; padding: 0 1; }
-Toast.-error { border-left: outer $error; }
-Toast.-warning { border-left: outer $warning; }
-#header { height: 1; padding: 0 2; background: $background; }
-#header-left { width: 1fr; height: 1; text-wrap: nowrap; text-overflow: ellipsis; }
-#header-right { width: auto; height: 1; color: $afh-text3; padding-left: 2; }
-#rule { height: 1; color: $afh-border; padding: 0 1; }
-#main { height: 1fr; }
+ToastRack { align: right top; margin: 1 1 0 0; }
+Toast { background: $panel; border-left: none; padding: 0 2; width: auto; max-width: 60; }
+Toast.-error { background: $error 22%; }
+Toast.-warning { background: $warning 18%; }
+#app { height: 1fr; }
 #center { width: 1fr; height: 1fr; }
-#activity { height: 1; padding: 0 3; color: $afh-text2; display: none; text-wrap: nowrap; text-overflow: ellipsis; }
-#activity.-on { display: block; }
-#status { height: 1; padding: 0 3; }
-#status-left { width: 1fr; height: 1; text-wrap: nowrap; text-overflow: ellipsis; color: $afh-text2; }
-#status-right { width: auto; height: 1; color: $afh-text3; padding-left: 2; }
-#bottom { height: auto; dock: bottom; }
+#top { height: 1; padding: 0 2 0 1; margin: 0 0 1 0; }
+#top-left { width: 1fr; height: 1; text-wrap: nowrap; text-overflow: ellipsis; }
+#flow { height: 1fr; }
+Main.-boot #rail, Main.-boot #top, Main.-boot #composer, Main.-boot #dock { display: none; }
 """
 
 
+class Boot(Vertical):
+    """What the app shows while it opens: the mark, flowing, as the app's own boot screen has it."""
+
+    DEFAULT_CSS = """
+    Boot { height: 100%; width: 100%; align: center middle; }
+    Boot Mark { margin: 0 0 1 0; }
+    Boot #boot-text { width: 39; text-align: center; color: $afh-text3; }
+    """
+
+    def compose(self):
+        yield Mark(13, working=True)
+        yield Static("Starting AFH", id="boot-text")
+
+
+class Tab(Static):
+    """A word in the top bar, like the tabs along the top of the app."""
+
+    DEFAULT_CSS = """
+    Tab { width: auto; height: 1; padding: 0 1; color: $afh-text3; }
+    Tab:hover { color: $foreground; background: $boost; }
+    Tab.-off { display: none; }
+    """
+
+    def __init__(self, label: str, command: str, needs: int):
+        super().__init__(label)
+        self.label, self.command, self.needs = label, command, needs
+
+    def on_click(self) -> None:
+        self.app.action_command(self.command)
+
+    def show(self, count: int = 0) -> None:
+        self.update(Content.assemble(self.label, (f" {count}", "$primary bold") if count else ""))
+
+
+class Fact(Vertical):
+    """Where one of the mark's strands leads on the start screen."""
+
+    DEFAULT_CSS = """
+    Fact { height: 2; width: auto; }
+    Fact:hover .fact-top { background: $boost; }
+    Fact Static { height: 1; width: auto; max-width: 64; text-wrap: nowrap; text-overflow: ellipsis; }
+    """
+
+    def __init__(self, strand: int, top: Any, sub: Any, fn: Any, lead: int = 6, **kw: Any):
+        super().__init__(**kw)
+        self.strand, self.top, self.sub, self.fn, self.lead = strand, top, sub, fn, lead
+
+    def compose(self):
+        colour = STRAND_ENDS[self.strand]
+        strand = Content.assemble(*[("━", themes.mix(colour, "#000000", i / self.lead * 0.25)) for i in range(self.lead)])
+        yield Static(Content.assemble(strand, "  ", self.top), classes="fact-top")
+        yield Static(Content.assemble(" " * (self.lead + 2), self.sub))
+
+    def on_click(self) -> None:
+        self.fn()
+
+
 class Home(Vertical):
-    """The start screen: the mark, where you are, recent threads and what to try."""
+    """The start screen: the mark, with its three strands running on to where you are, who's working and what's next."""
 
     DEFAULT_CSS = """
     Home { height: 100%; width: 100%; align: center middle; padding: 0 2; }
-    Home > Static { width: 100%; height: auto; text-align: center; }
-    Home #mark { margin: 0 0 1 0; }
-    Home #facts { color: $afh-text2; text-align: center; width: 100%; }
-    Home #recent-title { color: $afh-text3; margin: 1 0 0 0; }
-    Home #tips { color: $afh-text3; margin: 1 0 0 0; text-align: center; width: 100%; }
-    Home .recent { width: 100%; height: 1; text-wrap: nowrap; text-overflow: ellipsis; text-align: center; }
-    Home .recent:hover { background: $boost; }
+    Home > * { width: auto; }
+    Home #hero { height: auto; width: auto; }
+    Home #facts { height: auto; width: auto; offset: -1 0; }
+    Home #slot-1 { margin: 2 0 0 0; }
+    Home #slot-2, Home #slot-3 { margin: 2 0 0 0; }
+    Home #greeting { height: auto; margin: 0 0 2 0; }
+    Home #tips { height: auto; margin: 2 0 0 0; }
+    Home.-small #slot-1, Home.-small #slot-2, Home.-small #slot-3 { margin: 1 0 0 0; }
     """
 
     def __init__(self, ui: "AFH"):
         super().__init__(id="home")
         self.ui = ui
 
+    def small(self) -> bool:
+        return self.ui.middle < 96 or self.ui.size.height < 30
+
+    def fit(self) -> None:
+        small = self.small()
+        self.set_class(small, "-small")
+        self.query_one("#home-mark", Mark).resize(8 if small else 13)
+
     def compose(self):
         ui = self.ui
-        yield Static(logo(), id="mark")
+        small = self.small()
+        self.set_class(small, "-small")
         ref = ui.model_ref()
-        model = ui.model_name(ref) or "no model yet"
-        yield Static(Content.assemble((f"Agent Flow Harness {__version__}", "bold"), "\n", ui.pretty_dir(), "   ", (model, "$primary")), id="facts")
-        if ui.recent:
-            yield Static("Recent threads here", id="recent-title")
-            for s in ui.recent[:4]:
-                yield RecentRow(s)
-        tips = "Type what you want done   / commands   @ files   ! shell   ? help"
-        if not ref:
-            tips = "No model yet. Type /connect to add one."
-        yield Static(tips, id="tips")
-
-
-class RecentRow(Row):
-    def __init__(self, session: dict):
-        super().__init__(Content.assemble(("  ", ""), S.one_line(session.get("title") or "New thread", 54), (f"  {S.ago((session.get('time') or {}).get('updated'))}", "$afh-text3")), classes="recent")
-        self.session = session
-
-    def on_click(self) -> None:
-        self.app.open_thread(self.session["id"])
+        model = ui.model_name(ref)
+        folder = S.base_name(ui.dir) or ui.dir
+        last = ui.recent[0] if ui.recent else None
+        yield Static(Content.assemble(gradient("Agent Flow Harness"), (f"   {__version__}", "$afh-text3")), id="greeting")
+        with Horizontal(id="hero"):
+            yield Mark(8 if small else 13, id="home-mark")
+            with Vertical(id="facts"):
+                yield Fact(0, (folder, "bold"), (ui.pretty_dir(), "$afh-text3"), lambda: ui.action_command("open"), id="slot-1")
+                who = f"{ui.agent_name(ui.agent_id())} · {MODE_LABEL.get(ui.mode_id(), ui.mode_id())}"
+                yield Fact(1, (model or "No model yet", "bold"), (who if ref else "/connect adds one", "$afh-text3"), lambda: ui.action_command("model" if ref else "connect"), id="slot-2")
+                if last:
+                    yield Fact(2, Content.assemble(("Continue  ", "$afh-text3"), (S.one_line(last.get("title") or "New thread", 70), "bold")),
+                               (f"{S.ago((last.get('time') or {}).get('updated'))} · Ctrl K for all of them", "$afh-text3"), lambda: ui.open_thread(last["id"]), id="slot-3")
+                else:
+                    yield Fact(2, ("Start something", "bold"), ("Say what you want done", "$afh-text3"), lambda: ui.composer.box.focus(), id="slot-3")
+        yield Static(keys("/ commands   @ files   ! shell   ? help"), id="tips")
 
 
 class Main(Screen):
@@ -109,6 +174,7 @@ class Main(Screen):
         Binding("ctrl+o", "app.toggle_details", "Details", priority=True, show=False),
         Binding("ctrl+t", "app.toggle_todos", "To-dos", priority=True, show=False),
         Binding("ctrl+b", "app.toggle_live", "Live panel", priority=True, show=False),
+        Binding("f3", "app.toggle_rail", "Threads rail", priority=True, show=False),
         Binding("ctrl+l", "app.redraw", "Redraw", priority=True, show=False),
         Binding("ctrl+r", "app.history_search", "History", priority=True, show=False),
         Binding("ctrl+g", "app.command('editor')", "Editor", priority=True, show=False),
@@ -127,35 +193,37 @@ class Main(Screen):
         super().__init__()
         self.ui = ui
 
+    def on_mount(self) -> None:
+        self.ui.begin()
+
     def compose(self):
         ui = self.ui
-        with Horizontal(id="header"):
-            yield Static(id="header-left")
-            yield Static(id="header-right")
-        with Horizontal(id="main"):
+        with Horizontal(id="app"):
+            yield ui.rail
             with Vertical(id="center"):
-                yield ui.scroller
+                with Horizontal(id="top"):
+                    yield Static(id="top-left")
+                    yield from ui.tabs
+                with Horizontal(id="flow"):
+                    yield ui.spine
+                    yield ui.scroller
+                yield ui.dock
+                yield ui.composer
             yield ui.live
-        with Vertical(id="bottom"):
-            yield ui.dock
-            yield Static(id="activity")
-            yield ui.composer
-            with Horizontal(id="status"):
-                yield Static(id="status-left")
-                yield Static(id="status-right")
 
 
 class AFH(Actions, App):
     TITLE = "AFH"
     ENABLE_COMMAND_PALETTE = False
-    CSS = CSS
+    CSS = CSS + MARKDOWN_CSS
     ALLOW_SELECT = True
     BINDINGS = [Binding("ctrl+c", "ctrl_c", show=False, priority=False), Binding("ctrl+q", "quit_now", show=False)]
 
     def __init__(self, client: Any, events: Any, directory: str, *, model: str | None = None, agent: str | None = None, mode: str | None = None,
-                 thread: str | None = None, resume: bool = False, home: Path | None = None):
+                 thread: str | None = None, resume: bool = False, home: Path | None = None, opener: Callable[[], Any] | None = None):
         super().__init__()
         self.client, self.events = client, events
+        self.opener = opener  # connects while the boot screen shows, when there's no client yet
         self.dir = directory
         self.home_dir = home or HOME
         self.boot: dict = {}
@@ -171,6 +239,9 @@ class AFH(Actions, App):
         self.wanted = {"model": model, "thread": thread, "resume": resume}
         self.history = History(self.home_dir / "tui-history.json")
         self.scroller = Transcript(self, id="transcript")
+        self.spine = Spine(self.scroller, id="spine")
+        self.rail = Rail(self, id="rail")
+        self.tabs = [Tab(*t) for t in TABS]
         self.composer = Composer(self, self.history, id="composer")
         self.dock = Dock(self, id="dock")
         self.live = LivePane(self, id="live")
@@ -178,6 +249,7 @@ class AFH(Actions, App):
         self.asking: set[str] = set()
         self.perm_open = False
         self.tick = 0
+        self.flowing = False
         self.last_esc = 0.0
         self.last_ctrl_c = 0.0
         self.compact_at = COMPACT_AT
@@ -208,12 +280,22 @@ class AFH(Actions, App):
             self.register_theme(theme)
         self.theme = "afh-sunset"
         self.push_screen(self.main_screen)
+        self.main_screen.add_class("-boot")
         self.set_interval(1 / 30, self.pump)
         self.set_interval(0.1, self.spin)
-        self.begin()
 
     @work(exclusive=True, group="begin")
     async def begin(self) -> None:
+        with unless_gone(self.scroller):
+            await self.scroller.mount(Boot())
+        self.strand(False)
+        try:
+            if self.client is None:
+                self.client = await asyncio.to_thread(self.opener)
+                self.events = await asyncio.to_thread(Events, self.client)
+        except CliError as err:
+            self.exit(return_code=err.code, message=str(err))
+            return
         try:
             await self.load_catalog()
             await self.api("POST", "/api/projects", {"path": self.dir})
@@ -229,10 +311,13 @@ class AFH(Actions, App):
         except CliError:
             self.recent = []
         wanted = self.wanted.get("thread") or (self.recent[0]["id"] if self.wanted.get("resume") and self.recent else None)
+        self.main_screen.remove_class("-boot")
+        self.fit()
         if wanted:
             await self.show_thread(wanted)
         else:
             await self.show_home()
+        self.composer.box.focus()
         self.check_for_update()
 
     async def load_catalog(self) -> None:
@@ -338,9 +423,48 @@ class AFH(Actions, App):
     async def show_home(self) -> None:
         self.thread = None
         await self.scroller.show(None)
-        await self.scroller.mount(Home(self))
+        self.strand(False)
+        with unless_gone(self.scroller):
+            await self.scroller.mount(Home(self))
         self.dock.draw()
         self.draw_status()
+        self.rail.reload()
+
+    def strand(self, on: bool) -> None:
+        """A thread has a strand, and it runs down into the deck."""
+        self.spine.set_class(not on, "-off")
+        self.land_strand()
+
+    def land_strand(self) -> None:
+        """The strand lands on the mark's top left point. With no mark, it meets the line."""
+        line = self.composer.line
+        join = SPINE_X if self.composer.has_class("-tight") and not self.spine.has_class("-off") else None
+        if join != line.join:
+            line.join = join
+            line.refresh()
+
+    def fit(self) -> None:
+        """What the terminal has room for."""
+        if self.main_screen.has_class("-boot") or not self.main_screen.is_attached:
+            return
+        self.live.fit()
+        self.rail.fit()
+        middle = self.middle
+        self.composer.set_class(self.size.height < TIGHT_HEIGHT or middle < TIGHT_WIDTH, "-tight")
+        self.land_strand()
+        for tab in self.tabs:
+            tab.set_class(middle < tab.needs, "-off")
+        for home in self.scroller.query(Home):
+            home.fit()
+        self.draw_status()
+
+    @property
+    def middle(self) -> int:
+        """Columns the conversation gets, between the rail and the live panel."""
+        return self.size.width - self.live.taken() - (RAIL_WIDTH if self.rail.shown() else 0)
+
+    def on_resize(self) -> None:
+        self.call_next(self.fit)  # this handler runs before Textual has stored the new size
 
     def open_thread(self, sid: str) -> None:
         self.run_worker(self.show_thread(sid), group="open", exclusive=True)
@@ -363,9 +487,11 @@ class AFH(Actions, App):
                 t.children.setdefault(s["id"], {"title": s.get("title"), "agent": s.get("agent"), "model": s.get("model")})
                 self.threads.setdefault(s["id"], S.Thread(s["id"], s))
             await self.scroller.show(t)
+            self.strand(True)
             self.dock.draw()
             self.draw_status()
             self.pump_permissions()
+            self.rail.reload()
         except CliError as err:
             self.fail(err)
 
@@ -377,6 +503,8 @@ class AFH(Actions, App):
 
     def pump(self) -> None:
         """Up to 400 events a tick, on the app's own thread."""
+        if self.events is None:
+            return
         for _ in range(400):
             try:
                 ev = self.events.queue.get_nowait()
@@ -388,7 +516,7 @@ class AFH(Actions, App):
         kind, d = ev.get("type", ""), ev.get("data") or {}
         sid = d.get("sessionID")
         if kind in ("afh.ready", "model.updated", "agent.updated"):
-            self.run_worker(self.refresh_catalog(), group="catalog", exclusive=True)
+            self.run_worker(self.refresh_catalog, group="catalog", exclusive=True)
             return
         if kind == "session.created" and d.get("parentID") in self.threads:
             parent = self.threads[d["parentID"]]
@@ -412,10 +540,10 @@ class AFH(Actions, App):
         if change is None:
             return
         if change.reload:
-            self.run_worker(self.reload_thread(), group="reload", exclusive=True)
+            self.run_worker(self.reload_thread, group="reload", exclusive=True)
             return
         if change.all:
-            self.run_worker(self.scroller.add_new(), group="add", exclusive=False)
+            self.run_worker(self.scroller.add_new, group="add", exclusive=False)
         if change.msg:
             self.scroller.touch(change.msg)
         if change.perm:
@@ -425,6 +553,7 @@ class AFH(Actions, App):
             self.draw_status()
         if kind in ("session.execution.succeeded", "session.execution.failed"):
             self.bell_when_done(kind)
+            self.rail.reload()
 
     def touch_delegate(self, child: S.Thread) -> None:
         t = self.thread
@@ -571,6 +700,8 @@ class AFH(Actions, App):
         self.thread = t
         self.draft = {"model": None, "agent": None, "mode": None, "goal": None, "worktree": False}
         await self.scroller.show(t)
+        self.strand(True)
+        self.rail.reload()
         return t
 
     # ---- the bars -----------------------------------------------------------------------------
@@ -578,23 +709,23 @@ class AFH(Actions, App):
     def spin(self) -> None:
         self.tick += 1
         t = self.thread
-        if t and (t.busy or t.compacting or t.retry):
+        busy = bool(t and (t.busy or t.compacting or t.retry))
+        if busy != self.flowing and self.main_screen.is_attached:
+            self.flowing = busy
+            self.composer.mark.flow(busy and self.setting("logoAnim", True), float(self.setting("animSpeed", 1) or 1))
+            self.composer.line.run(busy)
+            self.spine.run(busy)
+            if not busy:
+                self.live.rest()
+                self.fit()
+        if busy:
             self.draw_activity()
-        elif self.is_running:
-            self.hide_activity()
-
-    def hide_activity(self) -> None:
-        if self.screen is self.main_screen or self.main_screen.is_attached:
-            try:
-                self.main_screen.query_one("#activity").remove_class("-on")
-            except Exception:
-                pass
 
     def draw_activity(self) -> None:
+        """What's happening, in the deck, with light going through the words."""
         t = self.thread
         if not t:
             return
-        spinner = SPINNER[self.tick % len(SPINNER)]
         model = self.model_name(t.session.get("model")) or "the model"
         secs = S.fmt_dur(S.now_ms() - t.run_start) if t.run_start else ""
         if t.compacting:
@@ -611,48 +742,69 @@ class AFH(Actions, App):
         else:
             label = f"{model} is working"
         rate = f"  {round(t.live_tps)} tok/s" if t.live_tps else ""
-        row = self.main_screen.query_one("#activity", Static)
-        row.add_class("-on")
-        row.update(Content.assemble((spinner, "$primary"), f" {label}  ", (secs, "$afh-text3"), (rate, "$afh-text3"), ("   Esc stops", "$afh-text3")))
+        p = Palette.of(self)
+        self.composer.right.update(Content.assemble(shimmer(label, p.ramp, self.tick / 26, p.text2), (f"  {secs}{rate}", "$afh-text3"), ("   Esc stops", "$afh-text3")))
+
+    def draw_line(self, shell: bool = False) -> None:
+        """The line over the deck: how much of the model's context this thread has used."""
+        t = self.thread
+        limit = (self.find_model(self.model_ref()) or {}).get("context")
+        used = S.context_used(t.tokens) if t and t.tokens else 0
+        pct = 100 * used / limit if limit else 0
+        tone = "warn" if shell else "bad" if pct >= self.compact_at else ""
+        self.composer.line.set_fill(pct / 100, tone)
 
     def draw_status(self) -> None:
-        if not self.main_screen.is_attached:
-            return
         screen = self.main_screen
+        if not screen.is_attached or screen.has_class("-boot") or not screen.query("#top-left"):  # not up yet, or closing
+            return
         t = self.thread
         title = (t.session.get("title") if t else "") or ("New thread" if t else "")
-        left: list[Any] = [gradient("AFH"), "  "]
+        left: list[Any] = []
+        if not self.rail.shown():
+            left += [gradient("AFH"), "   "]
         if title:
-            left += [(S.one_line(title, 80), "$foreground"), ("  ·  ", "$afh-text3"), (S.base_name(self.dir), "$afh-text2")]
+            left += [(S.one_line(title, 80), "$foreground bold"), "   ", (S.base_name(self.dir), "$afh-text3")]
         else:
-            left.append((self.pretty_dir(), "$afh-text2"))
+            left.append((self.pretty_dir(), "$afh-text3"))
         wt = ((t.session.get("metadata") or {}).get("afh") or {}).get("worktree") if t else None
         if wt:
-            left += [("  ", ""), (f"⎇ {str(wt.get('branch')).replace('afh/', '')}", "$primary")]
-        screen.query_one("#header-left", Static).update(Content.assemble(*left))
+            left += ["   ", (f"⎇ {str(wt.get('branch')).replace('afh/', '')}", "$primary")]
+        screen.query_one("#top-left", Static).update(Content.assemble(*left))
+        changed = len({x.get("file") for m in (t.messages if t else []) for p in m.get("content") or [] if p.get("type") == "tool" for x in S.tool_patches(p)})
+        for tab in self.tabs:
+            tab.show(changed if tab.command == "diff" else 0)
+
+        c = self.composer
         ref = self.model_ref()
         variant = f" · {ref['variant']}" if ref and ref.get("variant") and ref["variant"] != "default" else ""
-        screen.query_one("#header-right", Static).update(Content.assemble((self.model_name(ref) or "no model", "$afh-text2"), variant))
-        agent = self.agent_name(self.agent_id())
         mode = self.mode_id()
-        bits: list[Any] = [(agent, "$primary bold"), "  ", (MODE_LABEL.get(mode, mode), {"full": "$warning", "readonly": "$afh-text2"}.get(mode, "$afh-text2"))]
+        c.agent_chip.show(self.agent_name(self.agent_id()), "$foreground")
+        c.mode_chip.show(MODE_LABEL.get(mode, mode), {"full": "$warning"}.get(mode, "$afh-text2"))
+        deck = 3 if c.has_class("-tight") else c.mark.cols + 4
+        room = self.middle - deck - len(self.agent_name(self.agent_id())) - len(MODE_LABEL.get(mode, mode)) - 16
+        c.model_chip.show(S.one_line((self.model_name(ref) or "No model") + variant, max(8, room)), "$foreground" if ref else "$error")
+        self.draw_line()
+        if t and (t.busy or t.compacting or t.retry):
+            return
+        bits: list[Any] = []
         limit = (self.find_model(ref) or {}).get("context")
-        if t and t.tokens:
-            used = S.context_used(t.tokens)
+        used = S.context_used(t.tokens) if t and t.tokens else 0
+        if used:
             if limit:
                 pct = round(100 * used / limit)
                 colour = "$error" if pct >= self.compact_at else "$warning" if pct >= self.compact_at * 0.75 else "$afh-text2"
-                bits += ["  ", (f"{pct}% context", colour)]
-            bits += ["  ", (f"{S.fmt_tokens(used + (t.tokens.get('output') or 0))} tokens", "$afh-text3")]
+                bits += [(f"{pct}% context", colour), "   "]
+            bits += [(f"{S.fmt_tokens(used + (t.tokens.get('output') or 0))} tokens", "$afh-text3"), "   "]
         if t and t.session.get("cost"):
-            bits += ["  ", (S.fmt_cost(t.session.get("cost")), "$afh-text2")]
+            bits += [(S.fmt_cost(t.session.get("cost")), "$afh-text2"), "   "]
         if t and t.jobs and any(j.get("running") for j in t.jobs):
-            bits += ["  ", (f"{sum(1 for j in t.jobs if j.get('running'))} running", "$success")]
+            bits += [(f"{sum(1 for j in t.jobs if j.get('running'))} running", "$success"), "   "]
         if self.update_notice:
-            bits += ["  ", (self.update_notice, "$primary")]
-        screen.query_one("#status-left", Static).update(Content.assemble(*bits))
-        wide = self.size.width >= 100
-        screen.query_one("#status-right", Static).update("/ commands  @ files  ? help" if wide else "? help")
+            bits += [(self.update_notice, "$primary"), "   "]
+        if not bits and self.middle >= 84:
+            bits.append(("/ commands   ? help", "$afh-text3"))
+        c.right.update(Content.assemble(*bits))
 
 
-__all__ = ["AFH", "MODE_ORDER", "MODE_LABEL", "bar", "os", "time", "VerticalScroll", "Callable"]
+__all__ = ["AFH", "MODE_ORDER", "MODE_LABEL", "bar", "os", "time", "VerticalScroll", "Callable", "Row", "SPINNER"]

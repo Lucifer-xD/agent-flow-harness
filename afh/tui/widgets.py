@@ -1,29 +1,28 @@
-"""The conversation on screen: messages, tool rows, thinking, notices and the start screen."""
+"""The conversation on screen. Every row is a point on the strand: see look.py for what that means."""
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any, Callable
 
 from textual import events
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.content import Content
+from textual.highlight import highlight
 from textual.widgets import Markdown, Static
 
 from . import state as S
+from .look import chip, code_colours, unless_gone
 from .themes import gradient_text, mix
 
+code_colours()
 WINDOW = 60  # messages drawn at once; "Show earlier" adds more
 MAX_BODY_LINES = 400  # lines of a tool's output drawn when opened
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-LOGO = (
-    " █████╗ ███████╗██╗  ██╗",
-    "██╔══██╗██╔════╝██║  ██║",
-    "███████║█████╗  ███████║",
-    "██╔══██║██╔══╝  ██╔══██║",
-    "██║  ██║██║     ██║  ██║",
-    "╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝",
-)
-TODO_MARK = {"completed": "✓", "cancelled": "✗", "in_progress": "▸", "pending": "○"}
+TODO_MARK = {"completed": "✓", "cancelled": "×", "in_progress": "◆", "pending": "○"}
+HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+DIFF_WIDTH = 320  # diff rows are padded past any terminal, so their tint runs the full width
+VERB_WIDTH = 9  # verbs line up, so the files after them do
 VISIBLE = {"user", "assistant", "compaction", "model-switched", "agent-switched", "shell"}
 
 
@@ -31,32 +30,52 @@ def gradient(text: str, style: str = "bold") -> Content:
     return Content.assemble(*[(ch, f"{colour} {style}".strip()) for ch, colour in gradient_text(text)])
 
 
-def logo() -> Content:
-    width = max(len(line) for line in LOGO)
-    colours = [c for _, c in gradient_text("x" * width)]
-    lines = []
-    for line in LOGO:
-        lines.append(Content.assemble(*[(ch, colours[i]) for i, ch in enumerate(line)]))
-    return Content("\n").join(lines)
+def code_lines(text: str, path: str | None) -> list[Content]:
+    """Source, coloured by what kind of file it's from, one Content a line."""
+    if path:
+        try:
+            return list(highlight(text, path=path).split("\n", allow_blank=True))
+        except Exception:
+            pass
+    return [Content(line) for line in text.split("\n")]
 
 
-def diff_content(patch: str | None, limit: int = MAX_BODY_LINES) -> Content:
-    """A coloured unified diff."""
-    pieces: list[Content] = []
-    lines = (patch or "").rstrip("\n").split("\n")
-    for line in lines[:limit]:
-        if line.startswith(("+++", "---")):
-            pieces.append(Content.styled(line, "$afh-text3"))
-        elif line.startswith("@@"):
-            pieces.append(Content.styled(line, "$primary"))
+def diff_content(patch: str | None, limit: int = MAX_BODY_LINES, path: str | None = None) -> Content:
+    """A unified diff the way the app shows one: line numbers, coloured code, whole rows tinted."""
+    rows: list[tuple[str, int | None, str]] = []
+    old = new = 0
+    raw = (patch or "").rstrip("\n").split("\n")
+    for line in raw[:limit]:
+        hunk = HUNK.match(line)
+        if hunk:
+            old, new = int(hunk.group(1)), int(hunk.group(2))
+            if rows:
+                rows.append(("gap", None, ""))
+        elif line.startswith(("+++", "---", "diff ", "index ", "Index: ", "===", "\\")):
+            continue
         elif line.startswith("+"):
-            pieces.append(Content.styled(line, "$success on $success 12%"))
+            rows.append(("+", new, line[1:]))
+            new += 1
         elif line.startswith("-"):
-            pieces.append(Content.styled(line, "$error on $error 12%"))
+            rows.append(("-", old, line[1:]))
+            old += 1
         else:
-            pieces.append(Content.styled(line, "$afh-text2"))
-    if len(lines) > limit:
-        pieces.append(Content.styled(f"… {len(lines) - limit} more lines. /diff shows all of it.", "$afh-text3"))
+            rows.append((" ", new, line[1:] if line.startswith(" ") else line))
+            old, new = old + 1, new + 1
+    code = code_lines("\n".join(text for _, _, text in rows), path)
+    pieces: list[Content] = []
+    for i, (kind, number, _) in enumerate(rows):
+        if kind == "gap":
+            pieces.append(Content.styled("     ⋯", "$afh-text3"))
+            continue
+        sign, tint = {"+": ("+", "on $success 14%"), "-": ("−", "on $error 14%")}.get(kind, (" ", ""))
+        tone = {"+": "$success", "-": "$error"}.get(kind, "$afh-text3")
+        line = Content.assemble((f"{number or '':>5} ", "$afh-text3"), (f"{sign} ", tone), code[i] if i < len(code) else "")
+        if kind == " ":
+            line = line.stylize_before("$afh-text2")
+        pieces.append(line.pad_right(max(0, DIFF_WIDTH - line.cell_length)).stylize_before(tint) if tint else line)
+    if len(raw) > limit:
+        pieces.append(Content.styled(f"      {len(raw) - limit} more lines. /diff shows all of it.", "$afh-text3"))
     return Content("\n").join(pieces)
 
 
@@ -81,11 +100,13 @@ class Foldable(Vertical):
     Foldable > Horizontal { height: 1; }
     Foldable .fold-left { width: 1fr; height: 1; text-wrap: nowrap; text-overflow: ellipsis; }
     Foldable .fold-right { width: auto; height: 1; padding-left: 1; }
-    Foldable .fold-body { height: auto; padding: 0 0 0 2; display: none; }
+    Foldable .fold-body { height: auto; padding: 0 1; margin: 0 0 1 0; display: none; background: $afh-code; }
+    Foldable .fold-body.-diff { padding: 0; text-wrap: nowrap; text-overflow: clip; }
     Foldable .fold-tail { height: auto; padding: 0 0 0 2; color: $afh-text3; display: none; }
     Foldable.-open .fold-body { display: block; }
-    Foldable:hover .fold-left { background: $boost; }
+    Foldable:hover .fold-left { color: $primary; }
     """
+    node = "step"
 
     def __init__(self, opened: bool = False, **kw: Any):
         super().__init__(**kw)
@@ -119,8 +140,6 @@ class Foldable(Vertical):
 class ToolRow(Foldable):
     """One tool call: verb, target and outcome. Opens to its diff or output."""
 
-    DEFAULT_CSS = "ToolRow { margin: 0 0 0 2; }"
-
     def __init__(self, tool: dict, opened: bool = False):
         super().__init__(opened=opened)
         self.tool = tool
@@ -141,15 +160,16 @@ class ToolRow(Foldable):
         meta = state.get("metadata") or {}
         kind = S.kind_of(name)
         patches = S.tool_patches(p) if kind == "edit" else []
-        mark = ("●", "$primary") if live else ("✗", "$error") if status == "error" else ("●", "$success" if kind == "edit" else "$afh-text3")
-        self.head.update(Content.assemble(mark, " ", (S.tool_verb(p, live), "bold"), "  ", (S.one_line(S.tool_target(p), 400), "$afh-text2")))
+        self.node = "work" if live else "fail" if status == "error" else "edit" if kind == "edit" else "step"
+        target = S.one_line(S.tool_target(p), 400)
+        self.head.update(Content.assemble((S.tool_verb(p, live).ljust(VERB_WIDTH), "bold"), " ", (f" {target} ", "$foreground on $panel") if kind in ("edit", "read") and target else (target, "$afh-text2")))
         bits: list[Any] = []
         if patches:
             added = removed = 0
             for x in patches:
                 a, r = (x["additions"], x["deletions"]) if x.get("additions") is not None else S.count_patch(x.get("patch"))
                 added, removed = added + (a or 0), removed + (r or 0)
-            bits += [(f"+{added}", "$success"), " ", (f"−{removed}", "$error")]
+            bits += [("▐", "$panel"), (f"+{added}", "$success on $panel"), (" ", "on $panel"), (f"−{removed}", "$error on $panel"), ("▌", "$panel")]
         elif meta.get("blockedBy"):
             bits.append(("blocked by hook", "$warning"))
         elif status == "error":
@@ -166,7 +186,7 @@ class ToolRow(Foldable):
         if diag:
             ok = diag.get("ok")
             count = diag.get("problems", 0)
-            bits += ["  ", ("checked" if ok else f"{count} problem{'' if count == 1 else 's'}", "$success" if ok else "$error")]
+            bits += [" ", chip("checked" if ok else f"{count} problem{'' if count == 1 else 's'}", "$success" if ok else "$error")]
         hooks = meta.get("hooks") or []
         if hooks and not meta.get("blockedBy"):
             bits += ["  ", (f"{len(hooks)} hook{'s' if len(hooks) > 1 else ''}", "$error" if any(h.get("code") for h in hooks) else "$afh-text3")]
@@ -176,6 +196,7 @@ class ToolRow(Foldable):
         if tail:
             self.tail.update(Content(tail))
         if self.opened:
+            self.body.set_class(bool(patches), "-diff")
             self.body.update(self.details(patches))
 
     def details(self, patches: list[dict]) -> Content:
@@ -186,14 +207,13 @@ class ToolRow(Foldable):
             for x in patches:
                 if len(patches) > 1:
                     sections.append(Content.styled(S.base_name(x.get("file")), "bold"))
-                sections.append(diff_content(x.get("patch")))
+                sections.append(diff_content(x.get("patch"), path=x.get("file")))
         else:
             text = S.input_text(p)
             if text:
                 sections.append(plain_block(text, "$afh-text2"))
         out = S.tool_text(state.get("content"))
-        if out:
-            sections.append(Content.styled("Output", "$afh-text3 bold"))
+        if out and not patches:  # an edit's output only repeats the diff
             sections.append(plain_block(out, "$foreground"))
         images = [c for c in state.get("content") or [] if c.get("type") == "image"]
         if images:
@@ -206,6 +226,9 @@ class ToolRow(Foldable):
 
 class PlanRow(ToolRow):
     """The agent's `todo` call: the list as it stands after the call."""
+
+    DEFAULT_CSS = "PlanRow .fold-body { background: transparent; padding: 0 0 0 1; margin: 0 0 1 0; }"
+    node = "plan"
 
     def __init__(self, tool: dict, opened: bool = True):
         super().__init__(tool, opened=opened)
@@ -220,21 +243,23 @@ class PlanRow(ToolRow):
         total = sum(1 for x in todos if x.get("status") != "cancelled")
         live = self.status() in ("streaming", "running")
         label = "Planning" if live else "Checked the to-do list" if meta.get("read") else "Updated the to-do list"
-        self.head.update(Content.assemble(("●", "$primary" if live else "$afh-text3"), " ", (label, "bold")))
-        self.right.update(Content.styled(f"{done}/{total} done", "$afh-text3") if todos else "")
+        self.node = "work" if live else "plan"
+        self.head.update(Content.styled(label, "bold"))
+        self.right.update(chip(f"{done}/{total} done") if todos else "")
         lines = []
         for x in todos:
             st = x.get("status") or "pending"
             text = x.get("activeForm") if st == "in_progress" and x.get("activeForm") else x.get("content")
-            style = {"completed": "$afh-text3 strike", "cancelled": "$afh-text3 strike", "in_progress": "$primary"}.get(st, "$foreground")
-            lines.append(Content.styled(f"{TODO_MARK.get(st, '○')} {text}", style))
+            style = {"completed": "$afh-text3 strike", "cancelled": "$afh-text3 strike", "in_progress": "$primary bold"}.get(st, "$foreground")
+            lines.append(Content.assemble((f"{TODO_MARK.get(st, '○')} ", {"completed": "$success", "in_progress": "$primary"}.get(st, "$afh-text3")), (text or "", style)))
         self.body.update(Content("\n").join(lines) if lines else "")
 
 
 class ThinkRow(Foldable):
     """Thinking: one quiet line that opens to the text."""
 
-    DEFAULT_CSS = "ThinkRow { margin: 0 0 0 2; } ThinkRow .fold-body { color: $afh-text3; }"
+    DEFAULT_CSS = "ThinkRow .fold-body { color: $afh-text3; background: transparent; }"
+    node = "think"
 
     def __init__(self, data: dict, opened: bool = False):
         super().__init__(opened=opened)
@@ -250,7 +275,7 @@ class ThinkRow(Foldable):
         start, end = (created, completed) if created and completed else (p.get("started"), p.get("ended"))
         secs = (end - start) / 1000 if start and end else None
         label = "Thinking" if live else (f"Thought for {secs:.1f}s" if secs < 10 else f"Thought for {round(secs)}s") if secs else "Thoughts"
-        self.head.update(Content.assemble(("▾" if self.opened else "▸", "$afh-text3"), " ", (label, "$afh-text3 italic")))
+        self.head.update(Content.assemble((label, "$afh-text3 italic"), (" ⌄" if self.opened else " ›", "$afh-text3")))
         text = (p.get("text") or "").strip()
         if self.opened:
             self.body.update(Content(text or "…"))
@@ -261,7 +286,10 @@ class ThinkRow(Foldable):
 
 
 class DelegateRow(ToolRow):
-    """A `subagent` call: who it went to, what it's doing now, and its report. Enter or click watches it."""
+    """A `subagent` call: a strand of its own forking off the main one. Click for its brief and report."""
+
+    DEFAULT_CSS = "DelegateRow .fold-tail { padding: 0 0 0 1; }"
+    node = "fork"
 
     def __init__(self, tool: dict, thread_of: Callable[[dict], "S.Thread | None"], agent_name: Callable[[str], str]):
         super().__init__(tool)
@@ -274,19 +302,20 @@ class DelegateRow(ToolRow):
         status = self.status()
         live = status in ("streaming", "running")
         who = self.agent_name(given.get("agent") or "helper")
-        mark = ("●", "$primary") if live else ("✗", "$error") if status == "error" else ("●", "$success")
-        self.head.update(Content.assemble(mark, " ", (who, "bold"), "  ", (S.one_line(given.get("description") or "", 300), "$afh-text2")))
+        self.node = "fork"
+        mark = ("● ", "$primary") if live else ("× ", "$error") if status == "error" else ("✓ ", "$success")
+        self.head.update(Content.assemble(("─", "$primary"), mark, (who, "bold"), "  ", (S.one_line(given.get("description") or "", 300), "$afh-text2")))
         child = self.thread_of(p)
         word = "working" if live else "failed" if status == "error" else "done"
         cost = (child.session.get("cost") if child else 0) or 0
-        self.right.update(Content.assemble((word, "$afh-text3"), (f"  {S.fmt_cost(cost)}", "$afh-text3") if cost else ""))
+        self.right.update(Content.assemble(chip(word, "$primary" if live else "$afh-text2"), (f"  {S.fmt_cost(cost)}", "$afh-text3") if cost else ""))
         steps = []
         if child and live:
             for m in child.messages[-6:]:
                 for part in m.get("content") or []:
                     if part.get("type") == "tool":
                         running = (part.get("state") or {}).get("status") in ("streaming", "running")
-                        steps.append(f"└ {S.tool_verb(part, running)} {S.one_line(S.tool_target(part), 80)}")
+                        steps.append(f"│ {S.tool_verb(part, running)} {S.one_line(S.tool_target(part), 80)}")
         self.tail.styles.display = "block" if steps else "none"
         if steps:
             self.tail.update(Content("\n".join(steps[-4:])))
@@ -301,14 +330,30 @@ class DelegateRow(ToolRow):
             self.body.update(Content("\n").join(sections))
 
 
+MARKDOWN_CSS = """
+TextPart { margin: 1 0 0 0; padding: 0; background: transparent; height: auto; }
+TextPart MarkdownParagraph { margin: 0 0 1 0; }
+TextPart MarkdownFence { margin: 0 0 1 0; padding: 0; background: $afh-code; color: $foreground; }
+TextPart MarkdownFence > Label { padding: 0 1; }
+TextPart MarkdownH1, TextPart MarkdownH2 { margin: 0 0 1 0; padding: 0; background: transparent; color: $foreground; text-style: bold; text-align: left; content-align: left top; border: none; }
+TextPart MarkdownH3, TextPart MarkdownH4, TextPart MarkdownH5, TextPart MarkdownH6 { margin: 0 0 1 0; padding: 0; background: transparent; color: $primary; text-style: bold; text-align: left; }
+TextPart MarkdownBlockQuote { background: $surface; border-left: none; padding: 0 1; margin: 0 0 1 0; color: $afh-text2; }
+TextPart MarkdownBulletList, TextPart MarkdownOrderedList { margin: 0 0 1 0; padding: 0; }
+TextPart MarkdownBulletList MarkdownParagraph, TextPart MarkdownOrderedList MarkdownParagraph { margin: 0; }
+TextPart MarkdownBullet { color: $primary; }
+TextPart MarkdownTable { margin: 0 0 1 0; background: transparent; }
+TextPart MarkdownTableContent { keyline: none; grid-gutter: 0 2; }
+TextPart MarkdownTableContent > .header { color: $afh-text2; text-style: bold; padding: 0; }
+TextPart MarkdownTableContent > .cell { padding: 0; }
+TextPart MarkdownHorizontalRule { border-bottom: solid $afh-border; margin: 0 0 1 0; }
+TextPart MarkdownBlock:dark > .code_inline, TextPart MarkdownBlock:light > .code_inline { background: $primary 14%; color: $foreground; }
+"""
+
+
 class TextPart(Markdown):
     """Streamed Markdown. Only what's new is parsed, so a long answer stays smooth."""
 
-    DEFAULT_CSS = """
-    TextPart { margin: 1 0 0 2; padding: 0; background: transparent; height: auto; }
-    TextPart MarkdownParagraph { margin: 0 0 1 0; }
-    TextPart MarkdownFence { margin: 0 0 1 0; }
-    """
+    node = "reply"
 
     def __init__(self, data: dict):
         super().__init__(data.get("text") or "", open_links=False)
@@ -328,12 +373,14 @@ class TextPart(Markdown):
 
 
 class UserMsg(Static):
-    """What you sent."""
+    """What you sent: a soft card, the first point of a turn."""
 
     DEFAULT_CSS = """
-    UserMsg { margin: 1 0 1 0; padding: 0 1; border-left: outer $primary; background: $surface; color: $foreground; height: auto; }
+    UserMsg { margin: 1 0 0 0; padding: 0 1; border: inner $surface; background: $surface; color: $foreground; height: auto; }
     UserMsg.-pending { color: $afh-text3; }
     """
+    node = "you"
+    node_row = 1  # the soft edge takes a row
 
     def __init__(self, m: dict):
         super().__init__()
@@ -347,7 +394,7 @@ class UserMsg(Static):
         self.set_class(bool(m.get("pending")), "-pending")
         cmd = m.get("command")
         if cmd and cmd.get("name") == "goal":
-            pieces = [("Goal  ", "$primary bold"), cmd.get("args") or ""]
+            pieces = [chip("Goal", "$primary"), "  ", cmd.get("args") or ""]
         elif cmd:
             pieces = [(f"/{cmd.get('name')}", "$primary bold"), f" {cmd.get('args')}" if cmd.get("args") else ""]
         else:
@@ -362,11 +409,13 @@ class UserMsg(Static):
 
 class Note(Static):
     """A quiet line in the thread: notices, model switches."""
-    DEFAULT_CSS = "Note { margin: 0 0 1 2; color: $afh-text3; height: auto; } Note.-warn { color: $warning; }"
+    DEFAULT_CSS = "Note { margin: 0 0 1 0; color: $afh-text3; height: auto; } Note.-warn { color: $warning; }"
 
 
 class ErrorCard(Static):
-    DEFAULT_CSS = "ErrorCard { margin: 1 0 1 2; padding: 0 1; border-left: outer $error; background: $error 8%; height: auto; }"
+    DEFAULT_CSS = "ErrorCard { margin: 1 0 1 0; padding: 0 1; border: inner $error 12%; background: $error 12%; height: auto; }"
+    node = "fail"
+    node_row = 1
 
     def __init__(self, err: Any, model: str = ""):
         super().__init__()
@@ -381,7 +430,12 @@ class ErrorCard(Static):
 
 
 class GoalCard(Static):
-    DEFAULT_CSS = "GoalCard { margin: 0 0 1 2; padding: 0 1; height: auto; border-left: outer $success; } GoalCard.-blocked { border-left: outer $warning; }"
+    DEFAULT_CSS = """
+    GoalCard { margin: 1 0 1 0; padding: 0 1; height: auto; border: inner $success 12%; background: $success 12%; }
+    GoalCard.-blocked { border: inner $warning 12%; background: $warning 12%; }
+    """
+    node = "edit"
+    node_row = 1
 
 
 class AssistantMsg(Vertical):
@@ -389,7 +443,7 @@ class AssistantMsg(Vertical):
 
     DEFAULT_CSS = """
     AssistantMsg { height: auto; }
-    AssistantMsg .meta { margin: 0 0 1 2; color: $afh-text3; height: 1; text-wrap: nowrap; text-overflow: ellipsis; }
+    AssistantMsg .meta { margin: 0 0 1 0; color: $afh-text3; height: 1; text-wrap: nowrap; text-overflow: ellipsis; }
     """
 
     def __init__(self, m: dict, view: "Transcript"):
@@ -487,7 +541,8 @@ class AssistantMsg(Vertical):
         if self.meta_row.parent is None:  # on_mount syncs once the rows are there
             return
         async with self.syncing:
-            await self.bring_up_to_date()
+            with unless_gone(self):
+                await self.bring_up_to_date()
 
     async def bring_up_to_date(self) -> None:
         """Bring the widgets in line with the message. Parts only ever appear at the end, except on a retry."""
@@ -573,6 +628,12 @@ class AssistantMsg(Vertical):
             bits.append(f"{round(m['tps'])} tok/s")
         return " · ".join(b for b in bits if b)
 
+    def points(self) -> Any:
+        for row in self.parts.values():
+            kind = getattr(row, "node", "")
+            if kind:
+                yield row, kind
+
     def set_details(self, opened: bool) -> None:
         for row in self.parts.values():
             if isinstance(row, (ThinkRow, ToolRow)) and not isinstance(row, (PlanRow, DelegateRow)):
@@ -580,7 +641,8 @@ class AssistantMsg(Vertical):
 
 
 class Compaction(Foldable):
-    DEFAULT_CSS = "Compaction { margin: 0 0 1 2; } Compaction .fold-body { color: $afh-text2; }"
+    DEFAULT_CSS = "Compaction { margin: 0 0 1 0; } Compaction .fold-body { color: $afh-text2; }"
+    node = "think"
 
     def __init__(self, m: dict):
         super().__init__()
@@ -592,7 +654,7 @@ class Compaction(Foldable):
     def draw(self) -> None:
         n = (self.m.get("metadata") or {}).get("compacted")
         label = f"Compacted {n} earlier message{'' if n == 1 else 's'}, summary" if n else "Earlier context was compacted, summary"
-        self.head.update(Content.assemble(("▾" if self.opened else "▸", "$afh-text3"), " ", (label, "$afh-text3")))
+        self.head.update(Content.assemble((label, "$afh-text3"), (" ⌄" if self.opened else " ›", "$afh-text3")))
         if self.opened:
             self.body.update(Content(self.m.get("text") or "No summary was kept for this compaction."))
 
@@ -608,7 +670,8 @@ class Transcript(VerticalScroll):
     """The conversation. Follows the end unless you've scrolled up."""
 
     DEFAULT_CSS = """
-    Transcript { height: 1fr; padding: 0 1; scrollbar-size-vertical: 1; background: $background; }
+    Transcript { height: 1fr; width: 1fr; padding: 0 2 0 0; scrollbar-size-vertical: 1; background: $background; }
+    Transcript > * { max-width: 124; }
     """
     can_focus = False
 
@@ -626,6 +689,14 @@ class Transcript(VerticalScroll):
     def on_mount(self) -> None:
         self.anchor()
         self.set_interval(1 / 12, self.flush)
+
+    def points(self) -> Any:
+        """What's on the strand, in order."""
+        for row in self.children:
+            if isinstance(row, AssistantMsg):
+                yield from row.points()
+            elif getattr(row, "node", ""):
+                yield row, row.node
 
     # what the rows ask for
     def show_thinking(self) -> bool:
@@ -677,7 +748,8 @@ class Transcript(VerticalScroll):
                 self.rows[m["id"]] = row
                 rows.append(row)
         if rows:
-            await self.mount_all(rows)
+            with unless_gone(self):
+                await self.mount_all(rows)
         await self.draw_error()
         self.scroll_end(animate=False)
         self.anchor()
@@ -733,7 +805,8 @@ class Transcript(VerticalScroll):
                 self.rows[m["id"]] = row
                 fresh.append(row)
         if fresh:
-            await self.mount_all(fresh, before=self.error_row) if self.error_row else await self.mount_all(fresh)
+            with unless_gone(self):
+                await self.mount_all(fresh, before=self.error_row) if self.error_row else await self.mount_all(fresh)
         self.dirty.update(k for k, r in self.rows.items() if isinstance(r, (AssistantMsg, UserMsg)))
         await self.draw_error()
 
@@ -744,7 +817,8 @@ class Transcript(VerticalScroll):
             self.error_row = None
         if t and t.error:
             self.error_row = ErrorCard(t.error, self.model_name(t.session.get("model")))
-            await self.mount(self.error_row)
+            with unless_gone(self):
+                await self.mount(self.error_row)
 
     def touch(self, mid: str | None) -> None:
         if mid:
@@ -772,7 +846,7 @@ class Transcript(VerticalScroll):
 def bar(fraction: float, width: int = 20) -> Content:
     filled = round(max(0, min(1, fraction)) * width)
     colour = "$error" if fraction >= 0.9 else "$warning" if fraction >= 0.7 else "$primary"
-    return Content.assemble(("█" * filled, colour), ("░" * (width - filled), "$afh-text3"))
+    return Content.assemble(("━" * filled, colour), ("━" * (width - filled), "$afh-border2"))
 
 
-__all__ = ["Transcript", "Row", "SPINNER", "logo", "gradient", "diff_content", "plain_block", "bar", "mix"]
+__all__ = ["MARKDOWN_CSS", "Transcript", "Row", "SPINNER", "gradient", "diff_content", "plain_block", "bar", "mix"]
