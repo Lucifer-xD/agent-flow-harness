@@ -238,6 +238,7 @@ class AFH(Actions, App):
     async def load_catalog(self) -> None:
         boot = await self.get("/api/bootstrap")
         self.boot = boot
+        self.warn_if_app_is_older(str(boot.get("version") or ""))
         self.settings = boot.get("settings") or {}
         self.models = boot.get("models") or []
         self.agents = boot.get("agents") or []
@@ -246,6 +247,13 @@ class AFH(Actions, App):
         agent = self.settings.get("agent") or {}
         self.compact_at = agent.get("compactAt") or COMPACT_AT
         await self.load_commands()
+
+    def warn_if_app_is_older(self, version: str) -> None:
+        """Attached to a desktop app that hasn't updated yet: some things here won't work until it does."""
+        from .update import newer
+
+        if version and not self.client.backend and newer(__version__, version):
+            self.say(f"The AFH app running on this PC is {version}, older than this terminal ({__version__}). Update the app, or some things here won't work.", 12)
 
     async def load_commands(self) -> None:
         try:

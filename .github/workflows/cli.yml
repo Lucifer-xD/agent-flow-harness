@@ -1,0 +1,113 @@
+name: Terminal app build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+    branches: ["tui"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: windows-latest, asset: afh-windows-x64.zip }
+          - { runner: macos-15, asset: afh-macos-arm64.tar.gz }
+          - { runner: macos-15-intel, asset: afh-macos-x64.tar.gz }
+          - { runner: ubuntu-22.04, asset: afh-linux-x64.tar.gz }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt pyinstaller
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          PYTHON: python
+        run: |
+          ./scripts/build-backend.ps1 -Name afh -Dist cli-dist
+          Compress-Archive -Path cli-dist/afh -DestinationPath cli-dist/${{ matrix.asset }}
+      - name: Build (Mac, Linux)
+        if: runner.os != 'Windows'
+        env:
+          PYTHON: python
+          NAME: afh
+          DIST: cli-dist
+        run: |
+          bash scripts/build-backend.sh
+          tar -czf cli-dist/${{ matrix.asset }} -C cli-dist afh
+
+      - name: Serve it like a release
+        shell: bash
+        run: |
+          mkdir -p mirror
+          cp cli-dist/${{ matrix.asset }} mirror/
+          cd mirror
+          python -c "import hashlib,sys; n=sys.argv[1]; print(hashlib.sha256(open(n,'rb').read()).hexdigest()+'  '+n)" ${{ matrix.asset }} > afh-checksums.txt
+          nohup python -m http.server 8765 --bind 127.0.0.1 > /dev/null 2>&1 &
+          sleep 2
+
+      - name: Install with the real script (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          AFH_DOWNLOAD_BASE: http://127.0.0.1:8765
+          AFH_HOME: ${{ runner.temp }}\afh-home
+        run: |
+          ./website/install.ps1
+          $afh = Join-Path $env:AFH_HOME 'bin\afh.cmd'
+          & $afh --version
+          & $afh status
+          if ($LASTEXITCODE -ne 0) { throw 'afh status failed' }
+      - name: Install with the real script (Mac, Linux)
+        if: runner.os != 'Windows'
+        env:
+          AFH_DOWNLOAD_BASE: http://127.0.0.1:8765
+          AFH_HOME: ${{ runner.temp }}/afh-home
+        run: |
+          bash website/install.sh
+          "$AFH_HOME/bin/afh" --version
+          "$AFH_HOME/bin/afh" status
+
+      - name: The full-screen app starts from the build
+        shell: bash
+        env:
+          AFH_HOME: ${{ runner.temp }}/afh-home
+        run: python scripts/smoke-tui.py "$(ls cli-dist/afh/afh cli-dist/afh/afh.exe 2>/dev/null | head -n 1)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: cli-dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write  # adds the archives to the release
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: out
+          merge-multiple: true
+      - name: Add the archives to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cd out
+          sha256sum afh-* > afh-checksums.txt
+          cat afh-checksums.txt
+          gh release upload "$GITHUB_REF_NAME" afh-* --clobber

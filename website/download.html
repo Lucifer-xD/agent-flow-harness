@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Download · Agent Flow Harness</title>
-  <meta name="description" content="Download Agent Flow Harness for Windows and Mac — free, no account needed — and the AFH app for Android and iPhone: chat with any model and reach your computer from anywhere.">
+  <meta name="description" content="Download Agent Flow Harness for Windows and Mac, install it in your terminal with one command on Windows, Mac or Linux, and get the AFH app for Android and iPhone.">
   <!-- seo -->
   <link rel="canonical" href="https://agentflowharness.com/download">
   <meta property="og:url" content="https://agentflowharness.com/download">
@@ -14,9 +14,9 @@
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta property="og:title" content="Download · Agent Flow Harness">
-  <meta property="og:description" content="Download Agent Flow Harness for Windows and Mac — free, no account needed — and the AFH app for Android and iPhone: chat with any model and reach your computer from anywhere.">
+  <meta property="og:description" content="Download Agent Flow Harness for Windows and Mac, install it in your terminal with one command on Windows, Mac or Linux, and get the AFH app for Android and iPhone.">
   <meta property="og:type" content="website">
-  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Agent Flow Harness", "alternateName": "AFH", "applicationCategory": "DeveloperApplication", "operatingSystem": "Windows 10, Windows 11, macOS, Android, iOS", "description": "A free desktop AI coding agent that runs on your own PC with the models you choose, plus a phone app to chat with any model and control your computer from anywhere.", "url": "https://agentflowharness.com/", "downloadUrl": "https://agentflowharness.com/download", "image": "https://agentflowharness.com/assets/social.png", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}</script>
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Agent Flow Harness", "alternateName": "AFH", "applicationCategory": "DeveloperApplication", "operatingSystem": "Windows 10, Windows 11, macOS, Linux, Android, iOS", "description": "A free desktop AI coding agent that runs on your own PC with the models you choose, plus a phone app to chat with any model and control your computer from anywhere.", "url": "https://agentflowharness.com/", "downloadUrl": "https://agentflowharness.com/download", "image": "https://agentflowharness.com/assets/social.png", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}</script>
   <!-- /seo -->
   <meta name="theme-color" content="#f7f3ee">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
@@ -44,15 +44,18 @@
       <div class="dl-main">
         <div class="dl-card" data-reveal>
           <p class="kicker">Download · free</p>
-          <h1 class="display">Get AFH<br><span class="grad-text">for PC &amp; Mac.</span></h1>
-          <p class="lead">No account needed. Install it, sign in or add a key, open a folder and say what you want built.</p>
-          <div class="cta-row">
-            <a class="btn btn-primary btn-big" data-download href="/downloads/AFH-Setup-1.20.0.exe">
+          <h1 class="display">Get AFH<br><span class="grad-text">your way.</span></h1>
+          <p class="lead">The same AFH three ways: a desktop app, your terminal, or your phone. No account needed.</p>
+          <nav class="dl-ways" aria-label="Ways to get AFH"><a href="#desktop" class="on">Desktop app</a><a href="#terminal">Terminal</a><a href="#phone">Phone</a></nav>
+          <div class="dl-buttons" id="desktop">
+            <a class="btn btn-big dl-win" data-download href="/downloads/AFH-Setup-1.20.0.exe">
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
-              Download AFH <span data-version>1.20.0</span>
+              Windows
             </a>
+            <a class="btn btn-big dl-apple" href="https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download/AFH-mac-arm64.dmg">Mac · Apple Silicon</a>
+            <a class="btn btn-big dl-apple" href="https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download/AFH-mac-x64.dmg">Mac · Intel</a>
           </div>
-          <p class="dl-mac">On a Mac? <a href="https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download/AFH-mac-arm64.dmg">Apple Silicon</a> · <a href="https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download/AFH-mac-x64.dmg">Intel</a> · <a href="#mac">How to open it</a></p>
+          <p class="dl-mac">On a Mac, the first time: <a href="#mac">how to open it</a>. On Linux: use the <a href="#terminal">terminal app</a>.</p>
           <ul class="dl-meta">
             <li>Version <b data-version>1.20.0</b></li>
             <li><b data-size>143 MB</b></li>
@@ -79,6 +82,16 @@
           <p class="retry">Download didn't start? <a data-download href="/downloads/AFH-Setup-1.20.0.exe">Try again</a> · <a href="/docs">Read the guide</a></p>
         </div>
       </div>
+    </section>
+
+    <section class="section dl-terminal" id="terminal" data-scene='{"net":1,"activity":0.6,"shiftX":0}'>
+      <div class="section-head center" data-reveal>
+        <p class="kicker">In your terminal</p>
+        <h2 class="h2">One command. No desktop app needed.</h2>
+        <p class="sub">The same AFH, full screen, on Windows, Mac and Linux. Everything the app does, from threads and models to approvals and settings.</p>
+      </div>
+      <div data-install data-reveal></div>
+      <p class="fine-note center" data-reveal>Then go to a project folder and type <code>afh</code>. Update any time with <code>afh update</code>. <a href="/cli">See what it looks like →</a></p>
     </section>
 
     <section class="panel release" data-reveal aria-label="This release">
@@ -183,7 +196,8 @@
       <div class="two">
         <div class="panel" data-reveal>
           <table class="req">
-            <tr><td>System</td><td><b>Windows 10 or 11</b>, 64-bit, or a <b>Mac</b> with Apple Silicon or Intel</td></tr>
+            <tr><td>Desktop app</td><td><b>Windows 10 or 11</b>, 64-bit, or a <b>Mac</b> with Apple Silicon or Intel</td></tr>
+            <tr><td>Terminal app</td><td>The same systems, plus <b>64-bit Linux</b> with glibc 2.35 or newer (Ubuntu 22.04 and later)</td></tr>
             <tr><td>Disk</td><td>About <b>430 MB</b> once installed, plus your threads</td></tr>
             <tr><td>Models</td><td>A ChatGPT or Copilot plan, any API key, or a model running on your PC</td></tr>
             <tr><td>Internet</td><td>Needed for online models. Local models work offline.</td></tr>
@@ -214,8 +228,9 @@
         <details data-reveal><summary>Why does Windows warn me about it?</summary><div><p>SmartScreen warns about apps it hasn't seen many times before. Choose <b>More info → Run anyway</b>. You can check the file's SHA-512 against the one on this page first.</p></div></details>
         <details data-reveal><summary>How safe is reaching my computer from the phone?</summary><div><p>Only your account can reach your computers, and you choose which computers are signed in. Everything goes over HTTPS through agentflowharness.com, which passes it along without keeping it: the server stores your email, a hash of your password and the list of your computers — never your threads, files or keys. Anyone signed in to your account can use AFH on your computer like you, so use a strong password. Turn it off any time in <b>Settings → Remote control</b>.</p></div></details>
         <details data-reveal><summary>How do I open AFH on a Mac?</summary><div id="mac"><p>Open the DMG and drag AFH to Applications. The app isn't signed by Apple yet, so the first time, macOS won't open it. Go to <b>System Settings → Privacy &amp; Security</b> and choose <b>Open Anyway</b>. You only do this once. If macOS says the app is damaged, run <code>xattr -dr com.apple.quarantine "/Applications/Agent Flow Harness.app"</code> in Terminal. New versions are a download, and AFH tells you when one is out. Computer use is Windows only.</p></div></details>
-        <details data-reveal><summary>Is there a Linux version?</summary><div><p>Not yet.</p></div></details>
-        <details data-reveal><summary>How do I uninstall it?</summary><div><p>Open <b>Settings → Apps</b> in Windows, find <b>Agent Flow Harness</b> and choose Uninstall. Your threads and keys stay in <code>%USERPROFILE%\.afh</code>; delete that folder to remove them too.</p></div></details>
+        <details data-reveal><summary>Is there a Linux version?</summary><div><p>Yes, in the terminal: <a href="#terminal">one command installs it</a>. The desktop window is Windows and Mac only.</p></div></details>
+        <details data-reveal><summary>How do I uninstall it?</summary><div><p>Desktop app: open <b>Settings → Apps</b> in Windows, find <b>Agent Flow Harness</b> and choose Uninstall. Terminal app: run <code>afh uninstall</code>. Either way your threads and keys stay in the <code>.afh</code> folder in your home folder; delete it to remove them too.</p></div></details>
+        <details data-reveal><summary>Do the terminal app and the desktop app share my threads?</summary><div><p>Yes. They use the same threads, settings, providers and keys. If the desktop app is open, the terminal app connects to it, so you can watch the same thread in both.</p></div></details>
       </div>
     </section>
   </main>

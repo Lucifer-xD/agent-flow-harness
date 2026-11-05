@@ -859,6 +859,7 @@ def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="afh", description="Agent Flow Harness in your terminal. With no command, chat in this folder.")
     p.add_argument("-v", "--version", action="version", version=f"afh {__version__}")
     p.add_argument("--plain", action="store_true", help="the simple line chat instead of the full-screen app")
+    p.add_argument("--tui-check", action="store_true", help=argparse.SUPPRESS)
     run_flags(p)
     sub = p.add_subparsers(dest="command")
     r = sub.add_parser("run", help="do one task, then exit")
@@ -916,6 +917,10 @@ def prepare_terminal() -> None:
 def main(argv: list[str] | None = None) -> int:
     prepare_terminal()
     a = parser().parse_args(argv)
+    if a.tui_check:
+        from . import tui
+
+        return tui.check()
     offline: dict[str, Callable] = {"serve": cmd_serve, "install": cmd_install, "update": cmd_update, "uninstall": cmd_uninstall}
     if a.command in offline:
         try:

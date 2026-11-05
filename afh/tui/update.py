@@ -118,7 +118,7 @@ def install_version(info: dict, say: Any = print) -> Path:
         unpack(archive, staging)
         shutil.rmtree(target, ignore_errors=True)
         staging.rename(target)
-    exe = next(iter(target.rglob("afh.exe" if os.name == "nt" else "afh")))
+    exe = target / "afh" / ("afh.exe" if os.name == "nt" else "afh")
     if os.name != "nt":
         exe.chmod(exe.stat().st_mode | stat.S_IXUSR)
     write_shim(exe)
@@ -214,7 +214,7 @@ def remove_from_path() -> None:
             kept = [p for p in value.split(";") if p and p.rstrip("\\").lower() != folder.lower()]
             winreg.SetValueEx(key, "Path", 0, kind, ";".join(kept))
         return
-    for name in (".profile", ".bashrc", ".zshrc", ".bash_profile"):
+    for name in (".profile", ".bashrc", ".zshrc", ".bash_profile", ".zprofile"):
         path = Path.home() / name
         if path.is_file():
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
@@ -226,11 +226,11 @@ def remove_from_path() -> None:
 def cmd_uninstall(_: Any = None) -> int:
     """afh uninstall: the program goes, your threads, settings and keys stay in ~/.afh."""
     remove_from_path()
-    shim_path().unlink(missing_ok=True)
-    if os.name == "nt" and standalone():
-        # A running program can't delete itself on Windows, so a small helper finishes after it exits.
-        subprocess.Popen(f'cmd /c ping -n 3 127.0.0.1 >nul & rmdir /s /q "{ROOT}"', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+    if os.name == "nt":
+        # Neither the running program nor the afh.cmd that started it can go yet, so a small helper finishes after we exit.
+        subprocess.Popen(f'cmd /c ping -n 3 127.0.0.1 >nul & del /q "{shim_path()}" & rmdir /s /q "{ROOT}"', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
     else:
+        shim_path().unlink(missing_ok=True)
         shutil.rmtree(ROOT, ignore_errors=True)
     print(f"AFH's terminal app is removed. Your threads, settings and keys are still in {HOME}.")
     return 0

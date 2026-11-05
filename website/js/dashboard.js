@@ -793,7 +793,7 @@
         h("div.dash-card", {},
           h("h2", {}, "Add a computer"),
           h("ol.dash-steps", {},
-            h("li", {}, h("a", { href: "/download" }, "Download AFH"), " for Windows and open it."),
+            h("li", {}, h("a", { href: "/download" }, "Download AFH"), " and open it."),
             h("li", {}, "Go to ", h("b", {}, "Settings → Remote control"), " and choose ", h("b", {}, "Sign in with your browser"), "."),
             h("li", {}, "Approve it on the page that opens — it shows up here in a few seconds."))),
         h("div.dash-card", {},

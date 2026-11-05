@@ -62,7 +62,7 @@
         <a href="#browser">Browser &amp; DevTools</a>
         <a href="#approvals">Approvals</a>
         <a href="#worktrees">Worktrees</a>
-        <a href="#cli">Command line</a>
+        <a href="#cli">Terminal</a>
         <a href="#github">GitHub agent</a>
         <a href="#races">Model races</a>
         <a href="#phone">From your phone</a>
@@ -83,7 +83,7 @@
       <section id="install">
         <h2>Install</h2>
         <ol class="steps">
-          <li><a href="/download">Download the installer</a> for Windows 10 or 11 (64-bit), or for a Mac.</li>
+          <li><a href="/download">Download the installer</a> for Windows 10 or 11 (64-bit), or for a Mac. Prefer a terminal, or on Linux? <a href="#cli">Install the terminal app</a> instead.</li>
           <li>Run it. If Windows says it protected your PC, choose <b>More info → Run anyway</b> — AFH is new, so SmartScreen doesn't know it yet.</li>
           <li>AFH opens when it's installed. Next time, find it in the Start menu.</li>
         </ol>
@@ -206,8 +206,12 @@
       </section>
 
       <section id="cli">
-        <h2>Command line</h2>
-        <p>Use the agent from any terminal, over SSH or in a script. Open <b>Settings → Developer → Command line</b>, choose <b>Install</b>, then open a new terminal.</p>
+        <h2>Terminal</h2>
+        <p>All of AFH, full screen in any terminal, over SSH or in a script. You don't need the desktop app. Install it with one command:</p>
+        <div data-install></div>
+        <p>Then go to a project folder and type <code>afh</code>. Type <code>/</code> for commands, <code>@</code> for files, <code>!</code> to run a shell command and <code>?</code> for help. <code>/connect</code> adds a provider. See <a href="/cli">the Terminal page</a> for every key.</p>
+        <p>Already have the desktop app? <b>Settings → Developer → Command line → Install</b> puts the same <code>afh</code> on your PATH. The two share threads, settings and keys, and <code>afh</code> connects to the app when it's open.</p>
+        <p><code>afh update</code> installs the newest version. <code>afh uninstall</code> removes the program and keeps your threads, settings and keys. <code>afh --plain</code> gives a simple line chat for basic terminals.</p>
         <div class="code" data-lang="bash"><pre><code>afh                                  # chat in this folder
 afh run "fix the failing tests"      # one task, then exit
 git diff | afh run "review this" -q &gt; review.md</code></pre></div>
@@ -333,9 +337,9 @@ afh race discard &lt;id&gt;</code></pre></div>
         <h3>Can I bring my OpenCode or Zadloop threads?</h3>
         <p>Yes. <b>Settings → Models &amp; providers</b> offers a one-time <b>Import from OpenCode</b> (keys, endpoints, MCP servers and threads). For single threads, open the palette and choose <b>Import thread…</b>.</p>
         <h3>Mac or Linux?</h3>
-        <p>AFH runs on Windows and Mac. Computer use is Windows only. There's no Linux version yet.</p>
+        <p>The desktop app runs on Windows and Mac. The terminal app also runs on 64-bit Linux. Computer use is Windows only.</p>
         <h3>Is there a command line?</h3>
-        <p>Yes: chat in a terminal with <code>afh</code>, or run one task with <code>afh run</code>. See <a href="#cli">Command line</a>.</p>
+        <p>Yes: <code>afh</code> opens AFH full screen in your terminal, and <code>afh run</code> does one task from a script. No desktop app needed. See <a href="#cli">Terminal</a>.</p>
       </section>
     </main>
   </div>

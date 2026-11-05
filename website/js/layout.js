@@ -5,7 +5,7 @@
 // reads), so the version, size, date and checksum shown anywhere are always the real ones.
 (() => {
   const page = document.body.dataset.page || "";
-  const LINKS = [["features", "Product"], ["models", "Models"], ["docs", "Docs"], ["api", "API"], ["changelog", "Changelog"]];
+  const LINKS = [["features", "Product"], ["cli", "Terminal"], ["models", "Models"], ["docs", "Docs"], ["api", "API"], ["changelog", "Changelog"]];
   const link = ([id, label]) => `<a href="/${id}"${page === id ? ' class="active" aria-current="page"' : ""}>${label}</a>`;
   const MARK = '<img src="/assets/mark.svg" alt="" width="34" height="20">';
 
@@ -37,7 +37,7 @@
     menu.innerHTML = `<nav aria-label="Menu">${[["", "Home"], ...LINKS, ["download", "Download"]].map(([id, label], i) =>
       `<a href="/${id}" style="--i:${i}"${page === (id || "home") ? ' class="active"' : ""}>${label}</a>`).join("")}</nav>
       <div class="menu-auth" data-auth-menu><a class="btn btn-ghost" href="/account">Sign in</a><a class="btn btn-primary" href="/account?signup">Create account</a></div>
-      <p class="menu-foot">AFH <span data-version>1.20.0</span> · Windows and Mac</p>`;
+      <p class="menu-foot">AFH <span data-version>1.20.0</span> · Windows, Mac and terminal</p>`;
     nav.after(menu);
     nav.querySelector(".theme-btn").addEventListener("click", () => window.afhTheme.set(window.afhTheme.get() === "dark" ? "light" : "dark"));
     const burger = nav.querySelector(".burger");
@@ -80,20 +80,75 @@
       <div class="footer-top">
         <div class="footer-brand">
           <a class="brand" href="/">${MARK}<span>Agent Flow Harness</span></a>
-          <p>A desktop coding agent that plans, delegates and writes code on your own PC, with the models you choose.</p>
+          <p>A coding agent that plans, delegates and writes code on your own computer, with the models you choose. As an app or in your terminal.</p>
           <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.20.0</span> · <span data-date>Nov 3, 2026</span></a>
         </div>
         <nav class="footer-cols" aria-label="Footer">
-          <div><h4>Product</h4><a href="/features">Features</a><a href="/features#modes">Modes</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a></div>
+          <div><h4>Product</h4><a href="/features">Features</a><a href="/features#modes">Modes</a><a href="/cli">Terminal</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a></div>
           <div><h4>Use it</h4><a href="/docs">Getting started</a><a href="/docs#providers">Add a provider</a><a href="/chat">Web chat</a><a href="/computers">Your computers</a><a href="/account?signup">Create account</a></div>
           <div><h4>Developers</h4><a href="/api">API reference</a><a href="/sdk/afh_sdk.py" download>Python SDK</a><a href="/sdk/afh.mjs" download>JavaScript SDK</a><a href="/api#events">Live events</a><a href="/docs#faq">FAQ</a></div>
         </nav>
       </div>
       <div class="footer-bottom">
         <p>© 2026 Agent Flow Harness</p>
-        <p>Runs on your PC · no account needed · no tracking scripts</p>
+        <p>Runs on your computer · no account needed · no tracking scripts</p>
       </div>`;
   }
+
+  // the download button speaks to the system you're on: <a data-os-cta>, words in data-os-label
+  const RELEASES = "https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download";
+  const ICONS = {
+    windows: "M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z",
+    mac: "M16.4 12.6c0-2.2 1.8-3.3 1.9-3.3-1-1.5-2.6-1.7-3.2-1.7-1.3-.1-2.6.8-3.3.8-.7 0-1.7-.8-2.8-.8-1.4 0-2.8.8-3.5 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.7.7 2.8.7c1.2 0 1.9-1 2.6-2.1.8-1.2 1.2-2.4 1.2-2.4s-2.3-.9-2.3-3.3ZM14.300 6.100c.6-.7 1-1.700.9-2.700-.9 0-1.900.6-2.600 1.300-.5.700-1 1.700-.9 2.600 1 .1 2-.5 2.600-1.200Z",
+    terminal: "M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm2.300 3.300L5 9.600 7.400 12 5 14.400l1.300 1.300L10 12 6.300 8.300ZM11 15v1.800h6V15h-6Z",
+    phone: "M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 3v13h8V5H8Zm4 14.200a.9.9 0 1 0 0 1.800.9.9 0 0 0 0-1.800Z",
+  };
+  const ua = navigator.userAgent;
+  const system = /Android|iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "phone" : /Mac OS X|Macintosh/.test(ua) ? "mac" : /Windows/.test(ua) ? "windows" : /Linux|X11|CrOS/.test(ua) ? "linux" : "other";
+  const dress = (a, icon, label, href) => {
+    a.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="${ICONS[icon]}"/></svg>${label}`;
+    a.href = href;
+  };
+  const buttons = document.querySelectorAll("[data-os-cta]");
+  buttons.forEach((a) => {
+    if (system === "windows") dress(a, "windows", "Download for Windows", "/download");
+    else if (system === "mac") dress(a, "mac", "Download for Mac", "/download#desktop");
+    else if (system === "linux") dress(a, "terminal", "Install in your terminal", "/cli");
+    else if (system === "phone") dress(a, "phone", "Get the app", "/download#phone");
+  });
+  document.documentElement.dataset.os = system;
+  if (system === "mac" && navigator.userAgentData?.getHighEntropyValues) {
+    navigator.userAgentData.getHighEntropyValues(["architecture"]).then(({ architecture }) => {
+      const chip = architecture === "arm" ? "arm64" : architecture === "x86" ? "x64" : "";
+      if (chip) buttons.forEach((a) => { a.href = `${RELEASES}/AFH-mac-${chip}.dmg`; });
+    }).catch(() => {});
+  }
+
+  // the one-line install, with a tab per system: <div data-install></div>
+  const INSTALL = [
+    ["windows", "Windows", "irm https://agentflowharness.com/install.ps1 | iex", "PowerShell"],
+    ["cmd", "CMD", "curl -fsSL https://agentflowharness.com/install.cmd -o install.cmd && install.cmd && del install.cmd", "Command Prompt"],
+    ["mac", "macOS", "curl -fsSL https://agentflowharness.com/install.sh | bash", "Terminal"],
+    ["linux", "Linux", "curl -fsSL https://agentflowharness.com/install.sh | bash", "Terminal"],
+  ];
+  document.querySelectorAll("[data-install]").forEach((box) => {
+    box.className = "install";
+    box.innerHTML = `<div class="install-tabs" role="tablist" aria-label="Your system">${INSTALL.map(([id, label]) => `<button type="button" role="tab" data-tab="${id}">${label}</button>`).join("")}</div>
+      <div class="install-line"><span class="install-prompt" aria-hidden="true">&gt;</span><code></code><button class="install-copy" type="button">Copy</button></div>`;
+    const code = box.querySelector("code");
+    const show = (id) => {
+      const row = INSTALL.find((x) => x[0] === id) || INSTALL[0];
+      code.textContent = row[2];
+      box.querySelectorAll("[data-tab]").forEach((b) => { const on = b.dataset.tab === row[0]; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
+    };
+    show(system);
+    box.addEventListener("click", (e) => {
+      const tab = e.target.closest("[data-tab]");
+      if (tab) show(tab.dataset.tab);
+      const copy = e.target.closest(".install-copy");
+      if (copy) navigator.clipboard.writeText(code.textContent).then(() => { copy.textContent = "Copied"; setTimeout(() => { copy.textContent = "Copy"; }, 1400); }, () => { copy.textContent = "Select it"; });
+    });
+  });
 
   // pictures of the app match the theme: <img src="light" data-dark="dark">
   const themed = () => document.querySelectorAll("img[data-dark]").forEach((img) => {

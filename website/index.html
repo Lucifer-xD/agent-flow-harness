@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agent Flow Harness (AFH) — free AI coding agent for Windows and Mac</title>
-  <meta name="description" content="Agent Flow Harness (AFH) — a desktop coding agent that runs on your machine, with your models. Goals, project memory, to-do lists, subagents, a built-in browser with DevTools, Red Team audits and a live view of every file it writes.">
+  <title>Agent Flow Harness (AFH) — free AI coding agent for Windows, Mac and the terminal</title>
+  <meta name="description" content="Agent Flow Harness (AFH) — a coding agent for your desktop and your terminal, running on your machine, with your models. Goals, project memory, to-do lists, subagents, a built-in browser with DevTools, Red Team audits and a live view of every file it writes.">
   <!-- seo -->
   <link rel="canonical" href="https://agentflowharness.com/">
   <meta property="og:url" content="https://agentflowharness.com/">
@@ -18,7 +18,7 @@
   <meta name="theme-color" content="#f7f3ee">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
   <meta property="og:title" content="Agent Flow Harness — build with any model, on your own PC">
-  <meta property="og:description" content="A desktop coding agent that plans, delegates and writes code with the models you choose.">
+  <meta property="og:description" content="A coding agent for your desktop and your terminal that plans, delegates and writes code with the models you choose.">
   <meta property="og:type" content="website">
   <script src="/js/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,19 +42,17 @@
     <!-- 1 · hero: the words, then the product, with the mark floating over it -->
     <section class="hero">
       <div class="hero-copy">
-        <a class="eyebrow eyebrow-link" href="/changelog"><span class="tag">1.19</span> The Studio redesign · DevTools in the built-in browser <span aria-hidden="true">→</span></a>
+        <a class="eyebrow eyebrow-link" href="/cli"><span class="tag">1.21</span> AFH in your terminal · one command to install <span aria-hidden="true">→</span></a>
         <h1 class="display">
           <span class="line"><span>Build with any model.</span></span>
-          <span class="line grad"><span>On your PC.</span></span>
+          <span class="line grad"><span>On your machine.</span></span>
         </h1>
-        <p class="lead center">Agent Flow Harness (AFH) is a free desktop coding agent that plans, delegates and writes code with the models you choose — ChatGPT, Claude, Gemini, Copilot, OpenRouter or local — and shows you every line as it lands.</p>
+        <p class="lead center">Agent Flow Harness (AFH) is a free coding agent, for your desktop or your terminal, that plans, delegates and writes code with the models you choose — ChatGPT, Claude, Gemini, Copilot, OpenRouter or local — and shows you every line as it lands.</p>
         <div class="cta-row center">
-          <a class="btn btn-primary" href="/download">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
-            Download for Windows
-          </a>
-          <a class="btn btn-ghost" href="#flow">See how it works</a>
+          <a class="btn btn-primary" href="/download" data-os-cta>Download AFH</a>
+          <a class="btn btn-ghost" href="/download">All downloads</a>
         </div>
+        <div data-install></div>
       </div>
       <div class="hero-shot">
         <div class="hero-stage" data-stage aria-hidden="true"></div>
@@ -242,13 +240,9 @@
       </div>
       <div class="reach-grid">
         <article class="reach-card" data-reveal>
-          <h3>In your terminal</h3>
-          <p>Chat with <code>afh</code>, or run one task from a script or CI with <code>afh run</code>.</p>
-          <div class="mp-mock" aria-hidden="true">
-            <div class="dv-tool"><b>$</b> afh run "fix the tests"</div>
-            <div class="dv-tool"><b>edit</b> src/api.py <span class="ok">+12 −4</span></div>
-            <div class="dv-tool"><b>shell</b> pytest <span class="ok">48 passed</span></div>
-          </div>
+          <h3><a href="/cli">In your terminal</a></h3>
+          <p>All of AFH, full screen: threads, models, approvals and every setting. Or one task from a script with <code>afh run</code>.</p>
+          <a class="tui-thumb" href="/cli" aria-label="See AFH in the terminal"><img src="/assets/tui-chat-light.svg" data-dark="/assets/tui-chat-dark.svg" width="1200" height="760" alt="AFH running full screen in a terminal" loading="lazy"></a>
         </article>
         <article class="reach-card" data-reveal style="--d:.08s">
           <h3>On GitHub</h3>
@@ -348,15 +342,13 @@
     <section id="download" class="cta">
       <div class="cta-stage" data-cta-stage aria-hidden="true"></div>
       <h2 class="display cta-title"><span class="line"><span>Start your</span></span><span class="line grad"><span>flow.</span></span></h2>
-      <p class="lead center">Free for Windows and Mac. Install it, sign in or add a key, and give it something to build.</p>
+      <p class="lead center">Free for Windows, Mac and your terminal. Install it, sign in or add a key, and give it something to build.</p>
       <div class="cta-row center">
-        <a class="btn btn-primary btn-big" href="/download">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
-          Get AFH for Windows
-        </a>
+        <a class="btn btn-primary btn-big" href="/download" data-os-cta>Download AFH</a>
         <a class="btn btn-ghost btn-big" href="/docs">Read the guide</a>
       </div>
-      <p class="fine center">Free · Windows 10/11, 64-bit · <span data-size>143 MB</span> · updates itself · <a href="/download">Mac version</a></p>
+      <div data-install></div>
+      <p class="fine center">Free · no account needed · <a href="/download">All downloads</a> · <a href="/cli">Terminal app</a></p>
     </section>
   </main>
 

@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Your agents. Your machine. Your flow.</b><br />
-  A free, open-source desktop coding agent for Windows and Mac. It plans, delegates and writes code with the models you choose,<br />
+  A free, open-source coding agent for Windows, Mac and your terminal. It plans, delegates and writes code with the models you choose,<br />
   and you can watch every line as it happens.
 </p>
 
@@ -64,9 +64,29 @@
 |---|---|
 | **Windows** | Download the installer from **[agentflowharness.com/download](https://agentflowharness.com/download)** or [GitHub Releases](https://github.com/Lucifer-xD/agent-flow-harness/releases/latest) and run it. The app isn't code-signed yet, so Windows may say it protected your PC: choose **More info → Run anyway**. AFH updates itself after that. |
 | **Mac** | Download the [Apple Silicon](https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download/AFH-mac-arm64.dmg) or [Intel](https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download/AFH-mac-x64.dmg) DMG and drag AFH to Applications. It isn't signed by Apple yet, so the first time, go to *System Settings → Privacy & Security* and choose **Open Anyway**. |
+| **Terminal** | One command on Windows, Mac or Linux, below. No desktop app needed. |
 | **Android** | Download the APK from the [download page](https://agentflowharness.com/download) and open it. Allow installs from your browser when asked. |
 | **iPhone** | Download the IPA from the [download page](https://agentflowharness.com/download) and install it with [Sideloadly](https://sideloadly.io) or [AltStore](https://altstore.io). |
 | **Web** | Open **[agentflowharness.com/chat](https://agentflowharness.com/chat)** and sign in. Nothing to install. |
+
+```powershell
+# Windows
+irm https://agentflowharness.com/install.ps1 | iex
+```
+
+```bash
+# macOS and Linux
+curl -fsSL https://agentflowharness.com/install.sh | bash
+```
+
+Then type `afh` in a project folder. It's the same AFH, full screen: threads, models, approvals and every setting. See the [terminal guide](docs/cli.md).
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/tui-light.svg" />
+    <img src="docs/screenshots/tui-dark.svg" width="860" alt="AFH full screen in a terminal" />
+  </picture>
+</p>
 
 **First run:** AFH opens *Models & providers*. Sign in with a plan, paste an API key, or pick a local model (Ollama, LM Studio and friends need no key). Then open a project folder and ask for something.
 
@@ -108,7 +128,7 @@
 - **Git worktrees:** give a thread or a delegate its own branch and folder, then merge it back with one click.
 - **Model races:** give one task to several models at once, each in its own worktree. Your tests score them, and you merge the winner.
 - **GitHub agent:** write `/afh` and a task on an issue or pull request. AFH does the work on your computer and opens a draft pull request. Only people you allow can start it.
-- **The `afh` command:** chat in a terminal, or run one task from a script or CI with `afh run`. See the [command line guide](docs/cli.md).
+- **AFH in your terminal:** everything, full screen, with one command to install. Or run one task from a script or CI with `afh run`. See the [terminal guide](docs/cli.md).
 
 **Works beyond the code**
 - **A built-in browser:** a tabbed browser in the side panel with DevTools. Watch the agent click and type, or take over any time.

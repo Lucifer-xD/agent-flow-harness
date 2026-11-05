@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 
@@ -16,6 +17,30 @@ def available() -> bool:
     except ImportError:
         return False
     return True
+
+
+def check() -> int:
+    """`afh --tui-check`: the whole app starts and draws, without a terminal. CI runs this on Windows."""
+    import asyncio
+    import queue
+
+    from .app import AFH
+
+    class Quiet:
+        url, key, backend = "http://127.0.0.1:9", "", None
+
+        def request(self, method: str, path: str, *rest: Any) -> Any:
+            return {"models": [], "agents": [], "settings": {}} if path == "/api/bootstrap" else []
+
+    async def go() -> None:
+        app = AFH(Quiet(), SimpleNamespace(queue=queue.Queue()), str(Path.cwd()), home=Path(os.environ.get("AFH_HOME") or Path.home() / ".afh"))
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause(1)
+            assert app.composer.box.has_focus
+        print("ok")
+
+    asyncio.run(go())
+    return 0
 
 
 def run(client: Any, a: Any) -> int:
