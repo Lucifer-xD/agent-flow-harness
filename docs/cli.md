@@ -50,9 +50,10 @@ It's the same AFH as the desktop app. Threads, settings, providers and keys are 
 | Ctrl+N | New thread |
 | F1 or `?` | Help |
 | F2 | Settings |
+| F3 | Threads rail |
 | Ctrl+O | Open or close tool details |
 | Ctrl+T | Show or hide the to-do list |
-| Ctrl+B | Live file panel |
+| Ctrl+B | Live panel |
 | Ctrl+R | Search what you've sent |
 | Ctrl+G | Write in your editor |
 | Ctrl+Y | Copy the last answer |
@@ -60,6 +61,8 @@ It's the same AFH as the desktop app. Threads, settings, providers and keys are 
 | Ctrl+C | Clear the box. Twice: quit |
 
 Type `/` for commands, including your own, `@` to attach a file, and `!` to run a shell command and show the agent the output.
+
+The AFH mark at the message box flows while a model works, like the app's. On a wide terminal your threads sit in a rail on the left. The words along the top and the chips under the message box open what they name, with a click or a command. The live panel opens by itself during a run when there's room for it, and closes after. **Settings → Appearance** has the logo animation and its speed.
 
 Things a terminal can't draw open outside it: images in your viewer, design previews in your browser. The mic stays in the desktop and phone apps.
 

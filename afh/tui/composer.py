@@ -1,4 +1,4 @@
-"""The message box: multi-line input with the / menu, the @ file picker, history and paste chips."""
+"""The deck: where the strand ends. The living mark, the message box, its chips, and the / and @ menus that rise from it."""
 from __future__ import annotations
 
 import json
@@ -16,6 +16,8 @@ from textual.widgets import OptionList, Static, TextArea
 from textual.widgets.option_list import Option
 
 from .dialogs import fuzzy
+from .look import SPINE_X, Flowline, chip
+from .mark import Mark
 
 HISTORY_MAX = 300
 PASTE_LINES, PASTE_CHARS = 12, 1200  # longer than this and a paste becomes a chip
@@ -90,8 +92,8 @@ class Box(TextArea):
     """The text area itself. Keys it doesn't want go on up to the app."""
 
     DEFAULT_CSS = """
-    Box { height: auto; max-height: 12; min-height: 1; border: none; padding: 0; background: transparent; width: 1fr; }
-    Box:focus { border: none; }
+    Box { height: auto; max-height: 12; min-height: 2; border: none; padding: 0; background: transparent; width: 1fr; }
+    Box:focus { border: none; background-tint: transparent; }
     """
 
     class Sent(Message):
@@ -100,7 +102,7 @@ class Box(TextArea):
             self.text = text
 
     def __init__(self, composer: "Composer"):
-        super().__init__("", soft_wrap=True, show_line_numbers=False, tab_behavior="focus", highlight_cursor_line=False, compact=True, placeholder="Ask anything   /  commands   @  files   !  shell")
+        super().__init__("", soft_wrap=True, show_line_numbers=False, tab_behavior="focus", highlight_cursor_line=False, compact=True, placeholder="Ask anything…")
         self.composer = composer
 
     async def _on_key(self, event: events.Key) -> None:
@@ -153,21 +155,46 @@ class Box(TextArea):
         await super()._on_paste(event)
 
 
-class Composer(Vertical):
-    """The rounded box at the bottom, with its menu above it."""
+class Chip(Static):
+    """A filled pill in the deck. Clicking it opens what it names."""
 
     DEFAULT_CSS = """
-    Composer { height: auto; padding: 0 1; }
-    Composer #menu { height: auto; max-height: 11; border: none; background: $surface; display: none; padding: 0 1; scrollbar-size-vertical: 1; }
-    Composer #menu:focus { border: none; }
+    Chip { width: auto; height: 1; margin: 0 1 0 0; }
+    Chip.-off { display: none; }
+    """
+
+    def __init__(self, command: str, **kw: Any):
+        super().__init__(**kw)
+        self.command = command
+
+    def show(self, text: str, fg: str = "$afh-text2") -> None:
+        self.update(chip(f"{text} ▾" if self.command else text, fg))
+
+    def on_click(self) -> None:
+        if self.command:
+            self.app.action_command(self.command)
+
+
+class Composer(Vertical):
+    """The deck, with its menu above it."""
+
+    DEFAULT_CSS = """
+    Composer { height: auto; background: $surface; }
+    Composer #menu { height: auto; max-height: 12; border: none; background: $afh-side; display: none; padding: 0 2 0 14; scrollbar-size-vertical: 1; text-wrap: nowrap; text-overflow: ellipsis; }
+    Composer #menu:focus { border: none; background-tint: transparent; }
+    Composer #menu > .option-list--option-highlighted { background: $primary 18%; color: $foreground; text-style: none; }
     Composer.-menu #menu { display: block; }
-    Composer #chips { height: auto; color: $afh-text2; padding: 0 2; display: none; }
+    Composer #deck { height: auto; padding: 0 0 0 1; }
+    Composer Box, Composer #bar, Composer #chips { margin: 0 2 0 1; }
+    Composer.-tight #deck-mark { display: none; }
+    Composer.-tight Box { min-height: 1; }
+    Composer.-tight #deck { padding: 0; }
+    Composer.-tight Box, Composer.-tight #bar, Composer.-tight #chips { margin: 0 2; }
+    Composer #field { height: auto; width: 1fr; }
+    Composer #chips { height: auto; color: $afh-text2; display: none; }
     Composer.-chips #chips { display: block; }
-    Composer #frame { height: auto; border: round $afh-border2; padding: 0 1; background: $background; }
-    Composer #frame:focus-within { border: round $primary; }
-    Composer.-shell #frame { border: round $warning; }
-    Composer #mark { width: 2; height: 1; color: $primary; text-style: bold; }
-    Composer.-shell #mark { color: $warning; }
+    Composer #bar { height: 1; width: 1fr; }
+    Composer #deck-right { width: 1fr; height: 1; text-align: right; text-wrap: nowrap; text-overflow: ellipsis; color: $afh-text3; }
     """
 
     def __init__(self, ui: Any, history: History, **kw: Any):
@@ -178,7 +205,13 @@ class Composer(Vertical):
         self.menu = OptionList(id="menu")
         self.menu.can_focus = False
         self.chips = Static(id="chips")
-        self.mark = Static("›", id="mark")
+        self.mark = Mark(4, id="deck-mark")
+        self.line = Flowline(id="line")
+        self.agent_chip = Chip("agent", id="chip-agent")
+        self.mode_chip = Chip("mode", id="chip-mode")
+        self.model_chip = Chip("model", id="chip-model")
+        self.shell_chip = Chip("", id="chip-shell", classes="-off")
+        self.right = Static(id="deck-right")
         self.send_key = "enter"
         self.pastes: dict[int, str] = {}
         self.files: list[str] = []
@@ -188,13 +221,21 @@ class Composer(Vertical):
 
     def compose(self):
         yield self.menu
-        yield self.chips
-        with Horizontal(id="frame"):
+        with Horizontal(id="deck"):
             yield self.mark
-            yield self.box
+            with Vertical(id="field"):
+                yield self.line
+                yield self.chips
+                yield self.box
+                with Horizontal(id="bar"):
+                    yield self.shell_chip
+                    yield self.agent_chip
+                    yield self.mode_chip
+                    yield self.model_chip
+                    yield self.right
 
     def on_mount(self) -> None:
-        self.query_one("#frame").styles.height = "auto"
+        self.shell_chip.show("shell", "$warning")
         self.box.focus()
 
     # text
@@ -231,7 +272,7 @@ class Composer(Vertical):
     def draw_chips(self) -> None:
         self.set_class(bool(self.files), "-chips")
         if self.files:
-            self.chips.update(Content.assemble(*[(f"[{os.path.basename(f)}] ", "$primary") for f in self.files], ("Ctrl+X removes", "$afh-text3")))
+            self.chips.update(Content.assemble(*[piece for f in self.files for piece in (chip(os.path.basename(f), "$primary"), " ")], ("Ctrl+X removes", "$afh-text3")))
 
     def submit(self) -> None:
         self.menu_close()
@@ -241,8 +282,9 @@ class Composer(Vertical):
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         event.stop()
         text = self.box.text
-        self.set_class(text.startswith("!"), "-shell")
-        self.mark.update("!" if text.startswith("!") else "›")
+        shell = text.startswith("!")
+        self.shell_chip.set_class(not shell, "-off")
+        self.ui.draw_line(shell)
         slash = re.fullmatch(r"/([a-z0-9_:-]*)", text, re.I)
         if slash:
             return self.fill_commands(slash.group(1).lower())
@@ -265,7 +307,7 @@ class Composer(Vertical):
                 continue
             ranked.append((not name.startswith(q), c))
         ranked.sort(key=lambda r: r[0])
-        self.show_menu("slash", [c for _, c in ranked][:30], lambda c: Content.assemble((f"/{c['name']}", "$primary bold"), (f" {c.get('args')}", "$afh-text3") if c.get("args") else "", "  ", (c.get("description") or "", "$afh-text2")))
+        self.show_menu("slash", [c for _, c in ranked][:30], lambda c: Content.assemble((f"/{c['name']}".ljust(14), "$primary bold"), " ", (c.get("description") or "", "$afh-text2"), (f"  {c.get('args')}", "$afh-text3") if c.get("args") else ""))
 
     def fill_files(self, q: str) -> None:
         directory = self.ui.directory()

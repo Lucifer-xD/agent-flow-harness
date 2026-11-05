@@ -1,4 +1,4 @@
-"""Dialogs: pickers, confirmations, forms, approvals, questions and text viewers."""
+"""Sheets: everything that asks or shows rises from the deck under a line of light. Nothing floats mid-screen."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -13,36 +13,51 @@ from textual.widgets import Button, Input, Label, OptionList, Select, Static, Sw
 from textual.widgets.option_list import Option
 
 from . import state as S
+from .look import Flowline, keys
 from .widgets import diff_content, plain_block
 
 BASE_CSS = """
-Dialog { align: center middle; background: $background 60%; }
-Dialog > #box {
-    width: 76; max-width: 92%; height: auto; max-height: 86%;
-    background: $surface; border: round $afh-border2; padding: 0 1;
-}
-Dialog #title { text-style: bold; height: auto; padding: 0 0 1 0; }
-Dialog #sub { color: $afh-text2; height: auto; padding: 0 0 1 0; }
-Dialog #hint { color: $afh-text3; height: auto; padding: 1 0 0 0; }
-Dialog Input { border: none; height: 1; padding: 0 1; background: $panel; margin: 0 0 1 0; }
-Dialog Input:focus { background: $boost; border: none; }
-Dialog OptionList { border: none; height: auto; max-height: 18; background: transparent; padding: 0; scrollbar-size-vertical: 1; }
-Dialog OptionList:focus { border: none; background-tint: transparent; }
-Dialog Button { min-width: 10; height: 1; border: none; margin: 0 1 0 0; background: $panel; color: $foreground; }
-Dialog Button:hover, Dialog Button:focus { background: $primary; color: $background; text-style: bold; }
-Dialog Button.primary { background: $primary; color: $background; text-style: bold; }
-Dialog Button.danger { background: $error; color: $background; text-style: bold; }
-Dialog #buttons { height: auto; padding: 1 0 0 0; }
-Dialog .field-label { color: $afh-text2; height: 1; }
-Dialog .field-help { color: $afh-text3; height: auto; padding: 0 0 1 0; }
-Dialog TextArea { height: 8; border: none; background: $panel; margin: 0 0 1 0; }
-Dialog Switch { border: none; height: 1; padding: 0; background: transparent; }
-Dialog Select { margin: 0 0 1 0; }
+Dialog, Approval, Question { align: center bottom; background: $background 62%; }
+#box { width: 100%; height: auto; max-height: 84%; background: $surface; padding: 0; }
+#inner { height: auto; padding: 1 3 1 3; }
+#title { text-style: bold; height: auto; padding: 0 0 1 0; }
+#sub { color: $afh-text2; height: auto; padding: 0 0 1 0; }
+#hint { height: auto; padding: 1 0 0 0; }
+#box Input { border: none; height: 1; padding: 0 1; background: $panel; margin: 0 0 1 0; }
+#box Input:focus { background: $boost; border: none; }
+#box OptionList { border: none; height: auto; max-height: 16; background: transparent; padding: 0; scrollbar-size-vertical: 1; text-wrap: nowrap; text-overflow: ellipsis; }
+#box OptionList:focus { border: none; background-tint: transparent; }
+#box OptionList > .option-list--option-highlighted { background: $primary 18%; color: $foreground; text-style: none; }
+#box Button { min-width: 10; height: 1; border: none; margin: 0 1 0 0; padding: 0 2; background: $panel; color: $foreground; }
+#box Button:hover, #box Button:focus { background: $primary; color: $background; text-style: bold; }
+#box Button.primary { background: $primary; color: $background; text-style: bold; }
+#box Button.danger { background: $error; color: $background; text-style: bold; }
+#buttons { height: auto; padding: 1 0 0 0; }
+.field-label { color: $afh-text2; height: 1; }
+.field-help { color: $afh-text3; height: auto; padding: 0 0 1 0; }
+#box TextArea { height: 8; border: none; background: $panel; margin: 0 0 1 0; }
+#box Switch { border: none; height: 1; width: 2; padding: 0; margin: 0 1 0 0; background: transparent; }
+#box Switch:focus { background: $primary 18%; background-tint: transparent; }
+#box Select { margin: 0 0 1 0; }
 """
 
 
+class Toggle(Switch):
+    """The same shape as the switches in Settings."""
+
+    def render(self) -> Content:
+        return Content.styled("━●", "$primary") if self.value else Content.styled("●━", "$afh-text3")
+
+
+def edge(tone: str = "") -> Flowline:
+    """The line of light along a sheet's top. `tone` is `warn` when it wants your attention."""
+    line = Flowline(id="edge")
+    line.fill, line.tone = 1.0, tone
+    return line
+
+
 class Dialog(ModalScreen):
-    """A box over the conversation. Esc closes it."""
+    """A sheet over the conversation. Esc closes it."""
 
     DEFAULT_CSS = BASE_CSS
     BINDINGS = [Binding("escape", "cancel", "Close", show=False)]
@@ -103,18 +118,18 @@ class Picker(Dialog):
 
     def compose(self):
         with Vertical(id="box"):
-            yield Static(self.title_text, id="title")
-            if self.sub:
-                yield Static(self.sub, id="sub")
-            if self.search:
-                yield Input(placeholder=self.placeholder, id="filter")
-            yield OptionList(id="list")
-            keys = "   ".join(f"{k.replace('ctrl+', 'Ctrl+').upper() if len(k) == 1 else k.replace('ctrl+', 'Ctrl+').title()} {label}" for k, label, _ in self.actions)
-            text = "   ".join(x for x in (self.hint or "↑↓ choose   Enter pick   Esc close", keys) if x)
-            yield Static(text, id="hint")
+            yield edge()
+            with Vertical(id="inner"):
+                yield Static(self.title_text, id="title")
+                if self.sub:
+                    yield Static(self.sub, id="sub")
+                if self.search:
+                    yield Input(placeholder=self.placeholder, id="filter")
+                yield OptionList(id="list")
+                extra = "   ".join(f"{k.replace('ctrl+', 'Ctrl+').upper() if len(k) == 1 else k.replace('ctrl+', 'Ctrl+').title()} {label}" for k, label, _ in self.actions)
+                yield Static(keys("   ".join(x for x in (self.hint or "↑↓ choose   Enter pick   Esc close", extra) if x)), id="hint")
 
     def on_mount(self) -> None:
-        self.query_one("#box").styles.width = self.box_width
         self.fill("")
         (self.query_one("#filter") if self.search else self.query_one("#list")).focus()
 
@@ -140,10 +155,10 @@ class Picker(Dialog):
             if item.group != group and not query:
                 group = item.group
                 if group:
-                    options.append(Option(Content.styled(group, "$afh-text3 bold"), disabled=True))
+                    options.append(Option(Content.styled(group.upper(), "$afh-text3 bold"), disabled=True))
                     self.shown.append(None)
-            mark = ("● ", "$primary") if item.checked else ("  ", "")
-            label = Content.assemble(mark, (item.label, item.style), (f"  {item.hint}", "$afh-text3") if item.hint else "")
+            mark = ("✓ ", "$primary bold") if item.checked else ("  ", "")
+            label = Content.assemble(mark, (item.label, item.style), (f"   {item.hint}", "$afh-text3") if item.hint else "")
             if first is None or item.checked:
                 first = len(options) if first is None or item.checked else first
             options.append(Option(label))
@@ -214,12 +229,14 @@ class Confirm(Dialog):
 
     def compose(self):
         with Vertical(id="box"):
-            yield Static(self.title_text, id="title")
-            if self.body:
-                yield Static(self.body, id="sub", markup=False)
-            with Horizontal(id="buttons"):
-                yield Button(self.confirm, id="yes", classes="danger" if self.danger else "primary")
-                yield Button("Cancel", id="no")
+            yield edge("bad" if self.danger else "")
+            with Vertical(id="inner"):
+                yield Static(self.title_text, id="title")
+                if self.body:
+                    yield Static(self.body, id="sub", markup=False)
+                with Horizontal(id="buttons"):
+                    yield Button(self.confirm, id="yes", classes="danger" if self.danger else "primary")
+                    yield Button("Cancel", id="no")
 
     def on_mount(self) -> None:
         self.query_one("#yes").focus()
@@ -246,21 +263,21 @@ class Prompt(Dialog):
 
     def compose(self):
         with Vertical(id="box"):
-            yield Static(self.title_text, id="title")
-            if self.sub:
-                yield Static(self.sub, id="sub", markup=False)
-            if self.multiline:
-                area = TextArea(self.value, id="field", soft_wrap=True, show_line_numbers=False, tab_behavior="focus")
-                area.styles.height = 20 if self.tall else 10
-                yield area
-                yield Static("Ctrl+S save   Esc cancel", id="hint")
-            else:
-                yield Input(self.value, placeholder=self.placeholder, password=self.password, id="field")
-                yield Static("Enter save   Esc cancel", id="hint")
+            yield edge()
+            with Vertical(id="inner"):
+                yield Static(self.title_text, id="title")
+                if self.sub:
+                    yield Static(self.sub, id="sub", markup=False)
+                if self.multiline:
+                    area = TextArea(self.value, id="field", soft_wrap=True, show_line_numbers=False, tab_behavior="focus")
+                    area.styles.height = 20 if self.tall else 10
+                    yield area
+                    yield Static(keys(f"Ctrl+S {self.save_label.lower()}   Esc cancel"), id="hint")
+                else:
+                    yield Input(self.value, placeholder=self.placeholder, password=self.password, id="field")
+                    yield Static(keys(f"Enter {self.save_label.lower()}   Esc cancel"), id="hint")
 
     def on_mount(self) -> None:
-        if self.tall:
-            self.query_one("#box").styles.width = 110
         self.query_one("#field").focus()
 
     def action_save(self) -> None:
@@ -294,35 +311,36 @@ class Form(Dialog):
 
     def compose(self):
         with Vertical(id="box"):
-            yield Static(self.title_text, id="title")
-            if self.sub:
-                yield Static(self.sub, id="sub", markup=False)
-            with VerticalScroll(id="fields"):
-                for f in self.fields:
-                    if f.kind == "switch":
-                        with Horizontal(classes="switch-row"):
-                            yield Switch(bool(f.value), id=f"f-{f.key}")
-                            yield Label(f" {f.label}")
-                    else:
-                        yield Label(f.label, classes="field-label")
-                        if f.kind == "area":
-                            yield TextArea(str(f.value or ""), id=f"f-{f.key}", soft_wrap=True, show_line_numbers=False, tab_behavior="focus")
-                        elif f.kind == "select":
-                            yield Select([(label, v) for label, v in f.options], value=f.value if any(v == f.value for _, v in f.options) else Select.BLANK, allow_blank=not f.options, id=f"f-{f.key}")
+            yield edge()
+            with Vertical(id="inner"):
+                yield Static(self.title_text, id="title")
+                if self.sub:
+                    yield Static(self.sub, id="sub", markup=False)
+                with VerticalScroll(id="fields"):
+                    for f in self.fields:
+                        if f.kind == "switch":
+                            with Horizontal(classes="switch-row"):
+                                yield Toggle(bool(f.value), id=f"f-{f.key}")
+                                yield Label(f" {f.label}")
                         else:
-                            yield Input(str(f.value if f.value is not None else ""), placeholder=f.placeholder, password=f.kind == "password", id=f"f-{f.key}",
-                                        type="number" if f.kind == "number" else "text")
-                    if f.help:
-                        yield Static(f.help, classes="field-help", markup=False)
-            with Horizontal(id="buttons"):
-                yield Button(self.save_label, id="save", classes="primary")
-                yield Button("Cancel", id="cancel")
+                            yield Label(f.label, classes="field-label")
+                            if f.kind == "area":
+                                yield TextArea(str(f.value or ""), id=f"f-{f.key}", soft_wrap=True, show_line_numbers=False, tab_behavior="focus")
+                            elif f.kind == "select":
+                                yield Select([(label, v) for label, v in f.options], value=f.value if any(v == f.value for _, v in f.options) else Select.BLANK, allow_blank=not f.options, id=f"f-{f.key}")
+                            else:
+                                yield Input(str(f.value if f.value is not None else ""), placeholder=f.placeholder, password=f.kind == "password", id=f"f-{f.key}",
+                                            type="number" if f.kind == "number" else "text")
+                        if f.help:
+                            yield Static(f.help, classes="field-help", markup=False)
+                with Horizontal(id="buttons"):
+                    yield Button(self.save_label, id="save", classes="primary")
+                    yield Button("Cancel", id="cancel")
 
     def on_mount(self) -> None:
-        self.query_one("#box").styles.width = self.box_width
         fields = self.query_one("#fields")
         fields.styles.height = "auto"
-        fields.styles.max_height = "70vh"
+        fields.styles.max_height = "64vh"
         for w in self.query(".switch-row"):
             w.styles.height = 1
             w.styles.margin = (0, 0, 1, 0)
@@ -368,20 +386,20 @@ class Viewer(Dialog):
 
     def compose(self):
         with Vertical(id="box"):
-            yield Static(self.title_text, id="title", markup=False)
-            if self.sub:
-                yield Static(self.sub, id="sub", markup=False)
-            with VerticalScroll(id="scroll"):
-                yield Static(self.body if isinstance(self.body, Content) else Content(str(self.body)), id="body")
-            keys = "   ".join(f"{k.title() if len(k) > 1 else k.upper()} {label}" for k, label, _ in self.actions)
-            base = self.hint or ("↑↓ scroll   Ctrl+Y copy   Esc close" if self.copy_text else "↑↓ scroll   Esc close")
-            yield Static("   ".join(x for x in (base, keys) if x), id="hint")
+            yield edge()
+            with Vertical(id="inner"):
+                yield Static(self.title_text, id="title", markup=False)
+                if self.sub:
+                    yield Static(self.sub, id="sub", markup=False)
+                with VerticalScroll(id="scroll"):
+                    yield Static(self.body if isinstance(self.body, Content) else Content(str(self.body)), id="body")
+                extra = "   ".join(f"{k.title() if len(k) > 1 else k.upper()} {label}" for k, label, _ in self.actions)
+                base = self.hint or ("↑↓ scroll   Ctrl+Y copy   Esc close" if self.copy_text else "↑↓ scroll   Esc close")
+                yield Static(keys("   ".join(x for x in (base, extra) if x)), id="hint")
 
     def on_mount(self) -> None:
-        box = self.query_one("#box")
-        box.styles.width = "92%"
-        box.styles.max_width = "120"
-        box.styles.height = "86%"
+        self.query_one("#box").styles.height = "86%"
+        self.query_one("#inner").styles.height = "1fr"
         self.query_one("#scroll").styles.height = "1fr"
         self.query_one("#scroll").focus()
 
@@ -406,13 +424,12 @@ class Approval(ModalScreen):
     """The agent wants to do something: shows the diff or command. Returns (decision, message)."""
 
     DEFAULT_CSS = BASE_CSS + """
-    Approval { align: center bottom; background: $background 40%; }
-    Approval > #box { width: 100%; max-width: 100%; height: auto; max-height: 80%; background: $surface; border: round $warning; padding: 0 1; }
-    Approval #title { text-style: bold; height: auto; padding: 0; }
-    Approval #sub { color: $afh-text2; height: auto; }
-    Approval #scroll { height: auto; max-height: 24; margin: 1 0 0 0; }
-    Approval #hint { color: $afh-text2; height: auto; padding: 1 0 0 0; }
-    Approval Input { border: none; height: 1; background: $panel; padding: 0 1; margin: 1 0 0 0; display: none; }
+    Approval #title { padding: 0; }
+    Approval #sub { padding: 0; }
+    Approval #scroll { height: auto; max-height: 24; margin: 1 0 0 0; background: $afh-code; }
+    Approval #scroll Static { padding: 0 1; }
+    Approval #scroll Static.-diff { padding: 0; text-wrap: nowrap; text-overflow: clip; }
+    Approval Input { margin: 1 0 0 0; display: none; }
     Approval.-reason Input { display: block; }
     """
     BINDINGS = [
@@ -440,22 +457,25 @@ class Approval(ModalScreen):
             title = meta.get("title") or {"edit": "Allow file changes?", "shell": "Run this command?"}.get(action, f"Allow {action}?")
             sub = p.get("message") or ""
         with Vertical(id="box"):
-            yield Static(Content.assemble(("? ", "$warning bold"), (title, "bold")), id="title")
-            if sub or self.thread_title:
-                yield Static(sub or f"In {self.thread_title}", id="sub", markup=False)
-            sections: list[Content] = []
-            if meta.get("command"):
-                sections.append(Content.styled(str(meta["command"]), "$foreground"))
-            for f in meta.get("files") or []:
-                sections.append(Content.styled(f"{f.get('status') or 'change'} · {f.get('file')}", "bold"))
-                sections.append(diff_content(f.get("patch"), 120))
-            if not meta.get("files") and not meta.get("command") and p.get("resources"):
-                sections.append(Content.styled("\n".join(str(r) for r in p["resources"]), "$afh-text2"))
-            if sections:
-                with VerticalScroll(id="scroll"):
-                    yield Static(Content("\n").join(sections))
-            yield Input(placeholder="Tell the agent what to do instead (optional), Enter to send", id="why")
-            yield Static(Content.assemble(("y", "$primary bold"), " allow once   ", ("a", "$primary bold"), " always in this thread   ", ("n", "$error bold"), " no   ", ("d", "$afh-text2 bold"), " decide later"), id="hint")
+            yield edge("warn")
+            with Vertical(id="inner"):
+                yield Static(title, id="title", markup=False)
+                if sub or self.thread_title:
+                    yield Static(sub or f"In {self.thread_title}", id="sub", markup=False)
+                sections: list[Content] = []
+                if meta.get("command"):
+                    sections.append(Content.styled(str(meta["command"]), "$foreground"))
+                files = meta.get("files") or []
+                for f in files:
+                    sections.append(Content.styled(f" {f.get('status') or 'change'} · {f.get('file')}", "bold"))
+                    sections.append(diff_content(f.get("patch"), 120, path=f.get("file")))
+                if not files and not meta.get("command") and p.get("resources"):
+                    sections.append(Content.styled("\n".join(str(r) for r in p["resources"]), "$afh-text2"))
+                if sections:
+                    with VerticalScroll(id="scroll"):
+                        yield Static(Content("\n").join(sections), classes="-diff" if files else "")
+                yield Input(placeholder="Tell the agent what to do instead (optional), Enter to send", id="why")
+                yield Static(keys("Y allow once   A always in this thread   N no   D decide later"), id="hint")
 
     def action_reply(self, decision: str) -> None:
         self.dismiss((decision, None))
@@ -479,13 +499,10 @@ class Question(ModalScreen):
     """The agent paused to ask: one question at a time, options or your own answer."""
 
     DEFAULT_CSS = BASE_CSS + """
-    Question { align: center bottom; background: $background 40%; }
-    Question > #box { width: 100%; max-width: 100%; height: auto; max-height: 80%; background: $surface; border: round $primary; padding: 0 1; }
-    Question #title { text-style: bold; height: auto; padding: 0; }
-    Question #qtext { height: auto; padding: 1 0; }
-    Question OptionList { border: none; height: auto; max-height: 12; background: transparent; }
-    Question Input { border: none; height: 1; background: $panel; padding: 0 1; margin: 1 0 0 0; }
-    Question #hint { color: $afh-text3; height: auto; padding: 1 0 0 0; }
+    Question #title { padding: 0; color: $afh-text3; }
+    Question #qtext { height: auto; padding: 1 0; text-style: bold; }
+    Question #box OptionList { max-height: 12; }
+    Question Input { margin: 1 0 0 0; }
     """
     BINDINGS = [Binding("escape", "skip", show=False), Binding("ctrl+b", "back", show=False)]
 
@@ -497,11 +514,13 @@ class Question(ModalScreen):
 
     def compose(self):
         with Vertical(id="box"):
-            yield Static("", id="title")
-            yield Static("", id="qtext", markup=False)
-            yield OptionList(id="opts")
-            yield Input(placeholder="Or type your own answer", id="other")
-            yield Static("", id="hint")
+            yield edge()
+            with Vertical(id="inner"):
+                yield Static("", id="title")
+                yield Static("", id="qtext", markup=False)
+                yield OptionList(id="opts")
+                yield Input(placeholder="Or type your own answer", id="other")
+                yield Static("", id="hint")
 
     def on_mount(self) -> None:
         self.draw()
@@ -510,20 +529,20 @@ class Question(ModalScreen):
         q = self.questions[self.at]
         a = self.answers[self.at]
         many = len(self.questions) > 1
-        self.query_one("#title", Static).update(Content.assemble(("? ", "$primary bold"), ("The agent has a question", "bold"), (f"   {self.at + 1} of {len(self.questions)}", "$afh-text3") if many else ""))
+        self.query_one("#title", Static).update(Content.assemble("The agent has a question", (f"   {self.at + 1} of {len(self.questions)}", "$afh-text3") if many else ""))
         self.query_one("#qtext", Static).update(q.get("question") or "")
         box = self.query_one("#opts", OptionList)
         at = box.highlighted
         box.clear_options()
         for o in q.get("options") or []:
             on_ = o.get("label") in a["selected"]
-            box.add_option(Option(Content.assemble(("[x] " if on_ else "[ ] ", "$primary" if on_ else "$afh-text3"), o.get("label") or "", (f"  {o.get('description')}", "$afh-text3") if o.get("description") else "")))
+            box.add_option(Option(Content.assemble(("● " if on_ else "○ ", "$primary" if on_ else "$afh-text3"), o.get("label") or "", (f"   {o.get('description')}", "$afh-text3") if o.get("description") else "")))
         box.highlighted = at if at is not None and at < box.option_count else (0 if box.option_count else None)
         other = self.query_one("#other", Input)
         other.value = a["other"]
         last = self.at == len(self.questions) - 1
-        pick = "Enter or Space picks" if q.get("multiple") else "Enter picks"
-        self.query_one("#hint", Static).update(f"{pick}   Tab your own answer   Ctrl+N {'submit' if last else 'next'}   {'Ctrl+B back   ' if self.at else ''}Esc skip")
+        pick = "Space pick   Enter pick" if q.get("multiple") else "Enter pick"
+        self.query_one("#hint", Static).update(keys(f"{pick}   Tab your own answer   Ctrl+N {'submit' if last else 'next'}   {'Ctrl+B back   ' if self.at else ''}Esc skip"))
         (box if box.option_count else other).focus()
 
     def toggle(self, index: int) -> None:

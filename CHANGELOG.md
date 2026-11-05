@@ -2,6 +2,24 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.22.0 (2026-11-05)
+
+**AFH's own terminal design**
+
+- **A design of its own.** The terminal app is redrawn from nothing around one idea: the harness. Filled surfaces instead of boxes, lines of light, and everything connected.
+- **The real mark, moving.** The same mark and the same animation as the desktop app, drawn in your terminal: on the start screen, while it starts, and at the message box, where it flows while a model works.
+- **Sharp at every size.** The mark is cut from exact block shapes with hard edges, in the terminal app and the installer, so it never blurs.
+- **A slim message box.** Four rows, line of light included, and it grows as you type. The strand lands right on the mark.
+- **The strand.** The conversation runs down a strand, with every message, edit and command a point on it, and it joins the message box. During a run, light travels along it.
+- **Threads beside you.** On a wide terminal your threads sit in a rail on the left, like the app, with tabs along the top and chips you can click. `F3` shows or hides the rail.
+- **Sheets that rise.** Approvals, questions and pickers come up from the bottom, and diffs have line numbers and code colours.
+- **It opens at once.** The animated mark shows while the engine starts, instead of a blank terminal.
+- **The installer shows the mark too.** The one-command install plays the animated mark on its own card, on any terminal, with a line of light for progress.
+- **Motion settings in the terminal.** Settings has **Logo flows while a model works** and **Animation speed**, shared with the app.
+- **Fixed:** a reply that started very fast could crash the terminal app.
+- **Fixed:** quitting while a reply was still drawing could print a crash.
+- **Fixed:** on a busy machine, opening a thread could fail with a false "Not found" or "API misuse" error, in the app and the terminal.
+
 ## 1.21.0 (2026-11-05)
 
 **AFH in your terminal**

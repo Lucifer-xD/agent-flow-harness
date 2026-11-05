@@ -35,14 +35,41 @@ def _j(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+class Rows(list):
+    """A query's rows, already fetched."""
+
+    def fetchone(self) -> Any:
+        return self[0] if self else None
+
+    def fetchall(self) -> list:
+        return list(self)
+
+
+class Shared:
+    """One connection for every thread. They would also share its prepared statements, so two running the same query
+    at once get each other's results, or SQLite's "API misuse". Here each query runs alone and has its rows before the next."""
+
+    def __init__(self, db: sqlite3.Connection, lock: Any):
+        self.db, self.lock = db, lock
+
+    def execute(self, sql: str, args: Any = ()) -> Rows:
+        with self.lock:
+            return Rows(self.db.execute(sql, args).fetchall())
+
+    def executescript(self, sql: str) -> None:
+        with self.lock:
+            self.db.executescript(sql)
+
+
 class Store:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
-        self.db.row_factory = sqlite3.Row
+        db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
+        db.row_factory = sqlite3.Row
+        self.lock = threading.RLock()
+        self.db = Shared(db, self.lock)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
-        self.lock = threading.RLock()
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(session)")}
         if "project" not in cols:  # 1.4: a worktree thread lives in another folder but belongs to its project
             self.db.execute("ALTER TABLE session ADD COLUMN project TEXT")

@@ -1,5 +1,6 @@
 """The terminal app, end to end: the real app driven by key presses, a real backend, a scripted model."""
 import asyncio
+import importlib.util
 import json
 import re
 import threading
@@ -16,11 +17,13 @@ import test_cli  # noqa: E402
 from test_cli import Model, environment, start_app, stop_app  # noqa: E402
 
 from afh import cli  # noqa: E402
-from afh.tui import themes, widgets  # noqa: E402
+from afh.tui import mark, themes, widgets  # noqa: E402
 from afh.tui.app import AFH  # noqa: E402
 from afh.tui.commands import COMMANDS, LOCAL  # noqa: E402
+from afh.tui.look import unless_gone  # noqa: E402
 from afh.tui.dialogs import Approval, Confirm, Form, Picker, Prompt, Question, Viewer, fuzzy  # noqa: E402
 from afh.tui.settings import TABS, Panes, SettingsScreen  # noqa: E402
+from textual.widget import MountError  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 plain_script = test_cli.script_for
@@ -100,8 +103,7 @@ def play(backend, project, script, size=(100, 32), **kw) -> None:
         async with app.run_test(size=size) as pilot:
             await until(pilot, lambda: app.boot and app.scroller.query("#home") or app.thread, what="the app to start")
             await script(app, pilot)
-            for w in app.workers:
-                w.cancel()
+            app.exit()  # as the real app leaves: cancelling workers by hand can catch one halfway through a mount
 
     asyncio.run(asyncio.wait_for(go(), 90))
 
@@ -228,7 +230,7 @@ def test_tab_and_shift_tab_change_agent_and_approvals(backend, tmp_path):
         await until(pilot, lambda: app.agent_id() != before)
         await pilot.press("shift+tab")
         await until(pilot, lambda: app.mode_id() == "full")
-        await shows(pilot, "full access")
+        await shows(pilot, "Full access")
 
     play(backend, tmp_path, script)
 
@@ -514,3 +516,234 @@ def test_every_app_command_exists_here():
 
 def test_screens_used_here_exist():
     assert Confirm and Prompt
+
+
+def test_the_mark_is_the_apps_mark():
+    source = (ROOT / "web/js/logo.js").read_text(encoding="utf-8")
+    drawn = re.findall(r'y: (\d+), from: "(#\w+)", to: "(#\w+)", d: "M(\d+) (\d+) C([\d ]+) C([\d ]+)"', source)
+    assert len(drawn) == 3
+    for (y, start, end, points), (app_y, app_start, app_end, x0, y0, first, second) in zip(mark.STRANDS, drawn):
+        numbers = [int(x0), int(y0), *[int(n) for n in f"{first} {second}".split()]]
+        assert (str(y), start, end) == (app_y, app_start, app_end)
+        assert [n for p in points for n in p] == numbers
+    css = (ROOT / "web/app.css").read_text(encoding="utf-8")
+    assert f"afh-link calc({mark.CYCLE}s" in css and "cubic-bezier(0.65, 0, 0.35, 1)" in css
+
+
+def test_the_mark_only_moves_while_working():
+    def cells(tick):
+        return [(seg.text, str(seg.style)) for strip in mark.frame(24, 8, "#0e0d0d", tick) for seg in strip]
+
+    assert cells(None) == cells(None)
+    assert len({tuple(cells(tick)) for tick in range(0, 48, 6)}) > 4
+
+
+def test_the_installers_carry_the_mark():
+    spec = importlib.util.spec_from_file_location("bake_mark", ROOT / "scripts/bake-mark.py")
+    bake = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bake)
+    want = bake.pictures()
+    for name, colour in (("install.ps1", r"\$markColors = (.*)"), ("install.sh", r"mark_true=\((.*)\)")):
+        block = bake.carried(ROOT / "website" / name)
+        frames = re.findall(rf"^\s*'([{bake.LETTERS}]+)',?$", block, re.M)
+        frames = [f for f in frames if len(f) == bake.COLS * bake.ROWS * 3]
+        assert len(frames) == bake.FRAMES + 1, name
+        palette = [tuple(int(v) for v in c.split(";")) for c in re.findall(r"'([\d;]+)'", re.search(colour, block).group(1))]
+        for frame, picture in zip(frames, want):
+            assert [bake.GLYPHS[bake.LETTERS.index(ch)] for ch in frame[0::3]] == [cell[0] for cell in picture], name
+            drawn = [palette[bake.LETTERS.index(ch)] for i in (1, 2) for ch in frame[i::3]]
+            real = [cell[i] for i in (1, 2) for cell in picture]
+            miss = sum(abs(a - b) for p, q in zip(drawn, real) for a, b in zip(p, q)) / (len(drawn) * 3)
+            assert miss < 6, f"{name} has drifted from the mark"
+
+
+def test_motion_settings_reach_the_terminal(backend, tmp_path):
+    async def script(app, pilot):
+        await shows(pilot, "Demo model")
+        await pilot.press("f2")
+        await until(pilot, lambda: isinstance(app.screen, SettingsScreen), what="settings")
+        app.screen.query_one("#nav").highlighted = 1
+        await shows(pilot, "Animation speed")
+        assert "Logo flows while a model works" in screen_text(app)
+        await pilot.press("escape")
+        mark = app.composer.mark
+        mark.flow(True, 2.0)
+        assert mark.speed == 2.0 and mark.timer is not None
+        mark.flow(False)
+
+    play(backend, tmp_path, script)
+
+
+def test_the_strand_runs_into_the_deck(backend, tmp_path):
+    async def script(app, pilot):
+        await shows(pilot, "Demo model")
+        assert app.spine.has_class("-off") and "┷" not in screen_text(app)
+        await send(pilot, "say hello")
+        await until(pilot, lambda: not app.thread.busy, what="the reply")
+        await until(pilot, lambda: {"you", "reply"} <= {kind for _, kind in app.spine.map or []}, what="the points")
+        assert not app.spine.has_class("-off") and "●" in screen_text(app)
+        assert "┷" not in screen_text(app)  # it lands on the mark
+        await pilot.resize_terminal(62, 18)
+        await until(pilot, lambda: "┷" in screen_text(app), what="the strand to meet the line")  # no room for a mark
+
+    play(backend, tmp_path, script)
+
+
+def test_the_mark_flows_during_a_run_unless_it_is_turned_off(backend, tmp_path):
+    async def script(app, pilot):
+        await send(pilot, "SLOW")
+        await until(pilot, lambda: app.composer.mark.working, what="the mark to flow")
+        await until(pilot, lambda: isinstance(app.screen, Approval), what="approval")
+        await pilot.press("n")
+        await pilot.press("enter")
+        await until(pilot, lambda: not app.thread.busy, what="the run to end")
+        await until(pilot, lambda: not app.composer.mark.working, what="the mark to rest")
+        setting = app.setting
+        app.setting = lambda key, default=None: False if key == "logoAnim" else setting(key, default)
+        await send(pilot, "SLOW")
+        await until(pilot, lambda: isinstance(app.screen, Approval), what="approval")
+        assert not app.composer.mark.working
+        await pilot.press("n")
+        await pilot.press("enter")
+        await until(pilot, lambda: not app.thread.busy, what="the run to end")
+
+    play(backend, tmp_path, script)
+
+
+def test_the_rail_lists_threads_and_makes_room(backend, tmp_path):
+    async def script(app, pilot):
+        await send(pilot, "first thread here")
+        await until(pilot, lambda: not app.thread.busy, what="the reply")
+        await shows(pilot, "Find a thread")
+        assert app.rail.shown()
+        await pilot.press("ctrl+b")
+        await until(pilot, lambda: app.live.has_class("-on") and not app.rail.shown(), what="the rail to give way")
+        await pilot.press("ctrl+b")
+        await until(pilot, lambda: app.rail.shown(), what="the rail to come back")
+        await pilot.press("f3")
+        await until(pilot, lambda: not app.rail.shown(), what="F3 to close it")
+        await pilot.resize_terminal(170, 40)
+        await pilot.pause(0.3)
+        assert not app.rail.shown()  # closed by hand stays closed
+        await pilot.press("f3")
+        await until(pilot, lambda: app.rail.shown(), what="F3 to open it")
+
+    play(backend, tmp_path, script, size=(130, 38))
+
+
+def test_the_live_panel_comes_and_goes_with_the_work(backend, tmp_path):
+    async def script(app, pilot):
+        await send(pilot, "WRITE the file")
+        await until(pilot, lambda: app.live.has_class("-on"), what="the panel to open")
+        assert app.rail.shown()
+        await until(pilot, lambda: isinstance(app.screen, Approval), what="the approval")
+        await pilot.press("y")
+        await until(pilot, lambda: not app.thread.busy, what="the run to end")
+        await until(pilot, lambda: not app.live.has_class("-on"), what="the panel to close")
+
+    play(backend, tmp_path, script, size=(190, 40))
+
+
+def test_the_layout_follows_the_terminal(backend, tmp_path):
+    def open_tabs(app):
+        return [t.label for t in app.tabs if not t.has_class("-off")]
+
+    async def script(app, pilot):
+        await shows(pilot, "Demo model")
+        await pilot.resize_terminal(62, 18)
+        await until(pilot, lambda: app.composer.has_class("-tight"), what="the tight deck")
+        assert not app.rail.shown() and open_tabs(app) == ["Goal", "Changes"]
+        await pilot.resize_terminal(200, 50)
+        await until(pilot, lambda: not app.composer.has_class("-tight"), what="the full deck")
+        assert app.rail.shown() and len(open_tabs(app)) == 6 and app.composer.mark.rows == 4
+        await until(pilot, lambda: app.scroller.query_one("#home-mark").rows == 13, what="the big mark")
+
+    play(backend, tmp_path, script, size=(100, 32))
+
+
+def test_chips_and_tabs_open_what_they_name(backend, tmp_path):
+    async def script(app, pilot):
+        await shows(pilot, "Demo model")
+        await pilot.click("#chip-model")
+        await until(pilot, lambda: isinstance(app.screen, Picker), what="the model list")
+        await pilot.press("escape")
+        await until(pilot, lambda: not isinstance(app.screen, Picker), what="the list to close")
+        await send(pilot, "/goal")
+        await until(pilot, lambda: isinstance(app.screen, Form) and app.screen.query("#f-text"), what="the goal form")
+        assert "━●" in screen_text(app)  # the same switch as Settings
+        await pilot.press("escape")
+
+    play(backend, tmp_path, script)
+
+
+def test_the_boot_screen_shows_while_it_connects(backend, tmp_path):
+    async def go():
+        def opener():
+            time.sleep(0.6)
+            return cli.Client(backend["url"], backend["key"])
+
+        app = AFH(None, None, str(tmp_path), home=backend["home"], opener=opener)
+        async with app.run_test(size=(100, 32)) as pilot:
+            await shows(pilot, "Starting AFH", 5)
+            await until(pilot, lambda: app.scroller.query("#home"), what="the start screen")
+            await shows(pilot, "Demo model")
+            assert "Starting AFH" not in screen_text(app)
+            app.exit()
+        app.client.close()
+
+    asyncio.run(asyncio.wait_for(go(), 60))
+
+
+def test_a_failed_start_leaves_with_the_reason(tmp_path):
+    async def go():
+        def opener():
+            raise cli.CliError("AFH would not start", 7)
+
+        app = AFH(None, None, str(tmp_path), home=tmp_path, opener=opener)
+        async with app.run_test(size=(100, 32)) as pilot:
+            await pilot.pause(0.4)
+        assert app.return_code == 7
+
+    asyncio.run(asyncio.wait_for(go(), 30))
+
+
+def test_quitting_mid_draw_prints_nothing():
+    """A widget that quitting took away can't be added to, and that alone must not end in a crash on the way out."""
+    class Gone:
+        is_attached = False
+
+    class Here:
+        is_attached = True
+
+    with unless_gone(Gone()):
+        raise MountError("closing")
+    with pytest.raises(MountError), unless_gone(Here()):
+        raise MountError("a real fault")
+
+
+def test_the_deck_stays_small_and_grows_with_the_text(backend, tmp_path):
+    async def script(app, pilot):
+        await shows(pilot, "Demo model")
+        deck = app.composer.query_one("#deck")
+        assert deck.size.height == 4 and app.composer.size.height == 4
+        app.composer.set_text("one\ntwo\nthree\nfour")
+        await until(pilot, lambda: deck.size.height == 6, what="the deck to grow")
+        app.composer.clear()
+        await until(pilot, lambda: deck.size.height == 4, what="the deck to shrink")
+
+    play(backend, tmp_path, script, size=(120, 40))
+
+
+def test_the_mark_has_hard_edges():
+    """A soft edge at this size is a blur: every colour in the picture is a strand, a point or what's behind them."""
+    back = (24, 22, 22)
+    picture = mark.Raster(39, 13).paint(back, None)
+    drawn = {cell[0] for row in picture for cell in row}
+    assert drawn - {" "} <= set(mark.BLOCKS) and "▚" in mark.BLOCKS and len(drawn) > 6
+    points = [mark.rgb(s[1]) for s in mark.STRANDS] + [mark.rgb(s[2]) for s in mark.STRANDS]
+    for row in picture:
+        for _, colour, behind in row:
+            for c in (colour, behind):
+                dim = sum(abs(a - b) for a, b in zip(c, back))
+                assert dim == 0 or dim > 200, f"{c} is a mix of the mark and what's behind it"
+    assert any(colour in points for row in picture for _, colour, _ in row)

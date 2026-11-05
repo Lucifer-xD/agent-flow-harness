@@ -45,8 +45,28 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.21.0" data-reveal>
-          <div class="rel-head"><h2>1.21.0</h2><time datetime="2026-11-05">Nov 5, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.22.0" data-reveal>
+          <div class="rel-head"><h2>1.22.0</h2><time datetime="2026-11-05">Nov 5, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">AFH's own terminal design</p>
+          <ul>
+            <li><b>A design of its own.</b> The terminal app is redrawn from nothing around one idea: the harness. Filled surfaces instead of boxes, lines of light, and everything connected.</li>
+            <li><b>The real mark, moving.</b> The same mark and the same animation as the desktop app, drawn in your terminal: on the start screen, while it starts, and at the message box, where it flows while a model works.</li>
+            <li><b>Sharp at every size.</b> The mark is cut from exact block shapes with hard edges, in the terminal app and the installer, so it never blurs.</li>
+            <li><b>A slim message box.</b> Four rows, line of light included, and it grows as you type. The strand lands right on the mark.</li>
+            <li><b>The strand.</b> The conversation runs down a strand, with every message, edit and command a point on it, and it joins the message box. During a run, light travels along it.</li>
+            <li><b>Threads beside you.</b> On a wide terminal your threads sit in a rail on the left, like the app, with tabs along the top and chips you can click. <code>F3</code> shows or hides the rail.</li>
+            <li><b>Sheets that rise.</b> Approvals, questions and pickers come up from the bottom, and diffs have line numbers and code colours.</li>
+            <li><b>It opens at once.</b> The animated mark shows while the engine starts, instead of a blank terminal.</li>
+            <li><b>The installer shows the mark too.</b> The one-command install plays the animated mark on its own card, on any terminal, with a line of light for progress.</li>
+            <li><b>Motion settings in the terminal.</b> Settings has <b>Logo flows while a model works</b> and <b>Animation speed</b>, shared with the app.</li>
+            <li><b>Fixed:</b> a reply that started very fast could crash the terminal app.</li>
+            <li><b>Fixed:</b> quitting while a reply was still drawing could print a crash.</li>
+            <li><b>Fixed:</b> on a busy machine, opening a thread could fail with a false "Not found" or "API misuse" error, in the app and the terminal.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.21.0" data-reveal>
+          <div class="rel-head"><h2>1.21.0</h2><time datetime="2026-11-05">Nov 5, 2026</time></div>
           <p class="title">AFH in your terminal</p>
           <ul>
             <li><b>All of AFH, full screen in your terminal.</b> Type <code>afh</code> for threads, models, approvals, goals, helpers, the live file panel and all of Settings, with <code>/</code> commands, <code>@</code> files, <code>!</code> shell, a command palette and the same 46 themes. It shares your threads, settings and keys with the desktop app.</li>

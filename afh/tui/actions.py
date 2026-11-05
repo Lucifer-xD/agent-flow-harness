@@ -38,7 +38,7 @@ TYPES = {"user": "You", "assistant": "Model", "system": "System notice", "idle":
 HELP_KEYS = [
     ("Enter", "send"), ("Ctrl+J, Alt+Enter", "new line"), ("Up, Down", "earlier messages you sent"), ("Ctrl+R", "search what you've sent"), ("Ctrl+G", "write in your editor"),
     ("Esc", "stop the run"), ("Esc Esc", "undo, on an empty box"), ("Tab", "next agent: Build, Plan, Delegate, Red Team…"), ("Shift+Tab", "approvals: ask, full, read only"),
-    ("Ctrl+P", "command palette"), ("Ctrl+K", "threads"), ("Ctrl+N", "new thread"), ("F2", "settings"), ("Ctrl+O", "open or close tool details"), ("Ctrl+T", "fold the to-do list"),
+    ("Ctrl+P", "command palette"), ("Ctrl+K", "threads"), ("Ctrl+N", "new thread"), ("F2", "settings"), ("F3", "threads rail"), ("Ctrl+O", "open or close tool details"), ("Ctrl+T", "fold the to-do list"),
     ("Ctrl+B", "live panel"), ("Ctrl+Y", "copy the last answer"), ("Alt+V", "paste an image"), ("PgUp, PgDn", "scroll"), ("Ctrl+L", "redraw"), ("Ctrl+C", "clear the box, twice to quit"),
 ]
 
@@ -162,6 +162,10 @@ class Actions:
 
     def action_toggle_live(self) -> None:
         self.live.toggle()
+
+    def action_toggle_rail(self) -> None:
+        self.rail.toggle()
+        self.draw_status()
 
     def action_redraw(self) -> None:
         self.refresh(layout=True, repaint=True)

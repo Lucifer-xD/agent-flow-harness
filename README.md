@@ -83,8 +83,8 @@ Then type `afh` in a project folder. It's the same AFH, full screen: threads, mo
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/tui-light.svg" />
-    <img src="docs/screenshots/tui-dark.svg" width="860" alt="AFH full screen in a terminal" />
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/tui-light.png" />
+    <img src="docs/screenshots/tui-dark.png" width="860" alt="AFH full screen in a terminal" />
   </picture>
 </p>
 

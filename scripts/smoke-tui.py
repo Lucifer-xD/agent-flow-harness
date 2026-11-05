@@ -13,6 +13,9 @@ import sys
 import time
 
 
+WORDS = b"sk anything"  # the cursor sits on the A, so the box's first letter arrives apart from the rest
+
+
 def posix(exe: str) -> int:
     import fcntl
     import pty
@@ -34,7 +37,7 @@ def posix(exe: str) -> int:
                 seen += os.read(fd, 65536)
             except OSError:
                 break
-    ok = b"Ask anything" in seen
+    ok = WORDS in seen
     os.write(fd, b"\x03")
     time.sleep(0.4)
     os.write(fd, b"\x03")
