@@ -381,3 +381,7 @@ html:not([data-os="mac"]) .dl-win, html[data-os="mac"] .dl-apple { background: l
 .keys-table td:first-child { width: 34%; white-space: nowrap; font-family: var(--mono); font-size: 13.5px; color: var(--ink); }
 .keys-table tr:first-child td { border-top: 0; }
 @media (max-width: 820px) { .tui-grid { grid-template-columns: 1fr; } .keys-table td:first-child { white-space: normal; width: 40%; } }
+.keys-panel { padding: 24px 26px; }
+.keys-panel h3 { margin: 0 0 10px; }
+.dl-ways a { white-space: nowrap; }
+@media (max-width: 520px) { .dl-ways { gap: 0; } .dl-ways a { padding: 7px 10px; } .keys-panel { padding: 18px 16px; } }

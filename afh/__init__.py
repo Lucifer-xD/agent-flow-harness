@@ -1,3 +1,3 @@
 """Agent Flow Harness: an open-source desktop coding agent with its own engine."""
 
-__version__ = "1.20.0"
+__version__ = "1.21.0"

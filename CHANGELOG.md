@@ -2,6 +2,16 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.21.0 (2026-11-05)
+
+**AFH in your terminal**
+
+- **All of AFH, full screen in your terminal.** Type `afh` for threads, models, approvals, goals, helpers, the live file panel and all of Settings, with `/` commands, `@` files, `!` shell, a command palette and the same 46 themes. It shares your threads, settings and keys with the desktop app.
+- **One command to install.** Windows, Mac and Linux, with no desktop app needed. `afh update` gets the newest version and `afh uninstall` removes it, keeping your data. See the [Terminal page](https://agentflowharness.com/cli).
+- **Run shell commands in a thread.** `!command` runs it in the project and shows the agent the output.
+- **A new website front door.** The download button follows your system, Mac has real download buttons, and the install command is one Copy away.
+- **Update log.** The desktop app keeps a log of its updates, and bug reports include it.
+
 ## 1.20.0 (2026-11-05)
 
 **Mac, the command line, GitHub and model races**
