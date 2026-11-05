@@ -471,9 +471,10 @@ class AssistantMsg(Vertical):
         meta = state.get("metadata") or {}
         if state.get("status") in (None, "streaming", "running"):
             return None
-        chosen = meta.get("chosen") or meta.get("choice")
-        title = S.tool_input(p).get("title") or "Design options"
-        return Note(Content.assemble(("Design options: ", "bold"), str(title), f"  chosen: {chosen}" if chosen else ""))
+        chosen = (meta.get("answer") or {}).get("choice")
+        title = (meta.get("design") or {}).get("title") or S.tool_input(p).get("title") or "Design options"
+        word = "skipped" if meta.get("dismissed") else f"{chosen} chosen" if chosen else "new options asked for"
+        return Note(Content.assemble(("Design: ", "bold"), str(title), f"  {word}"))
 
     def settled(self, p: dict, row: Any) -> bool:
         special = p.get("type") == "tool" and (p.get("name") or "").lower() in ("goal", "question", "design")

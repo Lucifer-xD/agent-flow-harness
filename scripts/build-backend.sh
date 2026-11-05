@@ -4,21 +4,24 @@
 # electron-builder then copies that folder into the app as Contents/Resources/backend.
 #
 # Usage: bash scripts/build-backend.sh     (PYTHON=... picks the interpreter, default .venv/bin/python)
+# NAME=afh DIST=cli-dist builds the standalone terminal app instead (same program, called afh).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PY="${PYTHON:-$ROOT/.venv/bin/python}"
-DIST="$ROOT/desktop/backend-dist"
+NAME="${NAME:-afh-backend}"
+DIST="$ROOT/${DIST:-desktop/backend-dist}"
 WORK="$ROOT/desktop/backend-build"
 
 "$PY" -m pip show pyinstaller >/dev/null 2>&1 || "$PY" -m pip install --upgrade pyinstaller
-rm -rf "$DIST/afh-backend"
+rm -rf "$DIST/$NAME"
 
-"$PY" -m PyInstaller --noconfirm --clean --onedir --console --name afh-backend \
+"$PY" -m PyInstaller --noconfirm --clean --onedir --console --name "$NAME" \
   --distpath "$DIST" --workpath "$WORK" --specpath "$WORK" --paths "$ROOT" \
   --add-data "$ROOT/web:web" \
   --add-data "$ROOT/afh/engine/data:afh/engine/data" \
   --collect-submodules afh \
+  --collect-all textual \
   --collect-submodules mcp.client \
   --collect-submodules mcp.shared \
   --collect-submodules mcp_types \
@@ -48,6 +51,6 @@ rm -rf "$DIST/afh-backend"
   --exclude-module _tkinter \
   "$ROOT/run.py"
 
-test -x "$DIST/afh-backend/afh-backend"
-test -f "$DIST/afh-backend/_internal/web/index.html"
-echo "Backend built: $DIST/afh-backend/afh-backend ($(du -sh "$DIST/afh-backend" | cut -f1))"
+test -x "$DIST/$NAME/$NAME"
+test -f "$DIST/$NAME/_internal/web/index.html"
+echo "Built: $DIST/$NAME/$NAME ($(du -sh "$DIST/$NAME" | cut -f1))"

@@ -1205,18 +1205,33 @@ class Actions:
         self.run_worker(update.notice(self), group="update", exclusive=True)
 
     def show_design(self, t: S.Thread, p: dict, done: Any) -> None:
-        """Design options: listed here, previews open in the browser."""
+        """Design options: listed here, Ctrl+O opens an option's screens in the browser."""
         self.run_worker(self.pick_design(t, p, done), group="design", exclusive=True)
 
     async def pick_design(self, t: S.Thread, p: dict, done: Any) -> None:
         design = (p.get("metadata") or {}).get("design") or {}
         options = design.get("options") or []
-        for o in options:
-            if o.get("url"):
-                webbrowser.open(o["url"])
-        rows = [Item(o.get("title") or o.get("id") or f"Option {i + 1}", o.get("id") or str(i), o.get("summary") or o.get("description") or "") for i, o in enumerate(options)]
-        picked = await self.push_screen_wait(Picker(design.get("title") or "Pick a design", rows, search=False, sub="Previews opened in your browser." if any(o.get("url") for o in options) else ""))
-        done(("design", {"decision": "answer", "answers": [{"selected": [picked], "other": ""}]}) if picked is not None else ("dismiss", None))
+
+        def preview(option: Any) -> None:
+            if isinstance(option, dict):
+                for screen in option.get("screens") or []:
+                    if screen.get("path"):
+                        webbrowser.open(Path(screen["path"]).as_uri())
+
+        rows = [Item(f"{o.get('letter')}  {o.get('name') or o.get('title') or ''}", o, S.one_line(o.get("summary") or o.get("notes") or "", 60)) for o in options]
+        rows += [Item("None of these: make new options", "again"), Item("Skip", "skip")]
+        picked = await self.push_screen_wait(Picker(design.get("title") or "Pick a design", rows, search=False, width=90, sub=S.one_line(design.get("brief") or design.get("summary") or "", 200),
+                                                    actions=[("ctrl+o", "open in browser", preview)], hint="Enter choose   Esc decide later"))
+        if picked is None:
+            done(None)
+        elif picked == "skip":
+            done(("dismiss", None))
+        elif picked == "again":
+            notes = await self.push_screen_wait(Prompt("What should change?", save="Send"))
+            done(("design", {"decision": "answer", "answers": [{"choice": "", "notes": notes or ""}]}))
+        else:
+            notes = await self.push_screen_wait(Prompt(f"Anything to change in {picked.get('letter')}?", save="Choose", placeholder="Optional"))
+            done(("design", {"decision": "answer", "answers": [{"choice": picked.get("letter"), "notes": notes or ""}]}))
 
 
 class ThemePicker(Picker):

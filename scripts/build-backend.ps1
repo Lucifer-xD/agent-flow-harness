@@ -8,17 +8,22 @@
 #
 # Requires the repo's .venv (created by AFH.bat or `python -m venv .venv`) with
 # requirements.txt installed. PyInstaller is installed into that venv if it is missing.
+#
+# -Name afh -Dist cli-dist builds the standalone terminal app instead (same program, called afh).
+# $env:PYTHON picks the interpreter.
+
+param([string]$Name = 'afh-backend', [string]$Dist = 'desktop\backend-dist')
 
 $ErrorActionPreference = 'Stop'
 
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$Python = Join-Path $Root '.venv\Scripts\python.exe'
-$DistPath = Join-Path $Root 'desktop\backend-dist'
+$Python = if ($env:PYTHON) { $env:PYTHON } else { Join-Path $Root '.venv\Scripts\python.exe' }
+$DistPath = Join-Path $Root $Dist
 $WorkPath = Join-Path $Root 'desktop\backend-build'
 $Entry = Join-Path $Root 'run.py'
 $WebDir = Join-Path $Root 'web'
 
-if (-not (Test-Path $Python)) {
+if (-not $env:PYTHON -and -not (Test-Path $Python)) {
     throw "Python venv not found at $Python. Create it first: python -m venv .venv; .venv\Scripts\python -m pip install -r requirements.txt"
 }
 if (-not (Test-Path $WebDir)) {
@@ -36,9 +41,9 @@ if ($LASTEXITCODE -ne 0) {
 & $Python -m PyInstaller --version
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller is not runnable" }
 
-if (Test-Path (Join-Path $DistPath 'afh-backend')) {
-    Write-Host "==> Removing previous build at $DistPath\afh-backend"
-    Remove-Item -Recurse -Force (Join-Path $DistPath 'afh-backend')
+if (Test-Path (Join-Path $DistPath $Name)) {
+    Write-Host "==> Removing previous build at $DistPath\$Name"
+    Remove-Item -Recurse -Force (Join-Path $DistPath $Name)
 }
 
 # WEB_DIR in afh\api.py is Path(__file__).resolve().parent.parent / "web". Inside the frozen
@@ -50,7 +55,7 @@ $PyArgs = @(
     '--clean',
     '--onedir',
     '--console',
-    '--name', 'afh-backend',
+    '--name', $Name,
     '--distpath', $DistPath,
     '--workpath', $WorkPath,
     '--specpath', $WorkPath,
@@ -59,6 +64,7 @@ $PyArgs = @(
     '--add-data', "$Root/afh/engine/data;afh/engine/data",
     # our own package + the MCP SDK (2.x: mcp, mcp_types, httpx2 are separate distributions)
     '--collect-submodules', 'afh',
+    '--collect-all', 'textual',  # the terminal app: its stylesheets and widgets load by name
     '--collect-submodules', 'mcp.client',
     '--collect-submodules', 'mcp.shared',
     '--collect-submodules', 'mcp_types',
@@ -95,16 +101,16 @@ $PyArgs = @(
     $Entry
 )
 
-Write-Host "==> Building afh-backend (this takes a minute or two)..."
+Write-Host "==> Building $Name (this takes a minute or two)..."
 & $Python @PyArgs
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed (exit $LASTEXITCODE)" }
 
-$Exe = Join-Path $DistPath 'afh-backend\afh-backend.exe'
-$Web = Join-Path $DistPath 'afh-backend\_internal\web\index.html'
+$Exe = Join-Path $DistPath "$Name\$Name.exe"
+$Web = Join-Path $DistPath "$Name\_internal\web\index.html"
 if (-not (Test-Path $Exe)) { throw "Build finished but $Exe is missing" }
 if (-not (Test-Path $Web)) { throw "Build finished but the UI was not bundled ($Web is missing)" }
 
-$SizeMB = [math]::Round(((Get-ChildItem -Recurse (Join-Path $DistPath 'afh-backend') | Measure-Object -Property Length -Sum).Sum / 1MB), 1)
+$SizeMB = [math]::Round(((Get-ChildItem -Recurse (Join-Path $DistPath $Name) | Measure-Object -Property Length -Sum).Sum / 1MB), 1)
 Write-Host ""
 Write-Host "==> Backend built: $Exe ($SizeMB MB)"
 Write-Host "    Smoke test:  `$env:AFH_HOME='C:\temp\afh-test'; & '$Exe' --headless"

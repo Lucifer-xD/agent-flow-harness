@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AFH in your terminal · Agent Flow Harness</title>
+  <meta name="description" content="All of Agent Flow Harness, full screen in your terminal. Install with one command on Windows, Mac or Linux. No desktop app needed.">
+  <!-- seo -->
+  <link rel="canonical" href="https://agentflowharness.com/cli">
+  <meta property="og:url" content="https://agentflowharness.com/cli">
+  <meta property="og:site_name" content="Agent Flow Harness">
+  <meta property="og:image" content="https://agentflowharness.com/assets/social.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta property="og:title" content="AFH in your terminal · Agent Flow Harness">
+  <meta property="og:description" content="All of Agent Flow Harness, full screen in your terminal. Install with one command on Windows, Mac or Linux. No desktop app needed.">
+  <meta property="og:type" content="website">
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Agent Flow Harness terminal app", "alternateName": "afh", "applicationCategory": "DeveloperApplication", "operatingSystem": "Windows, macOS, Linux", "description": "All of Agent Flow Harness, full screen in your terminal, installed with one command.", "url": "https://agentflowharness.com/cli", "image": "https://agentflowharness.com/assets/social.png", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}</script>
+  <!-- /seo -->
+  <meta name="theme-color" content="#f7f3ee">
+  <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+  <script src="/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/pages.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body data-page="cli" data-scene="features">
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <header data-nav></header>
+
+  <main class="wrap">
+    <section class="page-hero staged tui-hero">
+      <div class="page-stage" data-stage aria-hidden="true"></div>
+      <div class="page-copy">
+        <p class="kicker" data-reveal>Terminal</p>
+        <h1 class="display" data-reveal style="--d:.08s">All of AFH.<br><span class="grad-text">In your terminal.</span></h1>
+        <p class="lead" data-reveal style="--d:.16s">The same agent as the desktop app, full screen in any terminal. Threads, models, approvals, goals, helpers, every setting. It runs on its own: no desktop app needed.</p>
+        <div data-install data-reveal style="--d:.24s"></div>
+        <p class="install-note" data-reveal style="--d:.3s">Then go to a project folder and type <code>afh</code>. Windows, Mac and 64-bit Linux. No admin rights needed.</p>
+      </div>
+    </section>
+
+    <section class="section" data-reveal>
+      <figure class="tui-shot"><img src="/assets/tui-chat-light.svg" data-dark="/assets/tui-chat-dark.svg" width="1400" height="880" alt="AFH in a terminal: a thread with a file edit, a formatted answer and a live panel showing the file being written"></figure>
+    </section>
+
+    <section class="section">
+      <div class="section-head center" data-reveal>
+        <p class="kicker">The same AFH</p>
+        <h2 class="h2">Not a smaller version.</h2>
+        <p class="sub">It talks to the same engine as the desktop app, and shares its threads, settings, providers and keys. If the app is open, the terminal connects to it, and you can watch the same thread in both.</p>
+      </div>
+      <div class="tui-grid">
+        <figure class="tui-shot" data-reveal><img src="/assets/tui-slash-light.svg" data-dark="/assets/tui-slash-dark.svg" width="1200" height="760" alt="The slash command menu in AFH's terminal app" loading="lazy"><figcaption>Type <code>/</code> for every command</figcaption></figure>
+        <figure class="tui-shot" data-reveal style="--d:.08s"><img src="/assets/tui-approval-light.svg" data-dark="/assets/tui-approval-dark.svg" width="1200" height="760" alt="An approval card with a diff in AFH's terminal app" loading="lazy"><figcaption>Approve edits and commands, with the diff</figcaption></figure>
+        <figure class="tui-shot" data-reveal><img src="/assets/tui-settings-light.svg" data-dark="/assets/tui-settings-dark.svg" width="1200" height="760" alt="Settings in AFH's terminal app" loading="lazy"><figcaption>All 18 sections of Settings</figcaption></figure>
+        <figure class="tui-shot" data-reveal style="--d:.08s"><img src="/assets/tui-palette-light.svg" data-dark="/assets/tui-palette-dark.svg" width="1200" height="760" alt="The command palette in AFH's terminal app" loading="lazy"><figcaption>Ctrl+P finds any action, thread, model or theme</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="two">
+        <div class="panel" data-reveal>
+          <h3>Keys</h3>
+          <table class="keys-table">
+            <tr><td>Enter</td><td>Send</td></tr>
+            <tr><td>Ctrl+J</td><td>New line</td></tr>
+            <tr><td>Esc</td><td>Stop the run</td></tr>
+            <tr><td>Esc Esc</td><td>Undo, from an empty box</td></tr>
+            <tr><td>Tab</td><td>Next agent: Build, Plan, Delegate, Red Team</td></tr>
+            <tr><td>Shift+Tab</td><td>Approvals: ask first, full access, read only</td></tr>
+            <tr><td>Ctrl+P</td><td>Command palette</td></tr>
+            <tr><td>Ctrl+K</td><td>Threads</td></tr>
+            <tr><td>Ctrl+N</td><td>New thread</td></tr>
+            <tr><td>F2</td><td>Settings</td></tr>
+            <tr><td>Ctrl+O</td><td>Open or close tool details</td></tr>
+            <tr><td>Ctrl+B</td><td>Live panel</td></tr>
+            <tr><td>Ctrl+R</td><td>Search what you've sent</td></tr>
+            <tr><td>Ctrl+G</td><td>Write in your editor</td></tr>
+            <tr><td>Ctrl+C</td><td>Clear the box. Twice: quit</td></tr>
+          </table>
+        </div>
+        <div class="panel" data-reveal style="--d:.08s">
+          <h3>Commands</h3>
+          <table class="keys-table">
+            <tr><td>/model, /agent, /mode</td><td>What runs, and how freely</td></tr>
+            <tr><td>/connect</td><td>Sign in or add a key</td></tr>
+            <tr><td>/threads</td><td>Open, rename, fork, export, delete</td></tr>
+            <tr><td>/goal, /todo</td><td>Long work, step by step</td></tr>
+            <tr><td>/undo, /redo</td><td>Rewind the thread and its files</td></tr>
+            <tr><td>/diff, /cost</td><td>What changed, and what it took</td></tr>
+            <tr><td>/context, /prompt</td><td>See and edit what the model sees</td></tr>
+            <tr><td>/memory, /compact</td><td>What it knows, and room to work</td></tr>
+            <tr><td>/helpers, /jobs</td><td>Watch helpers and background jobs</td></tr>
+            <tr><td>/worktree, /race</td><td>Branches, and models against each other</td></tr>
+            <tr><td>/theme</td><td>46 themes, the same as the app</td></tr>
+            <tr><td>/settings</td><td>Everything else</td></tr>
+          </table>
+          <p class="install-note">Your own commands, like <code>/review</code>, show up here too. Type <code>@</code> to pick a file and <code>!</code> to run a shell command the agent can see.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="scripts">
+      <div class="section-head center" data-reveal>
+        <p class="kicker">In scripts</p>
+        <h2 class="h2">One task, then exit.</h2>
+        <p class="sub"><code>afh run</code> prints the answer to stdout and takes piped input, for scripts and CI. <a href="/docs#cli">Read the guide →</a></p>
+      </div>
+      <div class="panel" data-reveal>
+        <table class="keys-table">
+          <tr><td>afh run "fix the failing tests"</td><td>One task</td></tr>
+          <tr><td>git diff | afh run "review this" -q</td><td>Piped input, answer only</td></tr>
+          <tr><td>afh run --json "..."</td><td>Every event as JSON lines</td></tr>
+          <tr><td>afh update</td><td>Install the newest version</td></tr>
+          <tr><td>afh uninstall</td><td>Remove it; your threads and keys stay</td></tr>
+          <tr><td>afh --plain</td><td>A simple line chat for basic terminals</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="section-head center" data-reveal>
+        <p class="kicker">Questions</p>
+        <h2 class="h2">Good to know.</h2>
+      </div>
+      <div class="faq">
+        <details data-reveal open><summary>Which terminals work?</summary><div><p>Windows Terminal, the terminal in VS Code, macOS Terminal, iTerm2 and modern Linux terminals. The old Windows console window works but shows fewer colors. In a very basic terminal or a pipe, <code>afh</code> uses a simple line chat.</p></div></details>
+        <details data-reveal><summary>What can't a terminal do?</summary><div><p>It can't draw images or embed a browser, so screenshots and design previews open in your own viewer and browser. The mic is in the desktop and phone apps. The rest is here.</p></div></details>
+        <details data-reveal><summary>Why does my antivirus question it?</summary><div><p>AFH isn't code-signed yet, so some antivirus programs are wary of new builds. The installer checks the SHA-256 of every download against the release.</p></div></details>
+        <details data-reveal><summary>Can I read the script first?</summary><div><p>Yes: <a href="/install.ps1">install.ps1</a> and <a href="/install.sh">install.sh</a>. They download a release from GitHub, check it, unpack it to the <code>.afh</code> folder in your home folder and add <code>afh</code> to your PATH. Nothing needs admin rights.</p></div></details>
+      </div>
+    </section>
+
+    <section class="cta-band wrap">
+      <h2 class="display" data-reveal>Three ways.<br><span class="grad-text">One AFH.</span></h2>
+      <p class="lead" data-reveal style="--d:.08s">Prefer a window? The desktop app is the same AFH.</p>
+      <div class="cta-row" data-reveal style="--d:.16s">
+        <a class="btn btn-primary btn-big" href="/download" data-os-cta>Download AFH</a>
+        <a class="btn btn-ghost btn-big" href="/docs#cli">Read the guide</a>
+      </div>
+    </section>
+  </main>
+
+  <footer data-footer></footer>
+  <script src="/js/layout.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script type="module" src="/js/page.js"></script>
+</body>
+</html>

@@ -173,3 +173,8 @@
 .cta-stage { position: relative; height: clamp(170px, 28vh, 280px); width: min(560px, 60vw); margin: 0 auto 8px; }
 @media (max-width: 760px) { .cta-stage { height: 170px; } }
 .cta-title { margin: 0 auto; }
+
+.tui-thumb { display: block; margin-top: 14px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+.tui-thumb img { display: block; width: 100%; height: auto; }
+.reach-card h3 a { color: inherit; text-decoration: none; }
+.reach-card h3 a:hover { text-decoration: underline; text-underline-offset: 3px; }
