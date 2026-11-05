@@ -109,7 +109,7 @@ def play(backend, project, script, size=(100, 32), **kw) -> None:
 def test_start_screen_shows_where_you_are(backend, tmp_path):
     async def script(app, pilot):
         await shows(pilot, "Demo model")
-        await shows(pilot, tmp_path.name[:12])
+        await shows(pilot, tmp_path.name[:8])  # a long path wraps
         assert "commands" in screen_text(app)
 
     play(backend, tmp_path, script)
