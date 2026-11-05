@@ -1,6 +1,7 @@
 """The conversation on screen: messages, tool rows, thinking, notices and the start screen."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Callable
 
 from textual import events
@@ -399,6 +400,7 @@ class AssistantMsg(Vertical):
         self.retry_row = Note()
         self.err_row: ErrorCard | None = None
         self.stop_row: Note | None = None
+        self.syncing = asyncio.Lock()
 
     def compose(self):
         yield self.retry_row
@@ -481,6 +483,13 @@ class AssistantMsg(Vertical):
         return special and not getattr(row, "final", False) and (p.get("state") or {}).get("status") not in (None, "streaming", "running")
 
     async def sync(self) -> None:
+        """A token can arrive before this message has its rows, and two syncs must not mount the same part."""
+        if self.meta_row.parent is None:  # on_mount syncs once the rows are there
+            return
+        async with self.syncing:
+            await self.bring_up_to_date()
+
+    async def bring_up_to_date(self) -> None:
         """Bring the widgets in line with the message. Parts only ever appear at the end, except on a retry."""
         m = self.m
         keys = {self.key_of(p) for p in m.get("content") or []}
