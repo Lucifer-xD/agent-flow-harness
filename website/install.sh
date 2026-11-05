@@ -6,6 +6,7 @@
 # It downloads the newest release from GitHub, checks its SHA-256, unpacks it to ~/.afh/cli and puts
 # `afh` on your PATH. `afh uninstall` undoes this; your threads, settings and keys stay.
 set -euo pipefail
+temp="" staging=""  # the exit trap runs after the function has returned
 
 main() {
   local base="${AFH_DOWNLOAD_BASE:-https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download}"
@@ -20,7 +21,7 @@ main() {
     *) echo "There's no AFH build for $os on $arch yet." >&2; exit 1 ;;
   esac
 
-  local temp versions staging
+  local versions
   temp="$(mktemp -d)"
   versions="$home/cli/versions"
   staging="$versions/.new-$$"
