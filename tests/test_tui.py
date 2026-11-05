@@ -357,6 +357,8 @@ def test_a_settings_toggle_saves(backend, tmp_path):
         await until(pilot, lambda: app.setting("confirmDelete", True) != before, what="the save")
         saved = httpx.get(f"{backend['url']}/api/settings", headers={"x-afh-token": backend["token"]}, trust_env=False).json()
         assert saved["ui"]["confirmDelete"] == (not before)
+        await pilot.press("enter")  # the other tests share this backend
+        await until(pilot, lambda: app.setting("confirmDelete", True) == before, what="putting it back")
 
     play(backend, tmp_path, script)
 
@@ -387,7 +389,7 @@ def test_goal_from_the_dialog_starts_work(backend, tmp_path):
         await shows(pilot, "Hello from the mock.")
         await until(pilot, lambda: not app.thread.busy)
         await send(pilot, "/goal")
-        await until(pilot, lambda: isinstance(app.screen, Form), what="the goal form")
+        await until(pilot, lambda: isinstance(app.screen, Form) and app.screen.query("#f-text"), what="the goal form")
         app.screen.query_one("#f-text").text = "Ship the thing"
         await pilot.press("ctrl+s")
         await shows(pilot, "Ship the thing")
