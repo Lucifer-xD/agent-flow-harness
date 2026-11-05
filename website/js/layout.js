@@ -127,7 +127,7 @@
   // the one-line install, with a tab per system: <div data-install></div>
   const INSTALL = [
     ["windows", "Windows", "irm https://agentflowharness.com/install.ps1 | iex", "PowerShell"],
-    ["cmd", "CMD", "curl -fsSL https://agentflowharness.com/install.cmd -o install.cmd && install.cmd && del install.cmd", "Command Prompt"],
+    ["cmd", "CMD", "curl -fsSL https://agentflowharness.com/install.cmd -o install.cmd && .\\install.cmd && del install.cmd", "Command Prompt"],
     ["mac", "macOS", "curl -fsSL https://agentflowharness.com/install.sh | bash", "Terminal"],
     ["linux", "Linux", "curl -fsSL https://agentflowharness.com/install.sh | bash", "Terminal"],
   ];

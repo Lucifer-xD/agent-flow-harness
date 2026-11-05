@@ -13,7 +13,7 @@ irm https://agentflowharness.com/install.ps1 | iex
 Windows, in Command Prompt:
 
 ```bat
-curl -fsSL https://agentflowharness.com/install.cmd -o install.cmd && install.cmd && del install.cmd
+curl -fsSL https://agentflowharness.com/install.cmd -o install.cmd && .\install.cmd && del install.cmd
 ```
 
 macOS and Linux:
