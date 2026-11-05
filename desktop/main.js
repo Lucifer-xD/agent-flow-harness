@@ -404,11 +404,27 @@ const DEFAULT_FEED = "https://agentflowharness.com/downloads/";
 let autoUpdater = null;
 const update = { state: "idle", version: null, progress: 0, error: null, feed: "", current: app.getVersion() };
 const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
+const UPDATE_LOG_MAX = 512 * 1024;
+
+const afhHome = () => process.env.AFH_HOME || path.join(os.homedir(), ".afh");
+
+/** Updates run with no console open, so a failed one leaves its reason in logs/updates.log. */
+function logUpdate(...parts) {
+  const line = parts.map((p) => p?.stack || String(p)).join(" ").split(os.homedir()).join("~");
+  log("update:", line);
+  try {
+    const file = path.join(afhHome(), "logs", "updates.log");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    if (fs.existsSync(file) && fs.statSync(file).size > UPDATE_LOG_MAX) fs.renameSync(file, `${file}.old`);
+    fs.appendFileSync(file, `${new Date().toISOString()} ${line}\n`);
+  } catch (err) {
+    logErr("update log:", err.message);
+  }
+}
 
 function afhSettings() {
   try {
-    const home = process.env.AFH_HOME || path.join(os.homedir(), ".afh");
-    return JSON.parse(fs.readFileSync(path.join(home, "settings.json"), "utf8"));
+    return JSON.parse(fs.readFileSync(path.join(afhHome(), "settings.json"), "utf8"));
   } catch {
     return {};
   }
@@ -424,6 +440,7 @@ function updateSettings() {
 const firstLine = (err) => String(err?.message || err).split(/\r?\n/)[0].slice(0, 300);
 
 function setUpdate(patch) {
+  if (patch.state && patch.state !== update.state) logUpdate(`${update.state} -> ${patch.state}`, patch.version || "", patch.error || "");
   Object.assign(update, patch);
   sendEvent({ type: "update", update: { ...update } });
 }
@@ -433,6 +450,7 @@ function initUpdater() {
     update.state = "dev"; // a development run has nothing to update
     return;
   }
+  logUpdate(`AFH ${app.getVersion()} started`);
   if (IS_MAC) {
     setTimeout(() => checkForUpdates(false), 20_000).unref();
     setInterval(() => checkForUpdates(false), UPDATE_EVERY_MS).unref();
@@ -441,22 +459,23 @@ function initUpdater() {
   try {
     ({ autoUpdater } = require("electron-updater"));
   } catch (err) {
-    logErr("electron-updater unavailable:", err.message);
+    logUpdate("electron-updater unavailable:", err);
     update.state = "unsupported";
     return;
   }
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.logger = { info: (m) => log("update:", m), warn: (m) => log("update:", m), error: (m) => logErr("update:", m), debug: () => {} };
+  autoUpdater.logger = { info: (m) => logUpdate(m), warn: (m) => logUpdate("warning:", m), error: (m) => logUpdate("error:", m), debug: () => {} };
   autoUpdater.on("checking-for-update", () => setUpdate({ state: "checking", error: null }));
   autoUpdater.on("update-not-available", () => setUpdate({ state: "latest", checked: Date.now() }));
   autoUpdater.on("update-available", (info) => {
     setUpdate({ state: "available", version: info.version, checked: Date.now() });
-    if (updateSettings().auto) autoUpdater.downloadUpdate().catch(() => {});
+    if (updateSettings().auto) autoUpdater.downloadUpdate().catch((err) => logUpdate("download failed:", err));
+    else logUpdate("not downloading: automatic updates are off");
   });
   autoUpdater.on("download-progress", (p) => setUpdate({ state: "downloading", progress: Math.round(p.percent || 0) }));
   autoUpdater.on("update-downloaded", (info) => setUpdate({ state: "ready", version: info.version, progress: 100 }));
-  autoUpdater.on("error", (err) => setUpdate({ state: "error", error: firstLine(err) }));
+  autoUpdater.on("error", (err) => setUpdate({ state: "error", error: firstLine(err) })); // the logger above has the details
   setTimeout(() => checkForUpdates(false), 20_000).unref();
   setInterval(() => checkForUpdates(false), UPDATE_EVERY_MS).unref();
 }
@@ -486,6 +505,7 @@ async function checkForUpdates(manual) {
     return { ...update };
   }
   update.feed = feed;
+  logUpdate(`checking ${feed} (${manual ? "by hand" : "on schedule"})`);
   if (IS_MAC) return checkMacUpdate(feed);
   autoUpdater.setFeedURL({ provider: "generic", url: feed });
   try {
@@ -503,12 +523,13 @@ ipcMain.handle("afh:update:download", async () => {
     await shell.openExternal("https://agentflowharness.com/download");
     return { ...update };
   }
-  if (autoUpdater && update.state === "available") await autoUpdater.downloadUpdate().catch(() => {});
+  if (autoUpdater && update.state === "available") await autoUpdater.downloadUpdate().catch((err) => logUpdate("download failed:", err));
   return { ...update };
 });
 ipcMain.handle("afh:update:install", () => {
   if (!autoUpdater || update.state !== "ready") return false;
   quitting = true;
+  logUpdate(`restarting to install ${update.version}`);
   setImmediate(() => autoUpdater.quitAndInstall(true, true)); // silent, then start the new version
   return true;
 });

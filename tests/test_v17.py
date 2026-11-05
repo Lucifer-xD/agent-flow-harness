@@ -188,6 +188,7 @@ def test_bug_report_has_no_secrets(home, monkeypatch, tmp_path):
     (home / "logs").mkdir()
     (home / "logs" / "afh-backend.log").write_text(
         "2026 INFO x: GET /api/events?token=abcdef123456 200\n2026 ERROR afh: failed with Bearer sk-secretsecretsecret123\n", encoding="utf-8")
+    (home / "logs" / "updates.log").write_text("2026 error: download failed from https://x/?token=abcdef123456\n", encoding="utf-8")
     monkeypatch.setattr(bugreport, "_target_folder", lambda: tmp_path)
     path = bugreport.build("It crashed when I pasted an image")
     with zipfile.ZipFile(path) as z:
@@ -198,6 +199,7 @@ def test_bug_report_has_no_secrets(home, monkeypatch, tmp_path):
         assert secret not in everything
     assert providers[0]["hasKey"] is True and "api_key" not in providers[0]
     assert "ERROR afh" in everything  # the problem lines are still there
+    assert "download failed" in everything  # and why an update failed
 
 
 # ---- a provider retry stays with the reply it happened in -------------------------------------
