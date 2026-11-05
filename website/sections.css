@@ -106,6 +106,14 @@
 .mp-copy h3 { margin: 0; font: 800 clamp(28px, 3vw, 40px)/1.05 var(--display); letter-spacing: -0.035em; }
 .mp-copy p { margin: 14px 0 0; color: var(--ink-2); font-size: 16.5px; max-width: 440px; }
 .mp-mock { display: grid; gap: 8px; padding: 16px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); }
+.reach { padding: 8vh var(--gutter) 10vh; }
+.reach-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 1180px; margin: 0 auto; }
+.reach-card { display: flex; flex-direction: column; padding: 26px; border-radius: 22px; background: var(--surface); border: 1px solid var(--line-2); }
+.reach-card h3 { margin: 0 0 8px; font: 700 20px var(--display); letter-spacing: -0.02em; }
+.reach-card p { margin: 0 0 18px; font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+.reach-card code { font: 500 13.5px var(--mono); color: var(--ink); }
+.reach-card .mp-mock { margin-top: auto; padding: 12px; }
+@media (max-width: 960px) { .reach-grid { grid-template-columns: minmax(0, 1fr); } }
 .dv-tool { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font: 12.5px var(--mono); color: var(--ink-2); }
 .dv-tool b { color: var(--ink); font-weight: 600; }
 .dv-tool .ok { margin-left: auto; color: var(--green); }
