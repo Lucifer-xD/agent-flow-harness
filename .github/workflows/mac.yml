@@ -70,7 +70,11 @@ jobs:
         if: always()
         with:
           name: afh-mac-${{ matrix.arch }}
-          path: |
-            desktop/dist/*.dmg
-            desktop/dist/*.png
+          path: desktop/dist/*.dmg
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screen-${{ matrix.arch }}
+          path: desktop/dist/*.png
           if-no-files-found: warn

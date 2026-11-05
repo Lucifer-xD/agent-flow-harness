@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -116,7 +117,9 @@ class GithubAgent:
             return {"repos": {}, "recent": []}
 
     def write_state(self, state: dict) -> None:
-        self.state_path().write_text(json.dumps(state, indent=2), encoding="utf-8")
+        temp = self.state_path().with_suffix(".tmp")  # a reader never sees half a file
+        temp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        os.replace(temp, self.state_path())
 
     def record(self, task: dict, status: str, link: str = "", detail: str = "") -> None:
         state = self.read_state()
@@ -174,6 +177,14 @@ class GithubAgent:
                 found += 1
         return found
 
+    async def mark_start(self) -> None:
+        """Take the first look now, so a comment written right after switching this on still counts."""
+        try:
+            await self.poll()
+            self.error = None
+        except (GhError, OSError, ValueError) as err:
+            self.error = str(err)
+
     async def get(self, path: str) -> Any:
         return json.loads(await self.gh("api", path) or "null")
 
@@ -193,6 +204,9 @@ class GithubAgent:
             items.append((f"r{c['id']}", c, int(c["pull_request_url"].rsplit("/", 1)[1])))
         for i in await self.get(f"repos/{repo}/issues?state=open&since={since}&per_page=100"):
             items.append((f"i{i['id']}", i, i["number"]))
+        # Read again: a task can finish during those calls, and what it recorded must not be lost.
+        state = self.read_state()
+        seen_state = state["repos"][repo]
         tasks = []
         seen = seen_state["seen"]
         for key, item, number in items:

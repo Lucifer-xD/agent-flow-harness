@@ -172,6 +172,20 @@ def test_a_comment_runs_once(repo):
     assert len(first) == 1 and again == []
 
 
+def test_a_task_finishing_during_a_poll_keeps_its_record(repo):
+    class Busy(FakeGh):
+        async def __call__(self, *args, cwd=None, timeout=60):
+            if "/pulls/comments?" in str(args):
+                agent.record({"repo": REPO, "number": 7, "author": "me"}, "opened", "link")
+            return await super().__call__(*args, cwd=cwd, timeout=timeout)
+
+    agent, _ = agent_for(repo, Busy(comments=[comment("/afh go")]))
+    assert len(asyncio.run(scan(agent))) == 1
+    state = agent.read_state()
+    assert [r["status"] for r in state["recent"]] == ["opened"]
+    assert state["repos"][REPO]["seen"] == ["c1"]
+
+
 def task(repo, instruction="fix it"):
     return {"repo": REPO, "path": str(repo["work"]), "number": 7, "author": "me", "instruction": instruction, "reaction": None}
 
