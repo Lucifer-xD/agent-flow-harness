@@ -16,7 +16,7 @@ import test_cli  # noqa: E402
 from test_cli import Model, environment, start_app, stop_app  # noqa: E402
 
 from afh import cli  # noqa: E402
-from afh.tui import themes  # noqa: E402
+from afh.tui import themes, widgets  # noqa: E402
 from afh.tui.app import AFH  # noqa: E402
 from afh.tui.commands import COMMANDS, LOCAL  # noqa: E402
 from afh.tui.dialogs import Approval, Confirm, Form, Picker, Prompt, Question, Viewer, fuzzy  # noqa: E402
@@ -361,6 +361,14 @@ def test_a_settings_toggle_saves(backend, tmp_path):
         await until(pilot, lambda: app.setting("confirmDelete", True) == before, what="putting it back")
 
     play(backend, tmp_path, script)
+
+
+def test_a_token_before_the_message_has_its_rows_is_not_a_crash():
+    """The screen timer can reach a message that was added but hasn't drawn yet. It catches up when it mounts."""
+    message = {"id": "m1", "role": "assistant", "content": [{"type": "text", "ordinal": 0, "text": "Hello"}]}
+    row = widgets.AssistantMsg(message, None)
+    asyncio.run(row.sync())
+    assert not row.parts
 
 
 def test_narrow_terminal_still_works(backend, tmp_path):
