@@ -2,6 +2,15 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.20.0 (2026-11-05)
+
+**Mac, the command line, GitHub and model races**
+
+- **AFH for Mac,** for Apple Silicon and Intel. Apple hasn't signed it yet, so you approve it once in System Settings, and new versions are a download rather than an automatic update. Computer use stays on Windows.
+- **The afh command.** Chat with the agent in any terminal, or run one task from a script or CI with `afh run`. Turn it on in Settings → Developer.
+- **GitHub agent.** Write `/afh` and a task on an issue or pull request. AFH does the work on your computer and opens a draft pull request. Only people you allow can start it, and merging stays with you.
+- **Model races.** `afh race` gives one task to several models, each in its own worktree. Your tests score them, and you merge the one you pick.
+
 ## 1.19.5 (2026-11-04)
 
 **Worktree merges on a fresh PC**

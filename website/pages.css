@@ -164,6 +164,8 @@
 .dl-card .display { font-size: clamp(38px, 4.6vw, 64px); }
 .dl-card .lead { margin-top: 16px; font-size: clamp(16px, 1.2vw, 18px); }
 .dl-card .cta-row { margin-top: 26px; }
+.dl-mac { margin: 14px 0 0; color: var(--ink-2); }
+.dl-mac a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .dl-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 18px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--ink-2); }
 .dl-meta li { display: flex; align-items: center; gap: 7px; }
 .dl-meta li::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--orange); }

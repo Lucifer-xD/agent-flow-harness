@@ -6,13 +6,14 @@
 
 <p align="center">
   <b>Your agents. Your machine. Your flow.</b><br />
-  A free, open-source desktop coding agent for Windows. It plans, delegates and writes code with the models you choose,<br />
+  A free, open-source desktop coding agent for Windows and Mac. It plans, delegates and writes code with the models you choose,<br />
   and you can watch every line as it happens.
 </p>
 
 <p align="center">
   <a href="https://github.com/Lucifer-xD/agent-flow-harness/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Lucifer-xD/agent-flow-harness?label=desktop&color=ff6a2a" /></a>
   <a href="https://agentflowharness.com/download"><img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" /></a>
+  <a href="https://agentflowharness.com/download"><img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-555555" /></a>
   <a href="https://agentflowharness.com/download"><img alt="Android and iPhone 1.11.0" src="https://img.shields.io/badge/Android%20%7C%20iPhone-1.11.0-ff3d71" /></a>
   <a href="https://github.com/Lucifer-xD/agent-flow-harness/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/Lucifer-xD/agent-flow-harness/tests.yml?branch=main&label=tests" /></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Lucifer-xD/agent-flow-harness?color=2ea44f" /></a>
@@ -62,11 +63,12 @@
 | | |
 |---|---|
 | **Windows** | Download the installer from **[agentflowharness.com/download](https://agentflowharness.com/download)** or [GitHub Releases](https://github.com/Lucifer-xD/agent-flow-harness/releases/latest) and run it. The app isn't code-signed yet, so Windows may say it protected your PC: choose **More info → Run anyway**. AFH updates itself after that. |
+| **Mac** | Download the [Apple Silicon](https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download/AFH-mac-arm64.dmg) or [Intel](https://github.com/Lucifer-xD/agent-flow-harness/releases/latest/download/AFH-mac-x64.dmg) DMG and drag AFH to Applications. It isn't signed by Apple yet, so the first time, go to *System Settings → Privacy & Security* and choose **Open Anyway**. |
 | **Android** | Download the APK from the [download page](https://agentflowharness.com/download) and open it. Allow installs from your browser when asked. |
 | **iPhone** | Download the IPA from the [download page](https://agentflowharness.com/download) and install it with [Sideloadly](https://sideloadly.io) or [AltStore](https://altstore.io). |
 | **Web** | Open **[agentflowharness.com/chat](https://agentflowharness.com/chat)** and sign in. Nothing to install. |
 
-**First run on Windows:** AFH opens *Models & providers*. Sign in with a plan, paste an API key, or pick a local model (Ollama, LM Studio and friends need no key). Then open a project folder and ask for something.
+**First run:** AFH opens *Models & providers*. Sign in with a plan, paste an API key, or pick a local model (Ollama, LM Studio and friends need no key). Then open a project folder and ask for something.
 
 ## A tour
 
@@ -227,7 +229,7 @@ Found a security problem? Please [report it privately](SECURITY.md).
 
 ## Run it from source
 
-You need Windows, Python 3.12 and Node 20 or newer.
+You need Python 3.12 and Node 20 or newer. The commands below are for Windows. On a Mac, use `.venv/bin/python` and `scripts/build-backend.sh`.
 
 ```powershell
 git clone https://github.com/Lucifer-xD/agent-flow-harness.git
@@ -246,7 +248,7 @@ Or double-click `AFH.bat`, which sets everything up on first run. For the Electr
 | [`afh/`](afh) | The Python backend (FastAPI + SSE), loopback only and token-protected |
 | [`afh/engine/`](afh/engine) | The AFH Engine: the agent loop, tools, providers, sessions, permissions and more |
 | [`web/`](web) | The desktop UI: plain HTML, CSS and JavaScript with no build step |
-| [`desktop/`](desktop) | The Electron shell and Windows installer |
+| [`desktop/`](desktop) | The Electron shell and the Windows and Mac installers |
 | [`app/`](app) | The phone app (Flutter) |
 | [`relay/`](relay) | The AFH account server: sign-in, computers and the relay |
 | [`website/`](website) | agentflowharness.com, including AFH Chat |

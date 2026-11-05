@@ -45,8 +45,19 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.19.5" data-reveal>
-          <div class="rel-head"><h2>1.19.5</h2><time datetime="2026-11-04">Nov 4, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.20.0" data-reveal>
+          <div class="rel-head"><h2>1.20.0</h2><time datetime="2026-11-05">Nov 5, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">Mac, the command line, GitHub and model races</p>
+          <ul>
+            <li><b>AFH for Mac,</b> for Apple Silicon and Intel. Apple hasn't signed it yet, so you approve it once in System Settings, and new versions are a download rather than an automatic update. Computer use stays on Windows.</li>
+            <li><b>The afh command.</b> Chat with the agent in any terminal, or run one task from a script or CI with <code>afh run</code>. Turn it on in Settings → Developer.</li>
+            <li><b>GitHub agent.</b> Write <code>/afh</code> and a task on an issue or pull request. AFH does the work on your computer and opens a draft pull request. Only people you allow can start it, and merging stays with you.</li>
+            <li><b>Model races.</b> <code>afh race</code> gives one task to several models, each in its own worktree. Your tests score them, and you merge the one you pick.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.19.5" data-reveal>
+          <div class="rel-head"><h2>1.19.5</h2><time datetime="2026-11-04">Nov 4, 2026</time></div>
           <p class="title">Worktree merges on a fresh PC</p>
           <ul>
             <li><b>Merging a worktree works on a PC where git has no name or email set.</b> It used to stop with an error. Your own git name is still used when you have one.</li>

@@ -37,7 +37,7 @@
   <header data-nav></header>
 
   <section class="docs-hero">
-    <p class="eyebrow"><span class="dot"></span> Guide · AFH <span data-version>1.19.5</span></p>
+    <p class="eyebrow"><span class="dot"></span> Guide · AFH <span data-version>1.20.0</span></p>
     <h1 class="display"><span class="grad-text">Getting started.</span></h1>
     <p class="lead">From download to your first finished task in a few minutes — and everything you'll want to know after that.</p>
     <div class="cta-row">
@@ -80,11 +80,12 @@
       <section id="install">
         <h2>Install</h2>
         <ol class="steps">
-          <li><a href="/download">Download the installer</a> (Windows 10 or 11, 64-bit).</li>
+          <li><a href="/download">Download the installer</a> for Windows 10 or 11 (64-bit), or for a Mac.</li>
           <li>Run it. If Windows says it protected your PC, choose <b>More info → Run anyway</b> — AFH is new, so SmartScreen doesn't know it yet.</li>
           <li>AFH opens when it's installed. Next time, find it in the Start menu.</li>
         </ol>
-        <p class="note">AFH updates itself: new versions download in the background and install when you restart it. See <a href="#updates">Updates</a>.</p>
+        <p><b>On a Mac:</b> open the DMG and drag AFH to Applications. The app isn't signed by Apple yet, so the first time, macOS won't open it. Go to <b>System Settings → Privacy &amp; Security</b> and choose <b>Open Anyway</b>. You only do this once. If macOS says the app is damaged, run <code>xattr -dr com.apple.quarantine "/Applications/Agent Flow Harness.app"</code> in Terminal.</p>
+        <p class="note">On Windows, AFH updates itself: new versions download in the background and install when you restart it. See <a href="#updates">Updates</a>.</p>
       </section>
 
       <section id="providers">
@@ -291,7 +292,9 @@
         <h3>Can I bring my OpenCode or Zadloop threads?</h3>
         <p>Yes. <b>Settings → Models &amp; providers</b> offers a one-time <b>Import from OpenCode</b> (keys, endpoints, MCP servers and threads). For single threads, open the palette and choose <b>Import thread…</b>.</p>
         <h3>Mac or Linux?</h3>
-        <p>Not yet — Windows only for now.</p>
+        <p>AFH runs on Windows and Mac. Computer use is Windows only. There's no Linux version yet.</p>
+        <h3>Is there a command line?</h3>
+        <p>Yes: chat in a terminal with <code>afh</code>, or run one task with <code>afh run</code>. Turn it on in <b>Settings → Developer</b>, then read the <a href="https://github.com/Lucifer-xD/agent-flow-harness/blob/main/docs/cli.md">command line guide</a>.</p>
       </section>
     </main>
   </div>
