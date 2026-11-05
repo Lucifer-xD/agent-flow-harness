@@ -9,11 +9,15 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
-if __name__ == "__main__" and sys.argv[1:2] == ["cli"]:  # before the imports below: they start the engine
+# The standalone download is one program called afh: it is the command, and its own backend with --headless.
+STANDALONE = getattr(sys, "frozen", False) and Path(sys.executable).stem.lower() == "afh" and "--headless" not in sys.argv
+
+if __name__ == "__main__" and (sys.argv[1:2] == ["cli"] or STANDALONE):  # before the imports below: they start the engine
     from afh import cli
 
-    sys.exit(cli.main(sys.argv[2:]))
+    sys.exit(cli.main(sys.argv[2 if sys.argv[1:2] == ["cli"] else 1:]))
 
 import argparse
 import asyncio
@@ -71,6 +75,35 @@ def log_to_file() -> None:
     logging.getLogger().addHandler(handler)
 
 
+parent_gone = threading.Event()
+
+
+def watch_parent() -> None:
+    """The afh command holds our stdin open. When it goes, even with its terminal window closed, so do we."""
+    try:
+        sys.stdin.buffer.read()
+    except (OSError, ValueError):
+        pass
+    parent_gone.set()
+
+
+def resume_connections() -> None:
+    """Remote control and the AFH account, if they were left on, in the backend that does the background work."""
+    engine.owner.wait()
+    try:
+        from afh import remote
+
+        remote.apply(remote.settings())
+    except Exception as exc:
+        logging.getLogger("afh").warning("remote control not started: %s", exc)
+    try:
+        from afh import cloud
+
+        cloud.start()
+    except Exception as exc:
+        logging.getLogger("afh").warning("AFH account connection not started: %s", exc)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Agent Flow Harness")
     parser.add_argument("--browser", action="store_true", help="open in the default browser instead of a window")
@@ -82,7 +115,11 @@ def main() -> None:
     if sys.stderr is None:  # pythonw.exe has no console; keep a log file instead
         sys.stdout = sys.stderr = open(store.AFH_DIR / "afh.log", "w", encoding="utf-8", buffering=1)
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO, format="%(name)s: %(message)s")
-    for_cli = os.environ.get("AFH_CLI_BACKEND") == "1"  # a private backend for one afh command
+    kind = os.environ.get("AFH_CLI_BACKEND")
+    for_cli = kind == "1"  # a private backend for one afh command
+    for_terminal_app = kind == "2"  # the terminal app's own: everything, but each window keeps its own backend
+    if for_cli or for_terminal_app:
+        threading.Thread(target=watch_parent, daemon=True, name="afh-parent").start()
     if not for_cli:
         log_to_file()
     logging.getLogger("afh").info("AFH %s starting", __version__)
@@ -106,19 +143,9 @@ def main() -> None:
         time.sleep(0.05)
     engine.ready.wait(timeout=30)
     if not for_cli:
-        devapi.write_discovery(port, __version__)
-        try:  # resume remote control if it was left on
-            from afh import remote
-
-            remote.apply(remote.settings())
-        except Exception as exc:
-            logging.getLogger("afh").warning("remote control not started: %s", exc)
-        try:  # reconnect to the AFH account for the phone apps if it was left on
-            from afh import cloud
-
-            cloud.start()
-        except Exception as exc:
-            logging.getLogger("afh").warning("AFH account connection not started: %s", exc)
+        if not for_terminal_app:
+            devapi.write_discovery(port, __version__)
+        threading.Thread(target=resume_connections, daemon=True, name="afh-resume").start()
 
     url = f"http://127.0.0.1:{port}/#token={token}"
     try:
@@ -134,8 +161,8 @@ def main() -> None:
         if not args.headless:
             webbrowser.open(url)
         try:
-            while True:
-                time.sleep(1)
+            while not parent_gone.wait(1):
+                pass
         except KeyboardInterrupt:
             pass
     finally:
@@ -145,7 +172,8 @@ def main() -> None:
             except Exception:
                 pass
         server.should_exit = True
-        devapi.clear_discovery()
+        if not for_terminal_app:
+            devapi.clear_discovery()
     sys.exit(0)
 
 

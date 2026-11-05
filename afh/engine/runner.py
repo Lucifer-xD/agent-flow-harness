@@ -139,6 +139,8 @@ def to_chat(messages: list[dict], vision: bool = False) -> list[ChatMessage]:
         elif t in ("synthetic", "system"):
             if m.get("text"):
                 out.append(ChatMessage("user", m["text"]))
+        elif t == "shell":
+            out.append(ChatMessage("user", f"I ran this in the project folder:\n$ {m.get('command', '')}\n{m.get('output', '')}"))
         elif t == "compaction":
             out.append(ChatMessage("user", "Summary of the conversation so far (earlier messages were compacted):\n\n" + m.get("text", "")))
             out.append(ChatMessage("assistant", "Understood — I'll continue from that summary."))

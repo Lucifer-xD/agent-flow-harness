@@ -501,6 +501,15 @@ def revert_clear(sid: str):
     return {"ok": True}
 
 
+@app.post("/api/sessions/{sid}/shell")
+async def shell(sid: str, body: dict = Body(...)):
+    session_or_404(sid)
+    command = str(body.get("command") or "").strip()
+    if not command:
+        raise ValueError("Say what to run")
+    return await engine.run_shell(sid, command)
+
+
 @app.post("/api/sessions/{sid}/compact")
 async def compact(sid: str):
     session_or_404(sid)

@@ -179,11 +179,12 @@ def stop_process(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
-def start_backend() -> Client:
-    env = {**os.environ, "AFH_CLI_BACKEND": "1", "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+def start_backend(full: bool = False) -> Client:
+    """Light for one command. `full` is the terminal app's: schedules, remote control and the rest, as in the desktop app."""
+    env = {**os.environ, "AFH_CLI_BACKEND": "2" if full else "1", "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
     # Its own process group: Ctrl+C in the terminal stops the run, not the backend under it.
     group = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
-    proc = subprocess.Popen([*backend_argv(), "--headless"], env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+    proc = subprocess.Popen([*backend_argv(), "--headless"], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,  # stdin: it stops when we go
                             stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", **group)
     lines: "queue.Queue[str | None]" = queue.Queue()
 
@@ -210,7 +211,7 @@ def start_backend() -> Client:
     raise CliError("AFH's backend didn't start:\n" + "\n".join(seen[-8:]))
 
 
-def connect() -> Client:
+def connect(full: bool = False) -> Client:
     """AFH_URL with AFH_API_KEY when set, else the running app, else a private backend."""
     if os.environ.get("AFH_URL"):
         return Client(os.environ["AFH_URL"], os.environ.get("AFH_API_KEY", ""))
@@ -220,7 +221,7 @@ def connect() -> Client:
         client.request("GET", "/api/sessions", params={"limit": 1}, timeout=4)
         return client
     except (OSError, ValueError, KeyError, CliError):
-        return start_backend()  # no app, or api.json was left behind by a crash
+        return start_backend(full)  # no app, or api.json was left behind by a crash
 
 
 class Events:
@@ -762,10 +763,20 @@ def launcher() -> str:
     return " ".join(f'"{p}"' for p in backend_argv()) + " cli"
 
 
+def standalone_installed() -> bool:
+    shim = HOME / "bin" / ("afh.cmd" if os.name == "nt" else "afh")
+    try:
+        return "versions" in shim.read_text(encoding="utf-8") and str(HOME / "cli") in shim.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+
 def install_shim() -> dict:
     """Write ~/.afh/bin/afh and add that folder to the user's PATH (their account only, no admin)."""
     folder = HOME / "bin"
     folder.mkdir(parents=True, exist_ok=True)
+    if standalone_installed() and "cli" + os.sep + "versions" not in launcher():
+        return {"folder": str(folder), "pathChanged": False, "kept": True}  # the terminal download updates itself: leave it in charge
     if os.name == "nt":
         (folder / "afh.cmd").write_bytes(f"@{launcher()} %*\r\n".encode("utf-8"))
         added = add_to_windows_path(str(folder))
@@ -807,6 +818,24 @@ def add_to_shell_profiles(folder: Path) -> bool:
     return changed
 
 
+def cmd_update(a: argparse.Namespace) -> int:
+    from .tui import update
+
+    return update.cmd_update(a)
+
+
+def cmd_uninstall(a: argparse.Namespace) -> int:
+    from .tui import update
+
+    return update.cmd_uninstall(a)
+
+
+def tui_ready() -> bool:
+    from . import tui
+
+    return tui.available()
+
+
 def cmd_install(a: argparse.Namespace) -> int:
     done = install_shim()
     print(f"Installed in {done['folder']}. " + ("Open a new terminal and type afh." if done["pathChanged"] else "It's already on your PATH."))
@@ -829,6 +858,7 @@ def run_flags(p: argparse.ArgumentParser) -> None:
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="afh", description="Agent Flow Harness in your terminal. With no command, chat in this folder.")
     p.add_argument("-v", "--version", action="version", version=f"afh {__version__}")
+    p.add_argument("--plain", action="store_true", help="the simple line chat instead of the full-screen app")
     run_flags(p)
     sub = p.add_subparsers(dest="command")
     r = sub.add_parser("run", help="do one task, then exit")
@@ -868,6 +898,8 @@ def parser() -> argparse.ArgumentParser:
     sv = sub.add_parser("serve", help="run the backend in this terminal, for SSH or a server")
     sv.add_argument("--port", type=int)
     sub.add_parser("install", help="put the afh command on your PATH")
+    sub.add_parser("update", help="install the newest version")
+    sub.add_parser("uninstall", help="remove the terminal app; your threads, settings and keys stay")
     return p
 
 
@@ -884,15 +916,27 @@ def prepare_terminal() -> None:
 def main(argv: list[str] | None = None) -> int:
     prepare_terminal()
     a = parser().parse_args(argv)
-    offline: dict[str, Callable] = {"serve": cmd_serve, "install": cmd_install}
+    offline: dict[str, Callable] = {"serve": cmd_serve, "install": cmd_install, "update": cmd_update, "uninstall": cmd_uninstall}
     if a.command in offline:
-        return offline[a.command](a)
+        try:
+            return offline[a.command](a)
+        except (CliError, OSError, ValueError) as err:
+            note(paint("31", str(err)))
+            return FAILED
     commands: dict[str, Callable] = {"run": cmd_run, "threads": cmd_threads, "show": cmd_show, "diff": cmd_diff, "models": cmd_models,
                                      "provider": cmd_providers, "status": cmd_status, "race": cmd_race, "github": cmd_github}
     client = None
     try:
-        client = connect()
-        return commands[a.command](client, a) if a.command else Chat(client, a).loop()
+        if a.command:
+            client = connect()
+            return commands[a.command](client, a)
+        full_screen = not a.plain and tui_ready()
+        client = connect(full_screen)
+        if full_screen:
+            from . import tui
+
+            return tui.run(client, a)
+        return Chat(client, a).loop()
     except CliError as err:
         note(paint("31", str(err)))
         return err.code
