@@ -1701,7 +1701,9 @@ async def github_save(body: dict = Body(...)):
             raise ValueError(f"No such folder: {entry.get('path')}")
     if keep.get("mode", "ask") not in ("ask", "full"):
         raise ValueError("mode is ask or full")
-    store.save_settings({"github": {**(store.load_settings().get("github") or {}), **keep}})
+    saved = store.save_settings({"github": {**(store.load_settings().get("github") or {}), **keep}})
+    if saved["github"].get("enabled"):
+        await engine.github.mark_start()
     return await engine.github.status()
 
 
