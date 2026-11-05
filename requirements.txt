@@ -6,3 +6,4 @@ zstandard>=0.23
 qrcode>=8.0
 mcp>=2.3.0
 pillow>=10.0
+textual>=8.2,<9

@@ -93,6 +93,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "hooks": [],
     # Spending limits in USD (0 = none).
     "budget": {"perThread": 0, "perDay": 0},
+    # The terminal app: its own theme choice (empty = follow the desktop app's) and recent models.
+    "tui": {"theme": "", "recentModels": []},
     # "commands" (slash commands) is left out on purpose: absent = AFH's starter commands.
 }
 
@@ -319,3 +321,31 @@ def write_text_with_backup(path: Path, text: str) -> None:
         if not backup.exists():
             backup.write_bytes(path.read_bytes())
     path.write_text(text, encoding="utf-8")
+
+
+_engine_lock: Any = None
+
+
+def claim_engine() -> bool:
+    """One backend at a time does the background work (schedules, the GitHub agent, phone connections).
+    The lock goes when the process does, even after a crash."""
+    global _engine_lock
+    if _engine_lock:
+        return True
+    AFH_DIR.mkdir(parents=True, exist_ok=True)
+    f = open(AFH_DIR / "engine.lock", "a+b")
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return False
+    _engine_lock = f
+    return True

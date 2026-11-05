@@ -33,6 +33,7 @@ from .questions import QuestionTool
 from .jobs import JobManager, JobsTool
 from .runner import Run, to_chat
 from .sessions import Store
+from .tools.shell import kill_tree, spawn
 from .types import BudgetExceeded, ChatMessage, ChatRequest, FileDiff, ModelInfo, Provider, ToolContext, ToolResult, ToolSpec, event, new_id, now_ms
 
 log = logging.getLogger("afh.engine")
@@ -108,6 +109,10 @@ def compact_ratio(settings: dict) -> float:
         pct = 80
     return max(20, min(95, pct)) / 100
 
+SHELL_LIMIT = 600
+SHELL_OUTPUT = 30000
+
+
 class Engine:
     def __init__(self) -> None:
         self.store = Store(appstore.AFH_DIR / "afh.db")
@@ -129,6 +134,8 @@ class Engine:
 
     # ---- lifecycle ---------------------------------------------------------------------
 
+    owner = threading.Event()  # set once this backend is the one doing the background work
+
     async def start(self) -> None:
         self.loop = asyncio.get_running_loop()
         try:
@@ -143,6 +150,14 @@ class Engine:
         asyncio.ensure_future(self._refresh_catalog())
         if os.environ.get("AFH_CLI_BACKEND") == "1":
             return  # a private backend for one afh command: schedules and interrupted runs stay the app's job
+        asyncio.ensure_future(self.background_work())
+
+    async def background_work(self) -> None:
+        """Interrupted runs, schedules and the GitHub agent, in one backend at a time: the desktop app and
+        the terminal app can both be open, and whichever is left takes over when the other closes."""
+        while not appstore.claim_engine():
+            await asyncio.sleep(30)
+        self.owner.set()
         asyncio.ensure_future(self.resume_interrupted())
         from .schedules import Scheduler
 
@@ -1001,6 +1016,21 @@ class Engine:
         final = await self._complete(ref, MERGE_PROMPT, merged, 5000)
         self.publish(event("session.compaction.progress", sid, done=total + 1, total=total + 1))
         return final if final.strip() else merged
+
+    async def run_shell(self, sid: str, command: str) -> dict:
+        """A command you ran yourself (!command in the terminal app): no approval, and the model sees it."""
+        session = self.store.get_session(sid)
+        if not session:
+            raise KeyError(sid)
+        proc = await spawn(command, session["location"]["directory"], self.settings().get("shell"))
+        try:
+            out, _ = await asyncio.wait_for(proc.communicate(), SHELL_LIMIT)
+            code: int | None = proc.returncode
+        except asyncio.TimeoutError:
+            await kill_tree(proc)
+            out, code = f"Stopped after {SHELL_LIMIT} seconds.".encode(), None
+        text = (out or b"").decode("utf-8", "replace")[-SHELL_OUTPUT:]
+        return self.store.add_message(sid, {"type": "shell", "command": command, "output": text, "exitCode": code})
 
     async def compact_now(self, sid: str) -> bool:
         session = self.store.get_session(sid)
