@@ -255,10 +255,16 @@ class AFH(Actions, App):
         self.compact_at = COMPACT_AT
         self.notice = ""
         self.update_notice = ""
+        self.connected = asyncio.Event()  # what's asked for during boot waits here
+        if client:
+            self.connected.set()
+        self.marks: set[Mark] = set()
+        self.drawing: Any = None  # the update on its way to the terminal
 
     # ---- talking to the backend ---------------------------------------------------------------
 
     async def api(self, method: str, path: str, body: Any = None, params: dict | None = None, timeout: float = 60) -> Any:
+        await self.connected.wait()
         return await asyncio.to_thread(self.client.request, method, path, body, params, timeout)
 
     async def get(self, path: str, **params: Any) -> Any:
@@ -293,6 +299,7 @@ class AFH(Actions, App):
             if self.client is None:
                 self.client = await asyncio.to_thread(self.opener)
                 self.events = await asyncio.to_thread(Events, self.client)
+                self.connected.set()
         except CliError as err:
             self.exit(return_code=err.code, message=str(err))
             return
@@ -463,6 +470,32 @@ class AFH(Actions, App):
         """Columns the conversation gets, between the rail and the live panel."""
         return self.size.width - self.live.taken() - (RAIL_WIDTH if self.rail.shown() else 0)
 
+    def overlay(self, x: int, y: int, image: str) -> None:
+        """An image straight to the terminal, over the cells at x, y. The cursor stays where the app left it."""
+        if self._driver is None:
+            return
+        alone = self.drawing is None  # part of an update, it shows with that update
+        if alone:
+            self._begin_update()
+        self._driver.write(f"\x1b7\x1b[{y + 1};{x + 1}H{image}\x1b8")
+        if alone:
+            self._end_update()
+
+    def _display(self, screen: Any, renderable: Any) -> None:
+        self.drawing = renderable
+        try:
+            super()._display(screen, renderable)
+        finally:
+            self.drawing = None
+
+    def _end_update(self) -> None:
+        """Text wipes an image, so one that an update wrote over goes back before the terminal shows the result."""
+        if self.drawing is not None:
+            for mark in tuple(self.marks):
+                if mark.touched(self.drawing):
+                    mark.paint()
+        super()._end_update()
+
     def on_resize(self) -> None:
         self.call_next(self.fit)  # this handler runs before Textual has stored the new size
 
@@ -630,7 +663,7 @@ class AFH(Actions, App):
 
     def on_box_sent(self, message: Box.Sent) -> None:
         text = message.text.strip()
-        if text:
+        if text and not self.main_screen.has_class("-boot"):  # typed during boot: it stays in the box for when it opens
             self.run_worker(self.send(text), group="send", exclusive=False)
 
     async def send(self, text: str) -> None:

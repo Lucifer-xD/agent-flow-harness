@@ -2,6 +2,14 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.22.1 (2026-11-06)
+
+**A smooth logo in your terminal**
+
+- **The real logo, as a real image.** In Windows Terminal and other terminals that can show images, the mark is now a smooth image instead of characters: while it starts, on the start screen and at the message box, with the same animation as the app.
+- **In the installer too.** The one-command install plays the same smooth mark. Terminals that can't show images keep the block version.
+- **Fixed:** pressing Enter while the terminal app was still starting could crash it. What you typed now waits in the box.
+
 ## 1.22.0 (2026-11-05)
 
 **AFH's own terminal design**

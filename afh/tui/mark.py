@@ -16,6 +16,10 @@ from typing import Iterable
 from rich.color import Color
 from rich.segment import Segment
 from rich.style import Style
+from textual.app import ScreenStackError
+from textual.css.query import NoMatches
+from textual.errors import NoWidget
+from textual.geometry import Region
 from textual.strip import Strip
 from textual.widget import Widget
 
@@ -312,13 +316,18 @@ class Mark(Widget):
         self.speed = 1.0
         self.timer = None
         self.first = working
+        self.shown = ""
 
     def resize(self, rows: int) -> None:
         self.rows, self.cols = rows, rows * 3
         self.styles.width, self.styles.height = self.cols, rows
 
     def on_mount(self) -> None:
+        self.app.marks.add(self)
         self.flow(self.first)
+
+    def on_unmount(self) -> None:
+        self.app.marks.discard(self)
 
     def flow(self, working: bool, speed: float = 1.0) -> None:
         if working == self.working and (self.timer is not None) == working and speed == self.speed:
@@ -333,7 +342,51 @@ class Mark(Widget):
 
     def step(self) -> None:
         self.tick = (self.tick + 1) % LOOP
-        self.refresh()
+        if not self.paint():
+            self.refresh()
+
+    def in_view(self) -> Region | None:
+        """The rows of the mark that show on the screen in front. An image can be cut across, not down."""
+        try:
+            if not self.is_attached or self.app.screen is not self.screen:
+                return None
+            where = self.screen.find_widget(self)
+        except (NoWidget, NoMatches, ScreenStackError):
+            return None
+        area = where.region.intersection(where.clip)
+        if not area.area or area.width != where.region.width:
+            return None
+        layers = self.screen._compositor.layers_visible  # top first, a row at a time
+        for y in range(area.y, area.bottom):
+            for widget, region, _ in layers[y]:
+                if widget is self:
+                    break
+                if widget.layer != self.layer and region.overlaps(area):  # a toast, say
+                    return None
+        return area
+
+    def touched(self, update: object) -> bool:
+        """Whether an update to the screen wrote over this mark's cells."""
+        spans = getattr(update, "spans", None)
+        if spans is None:
+            return True
+        r = self.region
+        return any(r.y <= y < r.bottom and x1 < r.right and x2 > r.x for y, x1, x2 in spans)
+
+    def paint(self) -> bool:
+        """Put the real image over the blocks, where the terminal takes one and the whole mark is in view."""
+        from . import picture
+
+        area = self.in_view() if picture.CELL else None
+        if area is None:
+            return False
+        film = picture.film(self.cols, self.rows, self.backdrop())
+        if area == self.region:
+            self.shown = film.frame(self.tick if self.working else None) or self.shown
+        else:
+            self.shown = film.part(area.y - self.region.y, area.height)
+        self.app.overlay(area.x, area.y, self.shown)
+        return True
 
     def backdrop(self) -> str:
         if self.back:
@@ -342,5 +395,8 @@ class Mark(Widget):
         return f"#{colour.r:02x}{colour.g:02x}{colour.b:02x}"
 
     def render_line(self, y: int) -> Strip:
-        lines = frame(self.cols, self.rows, self.backdrop(), self.tick if self.working else None)
+        from . import picture
+
+        moving = self.working and picture.CELL is None  # under an image the blocks stay still: nothing shows them moving
+        lines = frame(self.cols, self.rows, self.backdrop(), self.tick if moving else None)
         return lines[y] if y < len(lines) else Strip.blank(self.cols)

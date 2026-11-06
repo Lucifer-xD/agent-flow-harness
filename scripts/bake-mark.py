@@ -1,13 +1,16 @@
-"""Writes the animated mark into website/install.ps1 and website/install.sh.
+"""Writes the animated mark into website/install.ps1 and website/install.sh, and the real one to website/install-mark.gz.
 
     python scripts/bake-mark.py
 
 An installer has nothing to draw with, so it carries the frames: the same mark and the same loop as the app,
 from afh/tui/mark.py. Three letters are a cell: its block and its two colours. The mark sits on its own dark
 card, so it looks the same on any terminal, a white one included. The last frame is the mark at rest.
+Terminals that take images get those instead, from afh/tui/picture.py: the same frames, one Sixel image to a line.
+They'd make an installer ten times the size, so they stay beside it and the installers fetch them only when they can use them.
 """
 from __future__ import annotations
 
+import gzip
 import re
 import sys
 from pathlib import Path
@@ -17,7 +20,8 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from afh.tui.mark import BLOCKS, CYCLE, raster  # noqa: E402
+from afh.tui import picture as images  # noqa: E402
+from afh.tui.mark import BLOCKS, CYCLE, FPS, raster  # noqa: E402
 
 COLS, ROWS = 24, 8
 FRAMES = 32  # at ten a second, one loop is CYCLE seconds
@@ -101,7 +105,19 @@ def carried(path: Path) -> str:
     return found.group(0) if found else ""
 
 
+def film() -> bytes:
+    """Sized for Windows Terminal's cells, which it scales to whatever the font is. Other terminals work out the rows it takes."""
+    images.CELL = (10, 20)
+    card = images.Film(COLS, ROWS, "#%02x%02x%02x" % BACK)
+    frames = [card.encoded(i * FPS * CYCLE / FRAMES) for i in range(FRAMES)] + [card.encoded(None)]
+    images.CELL = None
+    return gzip.compress("\n".join(frames).encode(), 9, mtime=0)
+
+
 def main() -> None:
+    reel = film()
+    (ROOT / "website/install-mark.gz").write_bytes(reel)
+    print(f"install-mark.gz: {len(reel)} bytes")
     for path, block in blocks().items():
         source = path.read_bytes().decode()
         old = carried(path)

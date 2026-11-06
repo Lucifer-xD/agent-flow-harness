@@ -65,8 +65,8 @@ mark_frames=(
   'A99FA9B9AB9AIA9AC9A99A99A99A99A99A99A99A99A99A99A99A99A99AP9B9PB9PEP9A99AA9A9AAAAAAASABACCOD9ME9B9FAG9A99A99A99A99A99A99A99FO9MR9A9PAPPAPPA9PAP9A99AA9N9AN9AA99O9CM9DK9EA9FA9GMH9JZ9Ia9Ag9A99AM9B9NAOOA9RM9SN9PN9PAP9A99AQ9MQ9OQ9OQ9MT9MT9NU9NV9A9WBGXAYHAZIBaJKKgOh9OM9ANNA9OKk9Kd9Od9Od9Md9Ad9AQ9J9QI9QI9QBQ9BT9M9UM9VN9WIt9C9uBIvJwJJ9KJ9LK9ME9iJyjJ1kJ9kI9dI9dJ9dAd9A99Af9Jf9Jf9A99Im9Jq9B9rNs9AttI9uBv9Aw9A99A99A99A99E9yA11D92Jz9Jz9Az9A99Af9A9fAffAffSfmAmmA9qJ9rBs9N9tAu9A99A99A99A99A99A99A99B19A9zAzzAzzA9zAz9A99Df9Bf9Bf9O9fAm9A99A99A99A99A99A99A99A99A99A99A99A99A99Az9Bz9Bz9Cz9A99'
 )
 # mark:end
-mark_fg=() mark_bg=() place=() drawn=() line=()
-card="" dim=""
+mark_fg=() mark_bg=() place=() drawn=() line=() film=()
+card="" dim="" has_film="" card_rows=""
 rest=$((${#mark_frames[@]} - 1))
 width=$((mark_cols + 2))
 height=$((mark_rows + 2))
@@ -93,6 +93,40 @@ load_mark() {
     printf -v code '%d' "'${mark_letters:i:1}"
     place[code]=$i
   done
+}
+
+# The real mark, where the terminal says it takes Sixel images. stdin is this script, so its answer comes from the tty.
+# Display only: any trouble here leaves the blocks.
+load_film() {
+  local url="${AFH_MARK_URL:-https://agentflowharness.com/install-mark.gz}" keep reply="" attributes='\[\?([0-9;]*)$' size='\[6;([0-9]+);([0-9]+)t'
+  local cell_h cell_w tall cols row frame count=0
+  { exec 3<>/dev/tty; } 2>/dev/null || return 0
+  keep="$(stty -g <&3 2>/dev/null)" || { exec 3>&-; return 0; }
+  stty -echo -icanon min 1 time 0 <&3 2>/dev/null || { exec 3>&-; return 0; }
+  printf '\033[16t\033[c' >&3
+  IFS= read -r -t 1 -d c -u 3 reply || true
+  stty "$keep" <&3 2>/dev/null || true
+  exec 3>&-
+  [[ "$reply" =~ $attributes ]] || return 0
+  case ";${BASH_REMATCH[1]};" in *";4;"*) ;; *) return 0 ;; esac
+  [[ "$reply" =~ $size ]] || return 0
+  cell_h="${BASH_REMATCH[1]}" cell_w="${BASH_REMATCH[2]}"
+  if [ "$cell_h" -lt 1 ] || [ "$cell_w" -lt 1 ]; then return 0; fi
+  curl -fsSL --max-time 4 "$url" -o "$temp/film.gz" 2>/dev/null || return 0
+  gzip -dc "$temp/film.gz" > "$temp/film" 2>/dev/null || return 0
+  while IFS= read -r frame || [ -n "$frame" ]; do
+    case "$frame" in $'\033P'*) ;; *) return 0 ;; esac
+    film[count]="$frame"
+    count=$((count + 1))
+  done < "$temp/film"
+  if [ "$count" -ne "${#mark_frames[@]}" ]; then return 0; fi
+  tall=$((mark_rows * 20 / 6 * 6))  # the frames' own height: whole Sixel bands
+  mark_rows=$(((tall + cell_h - 1) / cell_h))
+  height=$((mark_rows + 2))
+  cols=$(((mark_cols * 10 + cell_w - 1) / cell_w + 2))
+  printf -v row '%*s' "$cols" ''
+  for ((count = 0; count < mark_rows; count++)); do card_rows+=$'  \033['"${card}m$row"$'\033[0m\033[K\n'; done
+  has_film="yes"
 }
 
 draw_mark() {
@@ -123,8 +157,15 @@ frame() {
   local fill="$1" n="$2" status="$3" first="$4"
   local edge=$((fill * width / 1000)) text="" c
   if [ -z "$first" ]; then text=$'\033['"${height}A"$'\r'; fi
-  draw_mark "$n"
-  text+="${drawn[n]}"$'\033[K\n  '
+  if [ -n "$has_film" ]; then
+    # The card goes down once, and each frame lands on it. The cursor comes back to where the text goes on.
+    if [ -n "$first" ]; then text+="$card_rows"; else text+=$'\033['"${mark_rows}B"; fi
+    text+=$'\0337\033['"${mark_rows}A"$'\033[3C'"${film[n]}"$'\0338'
+  else
+    draw_mark "$n"
+    text+="${drawn[n]}"
+  fi
+  text+=$'\033[K\n  '
   for ((c = 0; c < width; c++)); do
     if [ "$c" -lt "$edge" ]; then text+=$'\033['"${line[c]}m━"; else text+=$'\033['"${dim}m━"; fi
   done
@@ -207,6 +248,7 @@ main() {
   local shown=0 tick=0 first="yes" total got goal
   if [ -n "$animate" ]; then
     load_mark
+    load_film
     printf '\033[?25l\n'
     while kill -0 "$worker" 2>/dev/null; do
       if [ -f "$temp/unpack" ]; then

@@ -151,6 +151,55 @@ function Install-Afh {
     $width = $markCols + 2
     $height = $markRows + 2
     $drawn = New-Object string[] $markFrames.Count
+    $film = $null
+    $cardRow = ''
+
+    # The cell size, if the terminal says it takes Sixel images. Its answer only arrives with the console's VT input on,
+    # and that takes kernel32: declared this way, because Add-Type has to start a compiler.
+    function Get-Cell {
+        $module = [Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly((New-Object Reflection.AssemblyName 'AfhInstall'), 'Run').DefineDynamicModule('AfhInstall')
+        $type = $module.DefineType('Keyboard', 'Public,Class')
+        $static = [Reflection.MethodAttributes]'Public,Static,PinvokeImpl'
+        foreach ($call in @(@('GetStdHandle', [IntPtr], @([int])), @('GetConsoleMode', [bool], @([IntPtr], [uint32].MakeByRefType())), @('SetConsoleMode', [bool], @([IntPtr], [uint32])))) {
+            $type.DefinePInvokeMethod($call[0], 'kernel32.dll', $static, 'Standard', $call[1], $call[2], 'Winapi', 'Auto').SetImplementationFlags('PreserveSig')
+        }
+        $native = $type.CreateType()
+        $keyboard = $native::GetStdHandle(-10)
+        [uint32]$mode = 0
+        if (-not $native::GetConsoleMode($keyboard, [ref]$mode)) { return $null }
+        $reply = ''
+        try {
+            [void]$native::SetConsoleMode($keyboard, 0x200)
+            [Console]::Out.Write("$esc[16t$esc[c")
+            $until = [DateTime]::UtcNow.AddMilliseconds(400)
+            while ([DateTime]::UtcNow -lt $until -and $reply -notmatch '\[\?[\d;]*c') {
+                while ([Console]::KeyAvailable) { $reply += [Console]::ReadKey($true).KeyChar }
+                [Threading.Thread]::Sleep(5)
+            }
+        }
+        finally { [void]$native::SetConsoleMode($keyboard, $mode) }
+        if ($reply -notmatch '\[\?([\d;]*)c' -or ($Matches[1] -split ';') -notcontains '4') { return $null }
+        if ($reply -notmatch '\[6;(\d+);(\d+)t' -or [int]$Matches[1] -lt 1 -or [int]$Matches[2] -lt 1) { return $null }
+        return @{ width = [int]$Matches[2]; height = [int]$Matches[1] }
+    }
+
+    # The loop as real images, one to a line. Display only: if it can't be had, the blocks above still are the mark.
+    function Get-Film {
+        $url = if ($env:AFH_MARK_URL) { $env:AFH_MARK_URL } else { 'https://agentflowharness.com/install-mark.gz' }
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        $request = [Net.WebRequest]::Create($url)
+        $request.Timeout = 4000
+        $request.UserAgent = 'AFH installer'  # the site's firewall turns away requests without one
+        $response = $request.GetResponse()
+        try {
+            $unzip = New-Object IO.Compression.GZipStream($response.GetResponseStream(), [IO.Compression.CompressionMode]::Decompress)
+            $frames = (New-Object IO.StreamReader($unzip)).ReadToEnd().Split("`n")
+        }
+        finally { $response.Close() }
+        if ($frames.Count -ne $markFrames.Count) { return $null }
+        foreach ($frame in $frames) { if (-not $frame.StartsWith("$esc" + 'P')) { return $null } }
+        return , $frames
+    }
 
     function Get-Mark($n) {
         if ($drawn[$n]) { return $drawn[$n] }
@@ -178,7 +227,12 @@ function Install-Afh {
     function Show-Frame($fill, $n, $status, $first) {
         $text = New-Object Text.StringBuilder
         if (-not $first) { [void]$text.Append("$esc[$($height)A`r") }
-        [void]$text.Append((Get-Mark $n))
+        if ($film) {
+            # The card goes down once, and each frame lands on it. The cursor comes back to where the text goes on.
+            if ($first) { [void]$text.Append($cardRow * $markRows) } else { [void]$text.Append("$esc[$($markRows)B") }
+            [void]$text.Append("${esc}7$esc[$($markRows)A$esc[3C$($film[$n])${esc}8")
+        }
+        else { [void]$text.Append((Get-Mark $n)) }
         [void]$text.Append("$esc[K`r`n  ")
         $edge = $fill * $width
         for ($c = 0; $c -lt $width; $c++) {
@@ -201,6 +255,19 @@ function Install-Afh {
         else { [Console]::WriteLine('Installing AFH...') }
 
         $running = $job.BeginInvoke()
+        if ($animate) {
+            try {
+                $cell = Get-Cell
+                if ($cell) {
+                    $film = Get-Film
+                    $tall = [int][Math]::Floor($markRows * 20 / 6) * 6  # the frames' own height: whole Sixel bands
+                    $markRows = [int][Math]::Ceiling($tall / $cell.height)
+                    $height = $markRows + 2
+                    $cardRow = "  $esc[48;2;$($markBack)m" + (' ' * ([int][Math]::Ceiling($markCols * 10 / $cell.width) + 2)) + "$reset$esc[K`r`n"
+                }
+            }
+            catch { $film = $null }
+        }
         $shown = 0.0
         $tick = 0
         while (-not $running.IsCompleted) {
