@@ -62,7 +62,7 @@ It's the same AFH as the desktop app. Threads, settings, providers and keys are 
 
 Type `/` for commands, including your own, `@` to attach a file, and `!` to run a shell command and show the agent the output.
 
-The AFH mark at the message box flows while a model works, like the app's. On a wide terminal your threads sit in a rail on the left. The words along the top and the chips under the message box open what they name, with a click or a command. The live panel opens by itself during a run when there's room for it, and closes after. **Settings → Appearance** has the logo animation and its speed.
+The AFH mark at the message box flows while a model works, like the app's. In a terminal that can show Sixel images, such as Windows Terminal, the mark is a real image; other terminals and SSH sessions get it drawn in block characters. `AFH_NO_IMAGES=1` turns the image off. On a wide terminal your threads sit in a rail on the left. The words along the top and the chips under the message box open what they name, with a click or a command. The live panel opens by itself during a run when there's room for it, and closes after. **Settings → Appearance** has the logo animation and its speed.
 
 Things a terminal can't draw open outside it: images in your viewer, design previews in your browser. The mic stays in the desktop and phone apps.
 

@@ -26,6 +26,7 @@ def check() -> int:
 
     from pygments.lexers import get_lexer_by_name
 
+    from . import picture
     from .app import AFH
 
     class Quiet:
@@ -42,14 +43,20 @@ def check() -> int:
         assert get_lexer_by_name("python")  # a build without lexers would show code uncoloured and say nothing
         print("ok")
 
+    picture.CELL = (10, 20)
+    assert picture.film(12, 4, "#181616").frame(None)  # a build without Pillow would quietly lose the real mark
+    picture.CELL = None
+
     asyncio.run(go())
     return 0
 
 
 def run(opener: Any, a: Any) -> int:
     """Full screen at once: the app connects behind its own boot screen, not before it."""
+    from . import picture
     from .app import AFH
 
+    picture.probe()
     app = AFH(None, None, str(Path(getattr(a, "dir", None) or ".").resolve()), model=getattr(a, "model", None), agent=getattr(a, "agent", None),
               mode=getattr(a, "mode", None), thread=getattr(a, "thread", None), resume=bool(getattr(a, "resume", False)), opener=opener)
     try:
