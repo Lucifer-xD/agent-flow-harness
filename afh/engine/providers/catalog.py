@@ -93,8 +93,9 @@ KNOWN: dict[str, dict] = {
         "env": ["MISTRAL_API_KEY"], "docs": "https://docs.mistral.ai/api", "extra": {},
     },
     "xai": {
-        "name": "xAI", "kind": "openai", "base_url": "https://api.x.ai/v1",
+        "name": "xAI (Grok)", "kind": "openai", "base_url": "https://api.x.ai/v1",
         "env": ["XAI_API_KEY"], "docs": "https://docs.x.ai/docs/api-reference", "extra": {},
+        "login": "xai",  # sign in with a SuperGrok / X Premium+ plan, or paste a key
     },
     "together": {
         "name": "Together AI", "kind": "openai", "base_url": "https://api.together.xyz/v1",
@@ -155,6 +156,11 @@ DEV_TEMPLATES: dict[str, dict] = {
                               "key_env": ["CLOUDFLARE_API_TOKEN"], "extra": {"auth_header": "cf-aig-authorization"}},
 }
 
+# models.dev providers with a sign-in (engine/auth.py) on top of the API key.
+DEV_LOGINS: dict[str, str] = {
+    "poe": "poe", "digitalocean": "digitalocean", "minimax-coding-plan": "minimax", "minimax-cn-coding-plan": "minimax-cn",
+}
+
 # Providers that need an SDK, a cloud credential file or a protocol AFH does not speak.
 DEV_UNSUPPORTED = {"qvac", "salad-cloud", "gitlab", "watsonx", "sap-ai-core", "google-vertex", "google-vertex-anthropic", "merge-gateway", "github-copilot"}
 
@@ -188,8 +194,11 @@ def _generated(dev_id: str, p: dict) -> dict | None:
     params = [{"name": v, "label": param_label(v, dev_id), "default": (tpl.get("defaults") or {}).get(v, "")} for v in dict.fromkeys(_VAR.findall(url))]
     pnames = {x["name"] for x in params}
     key_env = tpl.get("key_env") or [e for e in env if e not in pnames]
-    return {"name": p.get("name") or dev_id, "kind": kind, "base_url": url, "env": key_env, "docs": p.get("doc"), "extra": dict(tpl.get("extra") or {}),
-            "params": params, "hint": tpl.get("hint"), "source": "models.dev", "models_count": len(p.get("models") or {})}
+    out = {"name": p.get("name") or dev_id, "kind": kind, "base_url": url, "env": key_env, "docs": p.get("doc"), "extra": dict(tpl.get("extra") or {}),
+           "params": params, "hint": tpl.get("hint"), "source": "models.dev", "models_count": len(p.get("models") or {})}
+    if dev_id in DEV_LOGINS:
+        out["login"] = DEV_LOGINS[dev_id]
+    return out
 
 
 def entries() -> dict[str, dict]:
