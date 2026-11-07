@@ -188,7 +188,7 @@ The optional **AFH account** is only for reaching your computers and the web cha
   - **ChatGPT (Codex):** your Plus, Pro or Team plan.
   - **ChatGPT (chat):** the chat models on your ChatGPT plan, using your browser login.
   - **GitHub Copilot:** Claude, GPT and Gemini through your Copilot plan.
-  - **Grok (xAI):** your SuperGrok or X Premium+ plan, with a code you approve on x.ai.
+  - **Grok (xAI):** your SuperGrok or X Premium+ plan, with a code you approve on x.ai. AFH talks to xAI as the Grok CLI, the only app the plan pays for, so xAI could stop it working or act on your account.
   - **Google Antigravity:** Gemini and Claude on your Google account's quota.
   - **OpenRouter:** one account for hundreds of models.
   - **MiniMax Token Plan:** on minimax.io or minimax.cn.
