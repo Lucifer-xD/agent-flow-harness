@@ -22,7 +22,7 @@ from typing import AsyncIterator
 
 import httpx
 
-from afh.engine import usage
+from afh.engine import auth, usage
 from afh.engine.providers import catalog
 from afh.engine.providers.sse import (
     NETWORK_ERRORS, ProviderError, decode_body, error_message, http_error, image_data, iter_json, join_url,
@@ -52,6 +52,13 @@ class AnthropicProvider:
         if self.config.api_key:
             h["x-api-key"] = self.config.api_key
         h.update(self.config.headers)
+        return h
+
+    def _signed_headers(self, signed: dict[str, str]) -> dict[str, str]:
+        """A sign-in (MiniMax Token Plan) sends a Bearer token in place of x-api-key."""
+        h = self.headers() | signed
+        if "authorization" in signed:
+            h.pop("x-api-key", None)
         return h
 
     def build_body(self, req: ChatRequest) -> dict:
@@ -144,19 +151,37 @@ class AnthropicProvider:
     # ---- streaming --------------------------------------------------------------------
 
     async def stream(self, req: ChatRequest) -> AsyncIterator[ProviderEvent]:
-        url = join_url(self.config.base_url, "/v1/messages")
+        try:
+            base, signed = await auth.prepare(self.config, req)
+        except Exception as exc:
+            yield {"type": "error", "message": str(exc), "status": 401, "kind": "auth", "response": ""}
+            return
+        url = join_url(base, "/v1/messages")
         body = self.build_body(req)
-        async with make_client(self.headers(), self._transport) as client:
-            try:
-                async with client.stream("POST", url, json=body) as resp:
-                    usage.observe(self.config.id, resp.headers)
-                    if resp.status_code >= 300:
-                        yield http_error(resp.status_code, decode_body(await resp.aread()))
+        async with make_client(self._signed_headers(signed), self._transport) as client:
+            for attempt in (0, 1):
+                try:
+                    async with client.stream("POST", url, json=body) as resp:
+                        usage.observe(self.config.id, resp.headers)
+                        if resp.status_code == 401 and attempt == 0 and auth.signed_in(self.config):
+                            await resp.aread()  # a revoked token: get a new one and try once more
+                            try:
+                                base, signed = await auth.prepare(self.config, req, force=True)
+                            except Exception as exc:
+                                yield {"type": "error", "message": str(exc), "status": 401, "kind": "auth", "response": ""}
+                                return
+                            client.headers.update(signed)
+                            url = join_url(base, "/v1/messages")
+                            continue
+                        if resp.status_code >= 300:
+                            yield http_error(resp.status_code, decode_body(await resp.aread()))
+                            return
+                        async for ev in self._parse(resp):
+                            yield ev
                         return
-                    async for ev in self._parse(resp):
-                        yield ev
-            except NETWORK_ERRORS as exc:
-                yield network_error(exc, url)
+                except NETWORK_ERRORS as exc:
+                    yield network_error(exc, url)
+                    return
 
     async def _parse(self, resp: httpx.Response) -> AsyncIterator[ProviderEvent]:
         blocks: dict[int, dict] = {}
@@ -243,9 +268,13 @@ class AnthropicProvider:
             return catalog.merge_static(self.config, [])
         fetched: list[ModelInfo] = []
         after: str | None = None
-        async with make_client(self.headers(), self._transport) as client:
+        try:
+            base, signed = await auth.prepare(self.config)
+        except Exception as exc:
+            raise ProviderError(str(exc), 401) from exc
+        async with make_client(self._signed_headers(signed), self._transport) as client:
             for _ in range(10):  # paginated; ten pages is far more than the API has
-                url = join_url(self.config.base_url, "/v1/models") + "?limit=1000" + (f"&after_id={after}" if after else "")
+                url = join_url(base, "/v1/models") + "?limit=1000" + (f"&after_id={after}" if after else "")
                 try:
                     resp = await client.get(url)
                 except NETWORK_ERRORS as exc:

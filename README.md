@@ -40,7 +40,7 @@
 
 - **It finishes the job.** It plans the work as a to-do list you can edit, does it, runs the tests, checks the result in a real browser, and tells you plainly what's done or what's in the way.
 - **You see everything.** Code streams into the Live pane as it's written. Every thought, tool call, command and diff is in the thread, and the Context view shows exactly what the model sees.
-- **Any model, mixed freely.** 200+ providers, local models, or sign in with a plan you already pay for: ChatGPT, GitHub Copilot, Google Antigravity or OpenRouter. Lead with a strong model and hand work to fast, cheap ones.
+- **Any model, mixed freely.** 200+ providers, local models, or sign in with a plan you already pay for: ChatGPT, GitHub Copilot, Grok, Google Antigravity, MiniMax, Poe or OpenRouter. Lead with a strong model and hand work to fast, cheap ones.
 - **You stay in control.** Choose Ask first, Full access or Read only. Stop is instant. Undo rewinds the thread *and the files on disk*.
 - **It's yours.** Everything runs and is stored on your PC. No account needed, and the app sends no telemetry. The engine is written from scratch in this repo, in plain Python.
 
@@ -188,8 +188,12 @@ The optional **AFH account** is only for reaching your computers and the web cha
   - **ChatGPT (Codex):** your Plus, Pro or Team plan.
   - **ChatGPT (chat):** the chat models on your ChatGPT plan, using your browser login.
   - **GitHub Copilot:** Claude, GPT and Gemini through your Copilot plan.
+  - **Grok (xAI):** your SuperGrok or X Premium+ plan, with a code you approve on x.ai.
   - **Google Antigravity:** Gemini and Claude on your Google account's quota.
   - **OpenRouter:** one account for hundreds of models.
+  - **MiniMax Token Plan:** on minimax.io or minimax.cn.
+  - **Poe** and **DigitalOcean:** sign in and AFH creates the key for you.
+  - **ChatGPT with a code:** the same ChatGPT plan when there's no browser, such as over SSH.
 - **Local models with no key:** Ollama, LM Studio, vLLM, llama.cpp and Jan. AFH finds the ones running on your computer.
 - **Any compatible endpoint:** anything that speaks the OpenAI, Anthropic or Gemini API.
 

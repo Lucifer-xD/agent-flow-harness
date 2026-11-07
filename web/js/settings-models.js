@@ -8,19 +8,28 @@ const header = (title, lead) => [el("h2", title), lead ? el("p.lead", lead) : nu
 const field = (label, input, help) => el("div.field", el("label", label), input, help ? el("div.help", help) : null);
 
 const SIGN_INS = [
-  { method: "chatgpt", provider: "chatgpt", name: "ChatGPT (Codex)", sub: "Use your Plus, Pro or Team plan — no API key", icon: "sparkle" },
+  { method: "chatgpt", provider: "chatgpt", name: "ChatGPT (Codex)", sub: "Use your Plus, Pro or Team plan — no API key", icon: "sparkle", alt: "chatgpt-device" },
   { method: "chatgpt-web", provider: "chatgpt-chat", name: "ChatGPT (chat)", sub: "The real GPT-6 family (Astra, Sol, Terra…) from your browser login — uses your ChatGPT plan, not your Codex credits", icon: "sparkle", custom: true },
-  { method: "copilot", provider: "github-copilot", name: "GitHub Copilot", sub: "Claude, GPT and Gemini through your Copilot plan", icon: "github" },
+  { method: "copilot", provider: "github-copilot", name: "GitHub Copilot", sub: "Claude, GPT and Gemini through your Copilot plan", icon: "github", site: "GitHub" },
+  { method: "xai", provider: "xai", name: "Grok (xAI)", sub: "Use your SuperGrok or X Premium+ plan — no API key", icon: "zap", site: "xAI" },
   { method: "antigravity", provider: "antigravity", name: "Google Antigravity", sub: "Gemini and Claude on your Google account's Antigravity quota", icon: "globe",
     warning: "Google has suspended Antigravity access for some accounts that signed in through apps other than Antigravity itself (OpenCode, OpenClaw). "
       + "AFH signs in the same way, so your Google account's Antigravity access could be suspended. Your other Google services were not reported affected. "
       + "Use an account you can afford to lose Antigravity on." },
   { method: "openrouter", provider: "openrouter", name: "OpenRouter", sub: "Hundreds of models on one account; creates a key for you", icon: "globe" },
+  { method: "minimax", provider: "minimax-coding-plan", name: "MiniMax Token Plan", sub: "MiniMax models on your Token Plan (minimax.io); the China site is under Add a provider", icon: "cpu", site: "MiniMax" },
+  { method: "poe", provider: "poe", name: "Poe", sub: "GPT, Claude, Gemini, Grok and more on your Poe points; creates a key for you", icon: "bot" },
+  { method: "digitalocean", provider: "digitalocean", name: "DigitalOcean", sub: "Serverless inference on your DigitalOcean account", icon: "globe" },
+];
+// Sign-ins that only appear inside another one's dialog, or in Add a provider.
+const OTHER_SIGN_INS = [
+  { method: "chatgpt-device", provider: "chatgpt", name: "ChatGPT (Codex)", site: "OpenAI" },
+  { method: "minimax-cn", provider: "minimax-cn-coding-plan", name: "MiniMax Token Plan (China)", site: "MiniMax" },
 ];
 
 /** Sign-in dialog: opens the provider's page (or shows GitHub's device code) and waits for it. */
 export async function signIn(method, { onDone } = {}) {
-  const meta = SIGN_INS.find((x) => x.method === method) || { name: method };
+  const meta = [...SIGN_INS, ...OTHER_SIGN_INS].find((x) => x.method === method) || { name: method };
   if (meta.warning && !(await confirmDialog({ title: `Sign in to ${meta.name}?`, body: meta.warning, confirm: "I understand, sign in", danger: true }))) return;
   const status = el("div.signin-status", el("span.spinner"), " Starting…");
   const bodyBox = el("div.signin-body");
@@ -38,13 +47,17 @@ export async function signIn(method, { onDone } = {}) {
     return;
   }
   const open = () => login.url && native.openExternal(login.url);
+  const site = meta.site || meta.name;
   if (login.userCode) {
-    bodyBox.replaceChildren(el("p.lead", "Enter this code on GitHub to connect your Copilot plan:"), el("div.device-code", login.userCode),
-      el("button.btn.primary", { on: { click: async () => { await copyText(login.userCode); open(); } } }, ico("copy"), "Copy code & open GitHub"));
-    status.replaceChildren(el("span.spinner"), " Waiting for GitHub…");
+    bodyBox.replaceChildren(el("p.lead", `Enter this code on ${site} to connect your plan. You can do it on any device.`), el("div.device-code", login.userCode),
+      el("button.btn.primary", { on: { click: async () => { await copyText(login.userCode); open(); } } }, ico("copy"), `Copy code & open ${site}`),
+      login.url ? el("p.help", { style: { marginTop: "10px", wordBreak: "break-all" } }, login.url) : null);
+    status.replaceChildren(el("span.spinner"), ` Waiting for ${site}…`);
   } else if (login.url) {
+    const alt = meta.alt && [...SIGN_INS, ...OTHER_SIGN_INS].find((x) => x.method === meta.alt);
     bodyBox.replaceChildren(el("p.lead", "Finish signing in in your browser. AFH continues on its own when you are done."),
-      el("button.btn", { on: { click: open } }, ico("external"), "Open the sign-in page again"));
+      el("button.btn", { on: { click: open } }, ico("external"), "Open the sign-in page again"),
+      alt ? el("button.btn.ghost.sm", { style: { marginLeft: "8px" }, title: "For a browser on another device, or when this one can't reach AFH", on: { click: () => { dlg.close(); signIn(alt.method, { onDone }); } } }, "Use a code instead") : null);
     status.replaceChildren(el("span.spinner"), " Waiting for the browser…");
     open();
   }

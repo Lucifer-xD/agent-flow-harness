@@ -26,12 +26,18 @@ from .widgets import bar, diff_content
 
 SIGN_INS = [
     {"method": "chatgpt", "provider": "chatgpt", "name": "ChatGPT (Codex)", "sub": "Use your Plus, Pro or Team plan, no API key"},
+    {"method": "chatgpt-device", "provider": "chatgpt", "name": "ChatGPT (Codex) with a code", "sub": "The same plan; type a code on any device. For SSH and servers", "site": "OpenAI"},
     {"method": "chatgpt-web", "provider": "chatgpt-chat", "name": "ChatGPT (chat)", "sub": "The normal chat models from your browser login", "custom": True},
-    {"method": "copilot", "provider": "github-copilot", "name": "GitHub Copilot", "sub": "Claude, GPT and Gemini through your Copilot plan"},
+    {"method": "copilot", "provider": "github-copilot", "name": "GitHub Copilot", "sub": "Claude, GPT and Gemini through your Copilot plan", "site": "GitHub"},
+    {"method": "xai", "provider": "xai", "name": "Grok (xAI)", "sub": "Use your SuperGrok or X Premium+ plan, no API key", "site": "xAI"},
     {"method": "antigravity", "provider": "antigravity", "name": "Google Antigravity", "sub": "Gemini and Claude on your Google account's Antigravity quota",
      "warning": "Google has suspended Antigravity access for some accounts that signed in through apps other than Antigravity itself (OpenCode, OpenClaw). AFH signs in the same way, so your Google "
                 "account's Antigravity access could be suspended. Your other Google services were not reported affected. Use an account you can afford to lose Antigravity on."},
     {"method": "openrouter", "provider": "openrouter", "name": "OpenRouter", "sub": "Hundreds of models on one account; creates a key for you"},
+    {"method": "minimax", "provider": "minimax-coding-plan", "name": "MiniMax Token Plan", "sub": "MiniMax models on your Token Plan (minimax.io)", "site": "MiniMax"},
+    {"method": "minimax-cn", "provider": "minimax-cn-coding-plan", "name": "MiniMax Token Plan (China)", "sub": "The same on minimax.cn", "site": "MiniMax"},
+    {"method": "poe", "provider": "poe", "name": "Poe", "sub": "GPT, Claude, Gemini, Grok and more on your Poe points; creates a key for you"},
+    {"method": "digitalocean", "provider": "digitalocean", "name": "DigitalOcean", "sub": "Serverless inference on your DigitalOcean account"},
 ]
 FEATURED = ["openai", "anthropic", "gemini", "openrouter", "deepseek", "xai", "mistral", "groq", "kimi", "zai-coding", "azure", "amazon-bedrock", "ollama", "lmstudio"]
 TYPES = {"user": "You", "assistant": "Model", "system": "System notice", "idle": "Run ended", "compaction": "Compaction summary", "shell": "Shell", "synthetic": "Injected", "skill": "Skill"}
@@ -369,6 +375,8 @@ class Actions:
         items = []
         for x in SIGN_INS:
             p = have.get(x["provider"])
+            if x["method"] == "chatgpt-device" and p:  # one ChatGPT row is enough once signed in
+                continue
             signed = p and (p.get("signedIn") or (x["method"] == "openrouter" and p.get("hasKey")))
             items.append(Item(x["name"], ("signin", x), ("Signed in" + (f" as {p['account']}" if p.get("account") else "")) if signed else x["sub"], "Sign in with your plan", bool(signed)))
         items.append(Item("Scan this computer", ("scan", None), "Ollama, LM Studio, vLLM, llama.cpp, Jan", "On this computer"))
@@ -385,9 +393,14 @@ class Actions:
         elif kind == "scan":
             await self.scan_local()
         elif kind == "key":
-            if value.get("login") and not value.get("needsKey"):
-                await self.sign_in({"method": value["login"], "name": value.get("name")})
-            else:
+            how = "signin" if value.get("login") and not value.get("needsKey") else "key"
+            if value.get("login") and value.get("needsKey"):
+                how = await self.push_screen_wait(Picker(value.get("name") or value["id"], [
+                    Item("Sign in with your account", "signin", "Use a plan you already have", "How"),
+                    Item("Paste an API key", "key", f"Or set {value['env'][0]}" if value.get("env") else "", "How")], search=False))
+            if how == "signin":
+                await self.sign_in(next((x for x in SIGN_INS if x["method"] == value["login"]), {"method": value["login"], "name": value.get("name")}))
+            elif how == "key":
                 await self.key_form(value)
         else:
             await self.key_form(None)
@@ -401,7 +414,9 @@ class Actions:
         login = await self.api("POST", "/api/auth/login", {"method": x["method"]})
         if login.get("url"):
             webbrowser.open(login["url"])
-        body = f"Enter this code on GitHub:\n\n    {login['userCode']}\n\n{login.get('url') or ''}" if login.get("userCode") else f"Finish signing in in your browser. AFH continues on its own.\n\n{login.get('url') or ''}"
+        site = x.get("site") or x.get("name") or "the sign-in page"
+        body = (f"Open this page on any device and enter the code there ({site}):\n\n    {login['userCode']}\n\n{login.get('url') or ''}" if login.get("userCode")
+                else f"Finish signing in in your browser. AFH continues on its own.\n\n{login.get('url') or ''}")
         waiting = Viewer(f"Sign in to {x['name']}", body, hint="Esc cancels", copy_text=login.get("userCode") or "")
         task = asyncio.ensure_future(self.push_screen_wait(waiting))
         while not task.done():

@@ -223,6 +223,18 @@ def test_model_picker_changes_the_model(backend, tmp_path):
     play(backend, tmp_path, script)
 
 
+def test_connect_offers_the_grok_sign_in(backend, tmp_path):
+    async def script(app, pilot):
+        await send(pilot, "/connect")
+        await until(pilot, lambda: isinstance(app.screen, Picker), what="the provider list")
+        await type_in(pilot, "grok")
+        await shows(pilot, "Grok (xAI)")
+        await shows(pilot, "xAI (Grok)")  # the API-key entry, which offers the sign-in too
+        await pilot.press("escape")
+
+    play(backend, tmp_path, script)
+
+
 def test_tab_and_shift_tab_change_agent_and_approvals(backend, tmp_path):
     async def script(app, pilot):
         before = app.agent_id()

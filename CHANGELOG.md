@@ -2,6 +2,16 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.23.0 (2026-11-07)
+
+**Sign in with Grok, and more plans**
+
+- **Sign in with Grok.** Use your SuperGrok or X Premium+ subscription with no API key. AFH shows a code, and you approve it on x.ai from any device. Search for Grok in **Models & providers**, or type `/connect` in the terminal app. An xAI API key still works too.
+- **MiniMax Token Plan sign-in,** on minimax.io and on the China site, minimax.cn.
+- **Poe and DigitalOcean sign-in.** Each one creates a key on your account for you. When a key runs out, AFH asks you to sign in again.
+- **ChatGPT with a code.** For the terminal app over SSH, or a computer without a browser: sign in to your ChatGPT plan by typing a code on any device. In the app it's **Use a code instead** in the ChatGPT sign-in.
+- **Good to know:** some of these sign-in pages show another coding tool's name, such as OpenCode or OpenClaw. Those providers let coding agents share one public sign-in.
+
 ## 1.22.1 (2026-11-06)
 
 **A smooth logo in your terminal**
