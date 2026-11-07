@@ -115,7 +115,8 @@ def test_xai_refresh_and_headers(net):
     cfg = ProviderConfig(id="xai", name="xAI", kind="openai", base_url="https://api.x.ai/v1", api_key="old-key",
                          auth={"type": "xai", "access": "old", "refresh": "xr", "expires": time.time() - 1, "account": "me@x.test"})
     base, h = asyncio.run(auth.prepare(cfg))
-    assert base == "https://api.x.ai/v1" and h == {"authorization": "Bearer new"}
+    assert base == "https://cli-chat-proxy.grok.com/v1"  # the plan pays only on Grok's coding endpoint
+    assert h["authorization"] == "Bearer new" and h["x-grok-client-version"] == auth.GROK_CLI_VERSION and h["x-grok-req-id"]
     assert _form(calls[0])["grant_type"] == "refresh_token"
     kept = saved["xai"]["auth"]
     assert kept["refresh"] == "xr" and kept["account"] == "me@x.test"  # a refresh answer without a new refresh token keeps the old one
@@ -270,3 +271,31 @@ def test_chatgpt_with_a_code(net):
     a = saved["chatgpt"]["auth"]
     assert a["type"] == "chatgpt" and a["account_id"] == "acc" and a["refresh"] == "rt"
     assert saved["chatgpt"]["kind"] == "responses"
+
+
+def test_grok_asks_for_a_newer_client_and_gets_it(monkeypatch):
+    from afh.engine.providers.openai_compat import OpenAICompatProvider
+
+    saved = {}
+    monkeypatch.setattr(auth.provcfg, "upsert", lambda pid, patch: saved.update({pid: patch}))
+    seen = []
+
+    def handler(r):
+        seen.append(r.headers["x-grok-client-version"])
+        if r.headers["x-grok-client-version"] != "1.2.0":
+            return httpx.Response(426, json={"error": "Your Grok CLI version (1.0.13) is outdated. Please update to version 1.2.0 or later via `grok update`."})
+        body = 'data: {"choices":[{"index":0,"delta":{"content":"ok"}}]}\n\ndata: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+        return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=body.encode())
+
+    cfg = ProviderConfig(id="xai", name="xAI", kind="openai", base_url="https://api.x.ai/v1",
+                         auth={"type": "xai", "access": "a", "refresh": "r", "expires": time.time() + 3600})
+    p = OpenAICompatProvider(cfg, transport=httpx.MockTransport(handler))
+    req = ChatRequest(model="grok-4.7", system="", messages=[ChatMessage("user", "hi")])
+
+    async def go():
+        return [e async for e in p.stream(req)]
+
+    events = asyncio.run(go())
+    assert seen == ["1.0.13", "1.2.0"] and not [e for e in events if e.get("type") == "error"]
+    assert saved["xai"]["auth"]["client_version"] == "1.2.0"
+    assert not auth.outdated_client(cfg, 426, "update to version 1.2.0 or later")  # the same answer twice is a real failure

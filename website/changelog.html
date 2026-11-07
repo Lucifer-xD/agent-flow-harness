@@ -45,8 +45,18 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.23.0" data-reveal>
-          <div class="rel-head"><h2>1.23.0</h2><time datetime="2026-11-07">Nov 7, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.23.1" data-reveal>
+          <div class="rel-head"><h2>1.23.1</h2><time datetime="2026-11-07">Nov 7, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">Grok on your subscription</p>
+          <ul>
+            <li><b>Grok now runs on your plan.</b> In 1.23.0 the Grok sign-in connected, but xAI charged your xAI API team instead of your subscription, so chats stopped at a rate limit of 0. AFH now sends Grok through xAI's Grok CLI endpoint, the one your SuperGrok or X Premium+ plan pays for. Tool calls work there too.</li>
+            <li><b>Know the risk:</b> xAI lets the plan pay only for its own Grok CLI, so AFH tells xAI it is the Grok CLI. xAI could stop this from working, or act on your account. AFH says so before you sign in. An xAI API key has no such risk.</li>
+            <li><b>Only what your plan covers.</b> The model list for a Grok sign-in comes from that endpoint, so it shows the models your plan can use.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.23.0" data-reveal>
+          <div class="rel-head"><h2>1.23.0</h2><time datetime="2026-11-07">Nov 7, 2026</time></div>
           <p class="title">Sign in with Grok, and more plans</p>
           <ul>
             <li><b>Sign in with Grok.</b> Use your SuperGrok or X Premium+ subscription with no API key. AFH shows a code, and you approve it on x.ai from any device. Search for Grok in <b>Models &amp; providers</b>, or type <code>/connect</code> in the terminal app. An xAI API key still works too.</li>

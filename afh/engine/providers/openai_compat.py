@@ -135,6 +135,11 @@ class OpenAICompatProvider:
                 try:
                     async with client.stream("POST", url, json=body) as resp:
                         usage.observe(self.config.id, resp.headers)
+                        if resp.status_code == 426 and attempt == 0 and auth.outdated_client(self.config, 426, decode_body(await resp.aread())):
+                            base, signed = await auth.prepare(self.config, req)
+                            client.headers.update(signed)
+                            url = join_url(base, "/chat/completions")
+                            continue
                         if resp.status_code == 401 and attempt == 0 and auth.signed_in(self.config):
                             # A revoked or rotated token: get a new one and try once more.
                             await resp.aread()
@@ -257,6 +262,10 @@ class OpenAICompatProvider:
         async with make_client(self.headers() | signed, self._transport) as client:
             try:
                 resp = await client.get(url)
+                if auth.outdated_client(self.config, resp.status_code, decode_body(resp.content)):
+                    base, signed = await auth.prepare(self.config)
+                    client.headers.update(signed)
+                    resp = await client.get(url)
             except NETWORK_ERRORS as exc:
                 raise ProviderError(network_error(exc, url)["message"]) from exc
         if resp.status_code >= 300:

@@ -29,7 +29,8 @@ SIGN_INS = [
     {"method": "chatgpt-device", "provider": "chatgpt", "name": "ChatGPT (Codex) with a code", "sub": "The same plan; type a code on any device. For SSH and servers", "site": "OpenAI"},
     {"method": "chatgpt-web", "provider": "chatgpt-chat", "name": "ChatGPT (chat)", "sub": "The normal chat models from your browser login", "custom": True},
     {"method": "copilot", "provider": "github-copilot", "name": "GitHub Copilot", "sub": "Claude, GPT and Gemini through your Copilot plan", "site": "GitHub"},
-    {"method": "xai", "provider": "xai", "name": "Grok (xAI)", "sub": "Use your SuperGrok or X Premium+ plan, no API key", "site": "xAI"},
+    {"method": "xai", "provider": "xai", "name": "Grok (xAI)", "sub": "Use your SuperGrok or X Premium+ plan, no API key", "site": "xAI",
+     "warning": "xAI lets your SuperGrok or X Premium+ plan pay only for its own Grok CLI, so AFH tells xAI it is the Grok CLI. xAI could stop this from working, or act on your account. Use it only if you accept that risk. An xAI API key has no such risk."},
     {"method": "antigravity", "provider": "antigravity", "name": "Google Antigravity", "sub": "Gemini and Claude on your Google account's Antigravity quota",
      "warning": "Google has suspended Antigravity access for some accounts that signed in through apps other than Antigravity itself (OpenCode, OpenClaw). AFH signs in the same way, so your Google "
                 "account's Antigravity access could be suspended. Your other Google services were not reported affected. Use an account you can afford to lose Antigravity on."},

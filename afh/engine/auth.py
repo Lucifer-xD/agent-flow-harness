@@ -6,7 +6,8 @@
   chatgpt-device  the same ChatGPT plan with a code typed on any device (for SSH and headless use)
   copilot     GitHub device code; a GitHub token buys short-lived Copilot tokens
   xai         device code (xAI's shared client for coding agents); a SuperGrok or X Premium+
-              subscription pays, the token works on the normal xAI API
+              subscription pays. xAI bills the plan only on its Grok CLI endpoint (api.x.ai bills
+              the API team instead), so requests go there and identify as the Grok CLI
   minimax     device code (+ PKCE); a MiniMax Token Plan pays. minimax-cn is the China site
   poe         browser (OAuth PKCE); Poe hands back an API key that may expire
   digitalocean browser (implicit grant); the access token is the key for DigitalOcean's inference API
@@ -92,7 +93,8 @@ CHATGPT_DEVICE_REDIRECT = "https://auth.openai.com/deviceauth/callback"
 XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
 XAI_ISSUER = "https://auth.x.ai/oauth2"
 XAI_SCOPE = "openid profile email offline_access grok-cli:access api:access"
-XAI_BASE = "https://api.x.ai/v1"
+XAI_BASE = "https://cli-chat-proxy.grok.com/v1"  # the subscription's endpoint; api.x.ai answers 0/0 for it
+GROK_CLI_VERSION = "1.0.13"  # the oldest Grok CLI the endpoint accepts; raised from its 426 answer when needed
 
 # ---- MiniMax Token Plan ----
 MINIMAX_CLIENT_ID = "78257093-7e40-4613-99e0-527b14b39113"  # a public client; MiniMax's page may name OpenClaw
@@ -800,6 +802,22 @@ async def _refresh(config: ProviderConfig) -> dict:
 SIGNED_IN = ("chatgpt", "copilot", "antigravity", "chatgpt-web", "xai", "minimax")
 
 
+def outdated_client(config: ProviderConfig, status: int, body: str) -> bool:
+    """Grok's endpoint answers 426 "update to version X or later" when it wants a newer Grok CLI:
+    remember that version and say so, so the caller retries once."""
+    import re
+
+    auth = config.auth or {}
+    if status != 426 or auth.get("type") != "xai":
+        return False
+    found = re.search(r"version\s+v?(\d+(?:\.\d+){1,3})", body or "")
+    if not found or found.group(1) == (auth.get("client_version") or GROK_CLI_VERSION):
+        return False
+    config.auth = auth | {"client_version": found.group(1)}
+    provcfg.upsert(config.id, {"auth": config.auth})
+    return True
+
+
 def signed_in(config: ProviderConfig) -> bool:
     return (config.auth or {}).get("type") in SIGNED_IN
 
@@ -833,7 +851,8 @@ async def prepare(config: ProviderConfig, req: ChatRequest | None = None, force:
     if kind == "antigravity":
         return config.base_url or ANTIGRAVITY_BASE, {"authorization": f"Bearer {auth['access']}", "user-agent": ANTIGRAVITY_UA}
     if kind == "xai":
-        return config.base_url or XAI_BASE, {"authorization": f"Bearer {auth['access']}"}
+        return XAI_BASE, {"authorization": f"Bearer {auth['access']}", "x-grok-client-version": auth.get("client_version") or GROK_CLI_VERSION,
+                          "x-grok-req-id": str(uuid.uuid4())}
     if kind == "minimax":  # Bearer on MiniMax's Anthropic-style endpoint, in place of x-api-key
         return config.base_url, {"authorization": f"Bearer {auth['access']}"}
     h = {"authorization": f"Bearer {auth['access']}", "Openai-Intent": "conversation-edits", **COPILOT_HEADERS}

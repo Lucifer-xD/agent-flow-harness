@@ -2,6 +2,14 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.23.1 (2026-11-07)
+
+**Grok on your subscription**
+
+- **Grok now runs on your plan.** In 1.23.0 the Grok sign-in connected, but xAI charged your xAI API team instead of your subscription, so chats stopped at a rate limit of 0. AFH now sends Grok through xAI's Grok CLI endpoint, the one your SuperGrok or X Premium+ plan pays for. Tool calls work there too.
+- **Know the risk:** xAI lets the plan pay only for its own Grok CLI, so AFH tells xAI it is the Grok CLI. xAI could stop this from working, or act on your account. AFH says so before you sign in. An xAI API key has no such risk.
+- **Only what your plan covers.** The model list for a Grok sign-in comes from that endpoint, so it shows the models your plan can use.
+
 ## 1.23.0 (2026-11-07)
 
 **Sign in with Grok, and more plans**
