@@ -1,9 +1,9 @@
 {
-  "version": "1.22.1",
+  "version": "1.23.0",
   "sha256": {
-    "afh-linux-x64.tar.gz": "4f0276a6c5b5bf13d3f256ffdd506969defd0966b14e4b2a9c2507a0df461c7a",
-    "afh-macos-arm64.tar.gz": "b2cf8fc6d7c223c77579c0edbe1a877551b6f57bd9d7739a3b1d6fd7af4b4781",
-    "afh-macos-x64.tar.gz": "16d4569af4c4e5b0cea10ab48e6fb4ce58f3b34524699ce4f94b8bf4590b5ea6",
-    "afh-windows-x64.zip": "ec4eda3c566ff23199d1bb14cf6ed664c14b2712c9aba19c2b64d7c8aee4bddc"
+    "afh-linux-x64.tar.gz": "52d93f4729ceb9ee86de26a40cac3eca5e27d5d30348d33294f1c4cc99b4ccfb",
+    "afh-macos-arm64.tar.gz": "7a16bad64960050a6c6be66363b02d75d8eb763cda7ea742196bf0a2f02cd658",
+    "afh-macos-x64.tar.gz": "26ec4262c8b9bd4dcb36901cdf1b65042247d73030b0676d189f5cb108e6739e",
+    "afh-windows-x64.zip": "81b42e5c2ea2efd933549bd2c9c6a01a991030ea5b7fa6a8279eb66fd11b3679"
   }
 }
