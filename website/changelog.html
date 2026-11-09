@@ -45,8 +45,22 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.23.1" data-reveal>
-          <div class="rel-head"><h2>1.23.1</h2><time datetime="2026-11-07">Nov 7, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.24.0" data-reveal>
+          <div class="rel-head"><h2>1.24.0</h2><time datetime="2026-11-09">Nov 9, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">Two new interfaces: The Harness and Paper</p>
+          <ul>
+            <li><b>Pick how the whole app looks.</b> <b>Settings → Appearance → Interface</b> now has three choices, and the change applies right away. <b>Studio</b> is the layout you know. <b>The Harness</b> runs the thread along one live strand: every message and step is a node on it, the step being worked on glows, helpers branch off in violet, and the strand lands in a port in the message box. <b>Paper</b> reads like a document: a title you can click to rename, a line of facts, your message as a quote, the plan as a checklist, and the agent's steps as quiet rows with the time each one ran.</li>
+            <li><b>Each interface has its own themes.</b> The Harness comes with Harness, Steel, Voltage and Harness Day, and starts dark. Paper comes with Cream, Newsprint, Linen and Night Ink, and starts light. Studio keeps Sunset. The classic themes and custom colors work with all three.</li>
+            <li><b>Each interface remembers its own look.</b> Change the theme in one interface, and the others keep theirs.</li>
+            <li><b>Works everywhere:</b> phone width, right-to-left languages, and light and dark. The terminal app has the new themes too, and keeps its own Harness design.</li>
+            <li><b>A wrong computer clock now says so.</b> When a computer's date, time or time zone is wrong, every secure connection fails. Sign-ins and chats used to show a raw <code>CERTIFICATE_VERIFY_FAILED … certificate is not yet valid</code> error. AFH now explains that the clock is wrong, shows what the clock says, and tells you where to turn on automatic time. In Arabic too.</li>
+            <li><b>Antivirus HTTPS scanning is named.</b> When something on the computer or network intercepts secure connections, AFH says so and suggests turning the scanning off or trying another network.</li>
+            <li><b>No more stray "null"</b> in the sign-in dialog and a few other places.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.23.1" data-reveal>
+          <div class="rel-head"><h2>1.23.1</h2><time datetime="2026-11-07">Nov 7, 2026</time></div>
           <p class="title">Grok on your subscription</p>
           <ul>
             <li><b>Grok now runs on your plan.</b> In 1.23.0 the Grok sign-in connected, but xAI charged your xAI API team instead of your subscription, so chats stopped at a rate limit of 0. AFH now sends Grok through xAI's Grok CLI endpoint, the one your SuperGrok or X Premium+ plan pays for. Tool calls work there too.</li>

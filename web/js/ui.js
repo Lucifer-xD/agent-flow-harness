@@ -123,6 +123,16 @@ function append(node, children) {
   }
 }
 
+// The DOM's own insert methods turn null/undefined/false into the words "null"/"false" on screen.
+// The code passes `cond ? el(...) : null` to them the same way it does to el(), so skip those here too.
+for (const proto of [Element.prototype, DocumentFragment.prototype]) {
+  for (const name of ["append", "prepend", "replaceChildren", "before", "after", "replaceWith"]) {
+    const orig = proto[name];
+    if (typeof orig !== "function") continue;
+    proto[name] = function (...nodes) { return orig.apply(this, nodes.filter((n) => n != null && n !== false)); };
+  }
+}
+
 export const ico = (name, cls = "") => el(`span.ico${cls ? "." + cls : ""}`, { html: icon(name) });
 
 export function escapeHtml(s) {

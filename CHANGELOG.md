@@ -2,6 +2,24 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.24.0 (2026-11-09)
+
+**Two new interfaces: The Harness and Paper**
+
+- **Pick how the whole app looks.** **Settings → Appearance → Interface** now has three choices, and the change applies right away.
+  - **Studio:** the layout you know.
+  - **The Harness:** the thread runs along one live strand. Every message and step is a node on it, the step being worked on glows, helpers branch off in violet, and the strand lands in a port in the message box. The thread list shows each thread's state as a small strand.
+  - **Paper:** each thread reads like a document on a sheet. It has a title you can click to rename, a line of facts (agent, mode, model, when it started, changed files), your message as a quote and the plan as a checklist. The agent's steps are quiet rows with the time each one ran.
+- **Each interface has its own themes.** The Harness comes with Harness, Steel, Voltage and Harness Day, and starts dark. Paper comes with Cream, Newsprint, Linen and Night Ink, and starts light. Studio keeps Sunset. The classic themes and custom colors work with all three.
+- **Each interface remembers its own look.** Change the theme in one interface, and the others keep theirs. Switching back brings yours back.
+- **Works everywhere:** phone width, right-to-left languages, and light and dark. The terminal app has the new themes too, and keeps its own Harness design.
+
+**Fixes**
+
+- **A wrong computer clock now says so.** When a computer's date, time or time zone is wrong, every secure connection fails. Sign-ins and chats used to show a raw `CERTIFICATE_VERIFY_FAILED … certificate is not yet valid` error. AFH now explains that the clock is wrong, shows what the clock says, and tells you where to turn on automatic time. In Arabic too.
+- **Antivirus HTTPS scanning is named.** When something on the computer or network intercepts secure connections, AFH says so and suggests turning the scanning off or trying another network.
+- **No more stray "null" in the sign-in dialog** and a few other places.
+
 ## 1.23.1 (2026-11-07)
 
 **Grok on your subscription**

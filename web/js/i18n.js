@@ -264,6 +264,19 @@ const AR = {
   "None of these: the agent makes new options (say what to change in the notes)": "لا شيء منها: يصنع الوكيل خيارات جديدة (اكتب ما تريد تغييره في الملاحظات)",
   "The same screen in every option, side by side": "الشاشة نفسها في كل خيار، جنبًا إلى جنب", "Open this mockup in the browser panel": "افتح هذا النموذج في لوحة المتصفح",
   "Notes or a mix, e.g. \"A's colours with B's layout, bigger buttons\"": "ملاحظات أو مزيج، مثل \"ألوان A مع تخطيط B، وأزرار أكبر\"",
+  // provider sign-in dialog (settings-models.js signIn)
+  "Finish signing in in your browser. AFH continues on its own when you are done.": "أكمل تسجيل الدخول في المتصفح. سيتابع AFH وحده عندما تنتهي.",
+  "Open the sign-in page again": "افتح صفحة تسجيل الدخول مرة أخرى", "Waiting for the browser…": "بانتظار المتصفح…", "Starting…": "جارٍ البدء…",
+  "Use a code instead": "استخدم رمزًا بدلًا من ذلك", "I understand, sign in": "فهمت، سجّل الدخول",
+  // sign-in failures the user fixes on their own computer (engine/providers/sse.py tls_advice)
+  "Sign-in failed": "فشل تسجيل الدخول",
+  "This computer's date, time or time zone is wrong, so secure connections fail.": "تاريخ هذا الجهاز أو وقته أو منطقته الزمنية غير صحيح، لذلك تفشل الاتصالات الآمنة.",
+  "In Windows open Settings → Time & language → Date & time, turn on “Set time automatically” and “Set time zone automatically”, then press Sync now.": "في ويندوز افتح الإعدادات ← الوقت واللغة ← التاريخ والوقت، وفعّل «تعيين الوقت تلقائيًا» و«تعيين المنطقة الزمنية تلقائيًا»، ثم اضغط «المزامنة الآن».",
+  "Open System Settings → General → Date & Time and turn on “Set time and date automatically”.": "افتح إعدادات النظام ← عام ← التاريخ والوقت وفعّل «تعيين الوقت والتاريخ تلقائيًا».",
+  "Turn on automatic time in your system settings (or run: sudo timedatectl set-ntp true).": "فعّل ضبط الوقت تلقائيًا من إعدادات النظام (أو شغّل: sudo timedatectl set-ntp true).",
+  "Then try again.": "ثم حاول مرة أخرى.",
+  "Something on this computer or network is intercepting secure connections.": "شيء ما على هذا الجهاز أو الشبكة يعترض الاتصالات الآمنة.",
+  "Usually that's an antivirus with “HTTPS scanning” turned on, a work proxy or a VPN. Turn that scanning off or try another network, then try again.": "غالبًا يكون برنامج مكافحة فيروسات مفعّلًا فيه «فحص HTTPS»، أو بروكسي العمل، أو VPN. أوقف هذا الفحص أو جرّب شبكة أخرى، ثم حاول مرة أخرى.",
 };
 
 // Text with numbers or names in it.
@@ -278,6 +291,9 @@ const AR_PATTERNS = [
   [/^Choose ([A-D])$/, "اختر $1"], [/^Choose ([A-D]) with notes$/, "اختر $1 مع الملاحظات"], [/^Option ([A-D])$/, "الخيار $1"],
   [/^Design ([A-D]) chosen: (.+)$/, "اختير التصميم $1: $2"], [/^(.+) — click a screen to see it full size and try it$/, "$1 — انقر على شاشة لتراها بالحجم الكامل وتجرّبها"],
   [/^Summarising (\d+) older messages in (\d+) parts… (\d+)\/(\d+)$/, "جارٍ تلخيص $1 رسالة قديمة على $2 أجزاء… $3/$4"], [/^#(\d+)$/, "#$1"],
+  [/^The computer's clock says (.+)\.$/, "ساعة الجهاز تقول ‎$1‎."], [/^Sign in to ([A-Z][\w .()-]*)(\??)$/, "تسجيل الدخول إلى $1$2"],
+  [/^Enter this code on (.+) to connect your plan\. You can do it on any device\.$/, "أدخل هذا الرمز على $1 لربط اشتراكك. يمكنك فعل ذلك من أي جهاز."],
+  [/^Copy code & open (.+)$/, "انسخ الرمز وافتح $1"], [/^Waiting for ([A-Z][\w .()-]*)…$/, "بانتظار $1…"],
 ];
 
 const EXCLUDE = ".md, .bubble, pre, code, textarea, input, .think-text, .compact-text, .rail-text, .th-title, .tb-title h1, .todo-text, .plan-item, .goal-text, .goal-sub, .goal-card-text, .deleg-sub, .deleg-brief-text, .sub-desc, .sub-text, .job-cmd, .job-tail, .job-full, .live-code, .live-head .path, .diff, .h-pre, .tool-pre, .tool-target, .deleg-last, .err-msg, .slash-desc, .slash-name, .cmd-chip, .file-chip, .tb-path, .wt-path, .li-sub, .pi-sub, .deleg-model, .model, .bw-name, .bw-msg small, .d-name, .d-chip, .d-summary, .d-recap-note, .d-recap-sub, .dv-url, .dview-cap, .d-shot figcaption b, .d-col figcaption b";

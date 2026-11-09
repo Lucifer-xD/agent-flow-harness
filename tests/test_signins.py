@@ -299,3 +299,44 @@ def test_grok_asks_for_a_newer_client_and_gets_it(monkeypatch):
     assert seen == ["1.0.13", "1.2.0"] and not [e for e in events if e.get("type") == "error"]
     assert saved["xai"]["auth"]["client_version"] == "1.2.0"
     assert not auth.outdated_client(cfg, 426, "update to version 1.2.0 or later")  # the same answer twice is a real failure
+
+
+# ---- TLS failures the user fixes on their own computer ------------------------------------------
+
+
+def _cert_error(reason: str) -> httpx.ConnectError:
+    import ssl
+    try:
+        try:
+            raise ssl.SSLCertVerificationError(1, f"[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: {reason} (_ssl.c:1010)")
+        except ssl.SSLError as inner:
+            raise httpx.ConnectError(str(inner)) from inner
+    except httpx.ConnectError as outer:
+        return outer
+
+
+def test_a_wrong_clock_is_explained_in_plain_words():
+    from afh.engine.providers.sse import network_error, tls_advice
+    for reason in ("certificate is not yet valid", "certificate has expired"):
+        lines = tls_advice(_cert_error(reason))
+        assert lines and lines[0].startswith("This computer's date, time or time zone is wrong")
+        assert lines[1].startswith("The computer's clock says ")
+        assert "CERTIFICATE_VERIFY_FAILED" not in " ".join(lines)
+    msg = network_error(_cert_error("certificate is not yet valid"), "https://daily-cloudcode-pa.googleapis.com/v1internal")["message"]
+    assert msg.startswith("Couldn't connect securely to https://daily-cloudcode-pa.googleapis.com. This computer's date")
+    assert tls_advice(_cert_error("self-signed certificate in certificate chain"))[0].startswith("Something on this computer or network is intercepting")
+    assert tls_advice(_cert_error("unable to get local issuer certificate"))
+    assert tls_advice(httpx.ConnectError("[Errno 11001] getaddrinfo failed")) is None
+
+
+def test_sign_in_shows_the_clock_fix_instead_of_the_ssl_error():
+    async def flow(login):
+        raise _cert_error("certificate is not yet valid")
+
+    login = auth.Login("antigravity")
+    asyncio.run(auth._run(login, flow, None))
+    assert login.status == "error"
+    lines = login.error.split("\n")
+    assert lines[0] == "This computer's date, time or time zone is wrong, so secure connections fail."
+    assert lines[-1] == "Then try again."
+    assert "_ssl.c" not in login.error

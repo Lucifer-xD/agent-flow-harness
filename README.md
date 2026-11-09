@@ -156,7 +156,8 @@ Then type `afh` in a project folder. It's the same AFH, full screen: threads, mo
 - **Bring your threads:** import from OpenCode or Zadloop, and export any thread as JSON or Markdown.
 
 **Make it yours**
-- **46 themes** with your own accent colour, or build your own.
+- **Three interfaces:** Studio, The Harness (the thread runs along one live strand) or Paper (each thread reads like a document), each with its own themes and its own light or dark look.
+- **54 themes** with your own accent colour, or build your own.
 - **English and Arabic**, with a full right-to-left layout, switchable live.
 - **Slash commands:** `/goal` `/todo` `/memory` `/remember` `/compact` `/jobs` `/new` `/cost` `/review` `/fix-tests` `/explain` `/commit`, plus your own as Markdown files (`.claude/commands` works too).
 - **MCP servers and skills:** local or remote MCP servers, and skills from `~/.afh/skills` or the project. Skills made for other agents work as they are.

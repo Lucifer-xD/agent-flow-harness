@@ -3,8 +3,9 @@ import { browserHandBack, initBrowser, openBrowserTab, syncBrowserRuns, toggleBr
 import { designHooks } from "./design.js";
 import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadThread, viewImage } from "./chat.js";
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsOf, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
-import { PRESETS, applyAppearance as applyTheme, themeTransition } from "./appearance.js";
+import { INTERFACE_LOOKS, PRESETS, applyAppearance as applyTheme, themeTransition, themesFor } from "./appearance.js";
 import { applyLanguage } from "./i18n.js";
+import { docHead, initInterface, refreshDocHead, setPortWorking } from "./interface.js";
 import { openPalette } from "./palette.js";
 import { openContextEditor } from "./context.js";
 import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
@@ -46,6 +47,7 @@ const view = new ChatView($("messages"), $("thread"), {
   settings: () => S.settings,
   modelName: (ref) => modelName(ref),
   avatar: (live) => logoNode({ size: 28, working: live }),
+  docHead: (t) => docHead(t), // Paper shows the thread as a document with a title; the other interfaces hide it
   onFork: (id) => forkThread(id),
   onRetry: () => retryLast(),
   onRevert: (id) => revertTo(id),
@@ -162,6 +164,7 @@ async function boot() {
   ctx.renderLive = () => { if (S.drawer === "live") renderLive(wbBody("live"), wbTitle("live")); };
   hooks.delegation = (p, o) => delegationCard(p, { ...o, onWatch: openWatch });
   wire();
+  wireInterface();
   wireBrowser();
   connectEvents(onEvent, (state) => $("conn").className = "conn " + (state === "open" ? "ok" : "bad"));
   $("app").hidden = false;
@@ -209,7 +212,8 @@ async function toggleTheme(e) {
   const patch = { theme: next };
   if (u.preset !== "custom") {
     if (PRESETS[u.preset]) patch[dark ? "darkPreset" : "lightPreset"] = u.preset; // remember where you came from
-    patch.preset = fav && fav.dark === (next === "dark") ? (next === "dark" ? u.darkPreset : u.lightPreset) : next === "dark" ? "sunset" : "paper";
+    const own = INTERFACE_LOOKS[u.interface] || INTERFACE_LOOKS.studio;
+    patch.preset = fav && fav.dark === (next === "dark") ? (next === "dark" ? u.darkPreset : u.lightPreset) : next === "dark" ? own.dark : own.light;
     const p = PRESETS[patch.preset];
     Object.assign(patch, { accentOverride: false, bg: p.bg, text: p.text, accent: p.accent });
   }
@@ -477,7 +481,7 @@ async function chooseFolder() {
   }
 }
 
-function projectMenu() {
+function projectMenu(e) {
   const items = [{ group: "Projects" }];
   for (const p of S.settings.projects) {
     items.push({ title: basename(p), sub: p, icon: "folder", checked: p === project(), onSelect: () => switchProject(p) });
@@ -486,7 +490,8 @@ function projectMenu() {
   items.push({ title: "Open folder…", icon: "folder-plus", onSelect: chooseFolder });
   if (project()) items.push({ title: "Import thread…", sub: "From an export file, OpenCode or Zadloop", icon: "arrow-down", onSelect: importThread });
   if (project()) items.push({ title: "Remove from list", sub: basename(project()), icon: "x", danger: true, onSelect: removeProject });
-  popover($("project-picker"), items, { width: 300 });
+  const anchor = e?.currentTarget?.isConnected && e.currentTarget.offsetParent ? e.currentTarget : $("project-picker"); // Paper opens it from its tab bar
+  popover(anchor, items, { width: 300 });
 }
 
 async function switchProject(p) {
@@ -527,7 +532,7 @@ function renderThreads() {
     shownThreads.add(s.id);
     const st = threadStatus(s);
     const preview = threadPreview(s.id);
-    const item = el(`button.th-item.${st}${S.current?.id === s.id ? ".active" : ""}`, {
+    const item = el(`button.th-item.${st}${threadState(s) === "waiting" ? ".waiting" : ""}${S.current?.id === s.id ? ".active" : ""}`, {
       type: "button", title: s.title || "New thread", style: seen ? { animation: "none" } : { animationDelay: `${Math.min(i, 12) * 18}ms` },
       dataset: preview ? { preview } : null,
       on: { click: () => openThread(s.id) },
@@ -630,6 +635,12 @@ function threadStatus(s) {
   if (S.busy.has(s.id) || s.running) return "running";
   if (s.time?.idle || (s.tokens?.output || 0) > 0 || S.threads.get(s.id)?.messages?.some((m) => m.type === "assistant")) return "done";
   return "idle";
+}
+
+/** threadStatus, plus "waiting" while a working thread needs your answer (an approval or a question). */
+function threadState(s) {
+  const st = threadStatus(s);
+  return st === "running" && S.threads.get(s.id)?.permissions?.size ? "waiting" : st;
 }
 
 /** The status ring drawn in the thread list and on the welcome cards: a hollow ring, a pulsing one, or a check. */
@@ -807,6 +818,7 @@ function renderTopbar() {
   box.append(h, el("span.tb-crumb", { title: project() }, el("span.tb-sep"), ico("folder"), el("span.tb-path", basename(project()))), subChip);
   renderWork();
   syncPills();
+  refreshDocHead();
 }
 
 // ---- the sliding pill behind the active chip of the segmented controls (top bar + workbench tabs) ----
@@ -987,7 +999,7 @@ function showPalette() {
       .map(([id, label]) => ({ group: "Settings", title: label, icon: "settings", keywords: "settings", run: () => openSettings(id, ctx) })),
     ...S.sessions.slice(0, 80).map((s) => ({ group: "Threads", title: s.title || "New thread", sub: ago(s.time?.updated), icon: s.metadata?.afh?.goal ? "target" : "list", run: () => openThread(s.id) })),
     ...S.models.map((m) => ({ group: "Models", title: m.name, sub: providerName(m.providerID), icon: "cpu", keywords: m.id, run: () => chooseModel({ id: m.id, providerID: m.providerID }) })),
-    ...Object.entries(PRESETS).map(([id, p]) => ({ group: "Themes", title: p.name, sub: p.dark ? "dark" : "light", icon: p.dark ? "moon" : "sun", keywords: "theme color", run: () => applyPreset(id) })),
+    ...(({ own, classic }) => [...own, ...classic])(themesFor(S.settings.ui.interface)).map((id) => [id, PRESETS[id]]).map(([id, p]) => ({ group: "Themes", title: p.name, sub: p.dark ? "dark" : "light", icon: p.dark ? "moon" : "sun", keywords: "theme color", run: () => applyPreset(id) })),
   ];
   openPalette(items);
 }
@@ -1350,6 +1362,7 @@ function updateChangesBadge() {
     badge.hidden = !n;
     badge.textContent = n;
   }
+  if (t && t.docChanges !== n) { t.docChanges = n; refreshDocHead(); }
 }
 
 // ---- composer -----------------------------------------------------------------------
@@ -1396,6 +1409,7 @@ function renderComposerState() {
   const t = S.current;
   const busy = !!t && (t.busy || S.busy.has(t.id));
   $("tb-logo").hidden = !busy; // the mark flows beside the title while a model works
+  setPortWorking(busy); // and in The Harness composer port
   const send = $("btn-send");
   send.classList.toggle("stop", busy);
   send.innerHTML = icon(busy ? "stop" : "send");
@@ -1928,6 +1942,7 @@ function onEvent(ev) {
     onChildEvent(sid, result, view);
     if (D.watch === sid && result.status) refreshDrawerSoon();
   }
+  if (type === "permission.asked" || type === "permission.replied") renderThreads(); // the thread shows it is waiting for you
   if (type === "permission.asked") {
     const asking = ev.data?.action === "question";
     if (S.current !== t) toast(`"${t.session.title || "A thread"}" is ${asking ? "asking you a question" : "waiting for your approval"}`, "info", 5000);
@@ -1966,7 +1981,11 @@ window.__afh = { S, D, ctx, view, live: liveState }; // for debugging from the d
 const SB_KEY = "afh-sidebar";
 const HIDE_BELOW = 1100, PHONE_BELOW = 640;
 let sbPin = "";
-try { sbPin = localStorage.getItem(SB_KEY) || ""; } catch {}
+try {
+  // An early build of Paper tucked the sidebar away; it stays in its place now, so undo that once.
+  if (localStorage.getItem("afh-sidebar-before-paper")) { localStorage.removeItem("afh-sidebar-before-paper"); localStorage.removeItem(SB_KEY); }
+  sbPin = localStorage.getItem(SB_KEY) || "";
+} catch {}
 
 function sidebarMode() {
   if (innerWidth <= PHONE_BELOW) return "hidden";
@@ -2097,10 +2116,29 @@ function wire() {
   addEventListener("resize", syncPills);
 }
 
+/** Interfaces (Settings → Appearance): the app's hooks for Paper's document head and the Harness port. */
+function wireInterface() {
+  initInterface({
+    S,
+    meta: (t) => {
+      const agent = S.agents.find((a) => a.id === (t.session.agent || currentAgent()));
+      const modeKey = currentMode();
+      return { agent: agent?.name || null, mode: MODES[modeKey]?.label, modeKey, model: modelName(currentModel()), changes: collectEdits(t).length };
+    },
+    rename: (title) => patchSession({ title }),
+    openChanges: () => openDrawer("changes"),
+    redraw: () => { renderThreads(); renderTopbar(); if (S.current) view.update({ all: true }); requestAnimationFrame(() => { syncPills(); $("composer-wrap") && document.querySelector(".main").style.setProperty("--port-b", `${Math.max(0, $("composer-wrap").offsetHeight - $("composer").offsetTop - 30)}px`); }); },
+  });
+}
+
 /** The composer floats over the thread, so the thread needs room under its last message: --composer-h. */
 function wireComposerHeight() {
   const wrap = $("composer-wrap"), main = document.querySelector(".main");
-  const set = () => main.style.setProperty("--composer-h", `${wrap.offsetHeight}px`);
+  const set = () => {
+    main.style.setProperty("--composer-h", `${wrap.offsetHeight}px`);
+    // The Harness: how far above the bottom the strand lands in the composer's port
+    main.style.setProperty("--port-b", `${Math.max(0, wrap.offsetHeight - $("composer").offsetTop - 30)}px`);
+  };
   if ("ResizeObserver" in window) new ResizeObserver(set).observe(wrap);
   set();
 }

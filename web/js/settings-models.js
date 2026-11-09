@@ -72,7 +72,7 @@ export async function signIn(method, { onDone } = {}) {
       toast(`Signed in to ${meta.name}${v.account ? ` as ${v.account}` : ""}`, "ok");
       onDone?.(v);
     } else if (v.status === "error") {
-      status.replaceChildren(el("span.err-text", v.error || "Sign-in failed"));
+      status.replaceChildren(el("div.err-text", (v.error || "Sign-in failed").split("\n").map((line) => el("div", line))));
     }
   };
   if (login.status !== "pending") poll(); else timer = setTimeout(poll, 1500);
