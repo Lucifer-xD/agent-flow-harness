@@ -5,7 +5,7 @@ import { ChatView, applyEvent, collectEdits, createThread, fmtCost, hooks, loadT
 import { D, closeWatch, delegationCard, initDelegate, onChildEvent, registerDelegation, renderSubagentsChip, renderWatch, subagentsOf, subagentsPopover, syncChildren, trackEvent } from "./delegate.js";
 import { INTERFACE_LOOKS, PRESETS, applyAppearance as applyTheme, themeTransition, themesFor } from "./appearance.js";
 import { applyLanguage } from "./i18n.js";
-import { docHead, initInterface, refreshDocHead, setPortWorking } from "./interface.js";
+import { initInterface } from "./interface.js";
 import { openPalette } from "./palette.js";
 import { openContextEditor } from "./context.js";
 import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
@@ -47,7 +47,6 @@ const view = new ChatView($("messages"), $("thread"), {
   settings: () => S.settings,
   modelName: (ref) => modelName(ref),
   avatar: (live) => logoNode({ size: 28, working: live }),
-  docHead: (t) => docHead(t), // Paper shows the thread as a document with a title; the other interfaces hide it
   onFork: (id) => forkThread(id),
   onRetry: () => retryLast(),
   onRevert: (id) => revertTo(id),
@@ -818,7 +817,6 @@ function renderTopbar() {
   box.append(h, el("span.tb-crumb", { title: project() }, el("span.tb-sep"), ico("folder"), el("span.tb-path", basename(project()))), subChip);
   renderWork();
   syncPills();
-  refreshDocHead();
 }
 
 // ---- the sliding pill behind the active chip of the segmented controls (top bar + workbench tabs) ----
@@ -1362,7 +1360,6 @@ function updateChangesBadge() {
     badge.hidden = !n;
     badge.textContent = n;
   }
-  if (t && t.docChanges !== n) { t.docChanges = n; refreshDocHead(); }
 }
 
 // ---- composer -----------------------------------------------------------------------
@@ -1409,7 +1406,6 @@ function renderComposerState() {
   const t = S.current;
   const busy = !!t && (t.busy || S.busy.has(t.id));
   $("tb-logo").hidden = !busy; // the mark flows beside the title while a model works
-  setPortWorking(busy); // and in The Harness composer port
   const send = $("btn-send");
   send.classList.toggle("stop", busy);
   send.innerHTML = icon(busy ? "stop" : "send");
@@ -2116,18 +2112,10 @@ function wire() {
   addEventListener("resize", syncPills);
 }
 
-/** Interfaces (Settings → Appearance): the app's hooks for Paper's document head and the Harness port. */
+/** Interfaces (Settings → Appearance): switching one redraws what is on screen. */
 function wireInterface() {
   initInterface({
-    S,
-    meta: (t) => {
-      const agent = S.agents.find((a) => a.id === (t.session.agent || currentAgent()));
-      const modeKey = currentMode();
-      return { agent: agent?.name || null, mode: MODES[modeKey]?.label, modeKey, model: modelName(currentModel()), changes: collectEdits(t).length };
-    },
-    rename: (title) => patchSession({ title }),
-    openChanges: () => openDrawer("changes"),
-    redraw: () => { renderThreads(); renderTopbar(); if (S.current) view.update({ all: true }); requestAnimationFrame(() => { syncPills(); $("composer-wrap") && document.querySelector(".main").style.setProperty("--port-b", `${Math.max(0, $("composer-wrap").offsetHeight - $("composer").offsetTop - 30)}px`); }); },
+    redraw: () => { renderThreads(); renderTopbar(); if (S.current) view.update({ all: true }); requestAnimationFrame(syncPills); },
   });
 }
 
@@ -2136,8 +2124,6 @@ function wireComposerHeight() {
   const wrap = $("composer-wrap"), main = document.querySelector(".main");
   const set = () => {
     main.style.setProperty("--composer-h", `${wrap.offsetHeight}px`);
-    // The Harness: how far above the bottom the strand lands in the composer's port
-    main.style.setProperty("--port-b", `${Math.max(0, wrap.offsetHeight - $("composer").offsetTop - 30)}px`);
   };
   if ("ResizeObserver" in window) new ResizeObserver(set).observe(wrap);
   set();

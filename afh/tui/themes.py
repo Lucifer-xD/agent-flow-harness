@@ -1,4 +1,4 @@
-"""The app's themes as terminal colours (the classic 46 plus The Harness's and Paper's own). The table comes from web/js/appearance.js, and a test
+"""The app's themes as terminal colours (the classic 46 plus each interface's own). The table comes from web/js/appearance.js, and a test
 keeps the two the same: id: (name, accent, dark, (bg, side, panel, panel2, panel3, border, border2,
 text, text2, text3, code))."""
 from __future__ import annotations
@@ -54,14 +54,18 @@ PRESETS: dict[str, tuple] = {
     'gruvboxlight': ('Gruvbox Light', '#d65d0e', False, ('#fbf1c7', '#f2e5bc', '#fdf6d8', '#f2e5bc', '#ebdbb2', '#e5d5ad', '#d5c4a1', '#3c3836', '#665c54', '#928374', '#f2e5bc')),
     'nordlight': ('Nord Light', '#5e81ac', False, ('#eceff4', '#e5e9f0', '#f8f9fb', '#e9edf2', '#dfe4ec', '#d8dee9', '#c2cad8', '#2e3440', '#4c566a', '#7b869a', '#e5e9f0')),
     'contrastlight': ('High Contrast Light', '#0047ff', False, ('#ffffff', '#ffffff', '#ffffff', '#f2f2f2', '#e6e6e6', '#6b6b6b', '#3d3d3d', '#000000', '#1a1a1a', '#404040', '#f2f2f2')),
-    'harness': ('Harness', '#ff8a1f', True, ('#0b0c10', '#0e0f14', '#13151b', '#191c23', '#22252e', '#23262f', '#333744', '#eef0f5', '#aeb2c0', '#757a8a', '#08090c')),
-    'harness-steel': ('Steel', '#3ec5ff', True, ('#090c10', '#0c1015', '#11161c', '#161c24', '#1e2630', '#202833', '#2f3a47', '#e6edf4', '#a3b0be', '#6c7a89', '#06090c')),
-    'harness-volt': ('Voltage', '#c6f432', True, ('#0b0b09', '#0e0e0b', '#141410', '#1a1a15', '#23231c', '#25251d', '#36362b', '#f0f0e6', '#b2b2a4', '#7a7a6d', '#080806')),
-    'harness-day': ('Harness Day', '#e5531b', False, ('#f2f1f4', '#eae9ee', '#ffffff', '#f0eff3', '#e4e3ea', '#e1e0e7', '#cbc9d3', '#141318', '#55535f', '#8a8794', '#eeedf2')),
-    'paper-cream': ('Cream', '#d24e12', False, ('#f1ece4', '#ebe5db', '#fffdf9', '#f7f2ea', '#ece5da', '#e5ddd0', '#d2c7b7', '#1f1a15', '#5b5348', '#91877a', '#f5efe6')),
-    'paper-news': ('Newsprint', '#c4122f', False, ('#ebeae5', '#e4e3dd', '#fbfbf8', '#f1f0eb', '#e3e2dc', '#dcdbd4', '#c6c5bd', '#121211', '#45443f', '#7b7a72', '#efeee9')),
-    'paper-linen': ('Linen', '#2e7a58', False, ('#ecefe9', '#e5e9e2', '#fcfdfa', '#f2f5ef', '#e4e9e0', '#dde3d8', '#c6cfc0', '#17201a', '#4b594f', '#84907f', '#f0f3ed')),
-    'paper-night': ('Night Ink', '#f08a4b', True, ('#14120f', '#110f0d', '#1d1a16', '#24201b', '#2e2923', '#2f2a24', '#433c33', '#efe8dc', '#bcb2a3', '#867c6f', '#0f0d0b')),
+    'focus': ('Graphite', '#8fb4ff', True, ('#1a1a1c', '#141415', '#212124', '#29292d', '#333338', '#303035', '#42424a', '#ececee', '#b4b4bb', '#7e7e87', '#131314')),
+    'focus-umber': ('Umber', '#e8a56a', True, ('#1b1917', '#151311', '#23201d', '#2b2723', '#36312c', '#332e29', '#47403a', '#efebe6', '#b9b1a8', '#847c73', '#141210')),
+    'focus-chalk': ('Chalk', '#2f6feb', False, ('#ffffff', '#f6f6f7', '#ffffff', '#f2f2f4', '#e8e8eb', '#e5e5e9', '#d2d2d8', '#18181b', '#55555e', '#8b8b95', '#f5f5f7')),
+    'focus-sage': ('Sage', '#2f7d5b', False, ('#fbfbf8', '#f3f3ee', '#ffffff', '#f1f1ec', '#e6e6df', '#e2e2da', '#cfcfc5', '#1a1c18', '#555a50', '#8a8f84', '#f3f3ee')),
+    'compact': ('Indigo', '#7b8cff', True, ('#0f1115', '#0b0d10', '#151820', '#1b1f29', '#242935', '#232834', '#333a4a', '#e6e9f0', '#a5acbb', '#6f7687', '#0a0c0f')),
+    'compact-carbon': ('Carbon', '#f5a524', True, ('#121212', '#0d0d0d', '#191919', '#202020', '#2a2a2a', '#292929', '#3b3b3b', '#ebebeb', '#adadad', '#787878', '#0b0b0b')),
+    'compact-tide': ('Tide', '#2dd4bf', True, ('#0d1213', '#0a0e0f', '#131a1b', '#192223', '#212d2e', '#202c2d', '#2f4042', '#e3eeee', '#a2b5b6', '#6c8082', '#080c0d')),
+    'compact-day': ('Daylight', '#4f5bd5', False, ('#fafbfc', '#f0f2f5', '#ffffff', '#f3f5f8', '#e8ebf0', '#e3e6ec', '#cfd4dd', '#14171d', '#515866', '#878e9c', '#f1f3f6')),
+    'canvas': ('Porcelain', '#5b5bd6', False, ('#ffffff', '#eceef3', '#ffffff', '#f4f5f9', '#e9ebf1', '#e4e6ed', '#cfd3de', '#171923', '#535869', '#8a8fa0', '#f3f4f8')),
+    'canvas-sand': ('Sandstone', '#c2571a', False, ('#fffdfa', '#efeae2', '#fffdfa', '#f6f1ea', '#ece5db', '#e7dfd3', '#d4cabb', '#1e1a15', '#5a5348', '#90877a', '#f5f0e8')),
+    'canvas-night': ('Nightfall', '#8b8cf8', True, ('#16181d', '#0c0d10', '#1b1e24', '#22252d', '#2b2f39', '#2a2e37', '#3a3f4b', '#e9ebf1', '#a8adba', '#727786', '#101216')),
+    'canvas-pine': ('Pine', '#4ade80', True, ('#141a17', '#0b0f0d', '#19201c', '#1f2823', '#28332d', '#27322c', '#38463e', '#e6efe9', '#a6b5ab', '#6f8076', '#0e1310')),
 }
 
 FALLBACK = "sunset"

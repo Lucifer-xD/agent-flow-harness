@@ -2,6 +2,22 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.25.0 (2026-11-09)
+
+**Three new interfaces: Focus, Compact and Canvas**
+
+**Settings → Appearance → Interface** now has four choices: Studio and three new ones. The new ones are as plain as Studio, but each is laid out differently and has its own parts and motion.
+
+- **Focus:** just the conversation. A calm centered column, your messages as soft pills, and steps as single quiet lines. A step opens as an outline under a thin rail, sliding in out of a blur. Buttons are pills, and the message box is one large rounded field.
+- **Compact:** built for long working sessions. Turns read like a thread, with an avatar and a name line. A run of steps stacks into one list, and a step opens in place like a panel in an inspector, with a strip for each part. The message box is docked along the bottom, and everything moves fast and straight.
+- **Canvas:** the thread sits on its own sheet inside a tinted frame. Your request reads as a headline, and steps flow as small chips that lift when you point at them. A step opens as a raised card that springs out of its chip, with each part on its own tile.
+- **Twelve new themes,** four for each. Focus has Graphite, Umber, Chalk and Sage, and starts dark. Compact has Indigo, Carbon, Tide and Daylight, and starts dark. Canvas has Porcelain, Sandstone, Nightfall and Pine, and starts light.
+- Each interface remembers its own look, works with the classic themes and custom colors, and works at phone width and right to left. The terminal app has the new themes too.
+
+**Removed**
+
+- **The Harness and Paper interfaces are gone,** with their eight themes. If you were using one of them, AFH opens in Studio, in the look you last had there.
+
 ## 1.24.0 (2026-11-09)
 
 **Two new interfaces: The Harness and Paper**
