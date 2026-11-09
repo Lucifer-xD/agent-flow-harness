@@ -37,7 +37,7 @@
     menu.innerHTML = `<nav aria-label="Menu">${[["", "Home"], ...LINKS, ["download", "Download"]].map(([id, label], i) =>
       `<a href="/${id}" style="--i:${i}"${page === (id || "home") ? ' class="active"' : ""}>${label}</a>`).join("")}</nav>
       <div class="menu-auth" data-auth-menu><a class="btn btn-ghost" href="/account">Sign in</a><a class="btn btn-primary" href="/account?signup">Create account</a></div>
-      <p class="menu-foot">AFH <span data-version>1.24.0</span> · Windows, Mac and terminal</p>`;
+      <p class="menu-foot">AFH <span data-version>1.25.0</span> · Windows, Mac and terminal</p>`;
     nav.after(menu);
     nav.querySelector(".theme-btn").addEventListener("click", () => window.afhTheme.set(window.afhTheme.get() === "dark" ? "light" : "dark"));
     const burger = nav.querySelector(".burger");
@@ -81,7 +81,7 @@
         <div class="footer-brand">
           <a class="brand" href="/">${MARK}<span>Agent Flow Harness</span></a>
           <p>A coding agent that plans, delegates and writes code on your own computer, with the models you choose. As an app or in your terminal.</p>
-          <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.24.0</span> · <span data-date>Nov 9, 2026</span></a>
+          <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.25.0</span> · <span data-date>Nov 9, 2026</span></a>
         </div>
         <nav class="footer-cols" aria-label="Footer">
           <div><h4>Product</h4><a href="/features">Features</a><a href="/features#modes">Modes</a><a href="/cli">Terminal</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a></div>

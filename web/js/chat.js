@@ -607,8 +607,6 @@ export class ChatView {
     this.nodes.clear();
     this.root.replaceChildren();
     if (!t) return;
-    const head = this.opts.docHead?.(t);
-    if (head) this.root.append(head);
     // Very long threads (imports run to thousands of messages) draw only the newest part.
     const start = Math.max(0, t.messages.length - (this.window || WINDOW));
     this.hidden = new Set(t.messages.slice(0, start).map((m) => m.id));

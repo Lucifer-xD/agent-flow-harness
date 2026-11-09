@@ -40,7 +40,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "logoAnim": True,
         "themeTransition": "circle",  # circle | diamond | wipe | fade | blur | none
         "msgAnim": "rise",  # rise | fade | slide | pop | blur | none
-        "interface": "studio",  # studio | harness | paper: the layout and treatment; the theme still sets the colors
+        "interface": "studio",  # studio | focus | compact | canvas: the layout and its parts; the theme still sets the colors
         "glass": True,
         "customCss": "",
         "sendKey": "enter",  # enter | ctrl-enter
@@ -258,9 +258,28 @@ def _merge_defaults(data: dict, defaults: dict) -> dict:
     return out
 
 
+RETIRED_INTERFACES = ("harness", "paper")  # removed in 1.25.0
+_LOOK_KEYS = ("theme", "preset", "darkPreset", "lightPreset", "accent", "accentOverride", "bg", "text")
+
+
+def _retire_interface(settings: dict) -> dict:
+    """Someone who was using a removed interface goes back to Studio, in the look they left Studio in."""
+    ui = settings.get("ui") or {}
+    if ui.get("interface") in RETIRED_INTERFACES:
+        looks = ui.get("looks") if isinstance(ui.get("looks"), dict) else {}
+        back = looks.get("studio") if isinstance(looks.get("studio"), dict) else {k: DEFAULT_SETTINGS["ui"].get(k) for k in _LOOK_KEYS}
+        ui.update({k: back[k] for k in _LOOK_KEYS if back.get(k) is not None})
+        if "accentOverride" not in back:
+            ui["accentOverride"] = False
+        ui["interface"] = "studio"
+        for gone in RETIRED_INTERFACES:
+            looks.pop(gone, None)
+    return settings
+
+
 def load_settings() -> dict:
     with _lock:
-        return _merge_defaults(_read_json(SETTINGS_PATH, {}), DEFAULT_SETTINGS)
+        return _retire_interface(_merge_defaults(_read_json(SETTINGS_PATH, {}), DEFAULT_SETTINGS))
 
 
 def save_settings(patch: dict) -> dict:

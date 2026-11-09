@@ -1,7 +1,7 @@
 // Settings window. Big tabs live in their own modules (models, skills, delegation, remote).
 
 import { api, native } from "./api.js";
-import { INTERFACES, INTERFACE_LOOKS, MESSAGE_ANIMS, PRESETS, THEME_TRANSITIONS, applyAppearance, defaultLook, interfacePatch, resolveTheme, themeTransition, themesFor } from "./appearance.js";
+import { INTERFACES, INTERFACE_LOOKS, MESSAGE_ANIMS, PRESETS, THEME_TRANSITIONS, applyAppearance, defaultLook, interfacePatch, luminance, resolveTheme, themeTransition, themesFor } from "./appearance.js";
 import { delegationPane } from "./delegate.js";
 import { logoNode } from "./logo.js";
 import { modelsPane } from "./settings-models.js";
@@ -78,18 +78,22 @@ function thumbColors(id, ui) {
   const side = t.side || mix(t.bg, text, 97), panel = t.panel || mix(t.bg, text, 95), panel2 = t.panel2 || mix(t.bg, text, 92);
   return { "--bg": t.bg, "--bg-side": side, "--panel": panel, "--panel-2": panel2, "--card": panel, "--text": text, "--text-3": t.text3 || mix(text, t.bg, 55),
     "--line": mix(text, "transparent", 9), "--line-2": mix(text, "transparent", 14), "--line-3": mix(text, "transparent", 22),
-    "--accent": t.accent, "--accent-2": `color-mix(in srgb, ${t.accent} 70%, #ff3d71)` };
+    "--accent": t.accent, "--accent-2": `color-mix(in srgb, ${t.accent} 70%, #ff3d71)`, "--accent-ink": luminance(t.accent) > 0.5 ? "#111" : "#fff" };
 }
 /** A small drawing of each interface for the Appearance picker, in the colors it opens with. */
 function interfaceThumb(id, ui) {
   const i = (cls) => el(`i.${cls}`);
   const style = thumbColors(id, ui);
-  if (id === "harness") return el("span.ui-thumb.harness", { "aria-hidden": "true", style },
+  if (id === "focus") return el("span.ui-thumb.focus", { "aria-hidden": "true", style },
     el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
-    el("span.t-main", i("t-strand"), el("span.t-row", i("t-node"), i("t-you")), el("span.t-row", i("t-node.hot"), i("t-say")), el("span.t-row.sm", i("t-node.sm"), i("t-step")), el("span.t-row.sm", i("t-node.sm"), i("t-step")), el("span.t-box", i("t-port"))));
-  if (id === "paper") return el("span.ui-thumb.paper", { "aria-hidden": "true", style },
+    el("span.t-main", el("span.t-col", i("t-you"), i("t-step"), i("t-say"), i("t-say"), i("t-say.s")), i("t-box")));
+  if (id === "compact") return el("span.ui-thumb.compact", { "aria-hidden": "true", style },
     el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
-    el("span.t-body", el("span.t-sheet", i("t-h"), i("t-chips"), i("t-quote"), i("t-say"), el("span.t-step", i("t-time"), i("t-ev")), el("span.t-step", i("t-time"), i("t-ev.c")), i("t-check"), i("t-pill"))));
+    el("span.t-main", el("span.t-turn", i("t-av.you"), el("span.t-col", i("t-name"), i("t-say.s"))),
+      el("span.t-turn", i("t-av"), el("span.t-col", i("t-name"), i("t-say"), el("span.t-list", i("t-li"), i("t-li"), i("t-li")))), i("t-box")));
+  if (id === "canvas") return el("span.ui-thumb.canvas", { "aria-hidden": "true", style },
+    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
+    el("span.t-body", el("span.t-sheet", i("t-h"), i("t-h.s"), el("span.t-chips", i("t-chip"), i("t-chip"), i("t-chip.s")), i("t-say"), i("t-say.s"), i("t-box"))));
   return el("span.ui-thumb.studio", { "aria-hidden": "true", style },
     el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
     el("span.t-main", el("span.t-col", i("t-you"), i("t-say"), i("t-tool"), i("t-tool"), i("t-say.s")), el("span.t-box")));

@@ -949,3 +949,18 @@ def test_stop_right_after_sending_still_ends_the_run(home, tmp_path):
     sid = asyncio.run(go())
     assert sid not in e.runs and not e.is_running(sid)
     assert [ev for ev in e.events if ev["type"] == "session.execution.interrupted"]
+
+
+def test_a_removed_interface_goes_back_to_studio():
+    """The Harness and Paper were removed in 1.25.0: their users land in Studio, in the look they left it in."""
+    ui = {"interface": "paper", "theme": "light", "preset": "paper-cream", "lightPreset": "paper-cream", "darkPreset": "paper-night",
+          "looks": {"studio": {"theme": "dark", "preset": "midnight", "darkPreset": "midnight", "lightPreset": "snow", "accent": "#7c8cff", "accentOverride": False, "bg": "#0b0d14", "text": "#e9ecf5"},
+                    "paper": {"theme": "light", "preset": "paper-cream"}, "focus": {"theme": "dark", "preset": "focus"}}}
+    out = appstore._retire_interface({"ui": ui})["ui"]
+    assert out["interface"] == "studio" and out["preset"] == "midnight" and out["theme"] == "dark" and out["lightPreset"] == "snow"
+    assert set(out["looks"]) == {"studio", "focus"}
+    fresh = appstore._retire_interface({"ui": {"interface": "harness", "theme": "dark", "preset": "harness-volt"}})["ui"]
+    assert fresh["interface"] == "studio" and fresh["preset"] == "sunset" and fresh["theme"] == "system"
+    kept = appstore._retire_interface({"ui": {"interface": "canvas", "preset": "canvas"}})["ui"]
+    assert kept == {"interface": "canvas", "preset": "canvas"}
+
