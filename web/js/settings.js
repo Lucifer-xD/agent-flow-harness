@@ -1,7 +1,7 @@
 // Settings window. Big tabs live in their own modules (models, skills, delegation, remote).
 
 import { api, native } from "./api.js";
-import { MESSAGE_ANIMS, PRESETS, THEME_TRANSITIONS, applyAppearance, themeTransition } from "./appearance.js";
+import { INTERFACES, INTERFACE_LOOKS, MESSAGE_ANIMS, PRESETS, THEME_TRANSITIONS, applyAppearance, defaultLook, interfacePatch, resolveTheme, themeTransition, themesFor } from "./appearance.js";
 import { delegationPane } from "./delegate.js";
 import { logoNode } from "./logo.js";
 import { modelsPane } from "./settings-models.js";
@@ -70,6 +70,30 @@ export function openSettings(tab = "general", ctx, opts = {}) {
 
 const header = (title, lead) => [el("h2", title), lead ? el("p.lead", lead) : null];
 const card = (title, sub, action, ...children) => el("div.card", el("div.card-head", el("div", el("h3", title), sub ? el("p", sub) : null), action || null), ...children);
+/** The colors to draw an interface's picture in: the look it will open in. */
+function thumbColors(id, ui) {
+  const saved = (ui.interface || "studio") === id ? ui : ui.looks?.[id] || defaultLook(id);
+  const t = resolveTheme({ ...saved, interface: id });
+  const text = t.text, mix = (a, b, k) => `color-mix(in srgb, ${a} ${k}%, ${b})`;
+  const side = t.side || mix(t.bg, text, 97), panel = t.panel || mix(t.bg, text, 95), panel2 = t.panel2 || mix(t.bg, text, 92);
+  return { "--bg": t.bg, "--bg-side": side, "--panel": panel, "--panel-2": panel2, "--card": panel, "--text": text, "--text-3": t.text3 || mix(text, t.bg, 55),
+    "--line": mix(text, "transparent", 9), "--line-2": mix(text, "transparent", 14), "--line-3": mix(text, "transparent", 22),
+    "--accent": t.accent, "--accent-2": `color-mix(in srgb, ${t.accent} 70%, #ff3d71)` };
+}
+/** A small drawing of each interface for the Appearance picker, in the colors it opens with. */
+function interfaceThumb(id, ui) {
+  const i = (cls) => el(`i.${cls}`);
+  const style = thumbColors(id, ui);
+  if (id === "harness") return el("span.ui-thumb.harness", { "aria-hidden": "true", style },
+    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
+    el("span.t-main", i("t-strand"), el("span.t-row", i("t-node"), i("t-you")), el("span.t-row", i("t-node.hot"), i("t-say")), el("span.t-row.sm", i("t-node.sm"), i("t-step")), el("span.t-row.sm", i("t-node.sm"), i("t-step")), el("span.t-box", i("t-port"))));
+  if (id === "paper") return el("span.ui-thumb.paper", { "aria-hidden": "true", style },
+    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
+    el("span.t-body", el("span.t-sheet", i("t-h"), i("t-chips"), i("t-quote"), i("t-say"), el("span.t-step", i("t-time"), i("t-ev")), el("span.t-step", i("t-time"), i("t-ev.c")), i("t-check"), i("t-pill"))));
+  return el("span.ui-thumb.studio", { "aria-hidden": "true", style },
+    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
+    el("span.t-main", el("span.t-col", i("t-you"), i("t-say"), i("t-tool"), i("t-tool"), i("t-say.s")), el("span.t-box")));
+}
 const row = (title, sub, control) => el("div.row", el("div.rl", el("b", title), sub ? el("span", sub) : null), control);
 const field = (label, input, help) => el("div.field", el("label", label), input, help ? el("div.help", help) : null);
 
@@ -148,10 +172,14 @@ const PANES = {
     const presetGrid = el("div.preset-groups");
     const drawPresets = () => {
       presetGrid.replaceChildren();
-      const darkGrid = el("div.preset-grid"), lightGrid = el("div.preset-grid");
-      presetGrid.append(el("div.preset-group-title", ico("moon"), "Dark themes"), darkGrid, el("div.preset-group-title", ico("sun"), "Light themes"), lightGrid);
-      for (const [id, p] of Object.entries(PRESETS)) {
-        (p.dark ? darkGrid : lightGrid).append(el(`button.preset${u.preset === id ? ".on" : ""}`, { type: "button", style: { background: p.bg, color: p.text, borderColor: u.preset === id ? p.accent : "transparent" }, on: { click: async (e) => {
+      const darkGrid = el("div.preset-grid"), lightGrid = el("div.preset-grid"), ownGrid = el("div.preset-grid");
+      const iface = INTERFACES.find((x) => x.id === (u.interface || "studio")) || INTERFACES[0];
+      const { own, classic } = themesFor(iface.id);
+      if (own.length) presetGrid.append(el("div.preset-group-title", ico("sparkle"), `${iface.name} themes`), ownGrid);
+      presetGrid.append(el("div.preset-group-title", ico("moon"), own.length ? "Classic dark themes" : "Dark themes"), darkGrid, el("div.preset-group-title", ico("sun"), own.length ? "Classic light themes" : "Light themes"), lightGrid);
+      for (const id of [...own, ...classic]) {
+        const p = PRESETS[id];
+        (own.includes(id) ? ownGrid : p.dark ? darkGrid : lightGrid).append(el(`button.preset${u.preset === id ? ".on" : ""}`, { type: "button", style: { background: p.bg, color: p.text, borderColor: u.preset === id ? p.accent : "transparent" }, on: { click: async (e) => {
           // Picking a theme also makes it your favourite for its mode, and switches to that mode.
           const patch = { preset: id, accentOverride: false, bg: p.bg, text: p.text, accent: p.accent, [p.dark ? "darkPreset" : "lightPreset"]: id };
           const nowDark = document.documentElement.dataset.theme === "dark";
@@ -185,7 +213,30 @@ const PANES = {
           (() => { const i = el("input", { type: "color", value: u.accent, title: "Custom accent", style: { width: "30px", height: "30px", border: "0", background: "none", padding: "0", cursor: "pointer" } }); i.addEventListener("input", () => preview({ accent: i.value, accentOverride: true })); i.addEventListener("change", async () => { u.accent = i.value; u.accentOverride = true; await save({ accent: i.value, accentOverride: true }); drawPresets(); }); return i; })())));
     };
     drawCustom();
-    pane.append(...header("Appearance", "Make it yours: theme, colors, type, shape and motion. Changes apply instantly."),
+    // Interface: the layout and treatment of the whole app. Each one keeps its own look (theme, light or
+    // dark, colors): switching brings back the look you left it in, or its own default the first time.
+    const ifaceGrid = el("div.ui-picks");
+    const drawInterfaces = () => {
+      const cur = u.interface || "studio";
+      ifaceGrid.replaceChildren(...INTERFACES.map((x) => {
+        const look = INTERFACE_LOOKS[x.id];
+        const swatches = (look.own.length ? look.own : look.show).map((id) => el("i.ui-pick-dot", { title: PRESETS[id].name, style: { background: PRESETS[id].accent, boxShadow: `inset 0 0 0 3px ${PRESETS[id].bg}` } }));
+        return el(`button.ui-pick${cur === x.id ? ".on" : ""}`, { type: "button", dataset: { ui: x.id }, "aria-pressed": String(cur === x.id), on: { click: async (e) => {
+          if ((u.interface || "studio") === x.id) return;
+          const patch = interfacePatch(u, x.id);
+          Object.assign(u, patch);
+          themeTransition(u, () => applyAppearance({ ...ctx.S.settings.ui, ...patch }), e.currentTarget);
+          await save(patch);
+          ctx.redraw?.("appearance");
+        } } },
+          interfaceThumb(x.id, u),
+          el("span.ui-pick-text", el("b", x.name, cur === x.id ? el("span.ui-pick-on", ico("check"), "In use") : null), el("span", x.sub),
+            el("span.ui-pick-look", el("span.ui-pick-dots", swatches), look.own.length ? `Its own themes · ${look.mode} by default` : `The classic themes · ${look.mode} by default`)));
+      }));
+    };
+    drawInterfaces();
+    pane.append(...header("Appearance", "Make it yours: interface, theme, colors, type, shape and motion. Changes apply instantly."),
+      card("Interface", "How the whole app is laid out. Each interface has its own themes and remembers its own look; the classic themes work with all of them.", null, el("div.card-body", ifaceGrid)),
       card("Theme", null, seg([["system", "Follow system"], ["dark", "Dark"], ["light", "Light"]], u.theme, (v) => save({ theme: v }).then(drawPresets)), el("div.card-body", presetGrid), customBox),
       card("Type", null, null,
         row("Font", null, seg([["inter", "Inter"], ["system", "System"], ["rounded", "Rounded"], ["serif", "Serif"], ["mono", "Mono"]], u.font || "inter", (v) => save({ font: v }))),

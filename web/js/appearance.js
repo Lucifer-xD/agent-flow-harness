@@ -52,6 +52,16 @@ export const PRESETS = {
   gruvboxlight: { name: "Gruvbox Light", accent: "#d65d0e", ...light("#fbf1c7", "#f2e5bc", "#fdf6d8", "#f2e5bc", "#ebdbb2", "#e5d5ad", "#d5c4a1", "#3c3836", "#665c54", "#928374", "#f2e5bc") },
   nordlight: { name: "Nord Light", accent: "#5e81ac", ...light("#eceff4", "#e5e9f0", "#f8f9fb", "#e9edf2", "#dfe4ec", "#d8dee9", "#c2cad8", "#2e3440", "#4c566a", "#7b869a", "#e5e9f0") },
   contrastlight: { name: "High Contrast Light", accent: "#0047ff", ...light("#ffffff", "#ffffff", "#ffffff", "#f2f2f2", "#e6e6e6", "#6b6b6b", "#3d3d3d", "#000000", "#1a1a1a", "#404040", "#f2f2f2") },
+  // The Harness's own themes
+  harness: { name: "Harness", accent: "#ff8a1f", ...dark("#0b0c10", "#0e0f14", "#13151b", "#191c23", "#22252e", "#23262f", "#333744", "#eef0f5", "#aeb2c0", "#757a8a", "#08090c") },
+  "harness-steel": { name: "Steel", accent: "#3ec5ff", ...dark("#090c10", "#0c1015", "#11161c", "#161c24", "#1e2630", "#202833", "#2f3a47", "#e6edf4", "#a3b0be", "#6c7a89", "#06090c") },
+  "harness-volt": { name: "Voltage", accent: "#c6f432", ...dark("#0b0b09", "#0e0e0b", "#141410", "#1a1a15", "#23231c", "#25251d", "#36362b", "#f0f0e6", "#b2b2a4", "#7a7a6d", "#080806") },
+  "harness-day": { name: "Harness Day", accent: "#e5531b", ...light("#f2f1f4", "#eae9ee", "#ffffff", "#f0eff3", "#e4e3ea", "#e1e0e7", "#cbc9d3", "#141318", "#55535f", "#8a8794", "#eeedf2") },
+  // Paper's own themes
+  "paper-cream": { name: "Cream", accent: "#d24e12", ...light("#f1ece4", "#ebe5db", "#fffdf9", "#f7f2ea", "#ece5da", "#e5ddd0", "#d2c7b7", "#1f1a15", "#5b5348", "#91877a", "#f5efe6") },
+  "paper-news": { name: "Newsprint", accent: "#c4122f", ...light("#ebeae5", "#e4e3dd", "#fbfbf8", "#f1f0eb", "#e3e2dc", "#dcdbd4", "#c6c5bd", "#121211", "#45443f", "#7b7a72", "#efeee9") },
+  "paper-linen": { name: "Linen", accent: "#2e7a58", ...light("#ecefe9", "#e5e9e2", "#fcfdfa", "#f2f5ef", "#e4e9e0", "#dde3d8", "#c6cfc0", "#17201a", "#4b594f", "#84907f", "#f0f3ed") },
+  "paper-night": { name: "Night Ink", accent: "#f08a4b", ...dark("#14120f", "#110f0d", "#1d1a16", "#24201b", "#2e2923", "#2f2a24", "#433c33", "#efe8dc", "#bcb2a3", "#867c6f", "#0f0d0b") },
 };
 
 /** How the screen changes when the theme does. */
@@ -103,12 +113,52 @@ export function resolveTheme(ui) {
   if (p.dark !== wantDark) {
     // The other mode uses your favourite theme of that mode (remembered when you pick one).
     const fav = PRESETS[wantDark ? ui.darkPreset : ui.lightPreset];
-    p = fav && fav.dark === wantDark ? fav : wantDark ? PRESETS.sunset : PRESETS.paper;
+    const own = INTERFACE_LOOKS[ui.interface] || INTERFACE_LOOKS.studio;
+    p = fav && fav.dark === wantDark ? fav : PRESETS[wantDark ? own.dark : own.light];
   }
   return { ...p, accent: ui.accentOverride && ui.accent ? ui.accent : p.accent };
 }
 
 let styleTag = null;
+
+/** Interfaces: the layout and treatment of the whole app. Each one has its own themes and starts in
+ *  its own look (light or dark); the classic themes, custom colors, light and dark work with all three. */
+export const INTERFACES = [
+  { id: "studio", name: "Studio", sub: "The classic AFH layout: a sidebar of threads, a reading column and a floating composer." },
+  { id: "harness", name: "The Harness", sub: "Your thread runs along one live strand: every message and step is a node on it, helpers branch off, and it lands in the message box." },
+  { id: "paper", name: "Paper", sub: "Each thread is a document: a real title, your message as a quote, the plan as a checklist and every step as a quiet line with its time." },
+];
+
+/** Each interface's look: the mode it starts in, its dark and light themes, and the themes made for it
+ *  (shown first in Settings; other interfaces don't list them). */
+export const INTERFACE_LOOKS = {
+  studio: { mode: "dark", dark: "sunset", light: "paper", own: [], show: ["sunset", "midnight", "forest", "paper"] },
+  harness: { mode: "dark", dark: "harness", light: "harness-day", own: ["harness", "harness-steel", "harness-volt", "harness-day"] },
+  paper: { mode: "light", dark: "paper-night", light: "paper-cream", own: ["paper-cream", "paper-news", "paper-linen", "paper-night"] },
+};
+const OWN = new Set(Object.values(INTERFACE_LOOKS).flatMap((l) => l.own));
+/** The themes to offer in this interface: its own, then the classic ones. */
+export function themesFor(iface) {
+  const own = (INTERFACE_LOOKS[iface] || INTERFACE_LOOKS.studio).own;
+  return { own, classic: Object.keys(PRESETS).filter((id) => !OWN.has(id)) };
+}
+const LOOK_KEYS = ["theme", "preset", "darkPreset", "lightPreset", "accent", "accentOverride", "bg", "text"];
+/** The look an interface starts with the first time you pick it. */
+export function defaultLook(iface) {
+  const l = INTERFACE_LOOKS[iface] || INTERFACE_LOOKS.studio;
+  const preset = l.mode === "dark" ? l.dark : l.light, p = PRESETS[preset];
+  return { theme: l.mode, preset, darkPreset: l.dark, lightPreset: l.light, accentOverride: false, accent: p.accent, bg: p.bg, text: p.text };
+}
+/** The settings patch that switches to another interface: the current look is kept for this interface,
+ *  and the other one comes back the way you left it (or in its own default look). */
+export function interfacePatch(ui, iface) {
+  const from = ui.interface || "studio";
+  const looks = { ...(ui.looks || {}) };
+  looks[from] = Object.fromEntries(LOOK_KEYS.map((k) => [k, ui[k]]));
+  const saved = looks[iface];
+  const next = saved && (saved.preset === "custom" || PRESETS[saved.preset]) ? saved : defaultLook(iface);
+  return { interface: iface, looks, ...next };
+}
 
 export function applyAppearance(ui) {
   const root = document.documentElement;
@@ -137,6 +187,12 @@ export function applyAppearance(ui) {
   root.dataset.bubbles = ui.bubbles || "bubbles";
   root.dataset.msgAnim = ui.msgAnim || "rise";
   root.dataset.meta = ui.showMeta ? "on" : "off";
+  const iface = INTERFACES.some((x) => x.id === ui.interface) ? ui.interface : "studio";
+  if (root.dataset.ui !== iface) {
+    const from = root.dataset.ui || null;
+    root.dataset.ui = iface;
+    dispatchEvent(new CustomEvent("afh-interface", { detail: { id: iface, from } }));
+  }
   document.body.classList.toggle("no-anim", ui.animations === false);
   document.body.classList.toggle("no-logo-anim", ui.logoAnim === false);
   document.body.classList.toggle("glass", ui.glass !== false);

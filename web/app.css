@@ -1435,7 +1435,7 @@ body.resizing-drawer .workbench, body.resizing-drawer .app { transition: none !i
 .st-icon svg { width: 18px; height: 18px; }
 .signin-body { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 6px 0 14px; }
 .signin-status { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 13px; min-height: 22px; }
-.signin-status .err-text { color: #ff6b6b; }
+.signin-status .err-text { color: #ff6b6b; display: grid; gap: 4px; line-height: 1.45; }
 .device-code { font: 600 28px/1 var(--mono, ui-monospace, monospace); letter-spacing: 0.18em; padding: 14px 18px; border-radius: var(--radius); background: var(--panel-3); border: 1px dashed var(--border-2); user-select: all; }
 .signin-inline { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 13px; color: var(--text-2); }
 .signin-inline .muted { color: var(--text-3); }

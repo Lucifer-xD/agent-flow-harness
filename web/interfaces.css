@@ -1,0 +1,357 @@
+/* AFH interfaces — Settings → Appearance → Interface sets <html data-ui>: "studio" (app.css alone),
+   "harness" or "paper". Both restyle the same app, so every feature stays. Colors still come from the
+   theme tokens, so each interface works with all presets, custom themes, light, dark and right to left.
+   Each interface also has its own themes (appearance.js INTERFACE_LOOKS). web/js/interface.js adds Paper's
+   document head and the port where the Harness strand lands. */
+
+/* Bundled type (SIL Open Font License, see vendor/fonts). */
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("vendor/fonts/geist-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("vendor/fonts/geist-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("vendor/fonts/geist-mono-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("vendor/fonts/geist-mono-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 200 800; font-display: swap; src: url("vendor/fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 200 800; font-display: swap; src: url("vendor/fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+/* pieces only some interfaces show */
+.tool-time, .doc-head, .ui-port { display: none; }
+
+/* ==== the picker in Settings → Appearance ========================================================= */
+
+.ui-picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ui-pick { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 8px 8px 12px; border-radius: 14px; border: 1px solid var(--line-2); background: var(--card); color: var(--text); text-align: start;
+  transition: border-color 0.15s, box-shadow 0.2s, transform 0.2s var(--ease-out); }
+.ui-pick:hover { border-color: var(--line-3); transform: translateY(-1px); box-shadow: var(--lift); }
+.ui-pick.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ui-pick-text { display: flex; flex-direction: column; gap: 4px; padding: 0 4px; min-width: 0; }
+.ui-pick-text b { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; }
+.ui-pick-text > span { font-size: 12px; line-height: 1.45; color: var(--text-3); }
+.ui-pick-on { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: auto; font-size: 11px; font-weight: 600; color: var(--accent-text); }
+.ui-pick-on .ico { width: 12px; height: 12px; }
+.ui-pick-note { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: 12.5px; color: var(--text-2); }
+.ui-pick-note > .ico { width: 15px; height: 15px; color: var(--accent); flex: none; }
+.ui-pick-note > span:not(.ico) { flex: 1; min-width: 0; }
+.ui-pick-look { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11.5px; font-weight: 500; color: var(--text-2); }
+.ui-pick-dots { display: inline-flex; }
+.ui-pick-dot { display: block; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--card); }
+.ui-pick-dot + .ui-pick-dot { margin-inline-start: -5px; }
+@media (max-width: 760px) { .ui-picks { grid-template-columns: 1fr; } }
+
+/* the three drawings, in the current theme's colors */
+.ui-thumb { position: relative; display: flex; height: 104px; border-radius: 9px; overflow: hidden; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); direction: ltr; }
+.ui-thumb > span, .ui-thumb span span { display: flex; }
+.ui-thumb i { display: block; flex: none; }
+.ui-thumb .t-side { flex-direction: column; gap: 5px; width: 26%; padding: 12px 7px; background: var(--bg-side); border-right: 1px solid var(--line); }
+.ui-thumb .t-line { height: 4px; border-radius: 2px; background: var(--line-3); }
+.ui-thumb .t-line.s { width: 66%; }
+.ui-thumb .t-main { position: relative; flex: 1; flex-direction: column; min-width: 0; padding: 11px 12px; }
+.ui-thumb.studio .t-col { flex-direction: column; gap: 5px; }
+.ui-thumb.studio .t-you { align-self: flex-end; width: 46%; height: 9px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 16%, var(--panel)); box-shadow: inset -2px 0 0 var(--accent); }
+.ui-thumb.studio .t-say { width: 88%; height: 4px; border-radius: 2px; background: var(--line-3); }
+.ui-thumb.studio .t-say.s { width: 58%; }
+.ui-thumb.studio .t-tool { width: 78%; height: 9px; border-radius: 3px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); }
+.ui-thumb.studio .t-box { position: absolute; left: 12px; right: 12px; bottom: 8px; height: 16px; border-radius: 6px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-2); }
+.ui-thumb.harness .t-side { border-right: 0; }
+.ui-thumb.harness .t-main { gap: 7px; padding: 11px 12px 8px 10px; }
+.ui-thumb.harness .t-strand { position: absolute; left: 15px; top: 13px; bottom: 15px; width: 2px; border-radius: 2px; background: linear-gradient(#ffa21f, var(--accent) 45%, var(--accent-2)); }
+.ui-thumb.harness .t-row { position: relative; align-items: center; padding-left: 16px; }
+.ui-thumb.harness .t-node { position: absolute; left: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 2px var(--accent); }
+.ui-thumb.harness .t-node.hot { background: #fff; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 8px 2px var(--accent-2); }
+.ui-thumb.harness .t-node.sm { left: 2px; width: 6px; height: 6px; background: var(--accent); box-shadow: none; }
+.ui-thumb.harness .t-you { width: 64%; height: 10px; border-radius: 4px; background: var(--panel-2); }
+.ui-thumb.harness .t-say { width: 82%; height: 4px; border-radius: 2px; background: var(--line-3); }
+.ui-thumb.harness .t-step { width: 46%; height: 4px; border-radius: 2px; background: var(--line-2); }
+.ui-thumb.harness .t-box { position: absolute; left: 8px; right: 12px; bottom: 5px; height: 18px; border-radius: 7px; background: var(--panel-2); }
+.ui-thumb.harness .t-port { position: absolute; left: 1px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--bg); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); }
+.ui-thumb.paper .t-side { border-right: 0; }
+.ui-thumb.paper .t-body { position: relative; flex: 1; min-width: 0; padding: 8px 12px 0; }
+.ui-thumb.paper .t-sheet { position: relative; flex: 1; flex-direction: column; gap: 4px; min-width: 0; padding: 9px 11px; border-radius: 6px 6px 0 0; background: var(--panel); box-shadow: 0 0 0 1px var(--line), 0 6px 12px -6px rgba(0, 0, 0, 0.3); }
+.ui-thumb.paper .t-h { width: 70%; height: 7px; border-radius: 2px; background: var(--text); opacity: 0.85; }
+.ui-thumb.paper .t-chips { width: 50%; height: 4px; border-radius: 2px; background: var(--line-2); margin-bottom: 2px; }
+.ui-thumb.paper .t-quote { width: 64%; height: 7px; box-shadow: inset 2px 0 0 var(--accent); background: linear-gradient(var(--line-3), var(--line-3)) 6px 50% / 86% 3px no-repeat; }
+.ui-thumb.paper .t-say { width: 86%; height: 4px; border-radius: 2px; background: var(--line-3); }
+.ui-thumb.paper .t-step { align-items: center; gap: 4px; width: 62%; padding: 2px 4px; background: var(--bg); }
+.ui-thumb.paper .t-step + .t-step { margin-top: -4px; }
+.ui-thumb.paper .t-time { width: 8px; height: 3px; border-radius: 2px; background: var(--line-3); }
+.ui-thumb.paper .t-ev { flex: 1; height: 3px; border-radius: 2px; background: var(--line-3); }
+.ui-thumb.paper .t-ev.c { background: var(--accent); }
+.ui-thumb.paper .t-check { position: relative; width: 56%; height: 6px; background: linear-gradient(var(--line-3), var(--line-3)) 10px 50% / calc(100% - 10px) 3px no-repeat; }
+.ui-thumb.paper .t-check::before { content: ""; position: absolute; left: 0; top: 0; width: 6px; height: 6px; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--text-3); }
+.ui-thumb.paper .t-pill { position: absolute; left: 10px; right: 10px; bottom: 5px; height: 12px; border-radius: 6px; background: var(--panel); box-shadow: 0 0 0 1px var(--line-2), 0 3px 6px -2px rgba(0, 0, 0, 0.25); }
+
+/* ==== The Harness: the thread hangs on one live strand that lands in the message box ============== */
+
+:root[data-ui="harness"] {
+  --h-x: 26px;     /* the strand, measured from the reading column's start edge */
+  --h-gut: 62px;   /* where messages begin, past the strand */
+  --h-edge: 16px;  /* the composer's side padding: the column and the composer line up, so the strand meets the port */
+  --h-col: max(var(--h-edge), calc((100% - var(--chat-w)) / 2));
+  --h-strand: linear-gradient(180deg, color-mix(in srgb, #ffa21f 70%, var(--accent)), var(--accent) 45%, var(--accent-2));
+  --h-branch: #a184ff;
+  --h-wait: #ffb11f;
+  --h-hot: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 18px 4px color-mix(in srgb, var(--accent-2) 55%, transparent);
+  --mono: "Geist Mono", "JetBrains Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+}
+:root[data-ui="harness"][data-theme="light"] { --h-branch: #7c5cf0; --h-wait: #d98a00; --h-hot: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent), 0 0 14px 3px color-mix(in srgb, var(--accent-2) 40%, transparent); }
+:root[data-ui="harness"][data-font="inter"] { --font: "Geist", "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
+:root[data-ui="harness"] body { letter-spacing: -0.004em; }
+@media (max-width: 640px) { :root[data-ui="harness"] { --h-edge: 10px; --h-gut: 46px; --h-x: 18px; } }
+
+/* filled surfaces, no hairlines around the frame */
+:root[data-ui="harness"] .sidebar { border-right-color: transparent; }
+:root[data-ui="harness"] .sb-foot { border-top-color: transparent; }
+:root[data-ui="harness"] :is(.new-thread, .sb-search, .project-picker) { border-color: transparent; background: var(--panel); border-radius: 11px; }
+:root[data-ui="harness"] .topbar { border-bottom-color: transparent; }
+:root[data-ui="harness"] .tb-seg { border-color: transparent; background: var(--panel); }
+:root[data-ui="harness"] :is(.tb-crumb, .msg-meta .model) { border-color: transparent; background: var(--panel); font-family: var(--mono); font-weight: 500; }
+:root[data-ui="harness"] .msg-meta .model::before { display: none; }
+:root[data-ui="harness"] .msg-meta { font-family: var(--mono); font-size: 11px; }
+:root[data-ui="harness"] .workbench.open { border-inline-start-color: transparent; }
+:root[data-ui="harness"] :is(.wb-head, .wb-pane .drawer-head) { border-bottom-color: transparent; }
+:root[data-ui="harness"] .dock-card { border-color: transparent; background: color-mix(in srgb, var(--panel) 94%, transparent); }
+
+/* the thread list: each thread is a short strand — flowing light while it works, an amber knot
+   while it waits for you, a green dot when it is done */
+:root[data-ui="harness"] .th-item { gap: 10px; }
+:root[data-ui="harness"] .th-item .st-ring { width: 14px; height: 24px; border: 0; border-radius: 0; background: none; color: transparent; }
+:root[data-ui="harness"] .th-item .st-ring > * { display: none; }
+:root[data-ui="harness"] .th-item .st-ring::before { content: ""; position: absolute; inset: 0 auto 0 6px; width: 2px; height: auto; border-radius: 2px; background: var(--line-2); animation: none; transform: none; opacity: 1; }
+:root[data-ui="harness"] .th-item .st-ring::after { content: ""; position: absolute; inset: auto; left: 3px; top: 8px; width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--line-3); animation: none; transform: none; opacity: 1; }
+:root[data-ui="harness"] .th-item .st-ring.done::after { left: 4px; top: 9px; width: 6px; height: 6px; background: var(--ok); }
+:root[data-ui="harness"] .th-item .st-ring.running::before { background: var(--h-strand); }
+:root[data-ui="harness"] .th-item .st-ring.running::after { background: #fff; box-shadow: 0 0 10px 2px var(--accent); animation: h-ride calc(1.6s / var(--anim-speed, 1)) ease-in-out infinite; }
+:root[data-ui="harness"] .th-item.waiting .st-ring::before { background: var(--h-wait); }
+:root[data-ui="harness"] .th-item.waiting .st-ring::after { left: 2px; top: 7px; width: 10px; height: 10px; background: var(--bg-side); border: 2px solid var(--h-wait); box-shadow: none; animation: none; }
+:root[data-ui="harness"] .th-item.waiting .th-time { color: var(--h-wait); }
+:root[data-ui="harness"] .th-item.active::before { display: none; }
+:root[data-ui="harness"] .th-item.active { background: var(--panel-2); color: var(--text); }
+:root[data-ui="harness"] .th-time { font-family: var(--mono); font-size: 11px; }
+:root[dir="rtl"][data-ui="harness"] .th-item .st-ring::before { inset: 0 6px 0 auto; }
+@keyframes h-ride { 0%, 100% { transform: translateY(-6px); } 50% { transform: translateY(6px); } }
+
+/* the reading column lines up exactly with the composer, so the strand meets its port */
+:root[data-ui="harness"] .thread { position: relative; z-index: 1; scrollbar-gutter: stable both-edges; padding-inline: calc(var(--h-edge) - 10px); }
+:root[data-ui="harness"] .thread-inner { padding-inline-start: 0; }
+:root[data-ui="harness"] .thread-inner > :not(.msg, .hero, .thread-status, .doc-head), :root[data-ui="harness"] .thread-status > :not(.msg) { margin-inline-start: var(--h-gut); }
+:root[data-ui="harness"] :is(.thread-inner, .thread-status) > .msg { position: relative; padding-inline-start: var(--h-gut); }
+:root[data-ui="harness"] .chat-resize { display: none; }
+
+/* the strand: from under the top bar down into the composer's port */
+:root[data-ui="harness"] .main::before, :root[data-ui="harness"] .main::after { content: ""; position: absolute; z-index: 0; pointer-events: none;
+  top: 60px; bottom: var(--port-b, 120px); inset-inline-start: calc(var(--h-col) + var(--h-x) - 1px); width: 2px; border-radius: 2px; }
+:root[data-ui="harness"] .main::before { background: var(--h-strand); opacity: 0.9; }
+/* while the agent works, a packet of light travels down it */
+:root[data-ui="harness"] .main::after { inset-inline-start: calc(var(--h-col) + var(--h-x) - 4px); width: 8px; opacity: 0; background: linear-gradient(transparent, #fff 50%, transparent) 0 -60px / 100% 46px no-repeat; }
+:root[data-ui="harness"] .main:has(.msg.assistant.live, .msg.assistant.pending)::after { opacity: 0.85; animation: h-packet calc(3s / var(--anim-speed, 1)) linear infinite; }
+:root[data-ui="harness"][data-theme="light"] .main::after { background-image: linear-gradient(transparent, color-mix(in srgb, var(--accent) 45%, #fff) 50%, transparent); }
+:root[data-ui="harness"] .main:has(#messages > .hero)::before, :root[data-ui="harness"] .main:has(#messages > .hero)::after,
+:root[data-ui="harness"] .main:has(#messages > .hero) .composer-wrap::after { display: none; }
+@keyframes h-packet { from { background-position: 0 -60px; } to { background-position: 0 calc(100% + 60px); } }
+
+/* nodes: your messages ring in the accent, replies in amber, the live one glows white */
+:root[data-ui="harness"] :is(.thread-inner, .thread-status) > .msg::before { content: ""; position: absolute; z-index: 1; inset-inline-start: calc(var(--h-x) - 7px); top: 3px;
+  width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); box-sizing: border-box; }
+:root[data-ui="harness"] .msg.user::before { top: 13px; }
+:root[data-ui="harness"] .msg.assistant::before { border-color: color-mix(in srgb, #ffb11f 60%, var(--accent)); }
+:root[data-ui="harness"] .msg.assistant.cont::before { display: none; }
+:root[data-ui="harness"] :is(.msg.assistant.live, .msg.assistant.pending)::before { background: #fff; border: 0; box-shadow: var(--h-hot); animation: h-hot calc(1.4s / var(--anim-speed, 1)) ease-in-out infinite; }
+:root[data-ui="harness"] .msg.assistant.pending::before { top: 50%; margin-top: -7px; }
+@keyframes h-hot { 0%, 100% { transform: scale(0.86); } 50% { transform: scale(1.06); } }
+
+/* your message: a filled block, no bubble tail */
+:root[data-ui="harness"] .msg.user { justify-content: flex-start; }
+:root:is([data-ui="harness"], [data-ui="paper"]) .msg.user .user-actions { order: 1; }
+:root[data-ui="harness"] .msg.user .bubble { max-width: 100%; padding: 12px 16px; border: 0; border-radius: 16px; background: var(--panel-2); box-shadow: none; color: var(--text);
+  font-size: calc(var(--fs) + 2px); font-weight: 500; line-height: 1.5; }
+:root[data-ui="harness"] .msg.user:hover .bubble { box-shadow: none; }
+
+/* steps: no cards, just a line on the strand that opens to its details */
+:root[data-ui="harness"] .msg-body > :is(.tool, .think) { position: static; }
+:root[data-ui="harness"] .msg-body > .tool { margin: 2px 0; margin-inline-start: -9px; border-color: transparent; background: transparent; box-shadow: none; animation-name: fade; }
+:root[data-ui="harness"] .msg-body > .tool:hover { transform: none; box-shadow: none; background: var(--panel); }
+:root[data-ui="harness"] .msg-body > .tool.open { background: var(--panel); }
+:root[data-ui="harness"] .msg-body > .tool .tool-head { padding-inline: 8px 10px; }
+:root[data-ui="harness"] .msg-body > .tool .tool-ico { display: none; }
+:root[data-ui="harness"] :is(.tool-target.path, .tool-stat) { border-color: transparent; background: var(--panel-2); font-family: var(--mono); }
+:root[data-ui="harness"] :is(.tool.running, .tool.streaming) .tool-stat { background: transparent; text-transform: uppercase; letter-spacing: 0.06em; font-size: 10.5px; font-weight: 600; }
+:root[data-ui="harness"] :is(.tool-shots, .tool-live, .tool.plan .plan-list) { padding-inline-start: 10px; }
+/* each step is a small node on the strand. It is placed absolutely at its own spot (static position) with
+   the message as its containing block, so the card's rounded clip doesn't hide it. */
+:root[data-ui="harness"] .msg-body > :is(.tool, .think)::before { content: ""; position: absolute; z-index: 1; inset: auto; width: 10px; height: 10px; margin-top: 15px;
+  margin-inline-start: calc(var(--h-x) - var(--h-gut) + 3px); border: 0; border-radius: 50%; background: var(--accent); opacity: 1; transform: none; animation: none; box-shadow: none; }
+:root[data-ui="harness"] .msg-body > .think::before { width: 8px; height: 8px; margin-top: 7px; margin-inline-start: calc(var(--h-x) - var(--h-gut) - 4px); background: var(--bg); border: 2px solid var(--line-3); box-sizing: border-box; }
+:root[data-ui="harness"] .msg-body > .think.live::before { border-color: var(--accent); }
+:root[data-ui="harness"] .msg-body > .tool.error::before { background: var(--bad); }
+:root[data-ui="harness"] .msg-body > :is(.tool.running, .tool.streaming)::before { background: #fff; box-shadow: var(--h-hot); animation: h-hot calc(1.4s / var(--anim-speed, 1)) ease-in-out infinite; }
+:root[data-ui="harness"] .msg-body > .tool.plan::before { background: var(--bg); border: 2px solid var(--accent); box-sizing: border-box; }
+
+/* helpers branch off the strand in violet */
+:root[data-ui="harness"] .msg-body > .deleg { position: static; margin-inline-start: 30px; border-color: transparent; background: var(--panel); box-shadow: inset 2px 0 0 var(--h-branch); }
+:root[dir="rtl"][data-ui="harness"] .msg-body > .deleg { box-shadow: inset -2px 0 0 var(--h-branch); }
+:root[data-ui="harness"] .msg-body > .deleg::before { content: ""; position: absolute; z-index: 1; inset: auto; width: calc(var(--h-gut) - var(--h-x) + 30px); height: 40px;
+  margin-top: -18px; margin-inline-start: calc(var(--h-x) - var(--h-gut) - 31px); background: var(--h-branch); border-radius: 0; transition: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 66 40' preserveAspectRatio='none'%3E%3Cpath d='M1 0 C1 24 22 36 66 36' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 66 40' preserveAspectRatio='none'%3E%3Cpath d='M1 0 C1 24 22 36 66 36' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; }
+:root[dir="rtl"][data-ui="harness"] .msg-body > .deleg::before { transform: scaleX(-1); }
+
+/* the composer: filled, with the port on its start edge where the strand lands */
+:root[data-ui="harness"] .composer-wrap::after { content: ""; position: absolute; z-index: 0; pointer-events: none; top: -48px; bottom: var(--port-b, 120px);
+  inset-inline-start: calc(var(--h-col) + var(--h-x) - 1px); width: 2px; background: var(--accent-2); }
+:root[data-ui="harness"] :is(.composer, .work-dock) { position: relative; z-index: 1; }
+:root[data-ui="harness"] .jump { z-index: 2; }
+:root[data-ui="harness"] .composer { padding-inline-start: 58px; border-color: transparent; background: var(--panel-2); }
+:root[data-ui="harness"] .glass .composer { background: color-mix(in srgb, var(--panel-2) 92%, transparent); }
+:root[data-ui="harness"] .composer:focus-within { border-color: transparent; }
+:root[data-ui="harness"] .composer::before { content: ""; position: absolute; inset-inline-start: calc(var(--h-x) - 1px); top: -1px; width: 2px; height: 15px; background: var(--accent-2); }
+:root[data-ui="harness"] .ui-port { display: grid; place-items: center; position: absolute; inset-inline-start: calc(var(--h-x) - 17px); top: 13px; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--bg); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); pointer-events: none; transition: box-shadow 0.2s; }
+:root[data-ui="harness"] .composer:focus-within .ui-port { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent), 0 0 14px -2px var(--accent); }
+:root[data-ui="harness"] .ui-port .afh-logo { width: 22px; height: auto; }
+@media (max-width: 640px) {
+  :root[data-ui="harness"] .composer { padding-inline-start: 44px; }
+  :root[data-ui="harness"] .ui-port { width: 28px; height: 28px; inset-inline-start: calc(var(--h-x) - 14px); top: 12px; }
+  :root[data-ui="harness"] .ui-port .afh-logo { width: 18px; }
+  :root[data-ui="harness"] .composer::before { height: 13px; }
+}
+
+/* ==== Paper: each thread is a document on a sheet ================================================== */
+
+:root[data-ui="paper"] {
+  --pp-sheet: var(--panel);
+  --pp-tint: color-mix(in srgb, var(--bg) 60%, var(--panel));   /* the step rows, a shade under the sheet */
+  --pp-warm: rgba(60, 40, 20, 0.13);
+  --pp-w: calc(var(--chat-w) + 112px);                          /* the sheet: the reading column plus margins */
+}
+:root[data-ui="paper"][data-theme="dark"] {
+  --pp-sheet: color-mix(in srgb, var(--panel) 40%, var(--panel-2));
+  --pp-tint: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  --pp-warm: rgba(0, 0, 0, 0.45);
+}
+:root[data-ui="paper"][data-font="inter"] { --font: "Plus Jakarta Sans", "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
+:root[data-ui="paper"] body { letter-spacing: 0; }
+
+/* the thread list keeps its place; quieter, and the open thread is a card */
+:root[data-ui="paper"] .sidebar { border-right-color: transparent; }
+:root[data-ui="paper"] .sb-foot { border-top-color: transparent; }
+:root[data-ui="paper"] .new-thread { border: 1px solid var(--line-2); background: var(--pp-sheet); box-shadow: 0 1px 2px var(--pp-warm); }
+:root[data-ui="paper"] .new-thread:hover { border-color: var(--line-3); }
+:root[data-ui="paper"] .sb-search { background: transparent; border-color: var(--line); }
+:root[data-ui="paper"] .th-item.active { background: var(--pp-sheet); box-shadow: 0 0 0 1px var(--line), 0 1px 3px var(--pp-warm); }
+:root[data-ui="paper"] .th-item.active::before { display: none; }
+
+/* the top bar sits on the desk; inside a thread the document's own title replaces it */
+:root[data-ui="paper"] .topbar { border-bottom-color: transparent; background: var(--bg); }
+:root[data-ui="paper"] .topbar.scrolled { background: color-mix(in srgb, var(--bg) 88%, transparent); }
+:root[data-ui="paper"] .main:has(#messages > .doc-head) .tb-title h1 { display: none; }
+:root[data-ui="paper"] .chat-resize { display: none; }
+
+/* the sheet */
+:root[data-ui="paper"] .thread { scrollbar-gutter: stable both-edges; padding: 6px 14px 0; }
+:root[data-ui="paper"] .thread-inner { position: relative; z-index: 0; max-width: var(--pp-w); min-height: 100%; padding: 46px 56px calc(var(--composer-h, 160px) + 40px); }
+:root[data-ui="paper"] .thread-inner::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 16px 16px 0 0; background: var(--pp-sheet);
+  box-shadow: 0 0 0 1px var(--line), 0 18px 40px -18px var(--pp-warm); pointer-events: none; }
+:root[data-ui="paper"] .thread-inner:has(> .hero) { max-width: var(--chat-w); padding-top: 18px; }
+:root[data-ui="paper"] .thread-inner:has(> .hero)::before { display: none; }
+/* the composer sits on the sheet: the fade under it is the sheet's color and only as wide as the sheet */
+:root[data-ui="paper"] .composer-wrap::before { left: 50%; right: auto; width: min(100% - 28px, var(--pp-w)); transform: translateX(-50%);
+  background: linear-gradient(color-mix(in srgb, var(--pp-sheet) 0%, transparent), var(--pp-sheet) 46%); }
+:root[data-ui="paper"] .main:has(#messages > .hero) .composer-wrap::before { display: none; }
+:root[data-ui="paper"] .composer { border-color: var(--line-2); background: var(--pp-sheet); box-shadow: 0 20px 40px -16px var(--pp-warm), 0 2px 6px var(--pp-warm); }
+:root[data-ui="paper"] .glass .composer { background: var(--pp-sheet); }
+:root[data-ui="paper"] :is(#pick-model, .composer .pill) { border-color: transparent; background: var(--pp-tint); }
+
+/* the document: a title, the facts, your message as a quote, readable type */
+:root[data-ui="paper"] .doc-head { display: block; margin: 0 0 30px; }
+.doc-title { margin: 0 -6px; padding: 2px 6px; border-radius: 8px; font-size: 30px; line-height: 1.18; font-weight: 700; letter-spacing: -0.022em; cursor: text; unicode-bidi: plaintext; overflow-wrap: anywhere; transition: background 0.15s; }
+.doc-title:hover { background: var(--hover); }
+.doc-title-input { display: block; width: calc(100% + 12px); margin: 0 -6px; padding: 2px 6px; border: 0; border-radius: 8px; outline: 2px solid var(--accent-line); background: var(--hover); color: var(--text);
+  font: 700 30px/1.18 var(--font); letter-spacing: -0.022em; }
+.doc-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; font-size: 12px; }
+.doc-meta > * { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--pp-tint); color: var(--text-2); font-weight: 500; white-space: nowrap; }
+.doc-meta > .acc { color: var(--accent-text); background: var(--accent-soft); }
+.doc-chip { cursor: pointer; border: 0; font: inherit; }
+.doc-chip:hover { color: var(--text); background: var(--press); }
+:root[data-ui="paper"] .md { font-size: 1.08em; line-height: 1.72; }
+:root[data-ui="paper"] .msg.assistant .md { max-width: 68ch; }
+:root[data-ui="paper"] .msg-meta .model { height: auto; padding: 0; border: 0; background: none; color: var(--text-2); }
+:root[data-ui="paper"] .msg-meta .model::before { display: none; }
+:root[data-ui="paper"] .msg.user { justify-content: flex-start; margin: calc(30px * var(--pad)) 0 calc(22px * var(--pad)); }
+:root[data-ui="paper"] .msg.user .bubble { max-width: 100%; padding: 2px 0; padding-inline-start: 16px; border: 0; border-radius: 0; background: none; box-shadow: inset 2px 0 0 var(--accent);
+  font-size: 1.16em; font-weight: 500; line-height: 1.5; color: var(--text); }
+:root[dir="rtl"][data-ui="paper"] .msg.user .bubble, :root[dir="rtl"][data-ui="paper"] .msg.user:hover .bubble { box-shadow: inset -2px 0 0 var(--accent); }
+:root[data-ui="paper"] .msg.user .bubble::before { content: "You"; display: block; margin-bottom: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+:root[lang="ar"][data-ui="paper"] .msg.user .bubble::before { content: "أنت"; letter-spacing: 0; }
+:root[data-ui="paper"] .msg.user:hover .bubble { box-shadow: inset 2px 0 0 var(--accent); }
+:root[data-ui="paper"] .msg.user { flex-wrap: wrap; }
+:root[data-ui="paper"] .msg.user .bubble { flex: 1 1 0; }
+@media (max-width: 640px) { :root[data-ui="paper"] .msg.user .user-actions { flex-basis: 100%; justify-content: flex-start; padding-inline-start: 12px; } }
+
+/* the plan reads as a checklist; older versions of it fold to one line */
+:root[data-ui="paper"] .tool.plan { margin: 14px 0; border: 0; background: none; box-shadow: none; }
+:root[data-ui="paper"] .tool.plan:hover { transform: none; box-shadow: none; }
+:root[data-ui="paper"] .tool.plan::before, :root[data-ui="paper"] .tool.plan .tool-ico, :root[data-ui="paper"] .tool.plan .tool-time { display: none; }
+:root[data-ui="paper"] .tool.plan .tool-head { padding-inline: 0; min-height: 30px; }
+:root[data-ui="paper"] .tool.plan .tool-name { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+:root[data-ui="paper"] .tool.plan .plan-list { display: grid; gap: 9px; padding: 4px 0 8px; }
+:root[data-ui="paper"] .plan-item { gap: 11px; font-size: 1.04em; color: var(--text-2); }
+:root[data-ui="paper"] .plan-mark { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--line-3); }
+:root[data-ui="paper"] .plan-item.completed { color: var(--text-3); }
+:root[data-ui="paper"] .plan-item.completed .plan-mark { background: var(--text); border-color: var(--text); color: var(--pp-sheet); }
+:root[data-ui="paper"] .plan-item.in_progress { color: var(--text); font-weight: 600; }
+:root[data-ui="paper"] .plan-item.in_progress .plan-mark { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 3px, transparent 3.5px); }
+:root[data-ui="paper"] .plan-item.in_progress .plan-mark > * { display: none; }
+:root[data-ui="paper"] :is(.msg:has(.tool.plan):has(~ .msg .tool.plan) .msg-body > .tool.plan, .msg-body > .tool.plan:has(~ .tool.plan)) { margin: 6px 0; }
+:root[data-ui="paper"] :is(.msg:has(.tool.plan):has(~ .msg .tool.plan) .msg-body > .tool.plan, .msg-body > .tool.plan:has(~ .tool.plan)) .tool-body { display: none; }
+
+/* the agent's steps: each run of them is one tinted block of quiet rows, with the time since the turn
+   began. Opening a step makes it a card with its details. */
+:root[data-ui="paper"] .msg-body > :is(.tool:not(.plan), .think):not(.open) { margin: 0; border: 0; border-radius: 0; background: var(--pp-tint); box-shadow: none; animation-name: fade; }
+:root[data-ui="paper"] .msg-body > :is(.tool:not(.plan), .think):not(.open)::before { display: none; }
+:root[data-ui="paper"] .msg-body > :is(.tool:not(.plan), .think):not(.open):not(:is(.tool:not(.plan):not(.open), .think:not(.open)) + *) { margin-top: 10px; padding-top: 6px; border-start-start-radius: 12px; border-start-end-radius: 12px; }
+:root[data-ui="paper"] .msg-body > :is(.tool:not(.plan), .think):not(.open):not(:has(+ :is(.tool:not(.plan):not(.open), .think:not(.open)))) { margin-bottom: 12px; padding-bottom: 6px; border-end-start-radius: 12px; border-end-end-radius: 12px; }
+:root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open):hover { transform: none; box-shadow: none; background: color-mix(in srgb, var(--pp-tint) 70%, var(--line-2)); }
+:root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open) .tool-head { min-height: 0; padding: 4px 12px; gap: 10px; }
+:root[data-ui="paper"] .tool-time { display: inline-block; flex: none; min-width: 36px; font: 500 11px/1 var(--mono); color: var(--text-3); font-variant-numeric: tabular-nums; text-align: end; }
+:root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open) .tool-ico { width: 7px; height: 7px; margin: 0 2px; border: 0; border-radius: 50%; background: var(--line-3); flex: none; }
+:root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open) .tool-ico > * { display: none; }
+:root[data-ui="paper"] .msg-body > :is(.tool.running, .tool.streaming):not(.open) .tool-ico { background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); animation: ring-core calc(1.6s / var(--anim-speed, 1)) ease-in-out infinite; }
+:root[data-ui="paper"] .msg-body > .tool.error:not(.open) .tool-ico { background: var(--bad); }
+:root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open) .tool-name { flex: none; font-size: 12.8px; font-weight: 500; color: var(--text-2); }
+:root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open) .tool-target { min-width: 0; height: auto; padding: 0; border: 0; background: none; font: 600 12.8px/1.35 var(--font); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open) .tool-target.path { font-family: var(--mono); font-weight: 500; font-size: 12px; }
+:root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open) .tool-stat { height: auto; padding: 0; border: 0; background: none; font-size: 11px; }
+:root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open) :is(.tool-live, .tool-shots) { display: none; }
+:root[data-ui="paper"] .msg-body > .think:not(.open) .think-head { display: flex; gap: 10px; width: 100%; padding: 3px 12px; padding-inline-start: 58px; border-radius: 0; font-size: 12px; font-style: italic; color: var(--text-3); }
+:root[data-ui="paper"] .msg-body > .think:not(.open) .think-head .chev { display: none; }
+:root[data-ui="paper"] .msg-body > .think:not(.open) .think-head::before { content: ""; flex: none; width: 7px; height: 7px; margin: 0 2px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-3); }
+:root[data-ui="paper"] .msg-body > .think.live:not(.open) .think-head::before { box-shadow: inset 0 0 0 1.5px var(--accent); }
+:root[data-ui="paper"] .msg-body > .think:not(.open) .think-head:hover { color: var(--text-2); }
+/* an open step or thought: a card on the sheet */
+:root[data-ui="paper"] .msg-body > :is(.tool:not(.plan), .think).open { margin: 10px 0; border: 1px solid var(--line-2); border-radius: 14px; background: var(--pp-sheet); box-shadow: 0 8px 20px -14px var(--pp-warm); }
+:root[data-ui="paper"] .msg-body > .think.open { padding: 4px 8px 8px; }
+:root[data-ui="paper"] .msg-body > .tool.open .tool-ico { background: var(--pp-tint); border: 0; }
+:root[data-ui="paper"] .tool-target.path { border-color: transparent; background: var(--pp-tint); }
+:root[data-ui="paper"] .msg-body > .deleg { border-color: var(--line-2); background: var(--pp-sheet); box-shadow: none; border-radius: 14px; }
+
+/* the workbench is a sheet of its own on the desk */
+:root[data-ui="paper"] .workbench { background: var(--bg); }
+:root[data-ui="paper"] .workbench.open { border-inline-start-color: transparent; }
+:root[data-ui="paper"] .wb-head { border-bottom-color: transparent; }
+:root[data-ui="paper"] .wb-panes { margin: 0 12px 0 4px; border-radius: 16px 16px 0 0; background: var(--pp-sheet); box-shadow: 0 0 0 1px var(--line), 0 18px 40px -18px var(--pp-warm); overflow: hidden; }
+:root[data-ui="paper"] :is(.wb-pane .drawer-head, .live-head) { border-bottom-color: var(--line); background: transparent; }
+
+@media (max-width: 640px) {
+  :root[data-ui="paper"] .thread { padding: 0; }
+  :root[data-ui="paper"] .thread-inner { padding: 26px 16px calc(var(--composer-h, 160px) + 24px); }
+  :root[data-ui="paper"] .thread-inner::before { border-radius: 0; box-shadow: none; }
+  :root[data-ui="paper"] .composer-wrap::before { width: 100%; }
+  .doc-title, .doc-title-input { font-size: 23px; }
+  :root[data-ui="paper"] .msg-body > .tool:not(.plan):not(.open) .tool-head { padding-inline: 8px; gap: 8px; }
+  :root[data-ui="paper"] .tool-time { min-width: 30px; }
+  :root[data-ui="paper"] .msg-body > .think:not(.open) .think-head { padding-inline-start: 46px; gap: 8px; }
+}

@@ -513,6 +513,7 @@ def test_same_settings_sections_as_the_app():
 
 def test_same_themes_as_the_app():
     source = (ROOT / "web/js/appearance.js").read_text(encoding="utf-8")
+    source = source[source.index("export const PRESETS"):].split("\n};", 1)[0]  # the color themes, not the interfaces
     ids = set(re.findall(r"^\s*\{ id: \"([a-z0-9-]+)\"", source, re.M)) or set(re.findall(r"^\s*\"?([a-z0-9-]+)\"?: \{ name:", source, re.M))
     assert ids and ids <= set(themes.PRESETS)
 

@@ -11,6 +11,8 @@ import json
 import mimetypes
 import secrets
 import ssl
+import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator
 from urllib.parse import urlsplit
@@ -156,9 +158,41 @@ def stream_error(data: dict) -> ProviderEvent:
     return {"type": "error", "message": error_message(body), "status": None, "kind": "stream", "response": body[:2000]}
 
 
+def _chain(exc: BaseException | None):
+    seen = 0
+    while exc is not None and seen < 6:
+        yield exc
+        exc, seen = exc.__cause__ or exc.__context__, seen + 1
+
+
+def tls_advice(exc: BaseException) -> list[str] | None:
+    """Plain lines for TLS failures the user fixes on their own computer, or None.
+
+    "certificate is not yet valid" / "has expired" against big providers means the computer's
+    clock is wrong (a dead CMOS battery, a manually set date, the wrong time zone). A missing
+    issuer means something is intercepting HTTPS (antivirus scanning, a work proxy, a VPN)."""
+    text = " ".join(str(e) for e in _chain(exc)).lower()
+    if "not yet valid" in text or "certificate has expired" in text:
+        if sys.platform == "win32":
+            fix = "In Windows open Settings → Time & language → Date & time, turn on “Set time automatically” and “Set time zone automatically”, then press Sync now."
+        elif sys.platform == "darwin":
+            fix = "Open System Settings → General → Date & Time and turn on “Set time and date automatically”."
+        else:
+            fix = "Turn on automatic time in your system settings (or run: sudo timedatectl set-ntp true)."
+        return ["This computer's date, time or time zone is wrong, so secure connections fail.",
+                f"The computer's clock says {datetime.now().strftime('%d %b %Y, %H:%M')}.", fix, "Then try again."]
+    if "unable to get local issuer certificate" in text or "self-signed certificate in certificate chain" in text \
+            or "self signed certificate in certificate chain" in text:
+        return ["Something on this computer or network is intercepting secure connections.",
+                "Usually that's an antivirus with “HTTPS scanning” turned on, a work proxy or a VPN. Turn that scanning off or try another network, then try again."]
+    return None
+
+
 def network_error(exc: Exception, url: str) -> ProviderEvent:
     where = origin(url)
     detail = str(exc).strip()
+    if advice := tls_advice(exc):
+        return {"type": "error", "message": f"Couldn't connect securely to {where}. " + " ".join(advice), "status": None, "kind": "network", "response": detail[:2000]}
     if isinstance(exc, httpx.ConnectTimeout):
         msg = f"Timed out connecting to {where}"
     elif isinstance(exc, httpx.ConnectError):

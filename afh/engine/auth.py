@@ -213,8 +213,10 @@ async def _run(login: Login, flow: Callable[[Login], Awaitable[None]], on_done: 
     except asyncio.TimeoutError:
         login.status, login.error = "error", "The sign-in timed out. Try again."
     except Exception as err:  # shown in the sign-in dialog
+        from .providers.sse import tls_advice
         log.info("sign-in %s failed: %s", login.method, err)
-        login.status, login.error = "error", str(err) or err.__class__.__name__
+        advice = tls_advice(err)
+        login.status, login.error = "error", "\n".join(advice) if advice else (str(err) or err.__class__.__name__)
     finally:
         login.ready.set()
         for lid, old in list(_logins.items()):  # forget finished logins after a while

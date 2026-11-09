@@ -370,7 +370,7 @@ function pathNode(target) {
 const TODO_MARK = { completed: "check", cancelled: "x", in_progress: "zap", pending: null };
 
 /** The agent's `todo` call: the list as it stands after the call, not raw JSON. */
-function renderTodoTool(p, openSet) {
+function renderTodoTool(p, openSet, t0) {
   const status = p.state?.status || "streaming";
   const input = typeof p.state?.input === "object" ? p.state.input : {};
   const todos = p.state?.metadata?.todos || (Array.isArray(input.todos) && !input.merge ? input.todos : []);
@@ -380,6 +380,7 @@ function renderTodoTool(p, openSet) {
   const live = status === "streaming" || status === "running";
   const card = el(`div.tool.plan.${status}${openSet.has(p.id) || (!openSet.has("x" + p.id) && todos.length <= 8) ? ".open" : ""}`, { dataset: { tool: p.id } });
   const head = el("button.tool-head", { type: "button", on: { click: () => { const o = card.classList.toggle("open"); openSet[o ? "add" : "delete"](p.id); openSet[o ? "delete" : "add"]("x" + p.id); } } },
+    t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
     el("span.tool-ico", live ? el("span.spinner") : ico(status === "error" ? "alert" : "checklist")),
     el("span.tool-name", live ? "Planning" : read ? "Checked the to-do list" : "Updated the to-do list"),
     el("span.tool-target", ""),
@@ -465,10 +466,17 @@ function liveTail(p) {
   return out ? out.replace(/\s+$/, "").split("\n").slice(-LIVE_LINES).join("\n") : "";
 }
 
-function renderTool(p, openSet, thread) {
+/** m:ss since the turn started, for the activity margin (Paper). */
+function stepClock(ms) {
+  if (!(ms >= 0)) return "";
+  const s = Math.round(ms / 1000);
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function renderTool(p, openSet, thread, t0) {
   const name = (p.name || "tool").toLowerCase();
   if (name === "subagent" && hooks.delegation) return hooks.delegation(p, { thread, open: openSet });
-  if (name === "todo") return renderTodoTool(p, openSet);
+  if (name === "todo") return renderTodoTool(p, openSet, t0);
   if (name === "goal") { const g = renderGoalTool(p, openSet); if (g) return g; }
   if (name === "question") { const q = renderQuestionTool(p); if (q) return q; }
   if (name === "design") { const d = renderDesignTool(p); if (d) return d; }
@@ -519,6 +527,7 @@ function renderTool(p, openSet, thread) {
   const card = el(`div.tool.${kind}.${status}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
   // Header: icon tile · verb · target chip · (status, checks, hooks) at the right · chevron.
   const head = el("button.tool-head", { type: "button", on: { click: () => { card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
+    t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
     el("span.tool-ico", live ? el("span.spinner") : ico(status === "error" ? "alert" : name === "jobs" ? "activity" : info.icon)),
     el("span.tool-name", live ? verbs[1] : verbs[0]),
     targetNode,
@@ -598,6 +607,8 @@ export class ChatView {
     this.nodes.clear();
     this.root.replaceChildren();
     if (!t) return;
+    const head = this.opts.docHead?.(t);
+    if (head) this.root.append(head);
     // Very long threads (imports run to thousands of messages) draw only the newest part.
     const start = Math.max(0, t.messages.length - (this.window || WINDOW));
     this.hidden = new Set(t.messages.slice(0, start).map((m) => m.id));
@@ -792,8 +803,11 @@ export class ChatView {
   }
 
   renderAssistant(m, settings, anim) {
-    const { prev, next } = this.neighbors(m);
+    const { prev, next, list, i } = this.neighbors(m);
     const cont = prev?.type === "assistant";
+    let j = i;
+    while (j > 0 && list[j - 1].type !== "user") j--;
+    const t0 = list[j - 1]?.time?.created || m.time?.created || 0; // when this turn began
     const last = next?.type !== "assistant";
     const parts = [];
     const lastText = [...m.content].reverse().find((p) => p.type === "text");
@@ -815,7 +829,7 @@ export class ChatView {
         if (p.live && p === lastText) md.lastElementChild ? md.lastElementChild.classList.add("caret") : md.classList.add("caret");
         parts.push(md);
       } else if (p.type === "tool") {
-        parts.push(renderTool(p, this.openTools, this.thread));
+        parts.push(renderTool(p, this.openTools, this.thread, t0));
       }
     }
     const stopped = m.stopped || isStop(m.error);
