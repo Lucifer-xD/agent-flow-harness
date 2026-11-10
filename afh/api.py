@@ -968,6 +968,72 @@ def computer_teach(body: dict = Body(...)):
     return {"ok": controller(engine).lesson_reply(str(body.get("id", "")), str(body.get("choice", "next")))}
 
 
+# ---- the user's own browser (the chrome tool) ----------------------------------------------
+
+
+def _on_engine_loop(coro, timeout: float):
+    """The chrome connection lives on the engine's loop, whichever listener the request came in on."""
+    return asyncio.run_coroutine_threadsafe(coro, engine.loop).result(timeout)
+
+
+@app.get("/api/chrome")
+def chrome_status():
+    """Which of the user's browsers are here and ready, whether AFH is connected, and the allowed / blocked sites."""
+    from .engine.tools import chrome
+
+    return chrome.status(engine.settings())
+
+
+@app.post("/api/chrome/connect")
+def chrome_connect():
+    """Connect now (the browser asks the user to click Allow), so a task doesn't have to wait for it later."""
+    from .engine.tools import chrome
+    from .engine.tools.files import ToolError
+
+    try:
+        _on_engine_loop(chrome.CHROME.connect(engine.settings()), chrome.APPROVE_TIMEOUT + 15)
+    except ToolError as err:
+        raise ValueError(str(err)) from None
+    return chrome.status(engine.settings())
+
+
+@app.post("/api/chrome/disconnect")
+def chrome_disconnect():
+    from .engine.tools import chrome
+
+    _on_engine_loop(chrome.CHROME.shutdown(), 15)
+    return chrome.status(engine.settings())
+
+
+@app.post("/api/chrome/setup")
+def chrome_setup():
+    """Open the browser's own remote-debugging page, where the user ticks the box that lets apps connect."""
+    from .engine.tools import chrome
+    from .engine.tools.files import ToolError
+
+    try:
+        return {"ok": True, "browser": chrome.open_setup_page(engine.settings())}
+    except ToolError as err:
+        raise ValueError(str(err)) from None
+
+
+@app.post("/api/chrome/sites")
+def chrome_sites(body: dict = Body(...)):
+    """{allow: site} / {forget: site} for the always-allowed list; {blocked: [sites]} replaces the blocked list."""
+    from .engine.tools import chrome
+
+    if body.get("allow"):
+        chrome.allow_site(engine, str(body["allow"]))
+    if body.get("forget"):
+        chrome.forget_site(engine, str(body["forget"]))
+    if isinstance(body.get("blocked"), list):
+        cfg = dict(store.load_settings().get("chrome") or {})
+        cfg["blocked"] = list(dict.fromkeys(r for r in (chrome._rule(x) for x in body["blocked"]) if r))
+        store.replace_setting("chrome", cfg)
+        engine.publish({"type": "chrome.sites.changed", "data": {}})
+    return chrome.status(engine.settings())
+
+
 # ---- providers -----------------------------------------------------------------------------
 
 

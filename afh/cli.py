@@ -332,9 +332,11 @@ class Turn:
 
     def ask_approval(self, d: dict, path: str) -> None:
         what = ", ".join(clip(r, 80) for r in (d.get("resources") or [])[:3])
-        self.status(paint("33", f"? Allow {d.get('action')}") + (f" {what}" if what else ""))
+        title = (d.get("metadata") or {}).get("title")  # the chrome and computer tools say what they ask for
+        self.status(paint("33", f"? {title}" if title else f"? Allow {d.get('action')}") + (f" {what}" if what else ""))
+        always = "[a]lways for this site" if d.get("action") == "chrome" else "[a]lways in this thread"
         while True:
-            answer = input("  [y]es once, [a]lways in this thread, [n]o: ").strip().lower()
+            answer = input(f"  [y]es once, {always}, [n]o: ").strip().lower()
             if answer in ("y", "yes"):
                 decision, message = "once", None
             elif answer in ("a", "always"):

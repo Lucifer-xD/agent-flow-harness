@@ -357,6 +357,7 @@ class Panes:
         d = self.s.get("diagnostics") or {}
         v = self.s.get("voice") or {}
         c = self.s.get("computer") or {}
+        ch = self.s.get("chrome") or {}
         rows = [
             head("The agent loop"),
             R("number", "Steps per run", a.get("maxSteps") or 200, "10 to 1000", self.max_steps),
@@ -372,6 +373,13 @@ class Panes:
             self.toggle("browser", "enabled", "Let the agent use a browser"),
             R("choice", "Where it opens", b.get("where") or "panel", "The panel is part of the desktop app; here it always opens as a window", self.saver("browser", "where"), [("In the app's panel", "panel"), ("Its own window", "external")]),
             self.toggle("browser", "visible", "Show its window", default=False), R("text", "Browser path", b.get("path") or "", "Empty finds Chrome or Edge", self.saver("browser", "path")),
+            head("Your Chrome"),
+            note("Your own browser, with your sign-ins and tabs. It asks you to click Allow each time AFH connects."),
+            self.toggle("chrome", "enabled", "Let the agent use your own browser", "AFH asks you about each new site"),
+            R("choice", "Which browser", ch.get("browser") or "auto", "", self.saver("chrome", "browser"), [("The first one that is ready", "auto"), ("Chrome", "chrome"), ("Edge", "edge"), ("Brave", "brave")]),
+            self.toggle("chrome", "background", "Open its tabs in the background", default=False),
+            R("button", "Connect to your browser", "", "Shows the steps if your browser isn't ready yet", self.chrome_connect) if ch.get("enabled", True) is not False else None,
+            R("button", "Sites it may use", f"{len(ch.get('allowed') or [])} allowed", "", self.chrome_sites) if ch.get("enabled", True) is not False else None,
             head("Computer use"),
             self.toggle("computer", "enabled", "Let the agent use your mouse and keyboard", "It asks before each app, and Esc stops it", default=False),
             self.toggle("computer", "browserControl", "Let it control your browser too", default=False), self.toggle("computer", "hideWindow", "Hide AFH while it works", default=False), self.toggle("computer", "effects", "Show its cursor effects"),
@@ -418,6 +426,32 @@ class Panes:
         if picked:
             action, app = picked
             await self.ui.api("POST", "/api/computer/allow" if action == "allow" else "/api/computer/forget", {"app": app} if action == "allow" else {"id": app.get("id")})
+
+    async def chrome_connect(self) -> None:
+        data = await self.ui.get("/api/chrome")
+        ready = next((b for b in data.get("browsers") or [] if b.get("ready")), None)
+        if data.get("connected"):
+            self.ui.say(f"Already connected to {data.get('connectedTo')}", 4)
+        elif ready:
+            self.ui.say(f"Switch to {ready['name']} and click Allow", 8)
+            await self.ui.api("POST", "/api/chrome/connect", {}, timeout=150)
+            self.ui.say(f"Connected to {ready['name']}", 4)
+        elif any(b.get("installed") for b in data.get("browsers") or []):
+            name = next(b["name"] for b in data["browsers"] if b.get("installed"))
+            await self.ui.api("POST", "/api/chrome/setup", {})
+            self.ui.say(f"In {name}: tick “Allow remote debugging for this browser instance” on the page that opened ({data.get('setupPage')}), then connect again", 12)
+        else:
+            self.ui.say("No Chrome, Edge or Brave was found on this computer", 5)
+
+    async def chrome_sites(self) -> None:
+        data = await self.ui.get("/api/chrome")
+        allowed = data.get("allowed") or []
+        if not allowed:
+            self.ui.say("No sites yet. AFH asks you when the agent first needs one", 5)
+            return
+        picked = await self.wait(Picker("Sites it may use", [Item(site, site, "allowed", "Allowed", True) for site in allowed], sub="Enter forgets a site."))
+        if picked:
+            await self.ui.api("POST", "/api/chrome/sites", {"forget": picked})
 
     # delegation
 

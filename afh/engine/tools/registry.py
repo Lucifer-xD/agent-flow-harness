@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from afh.engine.tools.browser import BrowserTool
+from afh.engine.tools.chrome import ChromeTool
 from afh.engine.tools.computer import ComputerTool
 from afh.engine.tools.files import EditTool, GlobTool, GrepTool, ListTool, PatchTool, ReadTool, WriteTool
 from afh.engine.tools.shell import ShellTool
@@ -23,6 +24,8 @@ def builtin_tools(settings: dict | None = None) -> list[Tool]:
         tools.append(WebSearchTool())
     if ((settings or {}).get("browser") or {}).get("enabled", True) is not False:
         tools.append(BrowserTool())
+    if ((settings or {}).get("chrome") or {}).get("enabled", True) is not False:
+        tools.append(ChromeTool())
     if _win.is_supported() and ((settings or {}).get("computer") or {}).get("enabled", True) is not False:
         tools.append(ComputerTool())
     return tools

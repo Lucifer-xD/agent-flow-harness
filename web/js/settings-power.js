@@ -69,6 +69,74 @@ async function computerCard(pane, ctx, save) {
   await refresh();
 }
 
+// ---- Your own browser (the chrome tool) -----------------------------------------------------
+
+async function chromeCard(pane, ctx, save) {
+  const c = ctx.S.settings.chrome || {};
+  const state = el("div.chrome-state");
+  const sites = el("div.comp-apps");
+  const blocked = el("input.inp", { placeholder: "mybank.com, paypal.com", style: { width: "320px" } });
+  blocked.addEventListener("change", async () => {
+    try { show(await api.post("/api/chrome/sites", { blocked: blocked.value.split(",").map((x) => x.trim()).filter(Boolean) })); toast("Saved", "ok", 1400); } catch (e) { toast(e.message, "err"); }
+  });
+  pane.append(card("Your Chrome",
+    "Lets the agent use your own browser (Chrome, Edge or Brave) with your sign-ins and your open tabs, for things only your browser can do. Your browser asks you to click Allow each time AFH connects, and AFH asks you about each new site.",
+    null,
+    row("Let the agent use your browser", "Adds the chrome tool. Nothing connects until you turn on remote debugging in your browser and click Allow", toggle(c.enabled !== false, (v) => save({ chrome: { enabled: v } }))),
+    row("Which browser", "The one AFH connects to", select([["auto", "The first one that is ready"], ["chrome", "Chrome"], ["edge", "Edge"], ["brave", "Brave"]], c.browser || "auto", (v) => save({ chrome: { browser: v } }, "Saved"), "260px")),
+    row("Open its tabs in the background", "AFH's own tabs open behind the tab you are on, not in front of it", toggle(!!c.background, (v) => save({ chrome: { background: v } }))),
+    state,
+    el("div.comp-head", el("b", "Always-allowed sites"), el("span.comp-sub", "Sites the agent can use in your browser without asking again.")),
+    sites,
+    row("Blocked sites", "The agent never uses these in your browser, in any thread. Separate them with commas; their subdomains are included", blocked)));
+
+  const act = (label, path, busy, kind = "") => el(`button.btn.sm${kind}`, { on: { click: async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    if (busy) toast(busy, "ok", 6000);
+    try { const res = await api.post(path, {}); if (res.browsers) show(res); else setTimeout(refresh, 1500); } catch (err) { toast(err.message, "err", 9000); refresh(); }
+    btn.disabled = false;
+  } } }, label);
+
+  function show(d) {
+    const ready = (d.browsers || []).find((b) => b.ready);
+    const here = (d.browsers || []).filter((b) => b.installed);
+    const name = d.connectedTo || ready?.name || here[0]?.name || "Chrome";
+    let rows;
+    if (d.connected) {
+      rows = [el("div.chrome-line.ok", ico("check"), el("span", `Connected to ${d.connectedTo}`), el("span.comp-tier", (d.version || "").replace("/", " ")), el("span.spacer"), act("Disconnect", "/api/chrome/disconnect"))];
+    } else if (ready) {
+      rows = [el("div.chrome-line", ico("globe"), el("span", `${ready.name} is ready. Connect now, or give the agent a task and click Allow when ${ready.name} asks.`), el("span.spacer"),
+        act("Connect", "/api/chrome/connect", `Switch to ${ready.name} and click Allow`, ".primary"))];
+    } else if (here.length) {
+      const copy = el("button.btn.ghost.sm", { on: { click: async () => { try { await navigator.clipboard.writeText(d.setupPage); toast("Copied", "ok", 1200); } catch { toast(d.setupPage, "ok", 6000); } } } }, "Copy the address");
+      rows = [el("div.chrome-steps",
+        el("b", `Turn it on in ${name} (once)`),
+        el("ol",
+          el("li", "Open ", el("code", d.setupPage), ` in ${name}. `, act("Open it for me", "/api/chrome/setup"), " ", copy),
+          el("li", "Tick “Allow remote debugging for this browser instance”."),
+          el("li", `Come back here and press Check again, then Connect. ${name} will ask you to click Allow.`)),
+        el("div", el("button.btn.sm", { on: { click: () => refresh() } }, "Check again"), el("span.comp-sub", `Needs ${name} 144 or newer, and ${name} must be open.`)))];
+    } else {
+      rows = [el("div.comp-empty", "No Chrome, Edge or Brave was found on this computer.")];
+    }
+    state.replaceChildren(...rows);
+    const allowed = d.allowed || [];
+    sites.replaceChildren(...(allowed.length
+      ? allowed.map((site) => el("div.comp-row", el("span.comp-name", site), el("span.spacer"),
+        el("button.btn.ghost.sm", { on: { click: async () => { show(await api.post("/api/chrome/sites", { forget: site })); } } }, "Remove")))
+      : [el("div.comp-empty", "No sites yet. When the agent first needs a site, AFH asks you, and “Always allow” adds it here.")]));
+    if (document.activeElement !== blocked) blocked.value = (d.blocked || []).join(", ");
+  }
+
+  async function refresh() {
+    try { show(await api.get("/api/chrome")); } catch { state.replaceChildren(el("div.comp-empty", "Couldn't check your browser.")); }
+  }
+
+  ctx.onChromeSitesChanged = refresh;
+  await refresh();
+}
+
 // ---- Agent ----------------------------------------------------------------------------------
 
 export async function agentPane(pane, ctx) {
@@ -86,12 +154,14 @@ export async function agentPane(pane, ctx) {
   const br = s.browser || {};
   const brPath = el("input.inp", { value: br.path || "", placeholder: "Found automatically (Chrome or Edge)", style: { width: "320px" } });
   brPath.addEventListener("change", () => save({ browser: { path: brPath.value.trim() } }, "Saved"));
-  pane.append(card("Browser", "A real browser the agent drives to check its work or do things on the web: open your dev server, look at screenshots, click and type, read console errors. It has its own sign-ins, never your normal browser's.", null,
+  pane.append(card("Browser", "A real browser the agent drives to check its work or do things on the web: open your dev server, look at screenshots, click and type, read console errors. It has its own sign-ins, never your normal browser's (for that, see Your Chrome below).", null,
     row("Let the agent use a browser", "Adds the browser tool. Screenshots go to models that accept images", toggle(br.enabled !== false, (v) => save({ browser: { enabled: v } }))),
     row("Where it browses", "The side panel shows each thread's tab live; you can browse in it yourself and take over from the agent any time. Chrome or Edge is used when the AFH window isn't open (the CLI)",
       select([["panel", "Side panel in AFH (recommended)"], ["external", "Separate Chrome or Edge"]], br.where === "external" ? "external" : "panel", (v) => save({ browser: { where: v } }, "Saved"), "260px")),
     row("Show the Chrome/Edge window", "For the separate browser: watch it work instead of running it hidden (headless). Takes effect on its next start", toggle(!!br.visible, (v) => save({ browser: { visible: v } }))),
     row("Browser program", "For the separate browser: only if you want a specific Chrome/Edge/Chromium", brPath)));
+
+  await chromeCard(pane, ctx, save);
 
   if (WIN) await computerCard(pane, ctx, save);
 

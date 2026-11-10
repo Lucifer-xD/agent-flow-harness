@@ -396,7 +396,7 @@ class ComputerTool(BaseTool):
         if self._full_access(ctx):  # Full access: no prompts and no view-only/click-only limits
             return app
         if app.tier == "read":
-            raise ToolError(f"{app.name} is view-only for the computer tool (it's a web browser — use the `browser` tool for the web, "
+            raise ToolError(f"{app.name} is view-only for the computer tool (it's a web browser — use the `browser` tool for the web, or the `chrome` tool for the user's own browser, "
                             f"or turn on browser control in Settings → Agent → Computer control).")
         if typing and app.tier == "click":
             raise ToolError(f"{app.name} is click-only (a terminal or code editor): AFH can click in it but not type, so a command can't "

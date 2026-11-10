@@ -37,7 +37,7 @@
   <header data-nav></header>
 
   <section class="docs-hero">
-    <p class="eyebrow"><span class="dot"></span> Guide · AFH <span data-version>1.25.0</span></p>
+    <p class="eyebrow"><span class="dot"></span> Guide · AFH <span data-version>1.26.0</span></p>
     <h1 class="display"><span class="grad-text">Getting started.</span></h1>
     <p class="lead">From download to your first finished task in a few minutes — and everything you'll want to know after that.</p>
     <div class="cta-row">
@@ -60,6 +60,7 @@
         <a href="#helpers">Helpers</a>
         <a href="#live">Live pane &amp; undo</a>
         <a href="#browser">Browser &amp; DevTools</a>
+        <a href="#chrome">Your own Chrome</a>
         <a href="#approvals">Approvals</a>
         <a href="#worktrees">Worktrees</a>
         <a href="#cli">Terminal</a>
@@ -186,7 +187,21 @@
           <tr><td><code>sources</code></td><td>The files the page loaded — scripts, styles, data. Add <code>url=&lt;part&gt;</code> to read one.</td></tr>
         </table>
         <p>So when a page breaks, the agent can do what you would: check the console, find the request that answered <code>500</code>, read its response, open the source file that sent it and fix the code. Ask for it directly — <i>"open localhost:3000, try the login form and tell me why it fails"</i> — or let it reach for the browser on its own when it is testing something it built.</p>
-        <p class="note">The browser is a separate profile inside AFH: sign-ins you make there stay there, and nothing from your everyday browser is shared with it.</p>
+        <p class="note">The browser is a separate profile inside AFH: sign-ins you make there stay there, and nothing from your everyday browser is shared with it. To let the agent use your everyday browser, see <a href="#chrome">Your own Chrome</a>.</p>
+      </section>
+
+      <section id="chrome">
+        <h2>Your own Chrome</h2>
+        <p>The built-in browser is a clean one of AFH's own. For things only <b>your</b> browser can do, the agent has a second tool, <code>chrome</code>: it works in the Chrome, Edge or Brave you use every day, with your sign-ins and your open tabs. Ask for it directly: <i>"check my GitHub notifications in my Chrome"</i>, <i>"summarise the tab I have open"</i>.</p>
+        <p><b>Turn it on once.</b> In your browser, open <code>chrome://inspect/#remote-debugging</code> (<code>edge://…</code> in Edge) and tick <b>Allow remote debugging for this browser instance</b>. It needs Chrome or Edge 144 or newer, and there is no extension to install. <b>Settings → Agent → Your Chrome</b> opens that page for you and shows when your browser is ready.</p>
+        <table class="ref">
+          <tr><th>What you see</th><th>What it means</th></tr>
+          <tr><td>"Allow remote debugging?" in your browser</td><td>AFH is connecting. Your browser asks every time AFH starts using it, and shows a bar while it is connected. Click <b>Allow</b>, or Cancel to refuse.</td></tr>
+          <tr><td>"Let AFH use github.com in your Chrome?" in AFH</td><td>The agent wants to use a site for the first time. <b>Allow</b> is for this run, <b>Always allow</b> adds the site to your list, <b>Don't allow</b> refuses it. If a click lands on a site you refuse, AFH leaves it again.</td></tr>
+          <tr><td>Always-allowed and blocked sites</td><td>Both lists are in <b>Settings → Agent → Your Chrome</b>. A blocked site is never used, in any thread, even in Full access.</td></tr>
+        </table>
+        <p>The agent works in a tab it opened, or in one of your tabs after it lists them (<code>tabs</code>) and switches (<code>switch_tab</code>). Everything the built-in browser can do works here too: <code>open</code>, <code>screenshot</code>, <code>text</code>, <code>click</code>, <code>type</code>, <code>press</code>, <code>scroll</code>, <code>evaluate</code>, <code>console</code>, <code>network</code> and <code>sources</code>.</p>
+        <p class="note">In your browser the agent acts as you. It is told to stop and ask before anything that buys, sends, posts or deletes, never to type passwords or card numbers, and to treat what a web page says as information, not instructions. Closing AFH never closes your browser, and AFH only closes tabs it opened. You can turn the tool off in Settings.</p>
       </section>
 
       <section id="approvals">

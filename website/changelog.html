@@ -45,8 +45,23 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.25.0" data-reveal>
-          <div class="rel-head"><h2>1.25.0</h2><time datetime="2026-11-09">Nov 9, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.26.0" data-reveal>
+          <div class="rel-head"><h2>1.26.0</h2><time datetime="2026-11-10">Nov 10, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">Your own Chrome: the agent can use your real browser</p>
+          <p>AFH can now work in the browser you use every day (Chrome, Edge or Brave), with your sign-ins and your open tabs. Its built-in browser is a separate, clean one for checking its work, and it stays. The new <code>chrome</code> tool is for things only your own browser can do.</p>
+          <ul>
+            <li><b>Your sign-ins and your tabs:</b> ask for something behind a login, such as “check my GitHub notifications” or “summarise the tab I have open”. The agent opens a tab in your browser or works in one of yours. It can list your tabs, switch to one, click, type, scroll, read the page, and look at the console and network.</li>
+            <li><b>No extension and no separate profile:</b> AFH connects through the browser's own remote-debugging switch, in Chrome and Edge 144 or newer. Turn it on once at <code>chrome://inspect/#remote-debugging</code>. <b>Settings → Agent → Your Chrome</b> opens that page for you and shows when your browser is ready.</li>
+            <li><b>You stay in charge:</b> your browser asks you to click Allow each time AFH connects, and shows a bar while it is connected. AFH then asks about each new site: Allow, Always allow or Don't allow. Always-allowed sites are listed in Settings, and sites on your blocked list are never used, in any thread.</li>
+            <li><b>A site you refuse is left again:</b> if a click lands on a site you say no to, a tab that click opened is closed, and a page that moved goes back.</li>
+            <li><b>Careful by design:</b> the agent is told to stop and ask before anything that buys, sends, posts or deletes, never to type passwords or card numbers, and to treat what a web page says as information, not instructions. Closing AFH never closes your browser, and AFH only closes tabs it opened.</li>
+            <li><b>Everywhere:</b> the Windows and Mac apps, the terminal app and the <code>afh</code> command all have it, in English and Arabic. Large and high-resolution windows are handled, so clicks land where the screenshot shows.</li>
+            <li><b>Settings → Agent:</b> the Always-allowed apps list under Computer control now lines up with the rest of its card.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.25.0" data-reveal>
+          <div class="rel-head"><h2>1.25.0</h2><time datetime="2026-11-09">Nov 9, 2026</time></div>
           <p class="title">Three new interfaces: Focus, Compact and Canvas</p>
           <p><b>Settings → Appearance → Interface</b> now has four choices: Studio and three new ones. The new ones are as plain as Studio, but each is laid out differently and has its own parts and motion.</p>
           <ul>

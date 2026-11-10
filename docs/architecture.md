@@ -67,6 +67,8 @@ The Workbench is the panel on the right of a thread: Live, Changes, Browser, Con
 
 The `browser` tool (`afh/engine/tools/browser.py`) drives a real browser over the DevTools protocol. In the desktop app the page runs in the built-in side panel, where the user can watch or take over, and each thread has its own tab. Outside the app it uses Chrome or Edge with its own profile. Screenshots go back to models that accept images.
 
+The `chrome` tool (`afh/engine/tools/chrome.py`) is the same set of actions in the user's own running Chrome, Edge or Brave. It reads the port from `DevToolsActivePort` in the browser's profile folder (written when the user turns on remote debugging at `chrome://inspect/#remote-debugging`) and keeps one DevTools websocket to the whole browser, with a flat session per tab. The browser shows its own Allow prompt for that connection. AFH asks the user about each site (`ask_user`), keeps the always-allowed and blocked sites in `settings.chrome`, and never closes the browser or a tab it didn't open.
+
 ## Computer use
 
 The `computer` tool (`afh/engine/tools/computer.py`) is for work with no file, command or web route. It's only offered on Windows. It asks before it uses an app, once for everything a task needs, and a thin frame around the screen shows while it's working.

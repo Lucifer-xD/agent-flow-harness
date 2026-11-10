@@ -1859,6 +1859,7 @@ function onEvent(ev) {
   const type = ev.type || "";
   if (type === "computer.active" || type === "computer.fx" || type === "computer.teach") return; // drawn by the desktop overlay
   if (type === "computer.apps.changed") { ctx.onComputerAppsChanged?.(); return; }
+  if (type === "chrome.sites.changed") { ctx.onChromeSitesChanged?.(); return; }
   if (type === "project.memory.updated") return onMemoryEvent(ev.data);
   if (type === "schedule.ran") {
     const job = ev.data?.job || {};

@@ -80,6 +80,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     # The agent's browser tool (Chrome/Edge via DevTools): visible = show its window instead of headless.
     "browser": {"enabled": True, "visible": False, "path": ""},
+    # The `chrome` tool: the user's own running Chrome/Edge/Brave (browser: auto | chrome | edge | brave | chromium).
+    # allowed / blocked: sites the user always allows or never allows AFH to use there. background: open AFH's tabs behind the current one.
+    "chrome": {"enabled": True, "browser": "auto", "background": False, "allowed": [], "blocked": []},
     # The mic button: transcription provider ("" = Groq, then OpenAI), model and spoken language.
     "voice": {"provider": "", "model": "", "language": ""},
     # Desktop app updates: auto = download new versions in the background; feed = where to look.

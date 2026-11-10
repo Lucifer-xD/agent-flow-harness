@@ -560,11 +560,7 @@ class BrowserTool(BaseTool):
             return ToolResult(text="Closed this thread's browser tab.")
         url = ""
         if action == "open":
-            url = str_arg(input, "url").strip()
-            if not urlsplit(url).scheme:
-                url = "http://" + url
-            if urlsplit(url).scheme not in ("http", "https", "file"):
-                raise ToolError("Only http(s):// and file:// pages can be opened.")
+            url = self._open_url(input)
             await ctx.permissions.require("web", [url], {"url": url, "tool": "browser"})
         elif action == "evaluate":
             await ctx.permissions.require("web", ["javascript"], {"tool": "browser", "script": str(input.get("script", ""))[:500]})
@@ -574,6 +570,19 @@ class BrowserTool(BaseTool):
             if panel:
                 await PANEL.activity(sid, what, x, y)
 
+        return await self._act(page, action, input, url, show)
+
+    @staticmethod
+    def _open_url(input: dict) -> str:
+        url = str_arg(input, "url").strip()
+        if not urlsplit(url).scheme:
+            url = "http://" + url
+        if urlsplit(url).scheme not in ("http", "https", "file"):
+            raise ToolError("Only http(s):// and file:// pages can be opened.")
+        return url
+
+    async def _act(self, page: Tab, action: str, input: dict, url: str, show) -> ToolResult:
+        """One action in a tab, whichever browser the tab is in (`show` tells the panel what is happening)."""
         if action == "open":
             await show(f"Opening {url}")
             for attempt in range(3):
