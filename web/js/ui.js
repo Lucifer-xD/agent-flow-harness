@@ -21,6 +21,7 @@ export const ICONS = {
   diff: P('<path d="M6 3v12M18 9v12M3 6h6M15 18h6M15 6l3-3 3 3M3 18l3 3 3-3"/>'),
   scroll: P('<path d="M8 21h11a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2h4M6 3h12a2 2 0 0 1 2 2v12"/><path d="M10 8h6M10 12h6"/>'),
   "arrow-down": P('<path d="M12 5v14M19 12l-7 7-7-7"/>'),
+  "arrow-up": P('<path d="M12 19V5M5 12l7-7 7 7"/>'),
   terminal: P('<path d="m4 17 6-5-6-5M12 19h8"/>'),
   "mouse-pointer": P('<path d="M5 3l15 9-6.3 1.2L17 20l-2.8 1.2-3.2-6.9L5 18z"/>'),
   monitor: P('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>'),
@@ -107,7 +108,13 @@ export function el(spec, props, ...children) {
     else if (k === "text") node.textContent = v;
     else if (k === "value") node.value = v;
     else if (k === "className") node.className = v;
-    else if (k === "style" && typeof v === "object") Object.assign(node.style, v);
+    else if (k === "style" && typeof v === "object") {
+      for (const [sk, sv] of Object.entries(v)) {
+        if (sv == null) continue;
+        if (sk.startsWith("--")) node.style.setProperty(sk, sv); // custom properties need setProperty
+        else node.style[sk] = sv;
+      }
+    }
     else if (k === "dataset") Object.assign(node.dataset, v);
     else if (k in node && typeof v !== "string") node[k] = v;
     else node.setAttribute(k, v === true ? "" : v);
@@ -262,6 +269,7 @@ export function popover(anchor, items, opts = {}) {
   closePopover();
   const list = el("div.pop-list");
   const pop = el("div.pop", { style: { width: opts.width ? opts.width + "px" : null } });
+  if (opts.className) pop.classList.add(...opts.className.split(" ").filter(Boolean));
   let kb = -1;
   let query = "";
   const render = () => {
@@ -325,7 +333,8 @@ export function popover(anchor, items, opts = {}) {
     if (top < 10) { top = 10; }
     pop.style.maxHeight = Math.max(160, innerHeight - 20) + "px";
     pop.style.overflowY = "auto";
-    Object.assign(pop.style, { left: Math.max(10, left) + "px", top: top + "px", "--origin": origin });
+    Object.assign(pop.style, { left: Math.max(10, left) + "px", top: top + "px" });
+    pop.style.setProperty("--origin", origin);
   };
   place();
 
@@ -340,6 +349,54 @@ export function popover(anchor, items, opts = {}) {
 /** Re-run placement after a popover's content changed size. */
 export function repositionPopover() {
   openPop?.place?.();
+}
+
+// ---- segmented controls: one highlight that slides to the chosen option -----------
+
+function placePill(seg) {
+  const pill = seg.querySelector(":scope > .seg-pill");
+  if (!pill) return;
+  const on = [...seg.children].find((c) => c !== pill && c.classList.contains("on") && !c.hidden);
+  if (!on || !on.offsetWidth) { pill.classList.remove("show"); return; }
+  const first = !pill.classList.contains("show");
+  if (first) pill.style.transition = "none"; // the first time it lands in place instead of sliding in from the corner
+  pill.style.width = `${on.offsetWidth}px`;
+  pill.style.height = `${on.offsetHeight}px`;
+  pill.style.transform = `translate(${on.offsetLeft}px, ${on.offsetTop}px)`;
+  pill.classList.add("show");
+  if (first) requestAnimationFrame(() => requestAnimationFrame(() => { pill.style.transition = ""; }));
+}
+
+function fitPill(seg) {
+  if (!seg.querySelector(":scope > .seg-pill")) {
+    seg.prepend(el("span.seg-pill", { "aria-hidden": "true" }));
+    seg.classList.add("has-pill");
+    seg.addEventListener("click", () => requestAnimationFrame(() => placePill(seg)));
+    if (window.ResizeObserver) new ResizeObserver(() => placePill(seg)).observe(seg);
+  }
+  placePill(seg);
+}
+
+/** Every .seg under `root` gets a sliding highlight, including ones added later. */
+export function slidePills(root) {
+  if (!root || root._pills) return;
+  root._pills = true;
+  root.querySelectorAll(".seg").forEach(fitPill);
+  new MutationObserver((records) => {
+    for (const r of records) {
+      if (r.type === "attributes") {
+        if (r.target.classList.contains("seg-pill")) continue;
+        const seg = r.target.parentElement;
+        if (seg?.classList.contains("has-pill")) placePill(seg);
+        continue;
+      }
+      for (const n of r.addedNodes) {
+        if (n.nodeType !== 1) continue;
+        if (n.classList.contains("seg")) fitPill(n);
+        n.querySelectorAll?.(".seg").forEach(fitPill);
+      }
+    }
+  }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
 }
 
 // ---- modals -------------------------------------------------------------------

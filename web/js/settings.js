@@ -1,8 +1,11 @@
-// Settings window. Big tabs live in their own modules (models, skills, delegation, remote).
+// Settings window: a grouped sidebar with search, and one page per tab. Big tabs live in their own
+// modules (models, skills, delegation, remote). Every page is built from the same few pieces (header,
+// card, row, field, seg), restyled together in settings.css.
 
 import { api, native } from "./api.js";
 import { INTERFACES, INTERFACE_LOOKS, MESSAGE_ANIMS, PRESETS, THEME_TRANSITIONS, applyAppearance, defaultLook, interfacePatch, luminance, resolveTheme, themeTransition, themesFor } from "./appearance.js";
 import { delegationPane } from "./delegate.js";
+import { arabicFor } from "./i18n.js";
 import { logoNode } from "./logo.js";
 import { modelsPane } from "./settings-models.js";
 import { agentPane, commandsPane, hooksPane, usagePane } from "./settings-power.js";
@@ -10,28 +13,47 @@ import { bugPane, developerPane, githubPane, schedulesPane } from "./settings-de
 import { remotePane } from "./settings-remote.js";
 import { updatesCard } from "./updates.js";
 import { skillsPane } from "./settings-skills.js";
-import { basename, confirmDialog, copyText, el, ico, icon, modal, toast, toggle } from "./ui.js";
+import { basename, confirmDialog, copyText, el, ico, icon, modal, slidePills, toast, toggle } from "./ui.js";
 
-const TABS = [
-  ["general", "General", "sliders"],
-  ["appearance", "Appearance", "sparkle"],
-  ["personalization", "Personalization", "user"],
-  ["agent", "Agent", "checklist"],
-  ["delegation", "Delegation", "branch"],
-  ["models", "Models & providers", "cpu"],
-  ["usage", "Usage & cost", "coin"],
-  ["skills", "Skills", "book"],
-  ["mcp", "MCP servers", "plug"],
-  ["prompts", "Prompts & agents", "scroll"],
-  ["commands", "Commands", "slash"],
-  ["hooks", "Hooks", "hook"],
-  ["schedules", "Schedules", "clock"],
-  ["github", "GitHub", "github"],
-  ["developer", "Developer", "code"],
-  ["remote", "Remote control", "globe"],
-  ["bug", "Report a bug", "bug"],
-  ["about", "About", "info"],
+const GROUPS = [
+  ["Basics", [["general", "General", "sliders"], ["appearance", "Appearance", "sparkle"], ["personalization", "Personalization", "user"]]],
+  ["Models", [["models", "Models & accounts", "cpu"], ["usage", "Usage & cost", "coin"]]],
+  ["How the agent works", [["agent", "Agent", "checklist"], ["delegation", "Delegation", "branch"], ["prompts", "Prompts & agents", "scroll"], ["skills", "Skills", "book"],
+    ["mcp", "MCP servers", "plug"], ["commands", "Commands", "slash"], ["hooks", "Hooks", "hook"], ["schedules", "Schedules", "clock"]]],
+  ["Connect", [["github", "GitHub", "github"], ["remote", "Remote control", "globe"], ["developer", "Developer", "code"]]],
+  ["Help", [["bug", "Report a bug", "bug"], ["about", "About", "info"]]],
 ];
+/** Every tab, in order: [id, label, icon, group]. The command palette lists these too. */
+export const SETTINGS_TABS = GROUPS.flatMap(([group, tabs]) => tabs.map(([id, label, ic]) => [id, label, ic, group]));
+
+// What the search box finds: the cards and rows of each page, with words people type for them.
+// "Title" or ["Title", "other words"]. Choosing one opens the page and points at it.
+const FIND = {
+  general: ["New threads", ["Default mode", "build plan agent"], ["Default approval mode", "ask first full access read only permissions"], "Reopen the last thread on start", ["Pick up after a restart", "resume crash"],
+    ["Interface language", "arabic english translate"], ["Layout direction", "rtl ltr right to left"], ["Show thinking", "reasoning"], ["Show model, tokens and time under replies", "meta"],
+    ["Send with", "enter ctrl"], ["Ask before deleting a thread", "confirm"], ["Live file view", "edits"], ["Sounds", "tone"], ["Desktop notifications", "notify"], ["Keyboard", "shortcuts keys hotkeys"]],
+  appearance: [["Interface", "studio focus compact canvas layout"], ["Theme", "dark light mode colors"], ["Accent", "color"], ["Font", "typeface inter serif mono"], ["Text size", "font size zoom"],
+    ["Corner roundness", "radius"], ["Density", "compact comfortable"], ["Your messages", "bubbles flat"], ["Glass effect", "blur translucent"], ["Animations", "motion"], "Animation speed",
+    "Theme switch effect", "New messages", "Logo flows while a model works", ["Custom CSS", "style"]],
+  personalization: ["Use personalization", ["About you", "name role"], ["How it responds", "tone length concise detailed custom instructions"]],
+  models: [["Default model", "model"], ["Your providers", "accounts keys sign-ins models visibility"], ["Connect a provider", "api key sign in add provider openai anthropic gemini chatgpt copilot grok openrouter ollama local custom endpoint"],
+    ["Several accounts", "rotation switch limit threshold 90% order used up wait"]],
+  usage: [["Last 30 days", "tokens cost spending"], "By model", ["Spending limits", "budget per thread per day"]],
+  agent: [["Work loop", "steps"], "Steps per run", ["Compact the conversation at", "context"], ["Check the to-do list before finishing", "todo"], ["Computer control", "computer use mouse keyboard screen"],
+    ["Your Chrome", "browser edge brave real chrome"], ["Browser", "playwright headless"], ["Voice", "speech mic transcribe"], ["Goals", "autopilot"], ["Error checks after edits", "typescript ruff lint"]],
+  delegation: [["Built-in Helper", "subagent"], ["Delegates", "leader models"], "Leader instructions"],
+  prompts: [["Harness system prompt", "system prompt"], ["Per-mode replacement", "agent prompt"], ["Global instructions", "agents.md"], ["Project instructions", "agents.md"]],
+  skills: [["Installed", "skills"], ["Skill store", "install skills"]],
+  mcp: [["Servers", "mcp tools"], ["Popular servers", "playwright context7 github filesystem chrome devtools"]],
+  commands: [["Your commands", "slash"], "From files", "Built in"],
+  hooks: [["Your hooks", "before after tool"], "Templates"],
+  schedules: [["Jobs", "cron schedule recurring"]],
+  github: [["Agent", "github app /afh issues pull requests"], "Watch for /afh", "Who can start work", "Repositories", "Recent work"],
+  remote: [["Remote control", "phone lan network"], ["Password", "remote"], "Reachable from outside your network", ["Connect a device", "qr phone"], ["AFH account", "phone app sign in"]],
+  developer: [["API keys", "developer api"], "Where the API is", "Fixed port", ["Command line", "afh cli terminal"], "Quick start"],
+  bug: [["What went wrong", "bug report issue"], "Include the backend log"],
+  about: [["Version", "about"], ["Updates", "update download automatically"], ["Reload engine", "restart"], "Where things live", "Open source"],
+};
 const ACCENTS = ["#ff6a2a", "#ff3d71", "#f59f00", "#2fbf71", "#22b8cf", "#4f8cff", "#7c6cff", "#e64980", "#ffffff"];
 const RESTART_NOTE = "Saving reconnects MCP servers; running threads keep going.";
 
@@ -39,33 +61,181 @@ let instance = null;
 
 export function openSettings(tab = "general", ctx, opts = {}) {
   if (instance) return instance.show(tab, opts);
-  const nav = el("nav.m-nav", el("h3", "Settings"));
-  const body = el("div.m-body");
   const buttons = {};
-  for (const [id, label, ic] of TABS) {
-    buttons[id] = el("button", { type: "button", on: { click: () => show(id) } }, ico(ic), label);
-    nav.append(buttons[id]);
-  }
-  nav.append(el("div.spacer"), el("div.h-muted", { style: { padding: "0 10px", fontStyle: "normal", fontSize: "11.5px" } }, "Changes save automatically unless a Save button is shown."));
-  let current = null;
-  const show = async (id, o = {}) => {
-    current = id;
-    Object.entries(buttons).forEach(([k, b]) => b.classList.toggle("on", k === id));
-    const pane = el("div.m-pane");
-    body.replaceChildren(el("button.icon-btn.m-close", { title: "Close (Esc)", html: icon("x"), on: { click: () => m.close() } }), pane);
-    try {
-      await PANES[id](pane, ctx, o);
-    } catch (e) {
-      pane.append(el("div.error-card", ico("alert"), el("div", e.message)));
+  const ind = el("span.m-ind", { "aria-hidden": "true" });
+  const list = el("div.m-list", ind);
+  for (const [group, tabs] of GROUPS) {
+    list.append(el("div.m-group", group));
+    for (const [id, label, ic] of tabs) {
+      buttons[id] = el("button.m-tab", { type: "button", dataset: { tab: id }, on: { click: () => show(id) } }, ico(ic), el("span", label));
+      list.append(buttons[id]);
     }
+  }
+  const results = el("div.m-results", { hidden: true, role: "listbox" });
+  const q = el("input.m-search-inp", { type: "text", placeholder: "Search settings", "aria-label": "Search settings", spellcheck: false, autocomplete: "off" });
+  const clear = el("button.m-search-x", { type: "button", title: "Clear", hidden: true, html: icon("x"), on: { click: () => { q.value = ""; runSearch(); q.focus(); } } });
+  const search = el("label.m-search", ico("search"), q, clear, el("kbd", "Ctrl F"));
+  const nav = el("nav.m-nav", el("div.m-brand", el("h3", "Settings")), search, list, results,
+    el("div.m-foot", ico("check"), el("span", "Changes save on their own unless a page shows a Save button.")));
+  const titleEl = el("b.m-top-title");
+  const crumb = el("span.m-top-crumb");
+  const top = el("div.m-top", el("div.m-top-text", crumb, el("span.m-top-sep", "/"), titleEl), el("button.icon-btn.m-close", { title: "Close (Esc)", html: icon("x"), on: { click: () => m.close() } }));
+  const scroller = el("div.m-scroll");
+  const body = el("div.m-body", top, scroller);
+  let current = null;
+  let seq = 0;
+  const moveInd = () => {
+    const b = buttons[current];
+    if (!b || !b.offsetParent || list.hidden) { ind.classList.remove("show"); return; }
+    const first = !ind.classList.contains("show");
+    if (first) ind.style.transition = "none";
+    ind.style.transform = `translate(${b.offsetLeft}px, ${b.offsetTop}px)`;
+    ind.style.height = `${b.offsetHeight}px`;
+    ind.style.width = `${b.offsetWidth}px`;
+    ind.classList.add("show");
+    if (first) requestAnimationFrame(() => requestAnimationFrame(() => (ind.style.transition = "")));
+    // where the tabs scroll sideways (a narrow window), keep the open one in view
+    if (list.scrollWidth > list.clientWidth + 4) list.scrollTo({ left: b.offsetLeft - list.clientWidth / 2 + b.offsetWidth / 2, behavior: "smooth" });
   };
-  const m = modal([nav, body], { onClose: () => { instance = null; ctx.onReady = null; ctx.onCatalogEvent = null; ctx.redraw = null; } });
+  const show = async (id, o = {}) => {
+    if (!PANES[id]) id = "general";
+    const token = ++seq;
+    const same = id === current;
+    current = id;
+    Object.entries(buttons).forEach(([k, b]) => { b.classList.toggle("on", k === id); b.setAttribute("aria-current", k === id ? "page" : "false"); });
+    requestAnimationFrame(moveInd);
+    const t = SETTINGS_TABS.find((x) => x[0] === id);
+    crumb.textContent = t[3];
+    titleEl.textContent = t[1];
+    const keep = same ? scroller.scrollTop : 0;
+    const pane = el(`div.m-pane${same ? ".quiet" : ""}`, { dataset: { tab: id } });
+    if (same) {
+      // a redraw of the open page: build it off screen and swap, so nothing jumps or flashes
+      try { await PANES[id](pane, ctx, o); } catch (e) { pane.append(el("div.error-card", ico("alert"), el("div", e.message))); }
+      if (token !== seq) return;
+      scroller.replaceChildren(pane);
+      scroller.scrollTop = keep;
+    } else {
+      top.classList.remove("titled", "lifted");
+      scroller.replaceChildren(pane);
+      scroller.scrollTop = 0;
+      try { await PANES[id](pane, ctx, o); } catch (e) { pane.append(el("div.error-card", ico("alert"), el("div", e.message))); }
+      if (token !== seq) return;
+    }
+    addToc(pane, scroller, same);
+    slidePills(pane);
+    if (o.find) pointAt(pane, o.find);
+  };
+  // the page title moves into the top bar once the page's own title scrolls away
+  scroller.addEventListener("scroll", () => {
+    const h = scroller.querySelector(".m-pane > h2");
+    top.classList.toggle("titled", !!h && scroller.scrollTop > h.offsetTop + h.offsetHeight - 6);
+    top.classList.toggle("lifted", scroller.scrollTop > 4);
+  }, { passive: true });
+
+  // ---- search
+  const index = SETTINGS_TABS.flatMap(([id, label, ic, group]) => [
+    { id, title: label, where: group, ic, words: `${label} ${group}`, page: true },
+    ...(FIND[id] || []).map((x) => { const [title, more] = Array.isArray(x) ? x : [x, ""]; return { id, title, where: label, ic, words: `${title} ${more} ${label}` }; }),
+  ]);
+  const haystack = (h) => `${h.words} ${arabicFor(h.title) || ""} ${arabicFor(h.where) || ""}`.toLowerCase();
+  let hits = [];
+  let kb = 0;
+  const pick = (h) => { q.value = ""; runSearch(); show(h.id, h.page ? {} : { find: h.title }); };
+  const runSearch = () => {
+    const needle = q.value.trim().toLowerCase();
+    clear.hidden = !needle;
+    nav.classList.toggle("searching", !!needle);
+    results.hidden = !needle;
+    list.hidden = !!needle;
+    if (!needle) { requestAnimationFrame(moveInd); return; }
+    const words = needle.split(/\s+/);
+    const starts = (h) => (h.title.toLowerCase().startsWith(words[0]) ? 2 : 0) + (h.page ? 1 : 0);
+    hits = index.filter((h) => words.every((w) => haystack(h).includes(w))).sort((a, b) => starts(b) - starts(a)).slice(0, 14);
+    kb = 0;
+    results.replaceChildren(...(hits.length ? hits.map((h, i) => el(`button.m-hit${i === 0 ? ".kb" : ""}`, { type: "button", style: { "--i": String(Math.min(i, 8)) }, on: { click: () => pick(h) } },
+      ico(h.ic), el("span.m-hit-text", el("b", h.title), el("span", h.page ? h.where : h.where)), el("span.m-hit-go", { html: icon("chev") })))
+      : [el("div.m-nohit", "Nothing matches. Try other words, like “dark”, “key” or “phone”.")]));
+  };
+  q.addEventListener("input", runSearch);
+  q.addEventListener("keydown", (e) => {
+    const btns = [...results.querySelectorAll(".m-hit")];
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      kb = Math.max(0, Math.min(btns.length - 1, kb + (e.key === "ArrowDown" ? 1 : -1)));
+      btns.forEach((b, i) => b.classList.toggle("kb", i === kb));
+      btns[kb]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") { e.preventDefault(); if (hits[kb]) pick(hits[kb]); }
+    else if (e.key === "Escape" && q.value) { e.preventDefault(); e.stopImmediatePropagation(); q.value = ""; runSearch(); }
+  });
+  const onKey = (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f" && !document.querySelector(".modal.small")) { e.preventDefault(); q.focus(); q.select(); } };
+  document.addEventListener("keydown", onKey, true);
+  const onResize = () => moveInd();
+  addEventListener("resize", onResize);
+
+  const m = modal([nav, body], { onClose: () => {
+    instance = null; ctx.onReady = null; ctx.onCatalogEvent = null; ctx.redraw = null;
+    document.removeEventListener("keydown", onKey, true); removeEventListener("resize", onResize);
+  } });
+  m.box.classList.add("settings");
   ctx.onReady = () => current && ["mcp"].includes(current) && show(current);
   let timer = 0;
   ctx.onCatalogEvent = () => { if (current === "mcp") { clearTimeout(timer); timer = setTimeout(() => show(current), 900); } };
   ctx.redraw = (id, o) => show(id, o);
   instance = { show };
   show(tab, opts);
+}
+
+/** Long pages get a row of their sections under the title; it stays at the top and follows the scroll. */
+function addToc(pane, scroller, quiet) {
+  const cards = [...pane.querySelectorAll(":scope > .card")].filter((c) => c.querySelector(":scope > .card-head h3"));
+  if (cards.length < 4) return;
+  const top = (c) => c.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+  let lock = 0;
+  const btns = cards.map((c) => el("button", { type: "button", on: { click: () => {
+    lock = Date.now() + 700;
+    mark(btns[cards.indexOf(c)]);
+    scroller.scrollTo({ top: Math.max(0, top(c) - 64), behavior: "smooth" });
+  } } }, c.querySelector(":scope > .card-head h3").textContent));
+  const toc = el(`div.seg.m-toc${quiet ? ".quiet" : ""}`, { role: "navigation", "aria-label": "On this page" }, btns);
+  const mark = (b) => {
+    if (!b || b.classList.contains("on")) return;
+    btns.forEach((x) => x.classList.toggle("on", x === b));
+    if (toc.scrollWidth > toc.clientWidth) toc.scrollTo({ left: b.offsetLeft - toc.clientWidth / 2 + b.offsetWidth / 2, behavior: "smooth" });
+  };
+  const anchor = pane.querySelector(":scope > .lead") || pane.querySelector(":scope > h2");
+  if (anchor) anchor.after(toc); else pane.prepend(toc);
+  const spy = () => {
+    if (!toc.isConnected) { scroller.removeEventListener("scroll", spy); return; }
+    toc.classList.toggle("stuck", toc.getBoundingClientRect().top <= scroller.getBoundingClientRect().top + 1);
+    if (Date.now() < lock) return;
+    const y = scroller.scrollTop + 90;
+    let cur = 0;
+    cards.forEach((c, i) => { if (top(c) <= y) cur = i; });
+    if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4) cur = cards.length - 1;
+    mark(btns[cur]);
+  };
+  btns[0].classList.add("on");
+  scroller.addEventListener("scroll", spy, { passive: true });
+  requestAnimationFrame(spy);
+}
+
+/** Scroll to the card or row titled `title` and make it glow for a moment. */
+function pointAt(pane, title) {
+  const want = title.toLowerCase();
+  const said = (arabicFor(title) || "").toLowerCase();
+  const cands = [...pane.querySelectorAll(".card-head h3, .row .rl b, .field > label, h3, b")];
+  const text = (n) => n.textContent.trim().toLowerCase();
+  const hit = cands.find((n) => text(n) === want || (said && text(n) === said)) || cands.find((n) => text(n).startsWith(want));
+  const target = hit?.closest(".row, .field, .card") || hit;
+  if (!target) return;
+  setTimeout(() => {
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.remove("m-flash");
+    void target.offsetWidth;
+    target.classList.add("m-flash");
+    setTimeout(() => target.classList.remove("m-flash"), 2400);
+  }, 60);
 }
 
 const header = (title, lead) => [el("h2", title), lead ? el("p.lead", lead) : null];

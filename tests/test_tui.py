@@ -506,7 +506,8 @@ def test_fuzzy_ranks_exact_first():
 
 def test_same_settings_sections_as_the_app():
     source = (ROOT / "web/js/settings.js").read_text(encoding="utf-8")
-    app_tabs = re.findall(r'\["([a-z]+)", "[^"]+", "[a-z]+"\]', source[source.index("const TABS"):source.index("];", source.index("const TABS"))])
+    groups = source[source.index("const GROUPS"):source.index("\n];", source.index("const GROUPS"))]
+    app_tabs = re.findall(r'\["([a-z]+)", "[^"]+", "[a-z-]+"\]', groups)
     assert app_tabs and app_tabs == [t for t, _ in TABS]
     assert all(hasattr(Panes, f"pane_{t}") for t in app_tabs)
 

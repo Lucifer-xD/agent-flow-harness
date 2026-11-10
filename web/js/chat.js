@@ -929,10 +929,10 @@ export function errorCard(err, { model, onRetry, onChangeModel } = {}) {
   let hint = "";
   if (/ConnectionRefused|ECONNREFUSED|ENOTFOUND|fetch failed|unable to connect|network/i.test(text)) {
     title = "Couldn't reach the provider";
-    hint = "The model's endpoint didn't answer. If it's a local server (Ollama, LM Studio, a bridge), make sure it's running; otherwise check the provider's base URL in Settings → Models & providers.";
+    hint = "The model's endpoint didn't answer. If it's a local server (Ollama, LM Studio, a bridge), make sure it's running; otherwise check the provider's base URL in Settings → Models & accounts.";
   } else if (/\b401\b|unauthori[sz]ed|invalid api key|authentication/i.test(text)) {
     title = "The provider rejected the credentials";
-    hint = "The API key or sign-in for this provider isn't accepted. Reconnect it in Settings → Models & providers.";
+    hint = "The API key or sign-in for this provider isn't accepted. Reconnect it in Settings → Models & accounts.";
   } else if (/\b429\b|rate ?limit|too many requests/i.test(text)) {
     title = "Rate limited";
     hint = "The provider is throttling requests. Wait a moment and retry, or switch to another model.";

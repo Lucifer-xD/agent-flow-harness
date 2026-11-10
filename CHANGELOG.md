@@ -2,6 +2,21 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.31.0 (2026-11-10)
+
+**New settings: easier to find, easier to understand**
+
+Every settings page is redesigned, with the biggest changes where you spend the most time: your models, your providers and the accounts behind them.
+
+- **Search every setting:** type in the box at the top of Settings (or press Ctrl+F) to find any option on any page, in English or Arabic. Pick a result and AFH opens the page, scrolls to it and highlights it.
+- **Clearer groups:** the pages are sorted into Basics, Models, How the agent works, Connect and Help. Long pages such as Agent get a bar of their sections that stays at the top and shows where you are.
+- **Models & accounts:** the old Models & providers page is now one overview: your default model, and a tile for each provider that shows whether it works, how it is connected, how much of its limit is used, and how many models and accounts it has. Open a tile to see its Accounts, Models and Connection tabs.
+- **Accounts you can read at a glance:** each account shows its usage bars and whether it is in use, ready or resting until a set time. Use one by hand, or rename, reorder, turn off or remove it from its menu. **Sign in another** and **Add key** add more.
+- **Connecting a provider:** pick one of four ways (sign in with a plan you pay for, an API key, models on this computer, or any compatible server), with one search across all of them.
+- **A new model picker:** providers on the side, your recent models at the top, tags for images, thinking and models without tools, the context size, and effort at the bottom. Arrow keys and Enter work.
+- **Smoother:** pages slide in, choices slide instead of jumping, and every control has a cleaner look in Studio, Focus, Compact and Canvas, light and dark, and at phone width.
+- **Everywhere:** the terminal app's settings follow the same order and names, and the guide now says **Settings → Models & accounts**.
+
 ## 1.30.0 (2026-11-10)
 
 **Several accounts per provider, switched for you, and your own Chrome**

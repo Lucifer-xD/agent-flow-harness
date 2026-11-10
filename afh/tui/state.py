@@ -554,7 +554,7 @@ def explain_error(err: Any) -> dict:
     hint = ""
     rules = [
         (r"ConnectionRefused|ECONNREFUSED|ENOTFOUND|fetch failed|unable to connect|network", "Couldn't reach the provider",
-         "The model's endpoint didn't answer. If it's a local server, make sure it's running; otherwise check the provider's address in /settings, Models & providers."),
+         "The model's endpoint didn't answer. If it's a local server, make sure it's running; otherwise check the provider's address in /settings, Models & accounts."),
         (r"\b401\b|unauthori[sz]ed|invalid api key|authentication", "The provider rejected the credentials", "The API key or sign-in for this provider isn't accepted. Reconnect it with /connect."),
         (r"\b429\b|rate ?limit|too many requests", "Rate limited", "The provider is throttling requests. Wait a moment and retry, or switch model with /model."),
         (r"\b402\b|quota|billing|insufficient|credit|subscription plan", "Plan or credit limit", "Your plan doesn't allow this model or has run out of credits. Pick another model or top up with the provider."),
