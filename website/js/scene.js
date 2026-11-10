@@ -10,17 +10,16 @@
 // Stage boxes are empty, so the mark shows through them; cards and text sit on top of the canvas.
 // It follows the page's theme (<html data-theme>) by itself and only draws while a stage is on screen.
 import * as THREE from "three";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-// The logo (viewBox 240×140): each strand is two cubic segments meeting in the middle, with a depth
-// per control point so the strands weave past each other in 3D.
+// The logo (viewBox 240×140), the same paths as the 2D mark: each strand is two cubic segments
+// meeting in the middle.
 const STRANDS = [
-  { pts: [[46, 28], [104, 28], [108, 74], [134, 74], [160, 74], [164, 28], [194, 28]], z: [0, 0.9, 0.9, 0.55, 0.2, -0.6, 0], from: "#ffb11f", to: "#ff7a3d", delay: 2.1 },
-  { pts: [[46, 70], [92, 70], [98, 58], [120, 60], [150, 63], [152, 82], [194, 70]], z: [0, -0.5, -0.5, 0, 0.5, 0.5, 0], from: "#ff7747", to: "#ff4a68", delay: 1.05 },
-  { pts: [[46, 112], [108, 112], [116, 66], [146, 66], [172, 66], [170, 112], [194, 112]], z: [0, -0.9, -0.9, -0.55, -0.2, 0.6, 0], from: "#ff3d8a", to: "#e0169a", delay: 0 },
+  { pts: [[46, 28], [104, 28], [108, 74], [134, 74], [160, 74], [164, 28], [194, 28]], from: "#ffb11f", to: "#ff7a3d", delay: 2.1 },
+  { pts: [[46, 70], [92, 70], [98, 58], [120, 60], [150, 63], [152, 82], [194, 70]], from: "#ff7747", to: "#ff4a68", delay: 1.05 },
+  { pts: [[46, 112], [108, 112], [116, 66], [146, 66], [172, 66], [170, 112], [194, 112]], from: "#ff3d8a", to: "#e0169a", delay: 0 },
 ];
 const BEAT = 3.2;
-const STROKE = 9, DOT = 15, DEPTH = 34; // the app draws stroke 18 and dots r 15 in the 240×140 box
+const STROKE = 9, DOT = 15; // the app draws stroke 18 and dots r 15 in the 240×140 box
 
 // cubic-bezier(.65,0,.35,1), the app's easing, solved for x
 function bezier(p1x, p1y, p2x, p2y) {
@@ -60,66 +59,89 @@ function rightDot(p) {
   return [lerp(1, 0.85, t), lerp(1, 0.6, t)];
 }
 
-const glossy = (extra = {}) => new THREE.MeshPhysicalMaterial({ roughness: 0.22, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 1.15, sheen: 0.25, sheenColor: 0xffe2d0, ...extra });
+// The mark is the logo face on: the strands lie flat, and where they cross the top one passes in
+// front and the bottom one behind (the 2D drawing order). LAYER is in the logo's own units.
+const LAYER = [20, 0, -20];
+const sm = (t) => t * t * (3 - 2 * t);
+const layerZ = (k, u) => LAYER[k] * sm(Math.min(1, Math.max(0, (u - 0.06) / 0.2))) * sm(Math.min(1, Math.max(0, (0.94 - u) / 0.2)));
+
+// One light, cheap material for the strands and the dots: the logo's exact colours in the middle,
+// a touch darker at the edges so it reads round, and a glossy highlight up top. Colours are written
+// out as they are (no tone mapping), so the 3D mark matches the 2D one.
+const srgb = (h) => { const n = parseInt(h.slice(1), 16); return new THREE.Vector3(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
+const MARK_VS = `attribute vec3 acol; uniform vec3 uColor; varying vec3 vN, vV, vC; varying float vU;
+  void main(){
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vN = normalize(normalMatrix * normal); vV = -mv.xyz; vU = uv.x;
+    #ifdef VC
+    vC = acol;
+    #else
+    vC = uColor;
+    #endif
+    gl_Position = projectionMatrix * mv;
+  }`;
+const MARK_FS = `uniform float uHead, uTail, uGlow, uTime, uPulse, uSeed, uLit; varying vec3 vN, vV, vC; varying float vU;
+  void main(){
+    #ifdef VC
+    if (vU > uHead || vU < uTail) discard;
+    #endif
+    vec3 n = normalize(vN), v = isOrthographic ? vec3(0.0, 0.0, 1.0) : normalize(vV), l = normalize(vec3(-0.42, 0.74, 0.56));
+    float d = max(dot(n, l), 0.0), fr = pow(1.0 - max(dot(n, v), 0.0), 2.4);
+    vec3 c = vC * (0.84 + 0.24 * d) * (1.0 - fr * 0.34);
+    float hl = max(dot(n, normalize(l + v)), 0.0);
+    c += pow(hl, 80.0) * 0.75 + pow(hl, 12.0) * 0.09;
+    #ifdef VC
+    float lead = exp(-max(0.0, uHead - vU) * 9.0) * step(uHead, 0.999);
+    float ph = fract(vU * 9.0 - uTime * 0.55 + uSeed);
+    float pulse = pow(max(0.0, 1.0 - abs(ph - 0.5) * 2.0), 10.0) * uPulse;
+    c += vC * (lead * uGlow + pulse * 0.8);
+    #endif
+    c += vC * uLit;
+    gl_FragColor = vec4(c, 1.0);
+  }`;
+const markMat = (vc, color = "#ffffff") => new THREE.ShaderMaterial({
+  vertexShader: MARK_VS, fragmentShader: MARK_FS, defines: vc ? { VC: 1 } : {},
+  uniforms: { uColor: { value: srgb(color) }, uHead: { value: 1 }, uTail: { value: 0 }, uGlow: { value: 0.25 }, uTime: { value: 0 }, uPulse: { value: 0 }, uSeed: { value: 0 }, uLit: { value: 0 } },
+});
+const PAGE_BG = { light: srgb("#f6f5f3"), dark: srgb("#0a090c") };
 
 export function createMarks(canvas, { mobile = matchMedia("(max-width: 760px)").matches, reduced = matchMedia("(prefers-reduced-motion: reduce)").matches } = {}) {
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" }); }
   catch { canvas.remove(); return { add() {}, refresh() {} }; } // no WebGL: the stage boxes show their CSS fallback
   document.documentElement.classList.add("has-3d");
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
+  renderer.toneMapping = THREE.NoToneMapping;
   renderer.setClearColor(0x000000, 0);
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, mobile ? 2 : 1.75));
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, mobile ? 2 : 1.5));
   const scene = new THREE.Scene();
-  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -4000, 4000);
   camera.position.z = 1000;
-  const key = new THREE.DirectionalLight(0xfff3e8, 1.6);
-  key.position.set(-0.5, 0.8, 1);
-  const rim = new THREE.DirectionalLight(0xff5c9a, 0.7);
-  rim.position.set(0.9, -0.4, 0.4);
-  const fill = new THREE.HemisphereLight(0xffffff, 0x3a2030, 0.7);
-  scene.add(key, rim, fill);
 
   // ---- the strands, shared by every mark (they all beat together) ----
-  const curves = STRANDS.map((s) => {
-    const P = s.pts.map(([x, y], i) => new THREE.Vector3(x - 120, 70 - y, s.z[i] * DEPTH));
+  const curves = STRANDS.map((s, k) => {
+    const P = s.pts.map(([x, y]) => new THREE.Vector3(x - 120, 70 - y, 0));
     const path = new THREE.CurvePath();
     path.add(new THREE.CubicBezierCurve3(P[0], P[1], P[2], P[3]));
     path.add(new THREE.CubicBezierCurve3(P[3], P[4], P[5], P[6]));
-    return path;
+    const layered = new THREE.Curve();
+    layered.getPoint = (u, out = new THREE.Vector3()) => out.copy(path.getPointAt(u)).setZ(layerZ(k, u));
+    return layered;
   });
   const geos = curves.map((c, k) => {
     const g = new THREE.TubeGeometry(c, mobile ? 140 : 220, STROKE, mobile ? 16 : 22, false);
-    const from = new THREE.Color(STRANDS[k].from), to = new THREE.Color(STRANDS[k].to), col = new THREE.Color();
+    const from = srgb(STRANDS[k].from), to = srgb(STRANDS[k].to), col = new THREE.Vector3();
     const uv = g.attributes.uv, colors = new Float32Array(uv.count * 3);
     for (let i = 0; i < uv.count; i++) { col.copy(from).lerp(to, uv.getX(i)); col.toArray(colors, i * 3); }
-    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    g.setAttribute("acol", new THREE.BufferAttribute(colors, 3));
     return g;
   });
-  const uniforms = STRANDS.map(() => ({ uHead: { value: 1 }, uTail: { value: 0 }, uGlow: { value: 0.35 } }));
-  const strandMats = STRANDS.map((_, k) => {
-    const m = glossy({ vertexColors: true, emissive: 0xffffff });
-    m.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, uniforms[k]);
-      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vU;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvU = uv.x;");
-      sh.fragmentShader = sh.fragmentShader
-        .replace("#include <common>", "#include <common>\nuniform float uHead, uTail, uGlow; varying float vU;")
-        .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-          if (vU > uHead || vU < uTail) discard;
-          // the light that runs ahead of the drawing: brightest at the head, fading back along the strand
-          float lead = exp(-max(0.0, uHead - vU) * 9.0) * step(uHead, 0.999);
-          totalEmissiveRadiance = vColor.rgb * (0.10 + lead * uGlow);`);
-    };
-    m.customProgramCacheKey = () => "afh-strand";
-    return m;
-  });
+  const strandMats = STRANDS.map(() => markMat(true));
   // round ends, like the logo's stroke-linecap: a cap at each end that follows the drawing
-  const capGeo = new THREE.SphereGeometry(STROKE, 24, 16);
-  const capMats = STRANDS.map(() => [glossy({ emissive: 0x000000 }), glossy({ emissive: 0x000000 })]);
-  const dotGeo = new THREE.SphereGeometry(DOT, mobile ? 32 : 44, mobile ? 22 : 30);
-  const dotMats = STRANDS.map((s) => [glossy({ color: s.from }), glossy({ color: s.to, transparent: true })]);
+  const capGeo = new THREE.SphereGeometry(STROKE, 20, 14);
+  const capMats = STRANDS.map(() => [markMat(false), markMat(false)]);
+  const dotGeo = new THREE.SphereGeometry(DOT, mobile ? 28 : 36, mobile ? 18 : 24);
+  const dotMats = STRANDS.map((s) => [markMat(false, s.from), markMat(false, s.to)]);
+  const ends = STRANDS.map((s) => [srgb(s.from), srgb(s.to)]);
 
   const stages = [];
   function build() {
@@ -130,7 +152,6 @@ export function createMarks(canvas, { mobile = matchMedia("(max-width: 760px)").
       const L = new THREE.Mesh(dotGeo, dotMats[k][0]), R = new THREE.Mesh(dotGeo, dotMats[k][1]);
       L.position.set(46 - 120, 70 - s.pts[0][1], 0);
       R.position.set(194 - 120, 70 - s.pts[6][1], 0);
-      R.renderOrder = 2;
       g.add(tube, capT, capH, L, R);
       return { tube, capT, capH, L, R };
     });
@@ -153,7 +174,6 @@ export function createMarks(canvas, { mobile = matchMedia("(max-width: 760px)").
   addEventListener("resize", resize);
 
   const clock = new THREE.Clock();
-  const tmpC = new THREE.Color();
   let running = false;
   function frame() {
     const t = reduced ? BEAT * 0.5 : clock.getElapsedTime();
@@ -162,14 +182,15 @@ export function createMarks(canvas, { mobile = matchMedia("(max-width: 760px)").
     STRANDS.forEach((s, k) => {
       const p = (((t + s.delay) / BEAT) % 1 + 1) % 1;
       const [tail, head] = reduced ? [0, 1] : drawn(p);
-      uniforms[k].uHead.value = head; uniforms[k].uTail.value = tail;
-      const from = new THREE.Color(s.from), to = new THREE.Color(s.to);
-      capMats[k][0].color.copy(tmpC.copy(from).lerp(to, tail));
-      capMats[k][1].color.copy(tmpC.copy(from).lerp(to, head));
+      strandMats[k].uniforms.uHead.value = head; strandMats[k].uniforms.uTail.value = tail;
+      const [from, to] = ends[k];
+      capMats[k][0].uniforms.uColor.value.copy(from).lerp(to, tail);
+      capMats[k][1].uniforms.uColor.value.copy(from).lerp(to, head);
       const ls = reduced ? 1 : leftDot(p), [rs, ro] = reduced ? [1, 1] : rightDot(p);
-      dotMats[k][1].opacity = ro;
-      dotMats[k][1].emissive.copy(to).multiplyScalar(Math.max(0, rs - 1) * 1.4);
-      dotMats[k][0].emissive.copy(from).multiplyScalar(Math.max(0, ls - 1) * 1.6);
+      // a right dot waiting for its strand is faded into the page, like the 2D logo's
+      dotMats[k][1].uniforms.uColor.value.copy(PAGE_BG[document.documentElement.dataset.theme === "dark" ? "dark" : "light"]).lerp(to, ro);
+      dotMats[k][1].uniforms.uLit.value = Math.max(0, rs - 1) * 1.1;
+      dotMats[k][0].uniforms.uLit.value = Math.max(0, ls - 1) * 1.2;
       for (const st of stages) {
         const P = st.mark.parts[k], pos = curves[k];
         P.L.scale.setScalar(ls); P.R.scale.setScalar(rs);
@@ -213,4 +234,4 @@ export function createMarks(canvas, { mobile = matchMedia("(max-width: 760px)").
 }
 
 // The film on the home page builds on the same strands and the same beat.
-export { STRANDS, BEAT, drawn, leftDot, rightDot, glossy };
+export { STRANDS, BEAT, drawn, leftDot, rightDot, srgb, markMat, PAGE_BG };

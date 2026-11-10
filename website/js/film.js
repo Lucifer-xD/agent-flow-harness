@@ -12,8 +12,7 @@
 //
 // createFilm(section) returns false when there's no WebGL (the captions then show as plain text).
 import * as THREE from "three";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { STRANDS, BEAT, drawn, leftDot, rightDot, glossy } from "./scene.js";
+import { STRANDS, BEAT, drawn, leftDot, rightDot, srgb, markMat, PAGE_BG as BG } from "./scene.js";
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const ramp = (p, a, b) => clamp01((p - a) / (b - a));
@@ -41,8 +40,8 @@ const RING = 2.35;
 // The camera: [progress, target x y z, yaw°, pitch°, frame width, frame height]. Between two keys it
 // eases, so it holds still-ish while you read and travels in between.
 const KEYS = [
-  [0.0, 0, 0, 0, 0, 3, 5.4, 3.5],
-  [0.055, 0, 0, 0, -28, 11, 6.0, 4.0],
+  [0.0, 0, 0, 0, 0, 0, 5.4, 3.5],
+  [0.055, 0, 0, 0, -18, 7, 5.8, 3.8],
   [0.115, 1.6, -0.4, 0, -36, 13, 8.6, 5.4],
   [0.175, 5.1, -0.25, 0, -15, 7, 5.3, 3.8],
   [0.28, 5.5, -0.25, 0, -6, 5, 5.3, 3.8],
@@ -55,8 +54,8 @@ const KEYS = [
   [0.71, 26.3, 0.1, 0, 4, 5, 5.5, 3.9],
   [0.785, 34, 0, 0, -30, 16, 11.4, 7.4],
   [0.865, 34, 0, 0, 26, 12, 11.4, 7.4],
-  [0.935, 34, 0, 0, 0, 3, 5.4, 3.5],
-  [1.0, 34, 0, 0, 0, 3, 5.4, 3.5],
+  [0.935, 34, 0, 0, 0, 0, 5.4, 3.5],
+  [1.0, 34, 0, 0, 0, 0, 5.4, 3.5],
 ];
 
 // Phones and tall screens: the cards stack (see `tall` on each card) and the camera comes closer, so
@@ -339,23 +338,24 @@ const CARDS = [
 export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion: reduce)").matches } = {}) {
   const pin = root.querySelector(".film-pin"), canvas = root.querySelector(".film-canvas");
   const coarse = matchMedia("(pointer: coarse)").matches;
+  const dpr = devicePixelRatio || 1;
   let renderer;
-  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" }); }
+  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: dpr < 2, alpha: true, powerPreference: "high-performance" }); }
   catch { return false; }
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.06;
+  renderer.toneMapping = THREE.NoToneMapping; // the mark keeps the logo's exact colours
   renderer.setClearColor(0x000000, 0);
   const small = Math.min(innerWidth, innerHeight) < 600;
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, small ? 2 : 1.75));
-  const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  // sharpness: start crisp, and step down by itself if this machine can't hold a smooth frame rate
+  const prMin = Math.min(1, dpr);
+  let pr = Math.min(dpr, small ? 2 : 1.5);
+  renderer.setPixelRatio(pr);
 
   const scene = new THREE.Scene();
-  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 400);
-  const key = new THREE.DirectionalLight(0xfff3e8, 1.7); key.position.set(-0.5, 0.9, 1);
-  const rim = new THREE.DirectionalLight(0xff5c9a, 0.75); rim.position.set(0.9, -0.3, -0.6);
-  const fill = new THREE.HemisphereLight(0xffffff, 0x3a2030, 0.75);
-  scene.add(key, rim, fill);
+  const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(-0.5, 0.9, 1);
+  const fill = new THREE.HemisphereLight(0xffffff, 0x4a3040, 1.25);
+  scene.add(key, fill);
+  const slabMaterial = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0, transparent: true, ...extra });
 
   let theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 
@@ -390,24 +390,30 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
   });
 
   // ---------- the three strands: tubes whose centre line is rebuilt every frame ----------
-  const N = small ? 220 : 320, RAD = small ? 14 : 20;
-  const logo = STRANDS.map((s) => {
-    const P = s.pts.map(([x, y], i) => new THREE.Vector3((x - 120) * U, (70 - y) * U, s.z[i] * DEPTH));
+  const N = small ? 170 : 230, RAD = small ? 14 : 18;
+  // The logo exactly as the app draws it (the same paths as the 2D mark), seen face on. Where the
+  // strands cross, the top one passes in front and the bottom one behind, like the 2D drawing order.
+  const LAYER = [0.5, 0, -0.5];
+  const logo = STRANDS.map((s, k) => {
+    const P = s.pts.map(([x, y]) => new THREE.Vector3((x - 120) * U, (70 - y) * U, 0));
     const path = new THREE.CurvePath();
     path.add(new THREE.CubicBezierCurve3(P[0], P[1], P[2], P[3]));
     path.add(new THREE.CubicBezierCurve3(P[3], P[4], P[5], P[6]));
-    return Array.from({ length: N + 1 }, (_, i) => path.getPointAt(i / N));
+    return Array.from({ length: N + 1 }, (_, i) => {
+      const u = i / N, bump = sm(clamp01((u - 0.06) / 0.2)) * sm(clamp01((0.94 - u) / 0.2));
+      return path.getPointAt(u).setZ(LAYER[k] * bump);
+    });
   });
+
   const COS = Float32Array.from({ length: RAD + 1 }, (_, j) => Math.cos((j / RAD) * Math.PI * 2));
   const SIN = Float32Array.from({ length: RAD + 1 }, (_, j) => Math.sin((j / RAD) * Math.PI * 2));
   const ringQ = [[14, 0], [14, 60], [14, 120]].map(([ax, ay]) => new THREE.Quaternion().setFromEuler(new THREE.Euler(ax * D2R, ay * D2R, 0, "YXZ")));
 
-  const strandU = STRANDS.map(() => ({ uHead: { value: 1 }, uTail: { value: 0 }, uGlow: { value: 0.35 }, uTime: { value: 0 }, uPulse: { value: 0 }, uSeed: { value: 0 } }));
   const strands = STRANDS.map((s, k) => {
     const verts = (N + 1) * (RAD + 1);
     const g = new THREE.BufferGeometry();
     const pos = new Float32Array(verts * 3), nor = new Float32Array(verts * 3), uv = new Float32Array(verts * 2), col = new Float32Array(verts * 3);
-    const from = new THREE.Color(s.from), to = new THREE.Color(s.to), c = new THREE.Color();
+    const from = srgb(s.from), to = srgb(s.to), c = new THREE.Vector3();
     for (let i = 0; i <= N; i++) for (let j = 0; j <= RAD; j++) {
       const v = i * (RAD + 1) + j;
       uv[v * 2] = i / N; uv[v * 2 + 1] = j / RAD;
@@ -422,34 +428,19 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute("normal", new THREE.BufferAttribute(nor, 3).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-    const m = glossy({ vertexColors: true, emissive: 0xffffff });
-    strandU[k].uSeed.value = k / 3;
-    m.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, strandU[k]);
-      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vU;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvU = uv.x;");
-      sh.fragmentShader = sh.fragmentShader
-        .replace("#include <common>", "#include <common>\nuniform float uHead, uTail, uGlow, uTime, uPulse, uSeed; varying float vU;")
-        .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-          if (vU > uHead || vU < uTail) discard;
-          float lead = exp(-max(0.0, uHead - vU) * 9.0) * step(uHead, 0.999);
-          // lights that run along the rail, the way the work runs through a turn
-          float ph = fract(vU * 9.0 - uTime * 0.55 + uSeed);
-          float pulse = pow(max(0.0, 1.0 - abs(ph - 0.5) * 2.0), 10.0) * uPulse;
-          totalEmissiveRadiance = vColor.rgb * (0.10 + lead * uGlow + pulse * 1.3);`);
-    };
-    m.customProgramCacheKey = () => "afh-film-strand";
+    g.setAttribute("acol", new THREE.BufferAttribute(col, 3));
+    const m = markMat(true);
+    m.uniforms.uSeed.value = k / 3;
     const mesh = new THREE.Mesh(g, m);
     mesh.frustumCulled = false;
     scene.add(mesh);
-    return { g, pos, nor, mesh, P: Array.from({ length: N + 1 }, () => new THREE.Vector3()) };
+    return { g, pos, nor, mesh, U: m.uniforms, from, to, P: Array.from({ length: N + 1 }, () => new THREE.Vector3()), built: -1 };
   });
-  const capGeo = new THREE.SphereGeometry(TUBE, 24, 16);
-  const dotGeo = new THREE.SphereGeometry(DOT, small ? 32 : 44, small ? 22 : 30);
+  const capGeo = new THREE.SphereGeometry(TUBE, 20, 14);
+  const dotGeo = new THREE.SphereGeometry(DOT, small ? 28 : 36, small ? 18 : 24);
   const ends = STRANDS.map((s) => {
-    const capT = new THREE.Mesh(capGeo, glossy()), capH = new THREE.Mesh(capGeo, glossy());
-    const L = new THREE.Mesh(dotGeo, glossy({ color: s.from })), R = new THREE.Mesh(dotGeo, glossy({ color: s.to, transparent: true }));
-    R.renderOrder = 2;
+    const capT = new THREE.Mesh(capGeo, markMat(false)), capH = new THREE.Mesh(capGeo, markMat(false));
+    const L = new THREE.Mesh(dotGeo, markMat(false, s.from)), R = new THREE.Mesh(dotGeo, markMat(false, s.to));
     scene.add(capT, capH, L, R);
     return { capT, capH, L, R };
   });
@@ -471,6 +462,10 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
   function buildStrand(k, p, t) {
     const S = strands[k], P = S.P;
     const a = ramp(p, 0.075, 0.2), b = ramp(p, 0.705, 0.8), c = ramp(p, 0.845, 0.93);
+    // the mark itself doesn't move: only rebuild the tube while it's out on the rail or in the rings
+    const still = a === 0 || c === 1 ? (a === 0 ? 0 : 2) : -1;
+    if (still >= 0 && S.built === still) return;
+    S.built = still;
     const spin = (p - 0.72) * 3.2;
     for (let i = 0; i <= N; i++) {
       const u = i / N, L = logo[k][i], pt = P[i];
@@ -501,13 +496,18 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
   const at = (P, u) => { const f = clamp01(u) * N, i = Math.min(N - 1, Math.floor(f)); return tmp.copy(P[i]).lerp(P[i + 1], f - i); };
 
   // ---------- the cards ----------
-  const PPU = small ? 215 : 235; // texture pixels per world unit
+  const PPU = small ? 175 : 190; // texture pixels per world unit
+  // A card's picture goes to the graphics card as it is (premultiplied, top row first, no colour
+  // conversion, no mipmaps): that's the browser's fast path, so redrawing a card doesn't stall a frame.
+  const FACE_VS = "varying vec2 vUv; void main(){ vUv = vec2(uv.x, 1.0 - uv.y); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }";
+  const FACE_FS = "uniform sampler2D map; uniform float opacity; varying vec2 vUv; void main(){ gl_FragColor = texture2D(map, vUv) * opacity; }";
   function makeCard(spec) {
     const W = spec.w * 100, H = spec.h * 100;
     const cv = document.createElement("canvas");
     cv.width = Math.round(spec.w * PPU); cv.height = Math.round(spec.h * PPU);
     const ctx = cv.getContext("2d");
-    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = aniso;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.flipY = false; tex.premultiplyAlpha = true; tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter;
     const r = 0.14, w = spec.w - 0.04, h = spec.h - 0.04;
     const shape = new THREE.Shape();
     shape.moveTo(-w / 2 + r, -h / 2); shape.lineTo(w / 2 - r, -h / 2); shape.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r);
@@ -515,9 +515,9 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
     shape.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r); shape.lineTo(-w / 2, -h / 2 + r); shape.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
     const slabGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.03, bevelSegments: 3, curveSegments: 6 });
     slabGeo.translate(0, 0, -0.075);
-    const slabMat = glossy({ color: spec.dark ? 0x121116 : PAL[theme].slab, transparent: true, roughness: 0.3 });
+    const slabMat = slabMaterial(spec.dark ? 0x121116 : PAL[theme].slab);
     const slab = new THREE.Mesh(slabGeo, slabMat);
-    const faceMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, depthWrite: false });
+    const faceMat = new THREE.ShaderMaterial({ vertexShader: FACE_VS, fragmentShader: FACE_FS, uniforms: { map: { value: tex }, opacity: { value: 1 } }, transparent: true, premultipliedAlpha: true, depthWrite: false });
     const face = new THREE.Mesh(new THREE.PlaneGeometry(spec.w, spec.h), faceMat);
     face.position.z = 0.004; face.renderOrder = 3;
     const inner = new THREE.Group(); inner.add(slab, face);
@@ -551,6 +551,10 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
     });
   }).catch(() => {});
 
+  // Redrawing a card means sending its picture to the graphics card again, so a frame only redraws
+  // about two big cards' worth; anything left waits a frame.
+  let budget = 0;
+  const spend = (c) => { if (budget <= 0) return false; budget -= c.cv.width * c.cv.height; return true; };
   const redrawAll = () => { [...cards, ...tiles].forEach((c) => { c.last = -1; }); };
   document.fonts?.ready.then(redrawAll);
   document.fonts?.load(`600 16px ${SANS}`).then(redrawAll).catch(() => {});
@@ -584,10 +588,10 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
       g.rotation.x += f * -0.4;
     }
     const o = kin * (1 - kout) * (1 - sm(ramp(kfold, 0.55, 1)));
-    c.slabMat.opacity = o; c.faceMat.opacity = o;
+    c.slabMat.opacity = o; c.faceMat.uniforms.opacity.value = o;
     const kc = c.k ? clamp01((p - c.k[0]) / (c.k[1] - c.k[0])) : 1;
-    const qk = Math.round(kc * 160) / 160;
-    if (qk !== c.last) { c.last = qk; c.draw(qk); }
+    const qk = Math.round(kc * 120) / 120;
+    if (qk !== c.last && spend(c)) { c.last = qk; c.draw(qk); }
   }
   function placeTiles(p, t, landscape) {
     const kin = ramp(p, 0.715, 0.8), kout = ramp(p, 0.855, 0.9);
@@ -605,8 +609,8 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
       tile.group.quaternion.copy(camera.quaternion);
       tile.group.scale.setScalar(lerp(0.4, 1, ti) * lerp(1, 0.4, to));
       const o = ti * (1 - to);
-      tile.slabMat.opacity = o; tile.faceMat.opacity = o;
-      if (tile.last !== 1) { tile.last = 1; tile.draw(1); }
+      tile.slabMat.opacity = o; tile.faceMat.uniforms.opacity.value = o;
+      if (tile.last !== 1 && spend(tile)) { tile.last = 1; tile.draw(1); }
     });
   }
 
@@ -624,13 +628,23 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
   // ---------- size and layout: where the picture sits next to the captions ----------
   let W = 0, H = 0, landscape = true;
   const wide = matchMedia("(min-width: 700px) and (min-aspect-ratio: 21/20)");
+  // measured only when something changes size, never in the middle of a frame
+  let filmTop = 0, filmH = 1, pinH = 1, dirty = true;
   function resize() {
+    dirty = false;
     W = pin.clientWidth; H = pin.clientHeight;
+    filmTop = root.getBoundingClientRect().top + scrollY; filmH = root.offsetHeight; pinH = pin.offsetHeight;
     landscape = wide.matches;
     cards.forEach((c) => { c.home = landscape ? c.wideHome : c.tallHome; });
     renderer.setSize(W, H, false);
     camera.aspect = W / H;
   }
+  const remeasure = () => { dirty = true; };
+  new ResizeObserver(remeasure).observe(pin);
+  new ResizeObserver(remeasure).observe(document.body);
+  wide.addEventListener?.("change", remeasure);
+  addEventListener("resize", remeasure);
+  addEventListener("load", remeasure);
   function region() {
     if (landscape) {
       const capR = Math.max(24, W * 0.05) + Math.min(470, W * 0.38);
@@ -643,8 +657,9 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
   if (!coarse) addEventListener("pointermove", (e) => { pointer.x = e.clientX / innerWidth - 0.5; pointer.y = e.clientY / innerHeight - 0.5; }, { passive: true });
 
   // ---------- the playhead ----------
-  const span = () => Math.max(1, root.offsetHeight - pin.offsetHeight);
-  const top = () => root.getBoundingClientRect().top + scrollY;
+  if (dirty) resize();
+  const span = () => Math.max(1, filmH - pinH);
+  const top = () => filmTop;
   const scrollP = () => clamp01((scrollY - top()) / span());
   let shown = scrollP(), playing = false;
   const seek = (p, smooth = false) => scrollTo({ top: top() + clamp01(p) * span(), behavior: smooth ? "smooth" : "instant" });
@@ -731,57 +746,73 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
   const clock = new THREE.Clock();
   let last = performance.now(), first = true;
   const ry = new THREE.Vector3();
+  // sharpness steps down (never below the screen's own pixels) when frames come too slowly
+  let perfT = 0, perfN = 0, perfSkip = 2;
+  function watchSpeed(dt) {
+    perfT += dt; perfN++;
+    if (perfT < 1) return;
+    const avg = perfT / perfN; perfT = 0; perfN = 0;
+    if (perfSkip > 0) { perfSkip--; return; } // the first seconds include setting up
+    if (avg > 1 / 50 && pr > prMin) { pr = Math.max(prMin, pr - 0.25); renderer.setPixelRatio(pr); renderer.setSize(W, H, false); perfSkip = 1; }
+  }
+
+  let inView = false;
+  const setInView = (on) => { if (on === inView) return; inView = on; document.documentElement.classList.toggle("film-in", on); };
   function frame(now) {
     requestAnimationFrame(frame);
-    const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    const r = root.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > innerHeight) { if (playing) setPlaying(false); return; }
-    if (pin.clientWidth !== W || pin.clientHeight !== H || wide.matches !== landscape) resize();
+    const raw = (now - last) / 1000, dt = Math.min(0.1, raw); last = now;
+    if (dirty) resize();
+    const y = scrollY;
+    if (y > filmTop + filmH || y + H < filmTop) { setInView(false); if (playing) setPlaying(false); return; }
+    setInView(true);
 
     if (playing) {
       const np = scrollP() + dt / LENGTH;
       if (np >= 1) { seek(1); setPlaying(false); } else seek(np);
     }
     const target = scrollP();
-    shown = first ? target : shown + (target - shown) * (1 - Math.exp(-dt * (playing ? 14 : 6.5)));
+    shown = first ? target : shown + (target - shown) * (1 - Math.exp(-dt * (playing ? 16 : 11)));
     if (Math.abs(target - shown) < 0.00005) shown = target;
     const p = shown, t = clock.getElapsedTime();
+    budget = small ? 800000 : 1400000;
 
     // the beat: at work in the intro and at the end, fully drawn in between
     const loopW = reduced ? 0 : Math.max(1 - sm(ramp(p, 0.012, 0.05)), sm(ramp(p, 0.935, 0.975)));
     const pulse = reduced ? 0 : sm(ramp(p, 0.12, 0.2)) * (1 - sm(ramp(p, 0.7, 0.78))) + 0.25 * sm(ramp(p, 0.75, 0.8)) * (1 - sm(ramp(p, 0.86, 0.92)));
+    // in the rings the dots shrink away (a ring has no ends)
+    const ringK = sm(ramp(p, 0.72, 0.79)) * (1 - sm(ramp(p, 0.86, 0.92)));
+    const bg = BG[theme];
     STRANDS.forEach((s, k) => {
       buildStrand(k, p, reduced ? 0 : t);
-      const ph = (((t + s.delay) / BEAT) % 1 + 1) % 1;
+      const S = strands[k], ph = (((t + s.delay) / BEAT) % 1 + 1) % 1;
       const [tl, hd] = drawn(ph);
       const head = lerp(1, hd, loopW), tail = lerp(0, tl, loopW);
-      const U_ = strandU[k];
-      U_.uHead.value = head; U_.uTail.value = tail; U_.uTime.value = t; U_.uPulse.value = pulse;
-      const P = strands[k].P, E = ends[k];
-      const from = new THREE.Color(s.from), to = new THREE.Color(s.to);
+      S.U.uHead.value = head; S.U.uTail.value = tail; S.U.uTime.value = t; S.U.uPulse.value = pulse;
+      const P = S.P, E = ends[k];
       const on = head - tail > 0.004;
       E.capT.visible = E.capH.visible = on;
       if (on) {
-        E.capT.position.copy(at(P, Math.max(0.0005, tail))); E.capT.material.color.copy(from).lerp(to, tail);
-        E.capH.position.copy(at(P, Math.min(0.9995, head))); E.capH.material.color.copy(from).lerp(to, head);
+        E.capT.position.copy(at(P, Math.max(0.0005, tail))); E.capT.material.uniforms.uColor.value.copy(S.from).lerp(S.to, tail);
+        E.capH.position.copy(at(P, Math.min(0.9995, head))); E.capH.material.uniforms.uColor.value.copy(S.from).lerp(S.to, head);
       }
       const ls = lerp(1, leftDot(ph), loopW), [rs0, ro0] = rightDot(ph);
       const rs = lerp(1, rs0, loopW), ro = lerp(1, ro0, loopW);
-      // in the rings the dots shrink away (a ring has no ends)
-      const ringK = sm(ramp(p, 0.72, 0.79)) * (1 - sm(ramp(p, 0.86, 0.92)));
       E.L.position.copy(P[0]); E.R.position.copy(P[N]);
       E.L.scale.setScalar(ls * lerp(1, 0.001, ringK)); E.R.scale.setScalar(rs * lerp(1, 0.001, ringK));
-      E.R.material.opacity = ro;
-      E.R.material.emissive.copy(to).multiplyScalar(Math.max(0, rs - 1) * 1.4);
-      E.L.material.emissive.copy(from).multiplyScalar(Math.max(0, ls - 1) * 1.6);
+      E.L.visible = E.R.visible = ringK < 0.995;
+      // a right dot waiting for its strand is faded into the page, like the 2D logo's (no see-through)
+      E.R.material.uniforms.uColor.value.copy(bg).lerp(S.to, ro);
+      E.R.material.uniforms.uLit.value = Math.max(0, rs - 1) * 1.1;
+      E.L.material.uniforms.uLit.value = Math.max(0, ls - 1) * 1.2;
     });
 
-    // camera
+    // camera: face on while it's the logo, free to move in between
     camAt(p);
     if (!coarse) { pointer.sx += (pointer.x - pointer.sx) * 0.05; pointer.sy += (pointer.y - pointer.sy) * 0.05; }
-    const idle = reduced ? 0 : 1;
-    const yaw = (cam.yaw + pointer.sx * 7 + Math.sin(t * 0.35) * 2.2 * idle) * D2R;
-    const pitch = (cam.pitch + pointer.sy * 5 + Math.sin(t * 0.27 + 1) * 1.2 * idle) * D2R;
+    const faceOn = Math.max(1 - sm(ramp(p, 0.02, 0.08)), sm(ramp(p, 0.93, 0.97)));
+    const idle = reduced ? 0 : 1 - faceOn * 0.75, lean = 1 - faceOn * 0.6;
+    const yaw = (cam.yaw + pointer.sx * 7 * lean + Math.sin(t * 0.35) * 2.2 * idle) * D2R;
+    const pitch = (cam.pitch + pointer.sy * 5 * lean + Math.sin(t * 0.27 + 1) * 1.2 * idle) * D2R;
     const R = region(), rw = R.x1 - R.x0, rh = R.y1 - R.y0;
     const fw = cam.fw, fh = cam.fh;
     const dist = Math.max((fh * H) / rh, (fw * H) / rw) / (2 * Math.tan((camera.fov * D2R) / 2));
@@ -793,8 +824,8 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
     floorMat.uniforms.uCam.value.copy(camera.position);
 
     // the glow behind the mark: at the start and at the end
-    glows[0].material.opacity = (1 - sm(ramp(p, 0.05, 0.16))) * (theme === "dark" ? 0.9 : 0.75);
-    glows[1].material.opacity = sm(ramp(p, 0.76, 0.9)) * (theme === "dark" ? 0.9 : 0.75);
+    glows[0].material.opacity = (1 - sm(ramp(p, 0.05, 0.16))) * (theme === "dark" ? 0.7 : 0.55);
+    glows[1].material.opacity = sm(ramp(p, 0.76, 0.9)) * (theme === "dark" ? 0.7 : 0.55);
     glows[0].visible = glows[0].material.opacity > 0.01; glows[1].visible = glows[1].material.opacity > 0.01;
 
     cards.forEach((c) => placeCard(c, p, t));
@@ -803,8 +834,27 @@ export function createFilm(root, { reduced = matchMedia("(prefers-reduced-motion
     placeUi(p);
     renderer.render(scene, camera);
     if (first) { first = false; root.classList.add("film-live"); }
+    else if (raw < 0.25) watchSpeed(raw);
+  }
+  // get the shaders and the card pictures onto the graphics card before they're needed, so nothing
+  // stalls the first time it shows up
+  function warmUp() {
+    const all = [...cards, ...tiles];
+    all.forEach((c) => { c.group.visible = true; });
+    try { renderer.compile(scene, camera); } catch {}
+    all.forEach((c) => { c.group.visible = false; });
+    const queue = [...all];
+    const step = (dl) => {
+      while (queue.length && (!dl || dl.timeRemaining() > 4)) {
+        const c = queue.shift();
+        if (c.last === -1) { const k = c.id.startsWith("tile-") ? 1 : 0; c.last = k; c.draw(k); renderer.initTexture(c.tex); }
+      }
+      if (queue.length) (window.requestIdleCallback || ((f) => setTimeout(f, 30)))(step);
+    };
+    (window.requestIdleCallback || ((f) => setTimeout(f, 30)))(step);
   }
   resize();
+  warmUp();
   requestAnimationFrame(frame);
   return { seek, play: () => setPlaying(true), pause: () => setPlaying(false), get progress() { return shown; } };
 }

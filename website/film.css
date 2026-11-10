@@ -3,7 +3,7 @@
    picture on top, the captions under it. The player bar sits at the bottom, like a video's. */
 
 .film { position: relative; height: 760vh; height: 760svh; background: var(--bg); }
-.film-pin { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; isolation: isolate; }
+.film-pin { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; isolation: isolate; contain: layout paint; }
 .film-pin::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
   background:
@@ -23,7 +23,11 @@
 .film-poster { position: absolute; top: 84px; bottom: 92px; right: max(16px, 3vw); left: calc(max(24px, 5vw) + min(470px, 38vw) + 8px); display: grid; place-items: center; transition: opacity 0.7s var(--ease); pointer-events: none; }
 .film-poster-mark { width: min(560px, 86%); }
 .film-poster-mark .afh-mark, .cta-mark .afh-mark { display: block; width: 100%; height: auto; }
-.film-live .film-poster { opacity: 0; }
+.film-live .film-poster { opacity: 0; visibility: hidden; transition: opacity 0.7s var(--ease), visibility 0s 0.7s; }
+
+/* Over a picture that changes every frame, frosted glass has to be re-blurred every frame. While the
+   film is on screen the bars are solid instead, so the film keeps a smooth frame rate. */
+.film-in .nav, .film-in .nav.scrolled { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgb(var(--glass-rgb) / 0.94); }
 
 /* ---- captions ---- */
 .caps { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
@@ -58,8 +62,7 @@
 .player {
   position: absolute; z-index: 3; left: 50%; bottom: max(16px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
   display: flex; align-items: center; gap: 12px; width: min(760px, calc(100% - 32px)); padding: 8px 8px 8px 8px;
-  border: 1px solid var(--line-2); border-radius: 18px; background: rgb(var(--glass-rgb) / 0.74);
-  backdrop-filter: blur(18px) saturate(1.5); -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  border: 1px solid var(--line-2); border-radius: 18px; background: rgb(var(--glass-rgb) / 0.95);
   box-shadow: 0 12px 40px rgb(var(--ink-rgb) / 0.08);
 }
 .pl-play { flex: none; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 12px; background: var(--ink); color: var(--bg); cursor: pointer; transition: transform 0.2s var(--ease); }
