@@ -26,6 +26,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/sections.css">
+  <link rel="stylesheet" href="/film.css">
   <script type="importmap">
     { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -34,44 +35,82 @@
   </script>
 </head>
 <body data-page="home">
-  <canvas id="scene" aria-hidden="true"></canvas>
-
-  <header data-nav></header>
+    <header data-nav></header>
 
   <main id="top">
-    <!-- 1 · hero: the mark at work, exactly as it moves in the app while a model works -->
-    <section class="hero">
-      <div class="hero-copy">
-        <a class="eyebrow eyebrow-link" href="/changelog#v1.32.0"><span class="tag">1.32</span><span>A new chat · work folds away, commands as a terminal</span><span aria-hidden="true">→</span></a>
-        <h1 class="display">
-          <span class="line"><span>Build with any model.</span></span>
-          <span class="line grad"><span>On your machine.</span></span>
-        </h1>
-        <p class="lead">Agent Flow Harness is a free coding agent for your desktop and your terminal. It plans, delegates and writes code with the models you choose — ChatGPT, Claude, Gemini, OpenRouter or local — and shows you every line as it lands.</p>
-        <div class="cta-row">
-          <a class="btn btn-primary btn-big" href="/download" data-os-cta>Download AFH</a>
-          <a class="btn btn-ghost btn-big" href="/features">See what it does</a>
+    <!-- the film: one pinned 3D stage; your scroll is the playhead -->
+    <section class="film" id="film" aria-label="A short film about AFH that plays as you scroll">
+      <div class="film-pin">
+        <div class="film-poster" aria-hidden="true"><div class="film-poster-mark" data-mark-big></div></div>
+        <canvas class="film-canvas" aria-hidden="true"></canvas>
+        <div class="caps">
+          <div class="cap cap-hero" data-a="0" data-b="0.07">
+            <a class="eyebrow eyebrow-link" href="/changelog#v1.32.0"><span class="tag">1.32</span><span>A new chat · work folds away</span><span aria-hidden="true">→</span></a>
+            <h1 class="cap-title">Build with any model.<br><span class="grad-text">On your machine.</span></h1>
+            <p class="cap-lead">A free coding agent for your desktop and your terminal. It plans, delegates and writes code with the models you choose, and shows you every line as it lands.</p>
+            <div class="cap-cta">
+              <a class="btn btn-primary btn-big" href="/download" data-os-cta>Download AFH</a>
+              <button class="btn btn-ghost btn-big play-film" type="button" data-play-film aria-pressed="false"><span class="pf-ico" aria-hidden="true"></span><span class="pf-play">Play the film</span><span class="pf-pause">Pause</span></button>
+            </div>
+            <p class="cap-hint"><span class="mouse" aria-hidden="true"></span>Scroll to play. Scroll back to rewind.</p>
+          </div>
+          <div class="cap" data-a="0.14" data-b="0.29">
+            <p class="cap-k"><b>01</b>Say it</p>
+            <h2 class="cap-h">Say what you want.</h2>
+            <p class="cap-p">Type it like you'd tell a teammate. AFH reads your project and gets moving. No setup, no special commands.</p>
+          </div>
+          <div class="cap" data-a="0.315" data-b="0.45">
+            <p class="cap-k"><b>02</b>Plan</p>
+            <h2 class="cap-h">It sets a goal and makes a plan.</h2>
+            <p class="cap-p">It writes down what “done” means, then breaks the work into a to-do list you can watch tick off and edit any time.</p>
+          </div>
+          <div class="cap" data-a="0.475" data-b="0.565">
+            <p class="cap-k"><b>03</b>Work</p>
+            <h2 class="cap-h">It reads, edits, runs and tests.</h2>
+            <p class="cap-p">You see the file as it's written and every command as it runs, in a real terminal.</p>
+          </div>
+          <div class="cap" data-a="0.59" data-b="0.635">
+            <p class="cap-k"><b>03</b>Work</p>
+            <h2 class="cap-h">Then it folds the work away.</h2>
+            <p class="cap-p">When it's done, the steps fold under one line, so the answer stays in front.</p>
+          </div>
+          <div class="cap" data-a="0.655" data-b="0.715">
+            <p class="cap-k"><b>04</b>Review</p>
+            <h2 class="cap-h">You review every line.</h2>
+            <p class="cap-p">Every changed file is listed with its diff. Don't like a turn? Rewind the thread <em>and</em> the files.</p>
+          </div>
+          <div class="cap" data-a="0.75" data-b="0.865">
+            <p class="cap-k"><b>05</b>Models</p>
+            <h2 class="cap-h">Bring any model. <span class="grad-text">Mix them in one thread.</span></h2>
+            <p class="cap-p"><b>228</b> providers and <b>7,539</b> models: ChatGPT, Claude, Gemini, OpenRouter or local. A strong one leads, a fast one helps.</p>
+          </div>
+          <div class="cap cap-end" data-a="0.925" data-b="1">
+            <p class="cap-k"><b>06</b>Yours</p>
+            <h2 class="cap-title">Start your <span class="grad-text">flow.</span></h2>
+            <p class="cap-p">Free for Windows, Mac and your terminal. No account, no telemetry. v<span data-version>1.32.0</span></p>
+            <div class="cap-cta">
+              <a class="btn btn-primary btn-big" href="/download" data-os-cta>Download AFH</a>
+              <a class="btn btn-ghost btn-big" href="#app">Keep scrolling</a>
+            </div>
+          </div>
         </div>
-        <div data-install></div>
-      </div>
-      <div class="hero-art">
-        <div class="hero-stage stage" data-stage data-tilt aria-hidden="true"></div>
-        <div class="turn-chip" aria-hidden="true">
-          <span class="tc-ring"></span>
-          <span class="tc-text"><b data-tc-title>Working</b><span data-tc-bits>Reading the project</span></span>
-          <span class="tc-time" data-tc-time>0s</span>
+        <div class="player" role="group" aria-label="Film controls">
+          <button class="pl-play" type="button" data-play aria-label="Play"><span class="pf-ico" aria-hidden="true"></span></button>
+          <div class="pl-main">
+            <div class="pl-meta"><span data-chap>Intro</span><span data-time>0:00 / 0:48</span></div>
+            <div class="pl-track" role="slider" tabindex="0" aria-label="Film position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+          </div>
+          <button class="pl-skip" type="button" data-skip>Skip<span aria-hidden="true"> ↓</span></button>
         </div>
       </div>
-      <ul class="proof">
-        <li>Free, forever</li>
-        <li>No account needed</li>
-        <li>No telemetry</li>
-        <li>Windows · Mac · Linux terminal · v<span data-version>1.32.0</span></li>
-      </ul>
     </section>
 
     <!-- 2 · the product, full width -->
-    <section class="showcase wrap" aria-label="The app">
+    <section class="showcase wrap" id="app" aria-label="The app">
+      <div class="section-head center">
+        <p class="kicker">The real thing</p>
+        <h2 class="h2">That was one turn.<br><span class="grad-text">Here's the app it ran in.</span></h2>
+      </div>
       <div class="window" data-reveal>
         <div class="win-bar"><i></i><i></i><i></i><span>Agent Flow Harness</span></div>
         <img src="/assets/app-light.webp" data-dark="/assets/app-dark.webp" width="1600" height="1000" alt="The AFH window: threads on the left; a reply from Claude Opus 5.5 with its work folded under Worked for 32s; the to-do list and the chat box below" decoding="async">
@@ -81,46 +120,6 @@
         <p><b>Each reply</b> under its model's logo: the work folded under one line, the answer up front.</p>
         <p><b>The chat box</b> with the to-do list on top and the model and effort one click away.</p>
       </div>
-    </section>
-
-    <!-- 3 · one turn, start to finish: steps hung on one strand, like the work rail in the app -->
-    <section id="flow" class="turn section wrap">
-      <div class="section-head">
-        <p class="kicker">How a turn works</p>
-        <h2 class="h2">Say it. Watch it build.<br><span class="grad-text">Read the answer.</span></h2>
-      </div>
-      <ol class="steps">
-        <li class="step" data-reveal>
-          <div class="step-copy"><span class="step-n">01</span><h3>Say what you want.</h3><p>Type it like you'd tell a teammate. AFH reads your project and gets moving — no setup, no special commands.</p></div>
-          <figure class="step-shot"><img src="/assets/crop-composer.webp" data-dark="/assets/crop-composer-dark.webp" alt="The chat box with the model picker showing Gemini 3 Pro on High" loading="lazy" decoding="async"></figure>
-        </li>
-        <li class="step" data-reveal>
-          <div class="step-copy"><span class="step-n">02</span><h3>It sets a goal and makes a plan.</h3><p>The agent writes down what "done" means and breaks the work into a to-do list you can watch tick off — and edit any time.</p></div>
-          <figure class="step-shot"><img src="/assets/crop-todo.webp" data-dark="/assets/crop-todo-dark.webp" alt="The to-do list above the chat box, the first item in progress" loading="lazy" decoding="async"></figure>
-        </li>
-        <li class="step" data-reveal>
-          <div class="step-copy"><span class="step-n">03</span><h3>It does the work — and folds it away.</h3><p>Reads, edits, runs and tests. While it works you see every step; when it's done they fold under one line, so the answer stays in front.</p></div>
-          <div class="step-mock fold-demo" aria-hidden="true">
-            <button class="fd-bar" type="button" tabindex="-1"><span class="fd-ring"></span><b>Worked for 32s</b><span>Edited 3 files · Ran 1 command</span><i class="fd-chev"></i></button>
-            <div class="fd-work">
-              <div class="fd-step"><i class="ic-read"></i>Read <code>src/auth/session.ts</code></div>
-              <div class="fd-step"><i class="ic-edit"></i>Edited <code>login.tsx</code> <em class="add">+84</em> <em class="del">−3</em></div>
-              <div class="term">
-                <div class="term-head"><span>Terminal</span><em>4.2s</em><b class="ok">exit 0</b></div>
-                <pre><span class="pr">$</span> npm test
-<span class="dim">✓ auth › keeps the session (31 ms)</span>
-<span class="dim">✓ login › redirects home (12 ms)</span>
-<span class="okc">Tests: 12 passed, 12 total</span></pre>
-              </div>
-            </div>
-            <p class="fd-answer">Login now keeps you signed in and sends you back to the page you came from. All 12 tests pass.</p>
-          </div>
-        </li>
-        <li class="step" data-reveal>
-          <div class="step-copy"><span class="step-n">04</span><h3>You review every line.</h3><p>Every changed file is listed at the end of the reply. The workbench shows the diff, the file being written and the browser the agent drives. Don't like a turn? Rewind the thread <em>and</em> the files.</p></div>
-          <figure class="step-shot"><img src="/assets/crop-changes.webp" data-dark="/assets/crop-changes-dark.webp" alt="The Changes tab of the workbench with a diff" loading="lazy" decoding="async"></figure>
-        </li>
-      </ol>
     </section>
 
     <!-- 4 · everything in one harness -->
@@ -258,7 +257,7 @@
     <section id="models" class="models-sec section wrap">
       <div class="section-head center">
         <p class="kicker">Models</p>
-        <h2 class="h2">Bring any model. <span class="grad-text">Mix them in one thread.</span></h2>
+        <h2 class="h2">228 providers. <span class="grad-text">One picker.</span></h2>
         <p class="sub">228 providers and 7,539 models, plus any OpenAI-compatible endpoint. Use a strong model to lead and a fast one to help.</p>
       </div>
       <div class="logo-grid" data-logos aria-label="Some of the providers">
@@ -334,7 +333,7 @@
 
     <!-- 10 · download: the mark at work again -->
     <section id="download" class="cta">
-      <div class="cta-stage stage" data-stage aria-hidden="true"></div>
+      <div class="cta-mark" data-mark-big aria-hidden="true"></div>
       <h2 class="display cta-title"><span class="line"><span>Start your</span></span><span class="line grad"><span>flow.</span></span></h2>
       <p class="lead center">Free for Windows, Mac and your terminal. Install it, sign in or add a key, and give it something to build.</p>
       <div class="cta-row center">
