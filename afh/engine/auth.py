@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextvars
 from datetime import datetime
 import hashlib
 import json
@@ -160,6 +161,7 @@ class Login:
     provider_id: str = ""
     account: str = ""
     started: float = field(default_factory=time.time)
+    another: bool = False  # adding a second account: pick the account, don't switch to it
     task: asyncio.Task | None = None
     ready: asyncio.Event = field(default_factory=asyncio.Event)  # set once url/user_code are known
 
@@ -170,15 +172,16 @@ class Login:
 
 _logins: dict[str, Login] = {}
 OnDone = Callable[[str], Awaitable[None]]
+_another: contextvars.ContextVar[bool] = contextvars.ContextVar("afh_login_another", default=False)
 
 
-async def start(method: str, on_done: OnDone | None = None) -> Login:
+async def start(method: str, on_done: OnDone | None = None, another: bool = False) -> Login:
     if method not in PROVIDERS:
         raise ValueError(f"No sign-in for {method!r}")
     for old in list(_logins.values()):  # one login per method at a time (ChatGPT's port is fixed)
         if old.method == method and old.status == "pending":
             cancel(old.id)
-    login = Login(method)
+    login = Login(method, another=another)
     _logins[login.id] = login
     flow = {"openrouter": _openrouter, "chatgpt": _chatgpt, "chatgpt-device": _chatgpt_device, "copilot": _copilot, "antigravity": _antigravity,
             "xai": _xai, "minimax": _minimax, "minimax-cn": _minimax, "poe": _poe, "digitalocean": _digitalocean}[method]
@@ -203,6 +206,7 @@ def cancel(login_id: str) -> None:
 
 
 async def _run(login: Login, flow: Callable[[Login], Awaitable[None]], on_done: OnDone | None) -> None:
+    _another.set(login.another)
     try:
         await asyncio.wait_for(flow(login), LOGIN_TIMEOUT)
         login.status = "done"
@@ -231,7 +235,9 @@ def _save(method: str, patch: dict) -> str:
     cat = entries()[target["catalog"]]
     base = {"name": cat["name"], "kind": cat["kind"], "base_url": cat["base_url"], "headers": dict(cat.get("headers", {})),
             "extra": dict(cat.get("extra", {})), "fetch_models": cat.get("fetch_models", True), "catalog": target["catalog"], "enabled": True}
-    provcfg.upsert(target["id"], base | patch)
+    # A sign-in adds an account to the provider; the same account again only renews it. A normal
+    # sign-in starts using it; "Add another account" keeps the one in use.
+    provcfg.add_account(target["id"], patch, base, activate=not _another.get())
     return target["id"]
 
 
@@ -360,6 +366,7 @@ async def _chatgpt(login: Login) -> None:
             "response_type": "code", "client_id": CHATGPT_CLIENT_ID, "redirect_uri": redirect, "scope": "openid profile email offline_access",
             "code_challenge": challenge, "code_challenge_method": "S256", "id_token_add_organizations": "true",
             "codex_cli_simplified_flow": "true", "state": state, "originator": "codex_cli_rs",
+            **({"prompt": "login"} if login.another else {}),
         })
         login.ready.set()
         query = await cb.result
@@ -668,7 +675,7 @@ async def _antigravity(login: Login) -> None:
     async with _Callback("/oauth-callback", ANTIGRAVITY_PORT) as cb:
         login.url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({
             "client_id": ANTIGRAVITY_CLIENT_ID, "response_type": "code", "redirect_uri": redirect, "scope": " ".join(ANTIGRAVITY_SCOPES),
-            "code_challenge": challenge, "code_challenge_method": "S256", "state": state, "access_type": "offline", "prompt": "consent",
+            "code_challenge": challenge, "code_challenge_method": "S256", "state": state, "access_type": "offline", "prompt": "select_account consent",
         })
         login.ready.set()
         query = await cb.result
@@ -816,7 +823,7 @@ def outdated_client(config: ProviderConfig, status: int, body: str) -> bool:
     if not found or found.group(1) == (auth.get("client_version") or GROK_CLI_VERSION):
         return False
     config.auth = auth | {"client_version": found.group(1)}
-    provcfg.upsert(config.id, {"auth": config.auth})
+    provcfg.save_creds(config.id, config.account_id, {"auth": config.auth})
     return True
 
 
@@ -833,12 +840,12 @@ async def prepare(config: ProviderConfig, req: ChatRequest | None = None, force:
         raise RuntimeError(f"Your {KEY_LOGINS[kind]} sign-in expired. Sign in again in Settings → Models.")
     if kind not in SIGNED_IN:
         return config.base_url, {}
-    lock = _locks.setdefault(config.id, asyncio.Lock())
+    lock = _locks.setdefault(f"{config.id}#{config.account_id}", asyncio.Lock())
     async with lock:
         if force or not auth.get("access") or float(auth.get("expires") or 0) < time.time() + 120:
             fresh = await _refresh(config)
             config.auth = fresh
-            provcfg.upsert(config.id, {"auth": fresh})
+            provcfg.save_creds(config.id, config.account_id, {"auth": fresh})
             auth = fresh
     if kind == "chatgpt-web":
         base = (config.base_url or CHATGPT_WEB_BASE).split("/backend-api")[0]

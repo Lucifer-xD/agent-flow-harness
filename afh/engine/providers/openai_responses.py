@@ -93,7 +93,7 @@ class OpenAIResponsesProvider:
             for attempt in (0, 1):
                 try:
                     async with client.stream("POST", url, json=body) as resp:
-                        usage.observe(self.config.id, resp.headers)
+                        usage.observe(usage.key(self.config), resp.headers)
                         if resp.status_code == 401 and attempt == 0 and auth.signed_in(self.config):
                             await resp.aread()  # a revoked token: refresh once and retry
                             try:
@@ -104,7 +104,7 @@ class OpenAIResponsesProvider:
                             client.headers.update(signed)
                             continue
                         if resp.status_code >= 300:
-                            yield http_error(resp.status_code, decode_body(await resp.aread()))
+                            yield http_error(resp.status_code, decode_body(await resp.aread()), resp.headers)
                             return
                         async for ev in self._parse(resp):
                             yield ev

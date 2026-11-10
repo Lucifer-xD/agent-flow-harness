@@ -152,9 +152,9 @@ class GeminiProvider:
         async with make_client(self.headers(), self._transport) as client:
             try:
                 async with client.stream("POST", url, json=body) as resp:
-                    usage.observe(self.config.id, resp.headers)
+                    usage.observe(usage.key(self.config), resp.headers)
                     if resp.status_code >= 300:
-                        yield http_error(resp.status_code, decode_body(await resp.aread()))
+                        yield http_error(resp.status_code, decode_body(await resp.aread()), resp.headers)
                         return
                     async for ev in self._parse(resp):
                         yield ev

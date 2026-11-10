@@ -406,19 +406,21 @@ class Actions:
         else:
             await self.key_form(None)
 
-    async def sign_in(self, x: dict) -> None:
+    async def sign_in(self, x: dict, another: bool = False) -> None:
         if x.get("warning") and not await self.push_screen_wait(Confirm(f"Sign in to {x['name']}?", x["warning"], "I understand, sign in", danger=True)):
             return
         if x.get("custom"):
             await self.connect_chatgpt_web()
             return
-        login = await self.api("POST", "/api/auth/login", {"method": x["method"]})
+        login = await self.api("POST", "/api/auth/login", {"method": x["method"], "another": another})
         if login.get("url"):
             webbrowser.open(login["url"])
         site = x.get("site") or x.get("name") or "the sign-in page"
         body = (f"Open this page on any device and enter the code there ({site}):\n\n    {login['userCode']}\n\n{login.get('url') or ''}" if login.get("userCode")
                 else f"Finish signing in in your browser. AFH continues on its own.\n\n{login.get('url') or ''}")
-        waiting = Viewer(f"Sign in to {x['name']}", body, hint="Esc cancels", copy_text=login.get("userCode") or "")
+        if another:
+            body = "Pick a different account. AFH adds it and keeps using the one you have now.\n\n" + body
+        waiting = Viewer(f"Add another {x['name']} account" if another else f"Sign in to {x['name']}", body, hint="Esc cancels", copy_text=login.get("userCode") or "")
         task = asyncio.ensure_future(self.push_screen_wait(waiting))
         while not task.done():
             await asyncio.sleep(1.5)
@@ -426,7 +428,7 @@ class Actions:
             if state.get("status") == "done":
                 waiting.dismiss(None)
                 await task
-                self.say(f"Signed in to {x['name']}" + (f" as {state['account']}" if state.get("account") else ""), 4)
+                self.say((f"Added {state.get('account') or 'the account'} to {x['name']}" if another else f"Signed in to {x['name']}" + (f" as {state['account']}" if state.get("account") else "")), 4)
                 await self.load_catalog()
                 self.draw_status()
                 return

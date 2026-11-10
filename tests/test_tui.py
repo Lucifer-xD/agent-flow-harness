@@ -760,3 +760,31 @@ def test_the_mark_has_hard_edges():
                 dim = sum(abs(a - b) for a, b in zip(c, back))
                 assert dim == 0 or dim > 200, f"{c} is a mix of the mark and what's behind it"
     assert any(colour in points for row in picture for _, colour, _ in row)
+
+
+def test_accounts_menu_lists_every_key_and_adds_rules(backend, tmp_path):
+    headers = {"x-afh-token": backend["token"]}
+    r = httpx.post(f"{backend['url']}/api/providers/demo/accounts", headers=headers, trust_env=False, timeout=30, json={"apiKey": "sk-second-demo-key", "label": "Second"})
+    assert r.status_code < 300, r.text
+
+    async def script(app, pilot):
+        await send(pilot, "/settings models")
+        await until(pilot, lambda: isinstance(app.screen, SettingsScreen), what="settings")
+        await shows(pilot, "When every account is used up")
+        await shows(pilot, "2 accounts")
+        data = await app.get("/api/providers")
+        p = next(x for x in data["configured"] if x["id"] == "demo")
+        task = asyncio.ensure_future(Panes(app.screen).accounts(p, data))
+        await shows(pilot, "Second")
+        await shows(pilot, "Add another API key")
+        await shows(pilot, "automatic switching")
+        await pilot.press("escape")
+        await until(pilot, task.done, what="the menu to close")
+
+    try:
+        play(backend, tmp_path, script, size=(120, 40))
+    finally:
+        accs = httpx.get(f"{backend['url']}/api/providers/demo/accounts", headers=headers, trust_env=False, timeout=30).json()["accounts"]
+        for a in accs:
+            if a["label"] == "Second":
+                httpx.delete(f"{backend['url']}/api/providers/demo/accounts/{a['id']}", headers=headers, trust_env=False, timeout=30)

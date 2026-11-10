@@ -45,8 +45,24 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.26.0" data-reveal>
-          <div class="rel-head"><h2>1.26.0</h2><time datetime="2026-11-10">Nov 10, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.30.0" data-reveal>
+          <div class="rel-head"><h2>1.30.0</h2><time datetime="2026-11-10">Nov 10, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">Several accounts per provider, switched for you, and your own Chrome</p>
+          <p>A major release. Connect more than one account or API key to the same provider, and AFH moves a running task to the next account before the one in use runs out, without stopping it. This release also brings the agent into your own Chrome, Edge or Brave.</p>
+          <ul>
+            <li><b>Several accounts for one provider:</b> add as many sign-ins or API keys as you have to Gemini (Antigravity), ChatGPT, Grok, Kimi, Z.ai GLM, Anthropic and the rest. Open a provider in <b>Settings → Models &amp; providers</b> and use <b>Add account</b> (sign in with another account) or <b>Add key</b>. Your current key or sign-in becomes the first account, so nothing changes until you add a second.</li>
+            <li><b>Switched before the limit:</b> when the account in use reaches 90% of its 5-hour, weekly or other plan limit, the next step of the task runs on the next account. Each step is a separate request, so the task never stops. If a provider refuses a request for its limit anyway, AFH sends the same step to the next account at once.</li>
+            <li><b>A note in the chat:</b> each switch leaves a line like <i>“Account switched: Antigravity, from you1@… to you2@…. you1 is at 92% of its 5-hour limit (resets 14:32).”</i> The model never sees it.</li>
+            <li><b>Busy is not used up:</b> when a provider's servers are overloaded, every account would get the same answer, so AFH keeps the account and retries as before. Only a used-up quota, plan, credit or rate limit moves to another account.</li>
+            <li><b>Your rules:</b> switch at 70 to 95% or only when refused; use the accounts one after another or least used first; and when every account is used up, wait for the first one to come back and continue by itself, or stop. Each account shows its usage, and you can rename, reorder, switch off or pick one by hand.</li>
+            <li><b>Your own Chrome:</b> the agent can work in the Chrome, Edge or Brave you use every day, with your sign-ins and open tabs. Your browser asks you to click Allow, and AFH asks about each new site. Turn it on in <b>Settings → Agent → Your Chrome</b>.</li>
+            <li><b>Everywhere:</b> the Windows and Mac apps, the terminal app (provider → Accounts) and the new <code>afh accounts</code> command, in English and Arabic.</li>
+            <li><b>Terminal command:</b> <code>afh run</code> printed some notices as raw data; it now prints their text.</li>
+          </ul>
+        </article>
+
+        <article class="panel rel" id="v1.26.0" data-reveal>
+          <div class="rel-head"><h2>1.26.0</h2><time datetime="2026-11-10">Nov 10, 2026</time></div>
           <p class="title">Your own Chrome: the agent can use your real browser</p>
           <p>AFH can now work in the browser you use every day (Chrome, Edge or Brave), with your sign-ins and your open tabs. Its built-in browser is a separate, clean one for checking its work, and it stays. The new <code>chrome</code> tool is for things only your own browser can do.</p>
           <ul>

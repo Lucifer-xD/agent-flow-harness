@@ -69,6 +69,8 @@ class ProviderConfig:
     fetch_models: bool = True  # try GET /models on refresh
     extra: dict[str, Any] = field(default_factory=dict)  # provider-specific knobs (e.g. {"reasoning_field": "reasoning_content"})
     auth: dict[str, Any] = field(default_factory=dict)  # sign-in credentials (see engine/auth.py); empty = api_key
+    account_id: str = ""  # which of the provider's accounts these credentials are (engine/accounts.py)
+    account_label: str = ""
 
 
 @dataclass

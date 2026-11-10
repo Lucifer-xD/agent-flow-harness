@@ -37,7 +37,7 @@
   <header data-nav></header>
 
   <section class="docs-hero">
-    <p class="eyebrow"><span class="dot"></span> Guide · AFH <span data-version>1.26.0</span></p>
+    <p class="eyebrow"><span class="dot"></span> Guide · AFH <span data-version>1.30.0</span></p>
     <h1 class="display"><span class="grad-text">Getting started.</span></h1>
     <p class="lead">From download to your first finished task in a few minutes — and everything you'll want to know after that.</p>
     <div class="cta-row">
@@ -108,6 +108,21 @@
           <li>Pick a GPT-6 model in the message box. Every reply carries a green <b>real model</b> badge naming the model that actually answered, so you can tell it apart from a fallback.</li>
         </ol>
         <p class="note">The session stays on this computer like any other key. When it expires, import it again — nothing else changes.</p>
+        <h3 id="accounts">Several accounts for one provider</h3>
+        <p>A provider can have more than one account: several sign-ins (for example five Google accounts on Antigravity), several API keys, or both. AFH uses one at a time and moves to the next before the one in use runs out, between two steps of the task, so the task never stops.</p>
+        <ol class="steps">
+          <li>Open the provider in <b>Settings → Models &amp; providers</b>. Under <b>Accounts</b>, choose <b>Add account</b> to sign in with another account, or <b>Add key</b> to paste another key. Your first key or sign-in is already there.</li>
+          <li>Each account shows its usage (5-hour, weekly and so on, where the provider reports it) and whether it is in use, ready or resting. You can rename, reorder, switch off or <b>Use</b> one by hand.</li>
+          <li>Under <b>Several accounts</b>, choose when to switch (90% by default), the order, and what happens when every account is used up: wait for the first one to come back and continue, or stop.</li>
+        </ol>
+        <table class="ref">
+          <tr><th>What happens</th><th>What AFH does</th></tr>
+          <tr><td>The account in use reaches the threshold</td><td>The next step runs on the next account. A note appears in the chat; the model doesn't see it.</td></tr>
+          <tr><td>The provider refuses a request for its limit</td><td>The account rests until its reset time, and the same step runs again on the next account straight away.</td></tr>
+          <tr><td>The provider is overloaded</td><td>Nothing switches: every account would get the same answer. AFH waits and retries, as before.</td></tr>
+          <tr><td>Every account is used up</td><td>AFH waits until the first one is free and continues by itself (or stops, if you chose that).</td></tr>
+        </table>
+        <p class="note">Keys from the same account or project share one limit, so they gain nothing: use keys from different accounts. Some providers (Gemini API keys, xAI keys, Moonshot) don't report usage in advance, so AFH switches on the first refusal. Google, OpenAI and xAI don't allow getting around their limits, and Kimi and Z.ai don't allow sharing accounts: use accounts that are yours, at your own risk. In the terminal, use <code>afh accounts</code>.</p>
         <h3>Custom endpoint</h3>
         <p>For any other server, choose <b>Custom endpoint</b> and fill in the <b>API format</b> (OpenAI-compatible, Anthropic or Gemini), a <b>Base URL</b>, an <b>API key</b> if it needs one, and the <b>Model ids</b>.</p>
         <p class="note">Claude Pro/Max plans can't be used by sign-in in other apps — use an Anthropic API key instead.</p>

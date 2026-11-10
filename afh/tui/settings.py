@@ -528,10 +528,85 @@ class Panes:
         rows.append(head(f"Connected ({len(data.get('configured') or [])})"))
         for p in data.get("configured") or []:
             state = "off" if p.get("enabled") is False else p.get("account") or ("signed in" if p.get("signedIn") else f"key {p.get('keyHint')}" if p.get("hasKey") else "key from environment" if p.get("keyFromEnv") else "no key needed")
+            if len(p.get("accounts") or []) > 1:
+                state += f" · {len(p['accounts'])} accounts"
             rows.append(R("item", p.get("name") or p["id"], state, f"{sum(1 for m in p.get('models') or [] if not m.get('hidden'))} models", self.provider(p, data)))
         if not data.get("configured"):
             rows.append(note("No providers yet."))
+        ap = {"threshold": 90, "order": "fill", "whenAllUsed": "wait", **(self.s.get("accounts") or {})}
+        rows += [
+            head("Several accounts"),
+            note("Give a provider more than one key or sign-in (pick it above → Accounts). AFH moves to the next one between steps, without stopping the task."),
+            R("choice", "Switch at", str(ap["threshold"]), "Share of a 5-hour, weekly or other plan limit", self.account_pref("threshold"),
+              [(f"{v}% of a limit" if v < 100 else "Only when refused", str(v)) for v in (70, 80, 85, 90, 95, 100)]),
+            R("choice", "Order", ap["order"], "", self.account_pref("order"), [("One after another", "fill"), ("Least used first", "least")]),
+            R("choice", "When every account is used up", ap["whenAllUsed"], "", self.account_pref("whenAllUsed"), [("Wait, then continue", "wait"), ("Stop the task", "stop")]),
+        ]
         return rows
+
+    def account_pref(self, key: str) -> Callable[[str], Awaitable[None]]:
+        async def save(value: str) -> None:
+            ap = {"threshold": 90, "order": "fill", "whenAllUsed": "wait", **(self.s.get("accounts") or {})}
+            ap[key] = int(value) if key == "threshold" else value
+            await self.ui.save_settings({"accounts": ap})
+
+        return save
+
+    async def accounts(self, p: dict, data: dict) -> None:
+        """The provider's keys and sign-ins: use, order, rename, switch off, remove, add."""
+        ui = self.ui
+        pid = p["id"]
+        while True:
+            got = await ui.get(f"/api/providers/{pid}/accounts")
+            accs = got.get("accounts") or []
+            items = []
+            for a in accs:
+                state = {"active": "in use", "ready": "ready", "off": "off"}.get(a.get("state"), "")
+                if a.get("state") == "resting":
+                    state = "resting until " + time.strftime("%H:%M", time.localtime((a.get("restUntil") or 0) / 1000))
+                bars = "  ".join(f"{w.get('label')} {round(w['usedPercent'])}%" for w in (a.get("windows") or [])[:3] if w.get("usedPercent") is not None)
+                items.append(Item(a.get("label") or "Account", ("acc", a), f"{'sign-in' if a.get('kind') == 'signin' else 'key'} · {state}" + (f" · {bars}" if bars else ""), "Accounts", a.get("state") == "active"))
+            if p.get("login") and p.get("login") not in ("openrouter", "poe", "digitalocean", "chatgpt-web"):
+                items.append(Item("Add another account (sign in)", ("signin", None), "", "Add"))
+            items.append(Item("Add another API key", ("key", None), "", "Add"))
+            if len(accs) > 1:
+                items.append(Item(("Turn off" if got.get("rotation") else "Turn on") + " automatic switching", ("rotation", None), "", "Switching"))
+            picked = await self.wait(Picker(f"{p.get('name') or pid} accounts", items, search=False, sub="Enter opens an account. AFH uses one at a time and moves on near its limit."))
+            if not picked:
+                return
+            kind, a = picked
+            if kind == "signin":
+                await ui.sign_in(next((x for x in SIGN_INS if x["provider"] == pid), {"method": p.get("login"), "name": p.get("name")}), another=True)
+            elif kind == "key":
+                out = await self.wait(Form(f"Add a key to {p.get('name') or pid}", [Field("key", "API key", "password", ""), Field("label", "Name (optional)", value="")],
+                                           sub="Use a key from a different account or project: keys from one account share its limit."))
+                if out and out.get("key", "").strip():
+                    await ui.api("POST", f"/api/providers/{pid}/accounts", {"apiKey": out["key"].strip(), "label": out.get("label", "")})
+                    ui.say("Key added", 2)
+            elif kind == "rotation":
+                await ui.api("POST", f"/api/providers/{pid}/rotation", {"enabled": not got.get("rotation")})
+            elif kind == "acc":
+                acts = [Item("Use it now", "use"), Item("Move up", "up"), Item("Move down", "down"), Item("Rename…", "rename"),
+                        Item("Turn off" if a.get("enabled") else "Turn on", "toggle"), Item("Remove", "remove", style="$error")]
+                if a.get("state") == "active":
+                    acts = acts[1:]
+                act = await self.wait(Picker(a.get("label") or "Account", acts, search=False))
+                path = f"/api/providers/{pid}/accounts/{a['id']}"
+                if act == "use":
+                    await ui.api("PATCH", path, {"active": True})
+                    ui.say(f"Now using {a.get('label')}", 2)
+                elif act in ("up", "down"):
+                    await ui.api("PATCH", path, {"move": -1 if act == "up" else 1})
+                elif act == "rename":
+                    name = await self.wait(Prompt("Rename account", value=a.get("label") if a.get("named") else "", placeholder=a.get("label") or ""))
+                    if name is not None:
+                        await ui.api("PATCH", path, {"label": name})
+                elif act == "toggle":
+                    await ui.api("PATCH", path, {"enabled": not a.get("enabled")})
+                elif act == "remove":
+                    if await self.wait(Confirm(f"Remove {a.get('label')}?", "AFH forgets this key or sign-in. The other accounts stay.", "Remove", danger=True)):
+                        await ui.api("DELETE", path)
+            await ui.load_catalog()
 
     def default_ref(self) -> str:
         ref = self.s.get("defaultModel") or {}
@@ -573,7 +648,8 @@ class Panes:
         async def run() -> None:
             ui = self.ui
             on_ = p.get("enabled") is not False
-            items = [Item("Test the connection", "test"), Item("Turn off" if on_ else "Turn on", "enabled"), Item("Refresh its models", "refresh"), Item("Edit model limits…", "limits"), Item("Prices…", "prices")]
+            n = len(p.get("accounts") or [])
+            items = [Item(f"Accounts ({n})…" if n else "Accounts…", "accounts"), Item("Test the connection", "test"), Item("Turn off" if on_ else "Turn on", "enabled"), Item("Refresh its models", "refresh"), Item("Edit model limits…", "limits"), Item("Prices…", "prices")]
             if p.get("login") and p.get("signedIn"):
                 items.append(Item("Sign out", "logout"))
             elif p.get("login"):
@@ -583,7 +659,9 @@ class Panes:
             items.append(Item("Remove", "remove", style="$error"))
             picked = await self.wait(Picker(p.get("name") or p["id"], items, search=False))
             pid = p["id"]
-            if picked == "test":
+            if picked == "accounts":
+                await self.accounts(p, data)
+            elif picked == "test":
                 ui.say("Testing…", 1.5)
                 r = await ui.api("POST", f"/api/providers/{pid}/test", {}, timeout=60)
                 ui.say(f"Works with {r.get('model')}", 4) if r.get("ok") else ui.fail(r.get("error") or "It didn't answer")
