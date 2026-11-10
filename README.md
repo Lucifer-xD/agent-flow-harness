@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Your agents. Your machine. Your flow.</b><br />
-  A free, open-source coding agent for Windows, Mac and your terminal. It plans, delegates and writes code with the models you choose,<br />
+  A free, open-source desktop coding agent for Windows, also on Mac, with a terminal version if you prefer one. It plans, delegates and writes code with the models you choose,<br />
   and you can watch every line as it happens.
 </p>
 

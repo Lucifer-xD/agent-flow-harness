@@ -29,10 +29,10 @@ function cardHtml(p, i) {
   const chips = [
     p.login && '<span class="badge hot">Sign in</span>',
     p.local && '<span class="badge green">On your PC</span>',
-    p.reasoning > 0 && `<span class="badge pink">${p.reasoning} reasoning</span>`,
-    p.vision > 0 && `<span class="badge blue">${p.vision} see images</span>`,
+    p.reasoning > 0 && '<span class="badge pink">Reasoning</span>',
+    p.vision > 0 && '<span class="badge blue">Sees images</span>',
   ].filter(Boolean).join("");
-  const models = p.models ? plural(p.models, "model") : p.local ? "your own models" : "listed live";
+  const models = p.local ? "Models on your PC" : p.login ? "Sign in or API key" : "API key";
   return `<article class="pcard" style="--i:${i}">
     <div class="pcard-top"><span class="pav" style="background:linear-gradient(135deg,${a},${b})">${esc(initials || "?")}</span>
       <div class="pname"><b title="${esc(p.name)}">${esc(p.name)}</b><span>${esc(models)}</span></div></div>
@@ -45,7 +45,6 @@ function render() {
   const q = search.value.trim().toLowerCase();
   let list = all.filter(FILTERS[filter]).filter((p) => !q || p.name.toLowerCase().includes(q) || p.id.includes(q));
   if (sort.value === "name") list = [...list].sort((x, y) => x.name.localeCompare(y.name));
-  else if (sort.value === "models") list = [...list].sort((x, y) => y.models - x.models);
   count.textContent = `Showing ${Math.min(shown, list.length).toLocaleString("en-US")} of ${plural(list.length, "provider")}`;
   grid.innerHTML = list.length ? list.slice(0, shown).map(cardHtml).join("") : '<p class="empty">No provider matches. Any OpenAI-compatible endpoint works as a custom provider.</p>';
   more.hidden = list.length <= shown;
@@ -65,9 +64,7 @@ fetch("/data/providers.json")
   .then((r) => r.json())
   .then((d) => {
     all = d.providers;
-    const models = all.reduce((n, p) => n + p.models, 0);
     document.querySelectorAll("[data-total-providers]").forEach((el) => { el.textContent = all.length.toLocaleString("en-US"); });
-    document.querySelectorAll("[data-total-models]").forEach((el) => { el.textContent = models.toLocaleString("en-US"); });
     render();
   })
   .catch(() => { count.textContent = "The provider list couldn't be loaded."; });
