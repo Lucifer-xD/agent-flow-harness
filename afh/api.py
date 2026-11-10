@@ -1231,6 +1231,71 @@ def delete_provider(pid: str):
     return {"ok": True}
 
 
+# ---- several accounts per provider (engine/accounts.py) ----
+
+
+def _accounts_changed(pid: str) -> None:
+    engine.use_account(pid)
+    engine.publish({"type": "provider.account.changed", "data": {"providerID": pid}})
+    engine.publish({"type": "model.updated", "data": {}})
+
+
+@app.get("/api/providers/{pid}/accounts")
+async def provider_accounts(pid: str, force: bool = False):
+    """Every key and sign-in of the provider, with usage and state, and the switching settings."""
+    from .engine import accounts as accountsmod
+
+    p = provcfg.entry(pid)
+    if not p:
+        raise KeyError(pid)
+    return {"providerID": pid, "rotation": p.get("rotation", True) is not False, "prefs": accountsmod.prefs(store.load_settings()),
+            "accounts": await accountsmod.overview(engine, pid, force)}
+
+
+@app.post("/api/providers/{pid}/accounts")
+def provider_add_key(pid: str, body: dict = Body(...)):
+    """Add another API key as a new account."""
+    p = provcfg.entry(pid)
+    if not p:
+        raise KeyError(pid)
+    key = str(body.get("apiKey") or body.get("api_key") or "").strip()
+    if len(key) < 8:
+        raise ValueError("Paste the API key")
+    aid = provcfg.add_account(pid, {"api_key": key}, label=str(body.get("label") or "").strip()[:80])
+    _accounts_changed(pid)
+    return {"ok": True, "id": aid}
+
+
+@app.patch("/api/providers/{pid}/accounts/{aid}")
+def provider_update_account(pid: str, aid: str, body: dict = Body(...)):
+    """Rename ({label}), switch on/off ({enabled}), move ({move: -1|1}) or use now ({active: true})."""
+    from .engine import accounts as accountsmod
+
+    provcfg.update_account(pid, aid, {k: body[k] for k in ("label", "enabled", "move", "active") if k in body})
+    if body.get("active"):
+        accountsmod.clear_rest(pid, aid)  # the user chose it: try it, even if it was resting
+    _accounts_changed(pid)
+    return {"ok": True}
+
+
+@app.delete("/api/providers/{pid}/accounts/{aid}")
+def provider_remove_account(pid: str, aid: str):
+    from .engine import accounts as accountsmod
+
+    provcfg.remove_account(pid, aid)
+    accountsmod.clear_rest(pid, aid)
+    _accounts_changed(pid)
+    return {"ok": True}
+
+
+@app.post("/api/providers/{pid}/rotation")
+def provider_rotation(pid: str, body: dict = Body(...)):
+    if not provcfg.entry(pid):
+        raise KeyError(pid)
+    provcfg.set_rotation(pid, bool(body.get("enabled", True)))
+    return {"ok": True}
+
+
 # ---- provider sign-in (engine/auth.py) ----
 
 
@@ -1247,7 +1312,7 @@ async def auth_login(body: dict = Body(...)):
             log.info("refresh after sign-in: %s", err)
         engine.publish({"type": "model.updated", "data": {}})
 
-    login = await provider_auth.start(str(body.get("method") or ""), done)
+    login = await provider_auth.start(str(body.get("method") or ""), done, another=bool(body.get("another")))
     return login.view()
 
 

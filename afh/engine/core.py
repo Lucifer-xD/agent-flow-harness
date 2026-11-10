@@ -308,6 +308,19 @@ class Engine:
             except Exception as err:
                 log.warning("provider %s skipped: %s", cfg.id, err)
 
+    def use_account(self, pid: str):
+        """Rebuild one provider for the account now in use (engine/accounts.py switched it)."""
+        from .providers.catalog import make_provider
+
+        cfg = provcfg.provider_config(pid)
+        if cfg is None:
+            return self.providers.get(pid)
+        try:
+            self.providers[pid] = make_provider(cfg)
+        except Exception as err:
+            log.warning("provider %s not rebuilt: %s", pid, err)
+        return self.providers.get(pid)
+
     async def refresh_models(self, pid: str | None = None) -> None:
         for p_id, provider in self.providers.items():
             if pid and p_id != pid:

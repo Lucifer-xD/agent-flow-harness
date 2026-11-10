@@ -59,7 +59,7 @@ def test_chatgpt_tokens_and_pkce():
 
 def test_prepare_refreshes_and_builds_headers(monkeypatch):
     saved = {}
-    monkeypatch.setattr(auth.provcfg, "upsert", lambda pid, patch: saved.update({pid: patch}))
+    monkeypatch.setattr(auth.provcfg, "save_creds", lambda pid, aid, patch: saved.update({pid: patch}))
 
     async def fake_refresh(cfg):
         return cfg.auth | {"access": "new", "expires": time.time() + 3600}
@@ -141,6 +141,8 @@ def test_401_refreshes_the_token_and_retries(monkeypatch):
     from afh.engine.providers.openai_compat import OpenAICompatProvider
 
     monkeypatch.setattr(auth.provcfg, "upsert", lambda pid, patch: None)
+    monkeypatch.setattr(auth.provcfg, "add_account", lambda *a, **k: "acc")
+    monkeypatch.setattr(auth.provcfg, "save_creds", lambda *a, **k: None)
     tokens = iter(["second"])
 
     async def fake_refresh(cfg):

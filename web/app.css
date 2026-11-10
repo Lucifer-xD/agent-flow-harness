@@ -2550,3 +2550,28 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
   .card-head { flex-wrap: wrap; }
   .card-head > div:first-child { flex: 1 1 200px; }
 }
+
+/* ---- several accounts per provider (settings-models.js) */
+.acct-box { border: 1px solid var(--border); border-radius: 10px; margin: 4px 0 12px; overflow: hidden; }
+.acct-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; flex-wrap: wrap; background: var(--bg-2, transparent); border-bottom: 1px solid var(--border); }
+.acct-title { font-weight: 600; font-size: 13px; }
+.acct-auto { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); }
+.acct-rows .empty-row { padding: 10px 12px; }
+.acct-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.acct-row:last-child { border-bottom: 0; }
+.acct-row.off { opacity: 0.55; }
+.acct-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
+.acct-row.active .acct-dot { background: var(--ok, #2f9e6b); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok, #2f9e6b) 22%, transparent); }
+.acct-row.resting .acct-dot { background: var(--warn, #c98a1b); }
+.acct-state { font-size: 11.5px; color: var(--text-3); margin-left: 6px; font-weight: 500; }
+.acct-state.active { color: var(--ok, #2f9e6b); }
+.acct-state.resting { color: var(--warn, #c98a1b); }
+.acct-bars { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 5px; }
+.acct-bar { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-2); }
+.acct-bar .ab-track { width: 90px; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; display: inline-block; }
+.acct-bar .ab-fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s ease; }
+.acct-bar.warm .ab-fill { background: var(--warn, #c98a1b); }
+.acct-bar.hot .ab-fill { background: var(--bad); }
+.acct-bar .ab-pct { font-variant-numeric: tabular-nums; color: var(--text-3); }
+.acct-prefs { display: grid; gap: 4px; }
+.notice.account { color: var(--text-2); }

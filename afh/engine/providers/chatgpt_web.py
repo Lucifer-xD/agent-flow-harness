@@ -150,7 +150,7 @@ class ChatGPTWebProvider:
                             client.headers.update(signed)
                             continue
                         if resp.status_code >= 300:
-                            yield http_error(resp.status_code, decode_body(await resp.aread()))
+                            yield http_error(resp.status_code, decode_body(await resp.aread()), resp.headers)
                             return
                         async for ev in self._translate(resp, input_ids):
                             if "text" in ev:

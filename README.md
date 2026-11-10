@@ -41,6 +41,7 @@
 - **It finishes the job.** It plans the work as a to-do list you can edit, does it, runs the tests, checks the result in a real browser, and tells you plainly what's done or what's in the way.
 - **You see everything.** Code streams into the Live pane as it's written. Every thought, tool call, command and diff is in the thread, and the Context view shows exactly what the model sees.
 - **Any model, mixed freely.** 200+ providers, local models, or sign in with a plan you already pay for: ChatGPT, GitHub Copilot, Grok, Google Antigravity, MiniMax, Poe or OpenRouter. Lead with a strong model and hand work to fast, cheap ones.
+- **Several accounts per provider.** Add every account or key you have; when one nears its limit, AFH moves the running task to the next one without stopping it.
 - **You stay in control.** Choose Ask first, Full access or Read only. Stop is instant. Undo rewinds the thread *and the files on disk*.
 - **It's yours.** Everything runs and is stored on your PC. No account needed, and the app sends no telemetry. The engine is written from scratch in this repo, in plain Python.
 

@@ -2,6 +2,24 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.30.0 (2026-11-10)
+
+**Several accounts per provider, switched for you, and your own Chrome**
+
+A major release. Connect more than one account or API key to the same provider, and AFH moves a running task to the next account before the one in use runs out, without stopping it. This release also brings the agent into your own Chrome, Edge or Brave.
+
+- **Several accounts for one provider:** add as many sign-ins or API keys as you have to Gemini (Antigravity), ChatGPT, Grok, Kimi, Z.ai GLM, Anthropic and the rest. Open a provider in **Settings → Models & providers** and use **Add account** (sign in with another account) or **Add key**. Your current key or sign-in becomes the first account, so nothing changes until you add a second.
+- **Switched before the limit:** when the account in use reaches 90% of its 5-hour, weekly or other plan limit, the next step of the task runs on the next account. Each step is a separate request, so the task never stops. If a provider refuses a request for its limit anyway, AFH sends the same step to the next account at once.
+- **A note in the chat:** each switch leaves a line like <i>“Account switched: Antigravity, from you1@… to you2@…. you1 is at 92% of its 5-hour limit (resets 14:32).”</i> The model never sees it.
+- **Busy is not used up:** when a provider's servers are overloaded, every account would get the same answer, so AFH keeps the account and retries as before. Only a used-up quota, plan, credit or rate limit moves to another account.
+- **Your rules:** switch at 70 to 95% or only when refused; use the accounts one after another or least used first; and when every account is used up, wait for the first one to come back and continue by itself, or stop. Each account shows its usage, and you can rename, reorder, switch off or pick one by hand.
+- **Your own Chrome:** the agent can work in the Chrome, Edge or Brave you use every day, with your sign-ins and open tabs. Your browser asks you to click Allow, and AFH asks about each new site. Turn it on in **Settings → Agent → Your Chrome**.
+- **Everywhere:** the Windows and Mac apps, the terminal app (provider → Accounts) and the new `afh accounts` command, in English and Arabic.
+
+**Fixes**
+
+- **Terminal command:** `afh run` printed some notices as raw data; it now prints their text.
+
 ## 1.26.0 (2026-11-10)
 
 **Your own Chrome: the agent can use your real browser**

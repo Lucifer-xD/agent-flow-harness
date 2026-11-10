@@ -100,6 +100,10 @@ def _norm(path: str) -> str:
     return os.path.normcase(path).replace("\\", "/")
 
 
+class AccountSwitch(Exception):
+    """The step was refused for this account's limit; run it again on another account."""
+
+
 class Interrupted(Exception):
     pass
 
@@ -217,7 +221,12 @@ class Run:
                 await e.maybe_compact(self.session, agent)  # also mid-run: long tool chains can outgrow the window
                 model_ref = e.model_ref_for(self.session, agent)
                 provider, model = e.resolve_model(model_ref)
+                from . import accounts as accountsmod
+
+                provider = await accountsmod.before_step(e, self, provider, model.id)  # another account when this one is near its limit
                 msg = {"id": new_id("msg"), "type": "assistant", "agent": agent.id, "model": model_ref, "content": [], "time": {"created": now_ms()}}
+                if provider.config.account_id and len(accountsmod.pool(provider.config.id)[1]) > 1:
+                    msg["account"] = {"id": provider.config.account_id, "label": provider.config.account_label}
                 store.add_message(self.sid, msg)
                 self.msg = msg
                 self.emit("session.step.started", assistantMessageID=msg["id"], agent=agent.id, model=model_ref, started=msg["time"]["created"])
@@ -233,7 +242,10 @@ class Run:
                 req = ChatRequest(model=model.id, system=system, messages=history,
                                   tools=[t.spec for t in tools] if model.tools else [], variant=model_ref.get("variant") or None, max_tokens=min(model.output, 32_000),
                                   reasoning=model.reasoning)
-                tool_calls = await self._stream_step(provider, req, msg, model, model_ref)
+                try:
+                    tool_calls = await self._stream_step(provider, req, msg, model, model_ref)
+                except AccountSwitch:
+                    continue  # the same step again; before_step picks the next account
                 if self.abort.is_set():
                     raise Interrupted()
                 if not tool_calls:
@@ -372,6 +384,17 @@ class Run:
                 break
             except ProviderError as err:
                 status = err.ev.get("status")
+                from . import accounts as accountsmod
+
+                if not self.abort.is_set() and accountsmod.on_refusal(provider, err.ev):
+                    # This account is used up and another one can take over: drop the attempt (it
+                    # has nothing the model said) and run the step again on the next account.
+                    msg["content"] = []
+                    msg["finish"] = "switched"
+                    msg["time"]["completed"] = now_ms()
+                    store.save_message(self.sid, msg)
+                    self.emit("session.step.ended", assistantMessageID=msg["id"], finish="switched", tokens=None, cost=None)
+                    raise AccountSwitch() from err
                 retryable = err.ev.get("kind") == "network" or status in RETRYABLE
                 if retryable and attempt < 4 and not self.abort.is_set():
                     delay = min(8, 2 ** attempt)

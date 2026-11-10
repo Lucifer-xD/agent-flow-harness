@@ -148,8 +148,15 @@ def error_message(body: str, status: int | None = None) -> str:
     return f"HTTP {status}" if status else "Request failed"
 
 
-def http_error(status: int, body: str) -> ProviderEvent:
-    return {"type": "error", "message": error_message(body, status), "status": status, "kind": "http", "response": body[:2000]}
+def http_error(status: int, body: str, headers: Any = None) -> ProviderEvent:
+    ev: ProviderEvent = {"type": "error", "message": error_message(body, status), "status": status, "kind": "http", "response": body[:2000]}
+    try:  # when the limit lifts: engine/limits.py reads these to know how long an account rests
+        kept = {k.lower(): v for k, v in (headers or {}).items() if k.lower() == "retry-after" or k.lower().startswith(("x-ratelimit-reset", "anthropic-ratelimit-", "x-codex-"))}
+    except Exception:
+        kept = {}
+    if kept:
+        ev["headers"] = kept
+    return ev
 
 
 def stream_error(data: dict) -> ProviderEvent:

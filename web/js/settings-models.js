@@ -29,7 +29,7 @@ const OTHER_SIGN_INS = [
 ];
 
 /** Sign-in dialog: opens the provider's page (or shows GitHub's device code) and waits for it. */
-export async function signIn(method, { onDone } = {}) {
+export async function signIn(method, { onDone, another = false } = {}) {
   const meta = [...SIGN_INS, ...OTHER_SIGN_INS].find((x) => x.method === method) || { name: method };
   if (meta.warning && !(await confirmDialog({ title: `Sign in to ${meta.name}?`, body: meta.warning, confirm: "I understand, sign in", danger: true }))) return;
   const status = el("div.signin-status", el("span.spinner"), " Starting…");
@@ -38,11 +38,13 @@ export async function signIn(method, { onDone } = {}) {
   let timer = null;
   let finished = false;
   const dlg = modal(el("div.m-body.signin", { style: { padding: "24px" } },
-    el("h2", `Sign in to ${meta.name}`), bodyBox, status,
+    el("h2", another ? `Add another ${meta.name} account` : `Sign in to ${meta.name}`),
+    another ? el("p.lead", "Pick a different account in the browser. AFH adds it to the list and keeps using the one you have now.") : null,
+    bodyBox, status,
     el("div.actions", el("span", { style: { flex: 1 } }), el("button.btn.ghost", { on: { click: () => dlg.close() } }, "Cancel"))),
   { small: true, onClose: () => { clearTimeout(timer); if (login && !finished) api.del(`/api/auth/login/${login.id}`).catch(() => {}); } });
   try {
-    login = await api.post("/api/auth/login", { method });
+    login = await api.post("/api/auth/login", { method, another });
   } catch (e) {
     status.replaceChildren(el("span.err-text", e.message));
     return;
@@ -69,7 +71,7 @@ export async function signIn(method, { onDone } = {}) {
     finished = true;
     if (v.status === "done") {
       dlg.close();
-      toast(`Signed in to ${meta.name}${v.account ? ` as ${v.account}` : ""}`, "ok");
+      toast(another ? `Added ${v.account || "the account"} to ${meta.name}` : `Signed in to ${meta.name}${v.account ? ` as ${v.account}` : ""}`, "ok");
       onDone?.(v);
     } else if (v.status === "error") {
       status.replaceChildren(el("div.err-text", (v.error || "Sign-in failed").split("\n").map((line) => el("div", line))));
@@ -186,9 +188,10 @@ export async function modelsPane(pane, ctx, opts = {}) {
       const signed = have && (have.signedIn || (x.method === "openrouter" && have.hasKey));
       return el(`div.signin-tile${signed ? ".on" : ""}`,
         el("div.st-icon", { html: icon(x.icon) }),
-        el("div.li-main", el("div.li-title", x.name), el("div.li-sub", signed ? (have.account ? `Signed in as ${have.account}` : "Connected") : x.sub)),
+        el("div.li-main", el("div.li-title", x.name), el("div.li-sub", signed ? (have.account ? `Signed in as ${have.account}` : "Connected") + ((have.accounts?.length || 0) > 1 ? ` · ${have.accounts.length} accounts` : "") : x.sub)),
         signed ? el("button.btn.ghost.sm", { on: { click: async () => {
-          if (!(await confirmDialog({ title: `Sign out of ${x.name}?`, body: "AFH forgets the sign-in and removes the provider. You can sign in again any time.", confirm: "Sign out", danger: true }))) return;
+          const n = have.accounts?.length || 1;
+          if (!(await confirmDialog({ title: `Sign out of ${x.name}?`, body: n > 1 ? `AFH forgets all ${n} accounts and removes the provider. To remove only one, open the provider below → Accounts.` : "AFH forgets the sign-in and removes the provider. You can sign in again any time.", confirm: "Sign out", danger: true }))) return;
           if (await guard(() => api.post(`/api/providers/${x.provider}/logout`), "Signed out")) { await ctx.reloadCatalog(); redraw(); }
         } } }, "Sign out")
           : el("button.btn.primary.sm", { on: { click: () => (x.custom ? connectChatGPTWeb(afterSignIn) : signIn(x.method, { onDone: afterSignIn })) } }, "Sign in"));
@@ -208,6 +211,26 @@ export async function modelsPane(pane, ctx, opts = {}) {
   if (!configured.length) list.append(el("div.empty-row", "No providers yet — add one below."));
   pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Your providers"), el("p", "Toggle which models appear in the model picker")),
     el("button.btn.sm", { title: "Ask every provider for its current model list", on: { click: async () => { if (await guard(() => api.post("/api/models/refresh"), "Model lists refreshed")) { await ctx.reloadCatalog(); redraw(); } } } }, ico("refresh"), "Refresh models")), list, applyBar));
+
+  // ---- switching between accounts
+  {
+    const ap = { threshold: 90, order: "fill", whenAllUsed: "wait", ...(S.settings.accounts || {}) };
+    const save = (patch) => { Object.assign(ap, patch); ctx.saveSettings({ accounts: { ...ap } }).then(() => toast("Saved", "ok", 1200)); };
+    const thr = el("select.sel", { on: { change: (e) => save({ threshold: Number(e.target.value) }) } },
+      [70, 80, 85, 90, 95, 100].map((v) => el("option", { value: v, selected: Number(ap.threshold) === v }, v === 100 ? "Only when refused" : `${v}% of a limit`)));
+    const seg = (key, opts) => el("div.seg", opts.map(([v, l]) => el(`button${ap[key] === v ? ".on" : ""}`, { type: "button", on: { click: (e) => {
+      e.currentTarget.parentElement.querySelectorAll("button").forEach((b) => b.classList.remove("on")); e.currentTarget.classList.add("on"); save({ [key]: v });
+    } } }, l)));
+    const multi = configured.filter((p) => (p.accounts?.length || 0) > 1).length;
+    pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Several accounts"),
+      el("p", multi ? `${multi} provider${multi === 1 ? " has" : "s have"} more than one account. These rules apply to all of them.`
+        : "Give a provider more than one key or sign-in (open it above → Accounts) and AFH moves to the next one before the one in use runs out."))),
+      el("div.card-body.acct-prefs",
+        field("Switch at", thr, "When the account in use reaches this share of its 5-hour, weekly or other plan limit. A refused request switches at once."),
+        field("Order", seg("order", [["fill", "One after another"], ["least", "Least used first"]]), "One after another uses each account fully and keeps the prompt cache warm."),
+        field("When every account is used up", seg("whenAllUsed", [["wait", "Wait, then continue"], ["stop", "Stop the task"]])),
+        el("div.help", "Sign-ins: Google, OpenAI and xAI don't allow getting around their limits, and Kimi and Z.ai don't allow sharing accounts. Use accounts that are yours, at your own risk."))));
+  }
 
   /** Hand corrections for one model: AFH uses them over models.dev and the provider's own list. */
   function editModel(p, m) {
@@ -270,6 +293,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
         el("div.li-main", el("div.li-title", p.name, el("span.pill-tag", how), p.enabled === false ? el("span.pill-tag", "off") : null), el("div.li-sub", { style: { fontFamily: "var(--font)" } }, `${shown} of ${p.models.length} models shown · ${p.base_url}`)),
         el("span.chev", { html: icon("chev-down") })),
       el("div.provider-body",
+        accountsBox(p),
         el("div.provider-tools", q, el("span", { style: { flex: 1 } }),
           el("button.btn.ghost.sm", { on: { click: () => bulk(false) } }, "Show all"), el("button.btn.ghost.sm", { on: { click: () => bulk(true) } }, "Hide all"),
           el("button.btn.ghost.sm", { title: "Fetch the model list again", on: { click: async () => { if (await guard(() => api.post(`/api/providers/${p.id}/refresh`), "Models refreshed")) { await ctx.reloadCatalog(); redraw({ open: p.id }); } } } }, ico("refresh")),
@@ -283,6 +307,78 @@ export async function modelsPane(pane, ctx, opts = {}) {
           } } }, ico("trash"), "Remove")),
         body));
     return details;
+  }
+
+  /** Keys and sign-ins of one provider. With two or more, AFH moves to the next one when the one in use nears its limit. */
+  function accountsBox(p) {
+    const box = el("div.acct-box");
+    const signInMethod = p.login && !["openrouter", "poe", "digitalocean", "chatgpt-web"].includes(p.login) ? p.login : null;
+    const known = catalog.find((c) => c.id === p.catalog);
+    const takesKey = !p.login || (known && known.needsKey !== false && known.login !== p.login) || p.accounts?.some((a) => a.kind === "key");
+    const reopen = async () => { await ctx.reloadCatalog(); redraw({ open: p.id }); };
+    const addKey = () => {
+      const keyIn = el("input.inp", { type: "password", placeholder: "Paste another API key", autocomplete: "off" });
+      const nameIn = el("input.inp", { placeholder: "Name (optional), e.g. Work account" });
+      const dlg = modal(el("div.m-body", { style: { padding: "22px 24px" } },
+        el("h2", `Add a key to ${p.name}`),
+        el("p.lead", "Use a key from a different account or project. Keys from the same account share one limit, so switching between them gains nothing."),
+        field("API key", keyIn), field("Name", nameIn),
+        el("div.actions", el("span", { style: { flex: 1 } }), el("button.btn.ghost", { on: { click: () => dlg.close() } }, "Cancel"),
+          el("button.btn.primary", { on: { click: async () => {
+            if (await guard(() => api.post(`/api/providers/${p.id}/accounts`, { apiKey: keyIn.value, label: nameIn.value }), "Key added")) { dlg.close(); reopen(); }
+          } } }, ico("plus"), "Add key"))), { small: true });
+      keyIn.focus();
+    };
+    const head = el("div.acct-head",
+      el("div.li-main", el("div.acct-title", "Accounts"),
+        el("div.li-sub", (p.accounts?.length || 0) > 1 ? "AFH uses one at a time and moves to the next when it nears its limit, between steps, without stopping the task." : "Add another key or sign-in and AFH switches to it when this one nears its limit.")),
+      (p.accounts?.length || 0) > 1 ? el("label.acct-auto", { title: "Move to the next account automatically" }, el("span", "Switch automatically"),
+        toggle(p.rotation !== false, async (on) => { await guard(() => api.post(`/api/providers/${p.id}/rotation`, { enabled: on }), on ? "Automatic switching on" : "Automatic switching off"); })) : null,
+      signInMethod ? el("button.btn.ghost.sm", { on: { click: () => signIn(signInMethod, { another: true, onDone: reopen }) } }, ico("plus"), "Add account") : null,
+      takesKey ? el("button.btn.ghost.sm", { on: { click: addKey } }, ico("key"), "Add key") : null);
+    const rows = el("div.acct-rows");
+    box.append(head, rows);
+    const draw = (data) => {
+      const list = data?.accounts || (p.accounts || []).map((a) => ({ ...a, state: a.active ? "active" : a.enabled ? "ready" : "off", windows: [] }));
+      if (!list.length) { rows.replaceChildren(el("div.empty-row", "No key or sign-in yet.")); return; }
+      rows.replaceChildren(...list.map((a, i) => {
+        const stateText = a.state === "active" ? "In use" : a.state === "resting" ? `Resting until ${new Date(a.restUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : a.state === "off" ? "Off" : "Ready";
+        const bars = (a.windows || []).filter((w) => w.usedPercent != null).slice(0, 3).map((w) => {
+          const pct = Math.round(w.usedPercent);
+          const lvl = pct >= (data?.prefs?.threshold || 90) ? "hot" : pct >= 70 ? "warm" : "";
+          return el(`div.acct-bar${lvl ? "." + lvl : ""}`, { title: w.resetsAt ? `Resets ${new Date(w.resetsAt).toLocaleString()}` : "" },
+            el("span.ab-label", w.label), el("span.ab-track", el("span.ab-fill", { style: { width: `${Math.min(100, pct)}%` } })), el("span.ab-pct", `${pct}%`));
+        });
+        const rename = async () => {
+          const inp = el("input.inp", { value: a.named ? a.label : "", placeholder: a.label });
+          const dlg = modal(el("div.m-body", { style: { padding: "22px 24px" } }, el("h2", "Rename account"), field("Name", inp),
+            el("div.actions", el("span", { style: { flex: 1 } }), el("button.btn.ghost", { on: { click: () => dlg.close() } }, "Cancel"),
+              el("button.btn.primary", { on: { click: async () => { if (await guard(() => api.patch(`/api/providers/${p.id}/accounts/${a.id}`, { label: inp.value }))) { dlg.close(); load(); } } } }, "Save"))), { small: true });
+          inp.focus();
+        };
+        return el(`div.acct-row.${a.state}`,
+          el("span.acct-dot"),
+          el("div.li-main",
+            el("div.li-title", a.label, el("span.pill-tag", a.kind === "signin" ? "sign-in" : "key"), el(`span.acct-state.${a.state}`, stateText)),
+            a.state === "resting" && a.restWhy ? el("div.li-sub", a.restWhy) : a.usageError ? el("div.li-sub", `Usage: ${a.usageError}`) : null,
+            bars.length ? el("div.acct-bars", bars) : null),
+          a.state !== "active" ? el("button.btn.ghost.sm", { title: "Use this account now", on: { click: async () => { if (await guard(() => api.patch(`/api/providers/${p.id}/accounts/${a.id}`, { active: true }), `Now using ${a.label}`)) load(); } } }, "Use") : null,
+          el("button.icon-btn.sm", { title: "Move up", disabled: i === 0, html: icon("chev-down"), style: { transform: "rotate(180deg)" }, on: { click: async () => { if (await guard(() => api.patch(`/api/providers/${p.id}/accounts/${a.id}`, { move: -1 }))) load(); } } }),
+          el("button.icon-btn.sm", { title: "Move down", disabled: i === list.length - 1, html: icon("chev-down"), on: { click: async () => { if (await guard(() => api.patch(`/api/providers/${p.id}/accounts/${a.id}`, { move: 1 }))) load(); } } }),
+          el("button.icon-btn.sm", { title: "Rename", html: icon("edit"), on: { click: rename } }),
+          toggle(a.state !== "off", async (on) => { if (await guard(() => api.patch(`/api/providers/${p.id}/accounts/${a.id}`, { enabled: on }))) load(); }),
+          el("button.icon-btn.sm.danger", { title: "Remove this account", html: icon("trash"), on: { click: async () => {
+            if (!(await confirmDialog({ title: `Remove ${a.label}?`, body: list.length === 1 ? "This is the provider's only account. AFH can't use the provider until you add a key or sign in again." : "AFH forgets this key or sign-in. The other accounts stay.", confirm: "Remove", danger: true }))) return;
+            if (await guard(() => api.del(`/api/providers/${p.id}/accounts/${a.id}`), "Account removed")) reopen();
+          } } }));
+      }));
+    };
+    const load = async (force = false) => {
+      try { draw(await api.get(`/api/providers/${p.id}/accounts${force ? "?force=true" : ""}`)); } catch { draw(null); }
+    };
+    draw(null);
+    if ((p.accounts?.length || 0) > 0) load();
+    return box;
   }
 
   // ---- local model servers (Ollama, LM Studio, vLLM, llama.cpp, Jan)

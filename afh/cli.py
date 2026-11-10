@@ -306,7 +306,7 @@ class Turn:
         elif kind == "session.tool.failed":
             self.status(paint("31", f"  ✗ {clip(d.get('error') or 'failed', 160)}"))
         elif kind == "session.notice":
-            self.status(dim(f"  {clip(d.get('message') or d.get('label') or '', 160)}"))
+            self.status(dim(f"  {clip(d.get('label') or (d.get('message') if isinstance(d.get('message'), str) else '') or '', 240)}"))
         elif kind == "session.retry.scheduled":
             self.status(dim(f"  retrying in {d.get('delay', '?')}s"))
         elif kind == "permission.asked":
@@ -644,6 +644,61 @@ def cmd_providers(client: Client, a: argparse.Namespace) -> int:
     return OK
 
 
+def cmd_accounts(client: Client, a: argparse.Namespace) -> int:
+    """afh accounts [list|add|use|on|off|remove|rename] <provider> [account] [name]"""
+    if not a.provider:
+        rows = [p for p in client.get("/api/providers").get("configured") or [] if p.get("accounts")]
+        if not rows:
+            print("No provider has an account yet. Add one: afh provider add <name>")
+        table([p["id"], p.get("name") or "", f"{len(p['accounts'])} account{'s' if len(p['accounts']) != 1 else ''}",
+               next((x["label"] for x in p["accounts"] if x.get("active")), "")] for p in rows)
+        return OK
+    pid = a.provider
+    if a.action == "add":
+        key = os.environ.get("AFH_PROVIDER_KEY") or getpass.getpass(f"Another API key for {pid} (hidden): ").strip()
+        client.request("POST", f"/api/providers/{pid}/accounts", {"apiKey": key, "label": a.name or ""})
+        print(f"Added a key to {pid}")
+        return OK
+    data = client.get(f"/api/providers/{pid}/accounts")
+    accs = data.get("accounts") or []
+    if a.action == "list":
+        if a.json:
+            print(json.dumps(accs, ensure_ascii=False, indent=2))
+            return OK
+        rows = []
+        for n, x in enumerate(accs, 1):
+            state = x.get("state") or ""
+            if state == "resting":
+                state = "resting until " + time.strftime("%H:%M", time.localtime((x.get("restUntil") or 0) / 1000))
+            used = "  ".join(f"{w.get('label')} {round(w['usedPercent'])}%" for w in (x.get("windows") or [])[:3] if w.get("usedPercent") is not None)
+            rows.append([str(n), x.get("label") or "", "sign-in" if x.get("kind") == "signin" else "key", state, used])
+        table(rows)
+        if len(accs) > 1:
+            print(dim(f"Automatic switching is {'on' if data.get('rotation') else 'off'} at {data.get('prefs', {}).get('threshold', 90)}%."))
+        return OK
+    if a.action in ("auto-on", "auto-off"):
+        client.request("POST", f"/api/providers/{pid}/rotation", {"enabled": a.action == "auto-on"})
+        print(f"Automatic switching {'on' if a.action == 'auto-on' else 'off'} for {pid}")
+        return OK
+    if not a.account:
+        raise CliError(f"Which account? afh accounts {a.action} {pid} <number or name>", USAGE)
+    pick = a.account.strip().lower()
+    acc = accs[int(pick) - 1] if pick.isdigit() and 0 < int(pick) <= len(accs) else next((x for x in accs if pick in (x.get("label") or "").lower()), None)
+    if acc is None:
+        raise CliError(f"No account {a.account!r} on {pid}. See: afh accounts list {pid}")
+    path = f"/api/providers/{pid}/accounts/{acc['id']}"
+    if a.action == "use":
+        client.request("PATCH", path, {"active": True})
+    elif a.action in ("on", "off"):
+        client.request("PATCH", path, {"enabled": a.action == "on"})
+    elif a.action == "rename":
+        client.request("PATCH", path, {"label": a.name or ""})
+    elif a.action == "remove":
+        client.request("DELETE", path)
+    print(f"{a.action}: {acc.get('label')}")
+    return OK
+
+
 def show_race(race: dict) -> None:
     def outcome(e: dict) -> str:
         if e.get("error"):
@@ -887,6 +942,12 @@ def parser() -> argparse.ArgumentParser:
     pr = sub.add_parser("provider", help="list providers, or add one with an API key")
     pr.add_argument("action", nargs="?", choices=["list", "add"], default="list")
     pr.add_argument("name", nargs="?")
+    ac = sub.add_parser("accounts", help="several keys or sign-ins per provider: list, add, use, on, off, rename, remove, auto-on, auto-off")
+    ac.add_argument("action", nargs="?", choices=["list", "add", "use", "on", "off", "rename", "remove", "auto-on", "auto-off"], default="list")
+    ac.add_argument("provider", nargs="?")
+    ac.add_argument("account", nargs="?", help="its number in the list, or part of its name")
+    ac.add_argument("name", nargs="?", help="add/rename: the account's name")
+    ac.add_argument("--json", action="store_true")
     rc = sub.add_parser("race", help="several models on one task, you pick the winner (also: pick, show, discard)")
     rc.add_argument("prompt", nargs="*")
     rc.add_argument("-m", "--model", action="append", help="provider/model, twice or more")
@@ -931,7 +992,7 @@ def main(argv: list[str] | None = None) -> int:
             note(paint("31", str(err)))
             return FAILED
     commands: dict[str, Callable] = {"run": cmd_run, "threads": cmd_threads, "show": cmd_show, "diff": cmd_diff, "models": cmd_models,
-                                     "provider": cmd_providers, "status": cmd_status, "race": cmd_race, "github": cmd_github}
+                                     "provider": cmd_providers, "accounts": cmd_accounts, "status": cmd_status, "race": cmd_race, "github": cmd_github}
     client = None
     try:
         if a.command:

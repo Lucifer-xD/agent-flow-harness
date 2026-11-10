@@ -48,6 +48,8 @@ def net(monkeypatch):
     fast = asyncio.sleep
     monkeypatch.setattr(asyncio, "sleep", lambda delay, *a: fast(0))
     monkeypatch.setattr(auth.provcfg, "upsert", lambda pid, patch: saved.update({pid: patch}))
+    monkeypatch.setattr(auth.provcfg, "add_account", lambda pid, creds, base=None, label="", activate=False: saved.update({pid: (base or {}) | creds}))
+    monkeypatch.setattr(auth.provcfg, "save_creds", lambda pid, aid, patch: saved.update({pid: patch}))
     return routes, calls, saved
 
 
@@ -167,6 +169,8 @@ def test_minimax_refresh_only_goes_back_to_minimax(net):
 
 def test_anthropic_adapter_uses_the_minimax_sign_in(monkeypatch):
     monkeypatch.setattr(auth.provcfg, "upsert", lambda pid, patch: None)
+    monkeypatch.setattr(auth.provcfg, "add_account", lambda *a, **k: "acc")
+    monkeypatch.setattr(auth.provcfg, "save_creds", lambda *a, **k: None)
     seen: list[httpx.Request] = []
     sse = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in [
         {"type": "message_start", "message": {"id": "m", "usage": {"input_tokens": 3, "output_tokens": 0}}},
@@ -278,6 +282,8 @@ def test_grok_asks_for_a_newer_client_and_gets_it(monkeypatch):
 
     saved = {}
     monkeypatch.setattr(auth.provcfg, "upsert", lambda pid, patch: saved.update({pid: patch}))
+    monkeypatch.setattr(auth.provcfg, "add_account", lambda pid, creds, base=None, label="", activate=False: saved.update({pid: (base or {}) | creds}))
+    monkeypatch.setattr(auth.provcfg, "save_creds", lambda pid, aid, patch: saved.update({pid: patch}))
     seen = []
 
     def handler(r):

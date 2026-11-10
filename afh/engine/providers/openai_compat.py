@@ -134,7 +134,7 @@ class OpenAICompatProvider:
             for attempt in (0, 1):
                 try:
                     async with client.stream("POST", url, json=body) as resp:
-                        usage.observe(self.config.id, resp.headers)
+                        usage.observe(usage.key(self.config), resp.headers)
                         if resp.status_code == 426 and attempt == 0 and auth.outdated_client(self.config, 426, decode_body(await resp.aread())):
                             base, signed = await auth.prepare(self.config, req)
                             client.headers.update(signed)
@@ -157,7 +157,7 @@ class OpenAICompatProvider:
                             body = {k: v for k, v in body.items() if k != "stream_options"}
                             continue
                         if resp.status_code >= 300:
-                            yield http_error(resp.status_code, decode_body(await resp.aread()))
+                            yield http_error(resp.status_code, decode_body(await resp.aread()), resp.headers)
                             return
                         async for ev in self._parse(resp):
                             yield ev

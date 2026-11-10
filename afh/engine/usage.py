@@ -41,6 +41,11 @@ _RATE_PREFIXES = ("x-ratelimit-", "anthropic-ratelimit-", "x-codex-", "ratelimit
 # ---- recording headers -------------------------------------------------------------------------
 
 
+def key(config: ProviderConfig) -> str:
+    """Usage is kept per account: "provider#account" (just the provider when it has no accounts)."""
+    return f"{config.id}#{config.account_id}" if config.account_id else config.id
+
+
 def observe(provider_id: str, headers: Any) -> None:
     """Keep the rate-limit headers of a model answer (called by the adapters; cheap, never raises)."""
     try:
@@ -360,13 +365,15 @@ def local(store: Any, provider_id: str) -> dict:
 
 async def report(config: ProviderConfig, store: Any = None, force: bool = False) -> dict:
     """Everything known about a provider's limits right now (live answer cached for TTL seconds)."""
-    out: dict = {"providerID": config.id, "name": config.name, "account": (config.auth or {}).get("account", ""),
+    k = key(config)
+    out: dict = {"providerID": config.id, "name": config.name, "account": (config.auth or {}).get("account", "") or config.account_label,
+                 "accountID": config.account_id,
                  "signedIn": auth.signed_in(config), "windows": [], "rates": [], "source": "local", "updated": int(time.time() * 1000)}
     reader = live_source(config)
     if reader:
-        lock = _locks.setdefault(config.id, asyncio.Lock())
+        lock = _locks.setdefault(k, asyncio.Lock())
         async with lock:
-            hit = _cache.get(config.id)
+            hit = _cache.get(k)
             if hit and not force and time.time() - hit[0] < TTL:
                 live = hit[1]
             else:
@@ -375,11 +382,11 @@ async def report(config: ProviderConfig, store: Any = None, force: bool = False)
                         live = await reader(config, client)
                 except Exception as exc:
                     live = {"error": str(exc) or exc.__class__.__name__}
-                _cache[config.id] = (time.time(), live)
+                _cache[k] = (time.time(), live)
         out.update({k: v for k, v in live.items() if v not in (None, "", [], {})})
         if live.get("windows") or live.get("balance"):
             out["source"] = "live"
-    seen = _headers.get(config.id)
+    seen = _headers.get(k)
     if seen:
         windows, rates = from_headers(seen[1])
         if windows and not out["windows"]:
