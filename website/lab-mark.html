@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>mark lab</title>
+<script src="/js/theme.js"></script>
+<style>body{margin:0;background:#0d0b10;color:#fff;font:14px system-ui}[data-theme=light] body{background:#f6f4f1}#c{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none}.s{width:min(640px,90vw);aspect-ratio:240/140;margin:60px auto;outline:1px dashed #555}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head><body><canvas id="c"></canvas><div class="s" id="a"></div><div class="s" id="b" style="width:200px"></div>
+<script type="module">import {createMarks} from "/js/scene.js"; const m=createMarks(document.getElementById("c")); m.add(document.getElementById("a"),{tilt:true}); m.add(document.getElementById("b"));</script></body></html>

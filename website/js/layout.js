@@ -7,7 +7,21 @@
   const page = document.body.dataset.page || "";
   const LINKS = [["features", "Product"], ["cli", "Terminal"], ["models", "Models"], ["docs", "Docs"], ["api", "API"], ["changelog", "Changelog"]];
   const link = ([id, label]) => `<a href="/${id}"${page === id ? ' class="active" aria-current="page"' : ""}>${label}</a>`;
-  const MARK = '<img src="/assets/mark.svg" alt="" width="34" height="20">';
+  // the app's own logo, at work (the animation is in styles.css, the same as AFH's)
+  let uid = 0;
+  const STRANDS = [
+    [28, "#ffb11f", "#ff7a3d", "M46 28 C104 28 108 74 134 74 C160 74 164 28 194 28"],
+    [70, "#ff7747", "#ff4a68", "M46 70 C92 70 98 58 120 60 C150 63 152 82 194 70"],
+    [112, "#ff3d8a", "#e0169a", "M46 112 C108 112 116 66 146 66 C172 66 170 112 194 112"],
+  ];
+  const markSvg = (w = 34) => {
+    const id = `afhm${++uid}`;
+    const defs = STRANDS.map(([, a, b], i) => `<linearGradient id="${id}g${i}" x1="0" x2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`).join("");
+    const body = [2, 1, 0].map((i) => { const [y, a, b, d] = STRANDS[i]; return `<path class="strand s${i}" d="${d}" pathLength="100" stroke="url(#${id}g${i})"/><circle class="dot d${i} l" cx="46" cy="${y}" r="15" fill="${a}"/><circle class="dot d${i} r" cx="194" cy="${y}" r="15" fill="${b}"/>`; }).join("");
+    return `<svg class="afh-mark working" width="${w}" height="${Math.round((w * 140) / 240)}" viewBox="0 0 240 140" fill="none" aria-hidden="true"><defs>${defs}</defs>${body}</svg>`;
+  };
+  window.afhMarkSvg = markSvg;
+  const MARK = markSvg(34);
 
   if (!document.querySelector(".wash")) {
     const wash = document.createElement("div");
@@ -79,7 +93,7 @@
     footer.innerHTML = `
       <div class="footer-top">
         <div class="footer-brand">
-          <a class="brand" href="/">${MARK}<span>Agent Flow Harness</span></a>
+          <a class="brand" href="/">${markSvg(40)}<span>Agent Flow Harness</span></a>
           <p>A coding agent that plans, delegates and writes code on your own computer, with the models you choose. As an app or in your terminal.</p>
           <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.32.0</span> · <span data-date>Nov 10, 2026</span></a>
         </div>
@@ -89,6 +103,7 @@
           <div><h4>Developers</h4><a href="/api">API reference</a><a href="/sdk/afh_sdk.py" download>Python SDK</a><a href="/sdk/afh.mjs" download>JavaScript SDK</a><a href="/api#events">Live events</a><a href="/docs#faq">FAQ</a></div>
         </nav>
       </div>
+      <div class="footer-word" aria-hidden="true">Agent Flow Harness</div>
       <div class="footer-bottom">
         <p>© 2026 Agent Flow Harness</p>
         <p>Runs on your computer · no account needed · no tracking scripts</p>
@@ -159,11 +174,25 @@
   themed();
   document.addEventListener("afh:theme", themed);
 
+  // ?shot-y=N: open scrolled to N with everything shown (for screenshots of the page)
+  const shotY = new URLSearchParams(location.search).get("shot-y");
+  if (shotY !== null) {
+    document.documentElement.style.scrollBehavior = "auto";
+    document.documentElement.classList.add("shot");
+    const go = () => scrollTo(0, Number(shotY) || 0);
+    go(); addEventListener("load", () => { go(); setTimeout(go, 300); });
+  }
+
   // entrances
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
   }, { rootMargin: "0px 0px -8% 0px" });
   document.querySelectorAll("[data-reveal]").forEach((el) => io.observe(el));
+  // belt and braces: whatever is on screen shows even if the observer is slow to report
+  setTimeout(() => document.querySelectorAll("[data-reveal]:not(.in)").forEach((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.top < innerHeight && r.bottom > 0) el.classList.add("in");
+  }), 1200);
 
   // a section menu (.subnav) marks the section you're reading
   const sub = document.querySelector(".subnav");

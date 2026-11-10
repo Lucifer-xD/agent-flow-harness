@@ -15,7 +15,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Agent Flow Harness", "alternateName": "AFH", "applicationCategory": "DeveloperApplication", "operatingSystem": "Windows 10, Windows 11, macOS, Linux, Android, iOS", "description": "A free desktop AI coding agent that runs on your own PC with the models you choose, plus a phone app to chat with any model and control your computer from anywhere.", "url": "https://agentflowharness.com/", "downloadUrl": "https://agentflowharness.com/download", "image": "https://agentflowharness.com/assets/social.png", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "sameAs": ["https://github.com/Lucifer-xD/agent-flow-harness"]}</script>
   <!-- /seo -->
-  <meta name="theme-color" content="#f7f3ee">
+  <meta name="theme-color" content="#f6f5f3">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
   <meta property="og:title" content="Agent Flow Harness — build with any model, on your own PC">
   <meta property="og:description" content="A coding agent for your desktop and your terminal that plans, delegates and writes code with the models you choose.">
@@ -23,7 +23,7 @@
   <script src="/js/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/sections.css">
   <script type="importmap">
@@ -39,156 +39,145 @@
   <header data-nav></header>
 
   <main id="top">
-    <!-- 1 · hero: the words, then the product, with the mark floating over it -->
+    <!-- 1 · hero: the mark at work, exactly as it moves in the app while a model works -->
     <section class="hero">
       <div class="hero-copy">
-        <a class="eyebrow eyebrow-link" href="/changelog#v1.32.0"><span class="tag">1.32</span> A new chat · work folds away, commands as a terminal, provider logos <span aria-hidden="true">→</span></a>
+        <a class="eyebrow eyebrow-link" href="/changelog#v1.32.0"><span class="tag">1.32</span><span>A new chat · work folds away, commands as a terminal</span><span aria-hidden="true">→</span></a>
         <h1 class="display">
           <span class="line"><span>Build with any model.</span></span>
           <span class="line grad"><span>On your machine.</span></span>
         </h1>
-        <p class="lead center">Agent Flow Harness (AFH) is a free coding agent, for your desktop or your terminal, that plans, delegates and writes code with the models you choose — ChatGPT, Claude, Gemini, Copilot, OpenRouter or local — and shows you every line as it lands.</p>
-        <div class="cta-row center">
-          <a class="btn btn-primary" href="/download" data-os-cta>Download AFH</a>
-          <a class="btn btn-ghost" href="/download">All downloads</a>
+        <p class="lead">Agent Flow Harness is a free coding agent for your desktop and your terminal. It plans, delegates and writes code with the models you choose — ChatGPT, Claude, Gemini, OpenRouter or local — and shows you every line as it lands.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary btn-big" href="/download" data-os-cta>Download AFH</a>
+          <a class="btn btn-ghost btn-big" href="/features">See what it does</a>
         </div>
         <div data-install></div>
       </div>
-      <div class="hero-shot">
-        <div class="hero-stage" data-stage aria-hidden="true"></div>
-        <figure class="shot">
-          <img class="dv-shot" src="/assets/app-light.webp" data-dark="/assets/app-dark.webp" width="1600" height="1000" alt="The AFH window: threads on the left, the conversation with to-do and edit cards in the middle, the Changes tab of the workbench on the right" decoding="async">
-        </figure>
-        <div class="shot-toggle" role="group" aria-label="Theme of the screenshot">
-          <button type="button" class="on" data-shot="light">Light</button>
-          <button type="button" data-shot="dark">Dark</button>
-          <span class="shot-note">one of 58 themes</span>
+      <div class="hero-art">
+        <div class="hero-stage stage" data-stage data-tilt aria-hidden="true"></div>
+        <div class="turn-chip" aria-hidden="true">
+          <span class="tc-ring"></span>
+          <span class="tc-text"><b data-tc-title>Working</b><span data-tc-bits>Reading the project</span></span>
+          <span class="tc-time" data-tc-time>0s</span>
         </div>
       </div>
-      <ul class="proof center">
-        <li><i></i>Free, forever</li>
-        <li><i></i>No account needed</li>
-        <li><i></i>No telemetry in the app</li>
-        <li><i></i>Windows and <a href="/download">Mac</a> · version <span data-version>1.32.0</span></li>
+      <ul class="proof">
+        <li>Free, forever</li>
+        <li>No account needed</li>
+        <li>No telemetry</li>
+        <li>Windows · Mac · Linux terminal · v<span data-version>1.32.0</span></li>
       </ul>
     </section>
 
-    <!-- 2 · how it works: cards that stack as you scroll; the mark becomes each step -->
-    <section id="flow" class="chapters">
-      <div class="section-head center">
-        <p class="kicker">How it works</p>
-        <h2 class="h2">Say it. Watch it build.</h2>
+    <!-- 2 · the product, full width -->
+    <section class="showcase wrap" aria-label="The app">
+      <div class="window" data-reveal>
+        <div class="win-bar"><i></i><i></i><i></i><span>Agent Flow Harness</span></div>
+        <img src="/assets/app-light.webp" data-dark="/assets/app-dark.webp" width="1600" height="1000" alt="The AFH window: threads on the left, the conversation in the middle, the workbench on the right" decoding="async">
       </div>
-      <div class="stack">
-        <article class="chapter" data-shape="core" style="--i:0">
-          <div class="ch-copy">
-            <span class="ch-n">01</span>
-            <h3>Say what you want.</h3>
-            <p>Type it like you'd tell a teammate. No setup, no special commands — AFH reads your project and gets moving.</p>
-            <div class="ch-world" aria-hidden="true"></div>
-          </div>
-          <figure class="ch-shot wide"><img src="/assets/crop-composer.webp" data-dark="/assets/crop-composer-dark.webp" alt="The message box of AFH with a request typed in" loading="lazy" decoding="async"></figure>
-        </article>
-        <article class="chapter" data-shape="plan" style="--i:1">
-          <div class="ch-copy">
-            <span class="ch-n">02</span>
-            <h3>It sets a goal and makes a plan.</h3>
-            <p>The agent writes down what "done" means, then breaks the work into a to-do list you can watch tick off — and edit any time.</p>
-            <div class="ch-world" aria-hidden="true"></div>
-          </div>
-          <figure class="ch-shot wide"><img src="/assets/crop-todo.webp" data-dark="/assets/crop-todo-dark.webp" alt="A to-do card in the thread, two of three items done" loading="lazy" decoding="async"></figure>
-        </article>
-        <article class="chapter" data-shape="net" style="--i:2">
-          <div class="ch-copy">
-            <span class="ch-n">03</span>
-            <h3>It does the work — and splits it.</h3>
-            <p>Reads, edits, runs and tests, each step a card in the thread. A lead can hand pieces to helpers that run side by side, each in its own lane or git worktree.</p>
-            <div class="ch-world" aria-hidden="true"></div>
-          </div>
-          <figure class="ch-shot"><img src="/assets/crop-thread.webp" data-dark="/assets/crop-thread-dark.webp" alt="The conversation with edit, run and to-do cards" loading="lazy" decoding="async"></figure>
-        </article>
-        <article class="chapter" data-shape="code" style="--i:3">
-          <div class="ch-copy">
-            <span class="ch-n">04</span>
-            <h3>You watch every line land.</h3>
-            <p>The Workbench shows the file being written, the diff of everything changed, and the browser the agent drives. Don't like a turn? Rewind the thread <em>and</em> the files.</p>
-            <div class="ch-world" aria-hidden="true"></div>
-          </div>
-          <figure class="ch-shot"><img src="/assets/crop-changes.webp" data-dark="/assets/crop-changes-dark.webp" alt="The Changes tab of the workbench with a diff" loading="lazy" decoding="async"></figure>
-        </article>
+      <div class="show-notes">
+        <p><b>Threads</b> on the left, each with its model and progress.</p>
+        <p><b>The chat</b> in the middle: the answer up front, the work folded under one line.</p>
+        <p><b>The workbench</b> on the right: the live file, the diff, the browser.</p>
       </div>
     </section>
 
-    <!-- 3 · the workbench: a gallery you slide through -->
-    <section id="workbench" class="workbench">
-      <div class="section-head wb-head">
-        <div>
-          <p class="kicker">The Workbench</p>
-          <h2 class="h2">Everything the agent touches,<br>one tab away.</h2>
-        </div>
-        <div class="wb-nav"><button type="button" data-wb="-1" aria-label="Previous">←</button><button type="button" data-wb="1" aria-label="Next">→</button></div>
+    <!-- 3 · one turn, start to finish: steps hung on one strand, like the work rail in the app -->
+    <section id="flow" class="turn section wrap">
+      <div class="section-head">
+        <p class="kicker">How a turn works</p>
+        <h2 class="h2">Say it. Watch it build.<br><span class="grad-text">Read the answer.</span></h2>
       </div>
-      <div class="wb-track" tabindex="0">
-        <article class="wb-card">
-          <header><span class="wb-ico">◉</span><b>Live</b><span>the file as it's written</span></header>
-          <div class="wb-mock"><pre class="wb-code"><code data-live></code></pre></div>
-        </article>
-        <article class="wb-card">
-          <header><span class="wb-ico">⇅</span><b>Changes</b><span>working tree vs. thread start</span></header>
-          <div class="wb-mock"><img src="/assets/crop-changes.webp" data-dark="/assets/crop-changes-dark.webp" alt="" loading="lazy" decoding="async"></div>
-        </article>
-        <article class="wb-card">
-          <header><span class="wb-ico">⌕</span><b>Browser</b><span>with DevTools</span></header>
-          <div class="wb-mock wb-browser">
-            <div class="wbb-bar"><i></i><span>localhost:3000/login</span></div>
-            <div class="wbb-net">
-              <div class="nu-row"><i>200</i><b>GET</b><span>/api/session</span><em>Fetch · 13 ms</em></div>
-              <div class="nu-row"><i>200</i><b>GET</b><span>/app.js</span><em>Script · 29 ms</em></div>
-              <div class="nu-row bad"><i>500</i><b>POST</b><span>/api/login</span><em>Fetch · 212 ms</em></div>
-              <div class="nu-con">[error] TypeError: user is undefined <span>login.tsx:42</span></div>
+      <ol class="steps">
+        <li class="step" data-reveal>
+          <div class="step-copy"><span class="step-n">01</span><h3>Say what you want.</h3><p>Type it like you'd tell a teammate. AFH reads your project and gets moving — no setup, no special commands.</p></div>
+          <figure class="step-shot"><img src="/assets/crop-composer.webp" data-dark="/assets/crop-composer-dark.webp" alt="The message box with a request typed in" loading="lazy" decoding="async"></figure>
+        </li>
+        <li class="step" data-reveal>
+          <div class="step-copy"><span class="step-n">02</span><h3>It sets a goal and makes a plan.</h3><p>The agent writes down what "done" means and breaks the work into a to-do list you can watch tick off — and edit any time.</p></div>
+          <figure class="step-shot"><img src="/assets/crop-todo.webp" data-dark="/assets/crop-todo-dark.webp" alt="A to-do card, two of three items done" loading="lazy" decoding="async"></figure>
+        </li>
+        <li class="step" data-reveal>
+          <div class="step-copy"><span class="step-n">03</span><h3>It does the work — and folds it away.</h3><p>Reads, edits, runs and tests. While it works you see every step; when it's done they fold under one line, so the answer stays in front.</p></div>
+          <div class="step-mock fold-demo" aria-hidden="true">
+            <button class="fd-bar" type="button" tabindex="-1"><span class="fd-ring"></span><b>Worked for 32s</b><span>Edited 3 files · Ran 1 command</span><i class="fd-chev"></i></button>
+            <div class="fd-work">
+              <div class="fd-step"><i class="ic-read"></i>Read <code>src/auth/session.ts</code></div>
+              <div class="fd-step"><i class="ic-edit"></i>Edited <code>login.tsx</code> <em class="add">+84</em> <em class="del">−3</em></div>
+              <div class="term">
+                <div class="term-head"><span>Terminal</span><em>4.2s</em><b class="ok">exit 0</b></div>
+                <pre><span class="pr">$</span> npm test
+<span class="dim">✓ auth › keeps the session (31 ms)</span>
+<span class="dim">✓ login › redirects home (12 ms)</span>
+<span class="okc">Tests: 12 passed, 12 total</span></pre>
+              </div>
             </div>
+            <p class="fd-answer">Login now keeps you signed in and sends you back to the page you came from. All 12 tests pass.</p>
+          </div>
+        </li>
+        <li class="step" data-reveal>
+          <div class="step-copy"><span class="step-n">04</span><h3>You review every line.</h3><p>Every changed file is listed at the end of the reply. The workbench shows the diff, the file being written and the browser the agent drives. Don't like a turn? Rewind the thread <em>and</em> the files.</p></div>
+          <figure class="step-shot"><img src="/assets/crop-changes.webp" data-dark="/assets/crop-changes-dark.webp" alt="The Changes tab of the workbench with a diff" loading="lazy" decoding="async"></figure>
+        </li>
+      </ol>
+    </section>
+
+    <!-- 4 · everything in one harness -->
+    <section id="features" class="bento-sec section wrap">
+      <div class="section-head center">
+        <p class="kicker">Inside the harness</p>
+        <h2 class="h2">Everything the agent touches,<br>one tab away.</h2>
+      </div>
+      <div class="bento">
+        <article class="tile t-live" data-reveal>
+          <header><b>Live file</b><span>the code as it's written</span></header>
+          <pre class="live-code"><code data-live></code></pre>
+        </article>
+        <article class="tile t-browser" data-reveal style="--d:.06s">
+          <header><b>Browser with DevTools</b><span>it opens your app and reads the errors</span></header>
+          <div class="br-mock">
+            <div class="br-bar"><i></i><span>localhost:3000/login</span></div>
+            <div class="nu-row"><i>200</i><b>GET</b><span>/api/session</span><em>13 ms</em></div>
+            <div class="nu-row"><i>200</i><b>GET</b><span>/app.js</span><em>29 ms</em></div>
+            <div class="nu-row bad"><i>500</i><b>POST</b><span>/api/login</span><em>212 ms</em></div>
+            <div class="nu-con">TypeError: user is undefined <span>login.tsx:42</span></div>
           </div>
         </article>
-        <article class="wb-card">
-          <header><span class="wb-ico">☰</span><b>Context</b><span>everything the model sees</span></header>
-          <div class="wb-mock wb-list">
-            <div class="wbl"><b>System prompt</b><span>3.1k tokens</span></div>
-            <div class="wbl"><b>Project memory</b><span>12 facts</span></div>
-            <div class="wbl"><b>Skills</b><span>4 found</span></div>
-            <div class="wbl"><b>History</b><span>26 messages · 18.5k</span></div>
-            <div class="wbl on"><b>Edit any of it</b><span>→</span></div>
-          </div>
+        <article class="tile t-agents" data-reveal>
+          <header><b>Helpers</b><span>a lead hands out the pieces</span></header>
+          <ul class="ag-list">
+            <li><i class="lead"></i><b>Lead</b><span>claude-opus-5-5</span></li>
+            <li><i></i><b>Helper</b><span>writing tests</span><em class="run"></em></li>
+            <li><i></i><b>Helper</b><span>styling the form</span><em class="run"></em></li>
+            <li><i></i><b>Reviewer</b><span>checking diffs</span></li>
+          </ul>
         </article>
-        <article class="wb-card">
-          <header><span class="wb-ico">⇶</span><b>Agents</b><span>who is doing what</span></header>
-          <div class="wb-mock wb-list">
-            <div class="wbl"><i class="au-dot lead"></i><b>Lead</b><span>claude-opus-5-5</span></div>
-            <div class="wbl"><i class="au-dot"></i><b>Helper</b><span>writing tests</span></div>
-            <div class="wbl"><i class="au-dot"></i><b>Helper</b><span>styling the form</span></div>
-            <div class="wbl"><i class="au-dot"></i><b>Reviewer</b><span>checking diffs</span></div>
-          </div>
+        <article class="tile t-memory" data-reveal style="--d:.06s">
+          <header><b>Goals &amp; memory</b><span>it knows when it's done, and remembers your project</span></header>
+          <div class="goal"><span class="goal-k">Goal</span><b>All tests pass and login keeps the session</b><em class="ok">achieved</em></div>
+          <ul class="mem"><li>Uses pnpm, not npm</li><li>API lives in <code>server/</code></li><li>Tests run with Vitest</li></ul>
         </article>
-        <article class="wb-card">
-          <header><span class="wb-ico">◎</span><b>Prompt</b><span>what the model is told</span></header>
-          <div class="wb-mock wb-list">
-            <div class="wbl"><b>Mode</b><span>Build · full access</span></div>
-            <div class="wbl"><b>Tools</b><span>read · edit · shell · browser · …</span></div>
-            <div class="wbl"><b>Goal</b><span>All tests pass</span></div>
-            <div class="wbl"><b>Hooks</b><span>pre-commit · stop</span></div>
-          </div>
+        <article class="tile t-rewind" data-reveal style="--d:.12s">
+          <header><b>Rewind</b><span>the thread and the files, together</span></header>
+          <div class="rw"><span>Turn 4</span><span>Turn 5</span><span class="on">Turn 6</span><button type="button" tabindex="-1">↶ Rewind to here</button></div>
+        </article>
+        <article class="tile t-look" data-reveal>
+          <header><b>Your look</b><span>4 interfaces · 58 themes · Arabic</span></header>
+          <div class="sw"><i style="--a:#ff6a2a;--b:#111014"></i><i style="--a:#7c5cff;--b:#f6f5f3"></i><i style="--a:#18a664;--b:#0e1512"></i><i style="--a:#e0169a;--b:#fff"></i><i style="--a:#1f55b8;--b:#0b1020"></i><i style="--a:#ffb11f;--b:#1b1716"></i></div>
         </article>
       </div>
     </section>
 
-    <!-- 4 · modes: pick one, the panel changes -->
-    <section id="modes" class="modes">
+    <!-- 5 · modes -->
+    <section id="modes" class="modes section wrap">
       <div class="section-head center">
         <p class="kicker">Four ways to work</p>
         <h2 class="h2">Pick the mode. The harness does the rest.</h2>
       </div>
-      <div class="mode-explorer">
+      <div class="mode-explorer" data-reveal>
         <div class="mode-tabs" role="tablist">
-          <button type="button" class="on" data-mode="build" role="tab">Build</button>
+          <button type="button" class="on" data-mode="build" role="tab" aria-selected="true">Build</button>
           <button type="button" data-mode="plan" role="tab">Plan</button>
           <button type="button" data-mode="delegate" role="tab">Delegate</button>
           <button type="button" data-mode="red" role="tab">Red Team</button>
@@ -212,7 +201,7 @@
             </div>
           </div>
           <div class="mode-pane" data-mode="delegate">
-            <div class="mp-copy"><h3>Fan out.</h3><p>A lead model briefs helpers that work at the same time, each in its own lane or worktree, and checks what they bring back.</p></div>
+            <div class="mp-copy"><h3>Fan out.</h3><p>A lead model briefs helpers that work at the same time, each in its own lane or git worktree, and checks what they bring back.</p></div>
             <div class="mp-mock">
               <div class="dv-tool"><b>delegate</b> Helper → "write the tests" <span class="run">running</span></div>
               <div class="dv-tool"><b>delegate</b> Helper → "style the form" <span class="run">running</span></div>
@@ -220,7 +209,7 @@
             </div>
           </div>
           <div class="mode-pane" data-mode="red">
-            <div class="mp-copy"><h3>Break it before they do.</h3><p>Audits your own project for exploitable weaknesses — auth and OTP flaws, privilege escalation, injection, exposed secrets — and reports each with severity, exploit and fix. Never edits code.</p></div>
+            <div class="mp-copy"><h3>Break it before they do.</h3><p>Audits your own project for exploitable weaknesses — auth flaws, privilege escalation, injection, exposed secrets — and reports each with severity, exploit and fix. Never edits code.</p></div>
             <div class="mp-mock">
               <div class="dv-tool bad"><b>critical</b> OTP accepts any 6 digits after 3 tries</div>
               <div class="dv-tool warn"><b>high</b> admin role set from request body</div>
@@ -231,16 +220,16 @@
       </div>
     </section>
 
-    <!-- 4b · outside the app -->
-    <section id="reach" class="reach">
+    <!-- 6 · outside the app -->
+    <section id="reach" class="reach section wrap">
       <div class="section-head center">
         <p class="kicker">Terminal · GitHub · Races</p>
         <h2 class="h2">The agent, wherever you work.</h2>
         <p class="sub">Run it from a terminal, hand it an issue, or give one task to several models and keep the best result.</p>
       </div>
       <div class="reach-grid">
-        <article class="reach-card" data-reveal>
-          <h3><a href="/cli">In your terminal</a></h3>
+        <article class="reach-card rc-tui" data-reveal>
+          <h3><a href="/cli">In your terminal →</a></h3>
           <p>All of AFH, full screen: threads, models, approvals and every setting. Or one task from a script with <code>afh run</code>.</p>
           <a class="tui-thumb" href="/cli" aria-label="See AFH in the terminal"><img src="/assets/tui-chat-light.png" data-dark="/assets/tui-chat-dark.png" width="1560" height="950" alt="AFH running full screen in a terminal" loading="lazy"></a>
         </article>
@@ -255,7 +244,7 @@
         </article>
         <article class="reach-card" data-reveal style="--d:.16s">
           <h3>Model races</h3>
-          <p><code>afh race</code> gives one task to several models, each in its own worktree. Your tests score them, and you merge the one you pick.</p>
+          <p><code>afh race</code> gives one task to several models, each in its own worktree. Your tests score them; you merge the one you pick.</p>
           <div class="mp-mock" aria-hidden="true">
             <div class="dv-tool"><b>model 1</b> tests <span class="ok">12 passed</span></div>
             <div class="dv-tool warn"><b>model 2</b> 2 tests failed</div>
@@ -265,46 +254,50 @@
       </div>
     </section>
 
-    <!-- 5 · models: a wall -->
-    <section id="models" class="wall">
+    <!-- 7 · models -->
+    <section id="models" class="models-sec section wrap">
       <div class="section-head center">
         <p class="kicker">Models</p>
         <h2 class="h2">Bring any model. <span class="grad-text">Mix them in one thread.</span></h2>
         <p class="sub">228 providers and 7,539 models, plus any OpenAI-compatible endpoint. Use a strong model to lead and a fast one to help.</p>
       </div>
-      <div class="logo-wall" aria-label="Providers">
-        <span class="big">ChatGPT</span><span class="big">Anthropic</span><span class="big">OpenAI</span><span class="big">Google Gemini</span><span class="big">GitHub Copilot</span><span class="big">xAI Grok</span><span class="big">OpenRouter</span>
-        <span>Kimi</span><span>DeepSeek</span><span>Groq</span><span>Mistral</span><span>xAI</span><span>Z.AI · GLM</span><span>Together AI</span><span>Fireworks AI</span><span>Cerebras</span><span>Perplexity</span><span>Cohere</span><span>Qwen</span>
-        <span>Ollama</span><span>LM Studio</span><span>vLLM</span><span>llama.cpp</span><span>Jan</span><span>Hugging Face</span><span>Azure OpenAI</span><span>Amazon Bedrock</span><span>Vertex AI</span><span>Replicate</span><span>SambaNova</span><span class="more">+ 198 more</span>
+      <div class="logo-grid" data-logos aria-label="Some of the providers">
+        <span data-p="openai">OpenAI</span><span data-p="anthropic">Anthropic</span><span data-p="google">Google Gemini</span><span data-p="github-copilot">GitHub Copilot</span>
+        <span data-p="xai">xAI Grok</span><span data-p="openrouter">OpenRouter</span><span data-p="deepseek">DeepSeek</span><span data-p="moonshotai">Kimi</span>
+        <span data-p="mistral">Mistral</span><span data-p="groq">Groq</span><span data-p="zai">Z.AI · GLM</span><span data-p="alibaba">Qwen</span>
+        <span data-p="togetherai">Together AI</span><span data-p="fireworks-ai">Fireworks</span><span data-p="cerebras">Cerebras</span><span data-p="perplexity">Perplexity</span>
+        <span data-p="minimax">MiniMax</span><span data-p="ollama">Ollama</span><span data-p="lmstudio">LM Studio</span><span data-p="huggingface">Hugging Face</span>
+        <span data-p="azure">Azure OpenAI</span><span data-p="amazon-bedrock">Amazon Bedrock</span><span data-p="nvidia">NVIDIA</span><span class="more">+ 205 more</span>
       </div>
       <div class="stats">
-        <div class="stat"><b data-count="228">0</b><span>providers built in</span></div>
-        <div class="stat"><b data-count="7539">0</b><span>models to choose from</span></div>
-        <div class="stat"><b data-count="46">0</b><span>themes, light &amp; dark</span></div>
-        <div class="stat"><b data-count="0">0</b><span>threads kept on our servers</span></div>
+        <div class="stat"><b data-count="228">228</b><span>providers built in</span></div>
+        <div class="stat"><b data-count="7539">7,539</b><span>models to choose from</span></div>
+        <div class="stat"><b data-count="58">58</b><span>themes, light &amp; dark</span></div>
+        <div class="stat"><b>0</b><span>threads kept on our servers</span></div>
       </div>
+      <p class="fine center logo-credit">Provider logos from <a href="https://github.com/lobehub/lobe-icons" rel="noopener">Lobe Icons</a> (MIT). Names and logos belong to their owners.</p>
     </section>
 
-    <!-- 6 · sign in your way -->
-    <section id="signin" class="signin">
+    <!-- 8 · sign in your way -->
+    <section id="signin" class="signin section wrap">
       <div class="section-head center">
         <p class="kicker">Sign in your way</p>
         <h2 class="h2">Your plan, your keys, or your own PC.</h2>
         <p class="sub">Connect as many accounts as you have to one provider. <b>Settings → Models &amp; accounts</b> shows each one's usage, and AFH moves to the next before one runs out.</p>
       </div>
       <div class="si-grid">
-        <article class="si-card">
-          <span class="si-k">New in 1.18</span>
-          <h3>ChatGPT (chat)</h3>
-          <p>The real GPT-6 family — GPT-6 Astra, GPT-6.1 Sol, GPT-5.6 Terra and the rest — from your ChatGPT plan, separate from Codex credits. Every reply carries a badge confirming which model really answered.</p>
+        <article class="si-card" data-reveal>
+          <span class="si-k">Chat plans</span>
+          <h3>ChatGPT</h3>
+          <p>The GPT-6 family from your ChatGPT plan, separate from Codex credits. Every reply carries a badge confirming which model really answered.</p>
           <div class="si-badge">✓ real model · gpt-6.1-sol-wm</div>
         </article>
-        <article class="si-card">
+        <article class="si-card" data-reveal style="--d:.08s">
           <span class="si-k">Subscriptions</span>
           <h3>Codex, Copilot, Grok</h3>
           <p>Sign in with ChatGPT for Codex, with GitHub for Copilot, with xAI for Grok, or with OpenRouter for everything — no keys to paste.</p>
         </article>
-        <article class="si-card">
+        <article class="si-card" data-reveal style="--d:.16s">
           <span class="si-k">Yours</span>
           <h3>API keys &amp; local models</h3>
           <p>Paste a key for any of 228 providers, or point AFH at Ollama, LM Studio, vLLM or llama.cpp on your own machine. Nothing leaves it.</p>
@@ -312,19 +305,9 @@
       </div>
     </section>
 
-    <!-- 7 · the phone -->
-    <section id="account" class="acct">
-      <div class="acct-demo" aria-hidden="true" data-reveal>
-        <div class="phone">
-          <div class="ph-top"><span class="ph-dot on"></span><b>claude-opus-5-5</b></div>
-          <div class="ph-msg me">Is it going to rain in Cairo this weekend?</div>
-          <div class="ph-step"><i></i>Checked the weather in Cairo</div>
-          <div class="ph-msg ai">No rain — sunny both days, 24–29 °C. Saturday evening gets breezy.</div>
-          <div class="ph-card"><b>Your PC · online</b><span>Login page with tests · running</span></div>
-          <div class="ph-input">Message AFH…</div>
-        </div>
-      </div>
-      <div class="acct-copy" data-reveal style="--d:.12s">
+    <!-- 9 · the phone -->
+    <section id="account" class="acct section wrap">
+      <div class="acct-copy" data-reveal>
         <p class="kicker">Phone &amp; web · free account</p>
         <h2 class="h2">Take it with you.</h2>
         <p class="sub">The AFH app for Android and iPhone — and the same chat in your browser. Chat with any model using your own keys, and take over AFH on your computer from anywhere: live threads, one-tap approvals, new tasks.</p>
@@ -337,11 +320,21 @@
         </div>
         <p class="fine">Optional — AFH itself never needs an account. Chats and keys stay in your browser.</p>
       </div>
+      <div class="acct-demo" aria-hidden="true" data-reveal style="--d:.1s">
+        <div class="phone">
+          <div class="ph-top"><span class="ph-mark" data-mark-svg></span><b>claude-opus-5-5</b><span class="ph-eff">High</span></div>
+          <div class="ph-msg me">Is the build on my PC done?</div>
+          <div class="ph-fold"><i></i><b>Worked for 4m 12s</b><span>Edited 6 files</span></div>
+          <div class="ph-msg ai">Yes — the login page is finished and all 18 tests pass. Want me to open a pull request?</div>
+          <div class="ph-card"><b>Your PC · online</b><span>1 approval waiting</span><em>Approve</em></div>
+          <div class="ph-input">Message AFH…</div>
+        </div>
+      </div>
     </section>
 
-    <!-- 8 · download -->
+    <!-- 10 · download: the mark at work again -->
     <section id="download" class="cta">
-      <div class="cta-stage" data-cta-stage aria-hidden="true"></div>
+      <div class="cta-stage stage" data-stage aria-hidden="true"></div>
       <h2 class="display cta-title"><span class="line"><span>Start your</span></span><span class="line grad"><span>flow.</span></span></h2>
       <p class="lead center">Free for Windows, Mac and your terminal. Install it, sign in or add a key, and give it something to build.</p>
       <div class="cta-row center">
@@ -356,9 +349,6 @@
   <footer data-footer></footer>
 
   <script src="/js/layout.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
   <script type="module" src="/js/main.js"></script>
 </body>
 </html>
