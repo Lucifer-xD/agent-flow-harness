@@ -2,6 +2,24 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.32.0 (2026-11-10)
+
+**A new chat: replies you can read at a glance**
+
+The main chat screen is redesigned in the Studio interface: how replies, steps, commands and to-dos look, the chat box, and a simpler model picker that shows each provider's logo and asks for the effort.
+
+- **Each reply under its model:** a reply starts with the provider's logo, the model's name and the effort it used, so you always know who answered.
+- **Work folds away:** everything the model did on the way (its notes, its thinking and its steps) sits under one bar that sums it up, such as **Worked for 32s · Edited 3 files · Ran 1 command**. It stays open while the model works and folds when it is done, leaving the answer in front. Click the bar to open it again.
+- **Commands as a terminal:** open a command to see it in a small terminal: the command, its output, how long it took and how it ended (**exit 0**, failed or timed out), with a button to copy it.
+- **Files changed:** the end of a reply lists every file it changed with its icon and +/− lines. **Review** opens the Changes panel.
+- **File and language icons:** Python, TypeScript, CSS, Rust, Go, Dockerfile, package.json and many more show their own logo in steps, code blocks, the Live view, Changes and attachments.
+- **To-dos:** the to-do list in a reply and the one above the chat box have a progress ring and round checks; the one in progress is highlighted. The list above the chat box slides out from behind it.
+- **A simpler model picker:** one search box and one list, grouped under each provider's real logo. Pick a model that has effort levels and a second step asks for the effort (Auto, Low, Medium, High and more), each with a short note on what it means. The chat box shows the model's logo and the effort you chose.
+- **The picker follows Settings:** remove a provider, turn one off or hide a model in Settings and the picker updates at once, even while it is open, without restarting the app.
+- **New thread:** the greeting, the chat box and a few ideas sit together in the middle of the screen.
+- **Sidebar and top bar:** each thread shows a second line with its model, **Working…** or **Needs your answer**, and its to-do progress. The top bar's buttons are now quiet icons that show their names when you point at them.
+- **Everywhere:** Focus, Compact and Canvas keep their own look and get the icons and the new picker. Light and dark, Arabic and phone width are covered.
+
 ## 1.31.0 (2026-11-10)
 
 **New settings: easier to find, easier to understand**

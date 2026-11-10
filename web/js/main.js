@@ -11,7 +11,8 @@ import { openContextEditor } from "./context.js";
 import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
 import { SETTINGS_TABS, openSettings } from "./settings.js";
-import { modelPicker } from "./model-picker.js";
+import { effortLabel, modelPicker, modelsChanged, providerMark } from "./model-picker.js";
+import { fileIcon } from "./fileicons.js";
 import { openAccount, refreshAccountButton } from "./settings-remote.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
 import { initUpdates } from "./updates.js";
@@ -48,6 +49,9 @@ const view = new ChatView($("messages"), $("thread"), {
   settings: () => S.settings,
   modelName: (ref) => modelName(ref),
   avatar: (live) => logoNode({ size: 28, working: live }),
+  rich: () => document.documentElement.dataset.ui === "studio",
+  modelMark: (ref) => providerMark(ref.providerID, providerName(ref.providerID), 26),
+  onReview: () => openDrawer("changes"),
   onFork: (id) => forkThread(id),
   onRetry: () => retryLast(),
   onRevert: (id) => revertTo(id),
@@ -59,6 +63,8 @@ const view = new ChatView($("messages"), $("thread"), {
     document.querySelector(".topbar").classList.toggle("scrolled", top > 4);
   },
 });
+// Studio draws replies differently (grouped steps, logos), so switching the interface redraws the thread.
+new MutationObserver(() => { if (view.thread) view.renderAll(true); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-ui"] });
 
 // ---- boot -----------------------------------------------------------------------
 
@@ -268,6 +274,7 @@ export async function reloadCatalog() {
   S.providerNames = m.providerNames || {};
   S.agents = agents;
   renderComposerState();
+  modelsChanged();
 }
 
 // ---- projects & sessions ------------------------------------------------------------
@@ -538,9 +545,12 @@ function renderThreads() {
       on: { click: () => openThread(s.id) },
     },
       statusRing(st),
-      s.metadata?.afh?.worktree ? el("span.th-wt", { title: `Worktree · ${s.metadata.afh.worktree.branch}`, html: icon("branch") }) : null,
-      s.metadata?.afh?.goal ? el(`span.th-goal.${s.metadata.afh.goal.status}`, { title: `Goal (${s.metadata.afh.goal.status}): ${s.metadata.afh.goal.text}`, html: icon(s.metadata.afh.goal.status === "achieved" ? "check" : "target") }) : null,
-      el("span.th-title", s.title || "New thread"),
+      el("span.th-text",
+        el("span.th-line",
+          s.metadata?.afh?.worktree ? el("span.th-wt", { title: `Worktree · ${s.metadata.afh.worktree.branch}`, html: icon("branch") }) : null,
+          s.metadata?.afh?.goal ? el(`span.th-goal.${s.metadata.afh.goal.status}`, { title: `Goal (${s.metadata.afh.goal.status}): ${s.metadata.afh.goal.text}`, html: icon(s.metadata.afh.goal.status === "achieved" ? "check" : "target") }) : null,
+          el("span.th-title", s.title || "New thread")),
+        threadSub(s, st)),
       el("span.th-time", ago(t)),
       el("span.th-del", { title: "Delete thread", html: icon("trash"), on: { click: (e) => { e.stopPropagation(); deleteThread(s.id); } } }));
     box.append(item);
@@ -557,6 +567,7 @@ async function openThread(id) {
   } else t.session = session;
   syncState(t);
   S.current = t;
+  clearWelcome();
   renderThreads();
   renderTopbar();
   if (!t.loaded) {
@@ -580,6 +591,7 @@ async function openThread(id) {
 }
 
 function showHome() {
+  clearWelcome();
   S.current = null;
   S.draft.files = [];
   renderThreads();
@@ -628,6 +640,21 @@ function showHome() {
       el("h3.hero-h", ico("sparkle"), el("span", "Suggested tasks")),
       el("div.suggest", ideas.map(([icon, title, text], i) => el("button", { type: "button", dataset: { tone: String(i) }, style: { animationDelay: `${160 + i * 45}ms` }, on: { click: () => { setInput(text); $("input").focus(); } } },
         el("span.sg-ico", ico(icon)), el("b", title), el("span", text)))))));
+  mountWelcome(name ? `${greet}, ${name}` : greet, ideas);
+}
+
+// Studio's new-thread screen: the greeting above the chat box and the ideas under it, all centred. They live
+// in the composer's own column (not the scrolling thread) so they always line up; other interfaces hide them.
+function clearWelcome() {
+  document.querySelector(".main")?.classList.remove("welcome");
+  for (const n of document.querySelectorAll(".wel-top, .wel-ideas")) n.remove();
+}
+function mountWelcome(title, ideas) {
+  clearWelcome();
+  $("composer-wrap").prepend(el("div.wel-top", el("span.wel-mark", logoNode({ size: 44, working: true })), el("h2.wel-title", title),
+    el("p.wel-sub", el("span", "Working in"), el("span.wel-proj", ico("folder"), basename(project())))));
+  $("composer").after(el("div.wel-ideas", ideas.map(([name, title, text]) => el("button.wel-idea", { type: "button", title: text, on: { click: () => { setInput(text); $("input").focus(); } } }, ico(name), el("span", title)))));
+  document.querySelector(".main").classList.add("welcome");
 }
 
 /** "running" while the engine works on it, "done" once it has produced a reply, "idle" for a fresh thread. */
@@ -644,6 +671,17 @@ function threadState(s) {
 }
 
 /** The status ring drawn in the thread list and on the welcome cards: a hollow ring, a pulsing one, or a check. */
+/** The quiet second line of a thread row: what it is doing or which model it uses, and its to-do progress. */
+function threadSub(s, st) {
+  const todos = (s.metadata?.afh?.todos || []).filter((x) => x.status !== "cancelled");
+  const done = todos.filter((x) => x.status === "completed").length;
+  const waiting = threadState(s) === "waiting";
+  const what = waiting ? "Needs your answer" : st === "running" ? "Working…" : modelName(s.model) || "";
+  return el("span.th-sub",
+    what ? el("span.th-model", what) : null,
+    todos.length ? el("span.th-todo", { title: `${done} of ${todos.length} to-do items done` }, el("i", { style: { "--p": `${Math.round((100 * done) / todos.length)}%` } }), `${done}/${todos.length}`) : null);
+}
+
 function statusRing(status) {
   return el(`span.st-ring.${status}`, { title: status === "running" ? "Working" : status === "done" ? "Done" : "New" }, status === "done" ? ico("check") : null);
 }
@@ -1314,7 +1352,7 @@ async function refreshDrawer(reason = "changes") {
       const card = el(`div.file-diff${diffs.length <= 3 ? ".open" : ""}`, { style: { animationDelay: `${i * 30}ms` } });
       card.append(el("button.file-diff-head", { type: "button", on: { click: () => card.classList.toggle("open") } },
         el(`span.st.${d.status || "modified"}`, (d.status || "modified").slice(0, 1).toUpperCase()),
-        el("span.fn", { title: d.file }, d.file),
+        fileIcon(d.file || ""), el("span.fn", { title: d.file }, d.file),
         el("span.tool-stat", el("span.plus", `+${d.additions ?? 0}`), el("span.minus", `−${d.deletions ?? 0}`))),
         diffView(d.patch));
       body.append(card);
@@ -1391,7 +1429,10 @@ function renderComposerState() {
   if (!S.settings) return;
   const ref = currentModel();
   const gone = missingModel();
-  $("pick-model").replaceChildren(ico("cpu"), el("span.lbl", modelName(ref) || "Choose model"), el("span.chev", { html: icon("chev-down") }));
+  const effort = ref?.variant && ref.variant !== "default" ? effortLabel(ref.variant) : null;
+  $("pick-model").replaceChildren(ref ? providerMark(ref.providerID, providerName(ref.providerID), 18) : ico("cpu"),
+    el("span.lbl", ref ? findModel(ref)?.name || ref.id : "Choose model"), effort ? el("span.eff-badge", effort) : null, el("span.chev", { html: icon("chev-down") }));
+  $("pick-model").classList.toggle("empty", !ref);
   $("pick-model").title = gone ? `${gone.id} is no longer available, so ${modelName(ref) || "no model"} is used` : "";
   const agent = S.agents.find((a) => a.id === currentAgent());
   const agentChip = $("pick-agent");
@@ -1442,7 +1483,7 @@ function renderAttachments() {
   box.replaceChildren(...S.draft.files.map((f, i) => {
     const src = IMAGE_FILE.test(f) ? thumbs.get(f) || api.url("/api/image", { path: f }) : null;
     return el(src ? "span.file-chip.img-chip" : "span.file-chip", { title: f },
-      src ? el("img.chip-thumb", { src, alt: "", on: { click: () => viewImage(src) } }) : ico("file"), el("span", basename(f).replace(UPLOAD_PREFIX, "")),
+      src ? el("img.chip-thumb", { src, alt: "", on: { click: () => viewImage(src) } }) : fileIcon(f), el("span", basename(f).replace(UPLOAD_PREFIX, "")),
       el("button", { type: "button", html: icon("x"), on: { click: () => { S.draft.files.splice(i, 1); renderAttachments(); } } }));
   }));
 }
@@ -1526,7 +1567,7 @@ const PROVIDER_NAMES = { "kimi-code-plan-global": "Kimi (kimi.ai)", "kimi-code-p
 const providerName = (pid) => S.providerNames?.[pid] || PROVIDER_NAMES[pid] || pid.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 function modelMenu() {
   modelPicker($("pick-model"), {
-    models: S.models, current: currentModel(), providerName, align: "right",
+    getModels: () => S.models, current: currentModel(), providerName, align: "right",
     onPick: (ref) => chooseModel(ref),
     onManage: () => openSettings("models", ctx),
     onAdd: () => openSettings("models", ctx, { connect: true }),
@@ -1767,6 +1808,7 @@ async function submit(override) {
       thread.loaded = true;
       S.threads.set(session.id, thread);
       S.current = thread;
+      clearWelcome();
       S.draft = { model: null, agent: null, mode: null, files: [], goal: null, worktree: false };
       S.settings.lastThread = session.id;
       api.put("/api/settings", { lastThread: session.id }).catch(() => {});

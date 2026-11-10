@@ -3,7 +3,9 @@
 
 import { api } from "./api.js";
 import { designCard, renderDesignTool } from "./design.js";
-import { el, ico, icon, markdown, diffView, patchFromStrings, copyText, fmtDur, fmtTokens, basename, toast } from "./ui.js";
+import { el, ico, icon, markdown, diffView, patchFromStrings, copyText, fmtDur, fmtTokens, basename, toast, progressRing } from "./ui.js";
+import { fileIcon } from "./fileicons.js";
+import { effortLabel } from "./model-picker.js";
 
 // ---- state ----------------------------------------------------------------------
 
@@ -361,6 +363,42 @@ const VERBS = {
 const MEMORY_VERBS = { add: ["Remembered", "Remembering"], remove: ["Forgot", "Forgetting"], replace: ["Corrected memory", "Correcting memory"], list: ["Checked memory", "Checking memory"] };
 const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name) ? "edit" : /^(shell|bash|execute)$/.test(name) ? "run" : /^(read|glob|grep|list|ls)$/.test(name) ? "read" : /web|fetch/.test(name) ? "web" : "other");
 
+
+/** What a group of steps did, in short phrases, and a few icons for the files and kinds of work. */
+function stepSummary(tools) {
+  const edits = new Set(), reads = new Set();
+  let runs = 0, searches = 0, web = 0, other = 0;
+  const icons = [];
+  const add = (k, node) => { if (icons.length < 4 && !icons.some((x) => x.k === k)) icons.push({ k, node }); };
+  for (const p of tools) {
+    const name = (p.name || "").toLowerCase();
+    if (/^(todo|todowrite|goal|question)$/.test(name)) continue; // planning and asking, not work on files
+    const kind = kindOf(name);
+    const t = describeTool(p).target || "";
+    if (kind === "edit") {
+      const ps = toolPatches(p);
+      for (const x of ps) if (x.file && x.file !== "patch") edits.add(x.file);
+      if (!ps.length && t) edits.add(t);
+      add("f:" + (ps[0]?.file || t), fileIcon(ps[0]?.file || t));
+    } else if (kind === "read") {
+      if (/^(glob|grep|list|ls)$/.test(name)) { searches++; add("search", ico("search")); }
+      else { reads.add(t); add("f:" + t, fileIcon(t)); }
+    } else if (kind === "run") { runs++; add("run", ico("terminal")); }
+    else if (kind === "web") { web++; add("web", ico("globe")); }
+    else { other++; add("o:" + name, ico(describeTool(p).icon || "zap")); }
+  }
+  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const bits = [
+    edits.size ? `Edited ${n(edits.size, "file", "files")}` : null,
+    runs ? `Ran ${n(runs, "command", "commands")}` : null,
+    reads.size ? `Read ${n(reads.size, "file", "files")}` : null,
+    searches ? `Searched ${n(searches, "time", "times")}` : null,
+    web ? `Browsed ${n(web, "page", "pages")}` : null,
+    other ? `${n(other, "other step", "other steps")}` : null,
+  ].filter(Boolean).slice(0, 3);
+  return { bits, icons: icons.map((x) => el("span.si", x.node)) };
+}
+
 function pathNode(target) {
   const i = Math.max(target.lastIndexOf("/"), target.lastIndexOf("\\"));
   if (i < 0) return el("span.tool-target.path", { title: target }, el("span.name", target));
@@ -382,10 +420,11 @@ function renderTodoTool(p, openSet, t0) {
   const card = el(`div.tool.plan.${status}${openSet.has(p.id) || (!openSet.has("x" + p.id) && todos.length <= 8) ? ".open" : ""}`, { dataset: { tool: p.id } });
   const head = el("button.tool-head", { type: "button", on: { click: () => { const o = card.classList.toggle("open"); openSet[o ? "add" : "delete"](p.id); openSet[o ? "delete" : "add"]("x" + p.id); } } },
     t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
-    el("span.tool-ico", live ? el("span.spinner") : ico(status === "error" ? "alert" : "checklist")),
+    el("span.tool-ico", live ? el("span.spinner") : status === "error" ? ico("alert") : todos.length ? progressRing(done, of, 18) : ico("checklist")),
     el("span.tool-name", live ? "Planning" : read ? "Checked the to-do list" : "Updated the to-do list"),
     el("span.tool-target", ""),
-    todos.length ? el("span.tool-stat", `${done}/${of} done`) : null);
+    todos.length ? el("span.tool-stat", `${done}/${of} done`) : null,
+    el("span.tool-chev", { html: icon("chev-down") }));
   const list = el("div.plan-list", todos.map((x) => el(`div.plan-item.${x.status || "pending"}`, el("span.plan-mark", TODO_MARK[x.status] ? ico(TODO_MARK[x.status]) : null), el("span", x.status === "in_progress" && x.activeForm ? x.activeForm : x.content))));
   const err = p.state?.error ? el("pre.tool-pre.tool-error", p.state.error.message || "") : null;
   card.append(head, el("div.tool-body", el("div", todos.length ? list : null, err)));
@@ -533,20 +572,42 @@ function renderTool(p, openSet, thread, t0) {
   // Header: icon tile · verb · target chip · (status, checks, hooks) at the right · chevron.
   const head = el("button.tool-head", { type: "button", on: { click: () => { card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
     t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
-    el("span.tool-ico", live ? el("span.spinner") : ico(status === "error" ? "alert" : name === "jobs" ? "activity" : info.icon)),
+    el(`span.tool-ico${(kind === "edit" || kind === "read") && target && name !== "glob" && name !== "grep" ? ".is-file" : ""}`,
+      live && !((kind === "edit" || kind === "read") && target) ? el("span.spinner")
+        : status === "error" ? ico("alert")
+          : (kind === "edit" || kind === "read") && target && name !== "glob" && name !== "grep" ? fileIcon(target)
+            : ico(name === "jobs" ? "activity" : info.icon)),
     el("span.tool-name", live ? verbs[1] : verbs[0]),
     targetNode,
     el("span.tool-right", stat, diagChip, hookChip, el("span.tool-chev", { html: icon("chev-down") })));
   const sections = [];
-  if (patches.length) for (const x of patches) sections.push(el("div.tool-section", patches.length > 1 ? el("div.tool-section-label", basename(x.file)) : null, diffView(x.patch)));
-  else {
-    const input = p.state?.input;
-    const inputText = typeof input === "string" ? input : input && Object.keys(input).length ? (kind === "run" ? pick(input, "command", "cmd") : JSON.stringify(input, null, 2)) : "";
-    if (inputText) sections.push(el("div.tool-section", el("div.tool-section-label", kind === "run" ? "Command" : "Input"), el("pre.tool-pre", inputText)));
-  }
   const out = toolText(p.state?.content);
-  if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output"), el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + "\n…" : out)));
-  if (p.state?.error) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", p.state.error.message || JSON.stringify(p.state.error))));
+  const errText = p.state?.error ? p.state.error.message || JSON.stringify(p.state.error) : "";
+  if (kind === "run" && name !== "jobs" && !patches.length) {
+    // A command opens as a small terminal: the command, then its output, with how it ended.
+    const input = p.state?.input;
+    const cmd = typeof input === "string" ? input : pick(input || {}, "command", "cmd") || "";
+    const code = meta.exit_code;
+    const bad = status === "error" || (code != null && code !== 0) || meta.timed_out;
+    const state = live ? el("span.term-state.run", "running")
+      : el(`span.term-state.${bad ? "bad" : "ok"}`, ico(bad ? "alert" : "check"), meta.timed_out ? "timed out" : code != null ? `exit ${code}` : bad ? "failed" : "done");
+    sections.push(el("div.term",
+      el("div.term-head", ico("terminal"), el("span.term-title", { title: meta.description || "" }, meta.description || "Terminal"), el("span.term-grow"),
+        meta.duration_ms != null && !live ? el("span.term-dur", fmtDur(meta.duration_ms)) : null, state,
+        el("span.term-copy", { role: "button", tabIndex: 0, title: "Copy the command", html: icon("copy"), on: { click: async (e) => { e.stopPropagation(); await copyText(cmd); toast("Copied", "ok", 1200); } } })),
+      el("pre.tool-pre.term-cmd", cmd),
+      out ? el("pre.term-out", out.length > 20000 ? out.slice(0, 20000) + "\n…" : out) : !live && !errText ? el("div.term-empty", "No output") : null,
+      errText ? el("pre.tool-pre.tool-error.term-err", errText) : null));
+  } else {
+    if (patches.length) for (const x of patches) sections.push(el("div.tool-section", patches.length > 1 ? el("div.tool-section-label", fileIcon(x.file || ""), basename(x.file)) : null, diffView(x.patch)));
+    else {
+      const input = p.state?.input;
+      const inputText = typeof input === "string" ? input : input && Object.keys(input).length ? (kind === "run" ? pick(input, "command", "cmd") : JSON.stringify(input, null, 2)) : "";
+      if (inputText) sections.push(el("div.tool-section", el("div.tool-section-label", kind === "run" ? "Command" : "Input"), el("pre.tool-pre", inputText)));
+    }
+    if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output"), el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + "\n…" : out)));
+    if (errText) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", errText)));
+  }
   // Browser screenshots stay visible under the card's header; click one to see it full size.
   const shots = (p.state?.content || []).filter((c) => c.type === "image" && c.uri);
   const gallery = shots.length ? el("div.tool-shots", { dataset: { n: String(shots.length) } }, shots.map((c) => el("img.tool-shot", { src: c.uri, alt: "Browser screenshot", loading: "lazy", on: { click: () => viewImage(c.uri) } }))) : null;
@@ -658,7 +719,22 @@ export class ChatView {
         this.renderAll(true);
       } else {
         for (const id of this.streaming) if (!this.pending.has(id) && !this.patchLive(id)) this.pending.add(id);
+        // Studio: a reply's bar (on its first message) sums up the whole reply, and the message before a new
+        // one turns from answer into work, so both redraw too; then the reply's fold is applied everywhere.
+        const turns = new Set();
+        if (this.opts.rich?.()) {
+          for (const id of [...this.pending]) {
+            const m = this.thread.byId.get(id);
+            if (m?.type !== "assistant") continue;
+            const T = this.turnOf(m);
+            const k = T.msgs.indexOf(m);
+            if (T.msgs[0] && T.msgs[0] !== m) this.pending.add(T.msgs[0].id);
+            if (k > 0) this.pending.add(T.msgs[k - 1].id);
+            turns.add(m);
+          }
+        }
         for (const id of this.pending) this.rerender(id);
+        for (const m of turns) { const T = this.turnOf(m); this.applyTurn(T.id, T.collapsed, T.live); }
         this.pending.clear();
         this.streaming.clear();
       }
@@ -742,7 +818,7 @@ export class ChatView {
       case "user": {
         const files = (m.files || []).map((f) => String(f.uri || "").startsWith("data:image/")
           ? el("img.msg-img", { src: f.uri, alt: f.name || "", title: f.name || "", on: { click: () => viewImage(f.uri) } })
-          : el("span.file-chip", ico("file"), el("span", f.name || basename(f.uri))));
+          : el("span.file-chip", fileIcon(f.name || f.uri || ""), el("span", f.name || basename(f.uri))));
         const actions = this.opts.onRevert && !m.pending && !this.thread.busy ? el("div.msg-actions.user-actions",
           el("button.icon-btn", { title: "Undo to here — rewind the thread and the files to just before this message", html: icon("refresh"), on: { click: () => this.opts.onRevert(m.id) } }),
           el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(m.text || ""); toast("Copied", "ok", 1200); } } })) : null;
@@ -812,7 +888,10 @@ export class ChatView {
     while (j > 0 && list[j - 1].type !== "user") j--;
     const t0 = list[j - 1]?.time?.created || m.time?.created || 0; // when this turn began
     const last = next?.type !== "assistant";
+    const rich = !!this.opts.rich?.(); // Studio: a reply's work folds under one bar, a logo on each reply, files changed at the end
     const parts = [];
+    const kinds = []; // what each part is: think, text, tool, note
+    const add = (node, kind) => { parts.push(node); kinds.push(kind); };
     const lastText = [...m.content].reverse().find((p) => p.type === "text");
     for (const p of m.content) {
       if (p.type === "reasoning") {
@@ -823,25 +902,25 @@ export class ChatView {
         const box = el(`div.think${p.live ? ".live" : ""}${this.openThinks.has(key) ? ".open" : ""}`);
         box.append(
           el("button.think-head", { type: "button", on: { click: () => { box.classList.toggle("open"); this.openThinks[box.classList.contains("open") ? "add" : "delete"](key); } } },
-            el("span.chev", { html: icon("chev") }), el("span.think-label", label)),
+            el("span.chev", { html: icon("chev") }), el("span.think-ico", ico("sparkle")), el("span.think-label", label)),
           el("div.think-body", el("div", el("div.think-text", { dataset: { part: `reasoning:${p.ordinal}` } }, p.text || "…"))));
-        parts.push(box);
+        add(box, "think");
       } else if (p.type === "text") {
         if (!p.text && !p.live) continue;
         const md = el("div.md", { html: markdown(p.text), dataset: { part: `text:${p.ordinal}` } });
         if (p.live && p === lastText) md.lastElementChild ? md.lastElementChild.classList.add("caret") : md.classList.add("caret");
-        parts.push(md);
+        add(md, "text");
       } else if (p.type === "tool") {
-        parts.push(renderTool(p, this.openTools, this.thread, t0));
+        add(renderTool(p, this.openTools, this.thread, t0), "tool");
       }
     }
     const stopped = m.stopped || isStop(m.error);
     const last2 = this.thread.messages[this.thread.messages.length - 1] === m;
-    if (m.error && !stopped && !(last2 && this.thread.error)) parts.push(errorCard(m.error, { model: this.opts.modelName(m.model) }));
-    if (stopped) parts.push(el("div.sys-note", "Stopped"));
+    if (m.error && !stopped && !(last2 && this.thread.error)) add(errorCard(m.error, { model: this.opts.modelName(m.model) }), "note");
+    if (stopped) add(el("div.sys-note", "Stopped"), "note");
     if (!parts.length && !m.live && !m.retries?.length) return null;
-    if (!parts.length && (m.live || m.retrying)) parts.push(el("div.think.live", el("span.think-head", el("span.think-label", m.retrying ? "Waiting to retry" : "Working"))));
-    if (m.retries?.length) parts.unshift(retryNote(m));
+    if (!parts.length && (m.live || m.retrying)) add(el("div.think.live", el("span.think-head", el("span.think-label", m.retrying ? "Waiting to retry" : "Working"))), "think");
+    if (m.retries?.length) { parts.unshift(retryNote(m)); kinds.unshift("note"); }
 
     // Output already includes reasoning; input is the uncached part, so add what the cache served.
     const tokens = m.tokens ? fmtTokens((m.tokens.input || 0) + (m.tokens.cache?.read || 0) + (m.tokens.cache?.write || 0) + (m.tokens.output || 0)) + " tokens" : null;
@@ -850,7 +929,9 @@ export class ChatView {
     const { dur, tps } = stepStats(m);
     const turnDone = last && m.turnMs ? m.turnMs : null;
     const meta = el("div.msg-meta",
-      el("span.model", this.opts.modelName(m.model) || m.model?.id || "Assistant"),
+      rich && m.model ? el("span.model", this.opts.modelMark ? this.opts.modelMark(m.model) : null, this.opts.modelName({ ...m.model, variant: undefined }) || m.model.id,
+        m.model.variant && m.model.variant !== "default" ? el("span.eff-badge", effortLabel(m.model.variant)) : null)
+        : el("span.model", this.opts.modelName(m.model) || m.model?.id || "Assistant"),
       m.served?.slug ? (m.served.slug === m.model?.id
         ? el("span.served-tag.ok", { title: `Confirmed by ChatGPT: this reply came from the real model ${m.served.slug}${m.served.experience ? ` (${m.served.experience})` : ""}` }, ico("check"), "real model")
         : el("span.served-tag.warn", { title: `ChatGPT served ${m.served.slug} instead of ${m.model?.id} (a fallback)` }, `served as ${m.served.slug}`)) : null,
@@ -866,7 +947,98 @@ export class ChatView {
       text ? el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(text); toast("Copied", "ok", 1400); } } }) : null,
       el("button.icon-btn", { title: "Fork thread from here", html: icon("branch"), on: { click: () => this.opts.onFork(m.id) } }));
     const avatar = el("div.avatar", this.opts.avatar ? this.opts.avatar(m.live) : null);
-    return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}`, anim, avatar, cont ? null : meta, el("div.msg-body", parts), actions);
+    const files = rich && last && !m.live ? this.turnFiles(list.slice(j, i + 1)) : null;
+    // Studio: everything the model did on the way (its notes, thinking and steps) sits in one work column
+    // under a "Worked for …" bar; the answer at the end of the reply stays outside it.
+    let body = el("div.msg-body", parts);
+    const T = rich ? this.turnOf(m) : null;
+    if (T && T.tools.length) {
+      let from = parts.length;
+      if (last && !m.live) while (from > 0 && (kinds[from - 1] === "text" || kinds[from - 1] === "note")) from--;
+      const work = parts.slice(0, from);
+      body = el("div.msg-body",
+        cont ? null : this.turnBar(T),
+        work.length ? el(`div.work${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { dataset: { turn: T.id } }, el("div.work-in", work)) : null,
+        ...parts.slice(from));
+    }
+    return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}${T && T.tools.length ? ".has-work" : ""}`, anim, avatar, cont ? null : meta, body, files, actions);
+  }
+
+  /** The reply `m` belongs to: its messages, its steps, whether it is still running and folded. */
+  turnOf(m) {
+    const msgs = this.thread.messages;
+    const i = msgs.indexOf(m);
+    let a = i, b = i;
+    while (a > 0 && msgs[a - 1].type !== "user") a--;
+    while (b < msgs.length - 1 && msgs[b + 1].type !== "user") b++;
+    const turn = msgs.slice(a, b + 1).filter((x) => x.type === "assistant");
+    const tools = turn.flatMap((x) => x.content.filter((p) => p.type === "tool"));
+    const id = turn[0]?.id || m.id;
+    const live = turn.some((x) => x.live) || (!!this.thread.busy && b === msgs.length - 1);
+    const collapsed = this.openTools.has("tc:" + id) ? true : this.openTools.has("t:" + id) ? false : !live && tools.length >= 3;
+    return { id, msgs: turn, tools, live, collapsed };
+  }
+
+  /** "Worked for 1m 12s · Edited 3 files · Ran 2 commands": click to fold or unfold the work. */
+  turnBar(T) {
+    const sum = stepSummary(T.tools);
+    const first = T.msgs[0], end = T.msgs[T.msgs.length - 1];
+    // How long the reply took: the live run's own clock, else first start to last finish, else the steps added up.
+    const finish = Math.max(0, ...T.msgs.map((x) => x.time?.completed || (x.time?.created && x.durationMs ? x.time.created + x.durationMs : 0)));
+    const ms = end?.turnMs || (finish && first?.time?.created ? finish - first.time.created : 0) || T.msgs.reduce((n, x) => n + (stepStats(x).dur || 0), 0);
+    const start = first?.time?.created || Date.now();
+    const bar = el(`button.turn-bar${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { type: "button", dataset: { turn: T.id }, "aria-expanded": String(!T.collapsed), on: { click: () => {
+      const shut = !bar.classList.contains("shut");
+      this.openTools.delete(shut ? "t:" + T.id : "tc:" + T.id);
+      this.openTools.add(shut ? "tc:" + T.id : "t:" + T.id);
+      this.applyTurn(T.id, shut);
+    } } },
+      el("span.tb-chev", { html: icon("chev") }),
+      T.live ? el("span.tb-what", el("span.tb-pulse"), "Working", el("span.dur.live-dur", { dataset: { start: String(start) } }, fmtDur(Date.now() - start)))
+        : el("span.tb-what", ms > 0 ? `Worked for ${fmtDur(ms)}` : "Worked"),
+      el("span.tb-bits", sum.bits.map((b) => el("span.steps-bit", b))),
+      el("span.steps-icons", sum.icons),
+      el("span.steps-n", `${T.tools.length} ${T.tools.length === 1 ? "step" : "steps"}`));
+    return bar;
+  }
+
+  applyTurn(id, shut, live) {
+    for (const n of this.root.querySelectorAll(`[data-turn="${id}"]`)) {
+      n.classList.toggle("shut", shut);
+      if (live != null) n.classList.toggle("live", live);
+      if (n.classList.contains("turn-bar")) n.setAttribute("aria-expanded", String(!shut));
+    }
+  }
+
+  /** The files a whole reply changed, as a card at its end. */
+  turnFiles(msgs) {
+    const files = new Map();
+    for (const x of msgs) {
+      if (x.type !== "assistant") continue;
+      for (const p of x.content) {
+        if (p.type !== "tool" || p.state?.status !== "completed") continue;
+        for (const pt of toolPatches(p)) {
+          if (!pt.file || pt.file === "patch") continue;
+          const [a, r] = pt.additions != null ? [pt.additions, pt.deletions || 0] : countPatch(pt.patch);
+          const o = files.get(pt.file) || { a: 0, r: 0 };
+          files.set(pt.file, { a: o.a + a, r: o.r + r });
+        }
+      }
+    }
+    if (!files.size) return null;
+    let A = 0, R = 0;
+    for (const s of files.values()) { A += s.a; R += s.r; }
+    const review = () => this.opts.onReview?.();
+    return el("div.turn-files",
+      el("div.tf-head", ico("diff"), el("b", `${files.size} ${files.size === 1 ? "file" : "files"} changed`),
+        el("span.tool-stat", el("span.plus", `+${A}`), el("span.minus", `−${R}`)), el("span.tf-grow"),
+        this.opts.onReview ? el("button.tf-btn", { type: "button", on: { click: review } }, "Review", el("span.tf-arrow", { html: icon("chev") })) : null),
+      el("div.tf-list", [...files].map(([f, s]) => {
+        const k = Math.max(f.lastIndexOf("/"), f.lastIndexOf("\\"));
+        const dir = k > 0 ? f.slice(0, k).split(/[\\/]/).filter(Boolean).slice(-2).join("/") : "";
+        return el("button.tf-row", { type: "button", title: f, on: { click: review } }, fileIcon(f), el("span.tf-name", f.slice(k + 1)), dir ? el("span.tf-dir", dir) : null,
+          el("span.tool-stat", el("span.plus", `+${s.a}`), el("span.minus", `−${s.r}`)));
+      })));
   }
 
   renderPermissions() {

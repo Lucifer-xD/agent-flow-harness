@@ -191,11 +191,11 @@
 :root[data-ui="compact"] .pv-tile, :root[data-ui="compact"] .cn-item, :root[data-ui="compact"] .mv-welcome { border-radius: 8px; }
 :root[data-ui="compact"] .pv-tile:hover { transform: none; }
 :root[data-ui="compact"] .pv-mono, :root[data-ui="compact"] .cn-ic, :root[data-ui="compact"] .dm-icon { border-radius: 6px; }
-:root[data-ui="compact"] .pop.mp-pop { border-radius: 8px; }
+:root[data-ui="compact"] .pop.mpk-pop { border-radius: 8px; }
 :root[data-ui="focus"] .pv-tile { border: 0; box-shadow: none; background: var(--f-soft); border-radius: 20px; }
 :root[data-ui="focus"] .pv-tile.pv-new { background: transparent; border: 1.5px dashed var(--line-3); }
-:root[data-ui="focus"] .pop.mp-pop { border-radius: 20px; }
-:root[data-ui="focus"] .mp-row, :root[data-ui="focus"] .mp-prov { border-radius: 12px; }
+:root[data-ui="focus"] .pop.mpk-pop { border-radius: 20px; }
+:root[data-ui="focus"] .mpk-row, :root[data-ui="focus"] .mpk-chip { border-radius: 12px; }
 :root[data-ui="canvas"] .pv-tile { border: 0; border-radius: 16px; box-shadow: 0 0 0 1px var(--line), 0 12px 28px -24px rgba(0, 0, 0, 0.4); }
 :root[data-ui="canvas"] .modal.settings .m-search { border-radius: 11px; }
 :root[data-ui="canvas"] .m-ind { border-radius: 10px; background: var(--bg); box-shadow: 0 0 0 1px var(--line), 0 6px 14px -10px rgba(0, 0, 0, 0.45); }
@@ -209,76 +209,6 @@
   .m-ind, .seg-pill { transition: none !important; }
 }
 
-/* =====================================================================================
-   Model picker (model-picker.js): providers down the side, models beside them
-   ===================================================================================== */
-.pop.mp-pop { padding: 0; max-width: calc(100vw - 20px); border-radius: 14px; }
-.pop.mp-pop > .pop-list:empty { display: none; }
-.mp { display: flex; flex-direction: column; }
-.mp-head { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px; border-bottom: 1px solid var(--line); color: var(--text-3); }
-.mp-head > .ico { width: 15px; height: 15px; flex: none; }
-.mp-q { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; padding: 0; font-size: 13.6px; color: var(--text); }
-.mp-q::placeholder { color: var(--text-3); }
-.mp-hint { font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
-.mp-cols { display: grid; grid-template-columns: 200px minmax(0, 1fr); height: min(390px, 58vh); }
-.mp-cols.single { grid-template-columns: minmax(0, 1fr); height: auto; max-height: min(390px, 58vh); }
-.mp-rail { display: flex; flex-direction: column; gap: 1px; padding: 8px 6px; overflow-y: auto; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--text) 2.2%, transparent); }
-[dir="rtl"] .mp-rail { border-right: 0; border-left: 1px solid var(--line); }
-.mp-rail[hidden] { display: none; }
-.mp-prov { flex: none; display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 8px; border-radius: 7px; text-align: start; font-size: 12.8px; color: var(--text-2); transition: background 0.12s, color 0.12s, opacity 0.2s; }
-.mp-prov:hover { background: var(--hover); color: var(--text); }
-.mp-prov.on { background: var(--selected); color: var(--text); font-weight: 580; }
-.mp-prov.none { opacity: 0.42; }
-.mp-prov > .ico { width: 15px; height: 15px; color: var(--text-3); flex: none; }
-.mp-prov.on > .ico { color: var(--accent); }
-.mp-prov-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mp-count { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 6px; }
-.mp-prov.has .mp-count::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
-.mp-rail-sep { height: 1px; background: var(--line); margin: 5px 6px; flex: none; }
-.mp-add { flex: none; display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 8px; margin-top: auto; border-radius: 7px; font-size: 12.4px; color: var(--text-3); transition: background 0.12s, color 0.12s; }
-.mp-add:hover { background: var(--hover); color: var(--accent); }
-.mp-add .ico { width: 14px; height: 14px; }
-.mp-mono, .pv-mono { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 6px; font-size: 9.5px; font-weight: 750; letter-spacing: 0.02em;
-  color: hsl(var(--h) 58% 42%); background: hsl(var(--h) 70% 55% / 0.14); box-shadow: inset 0 0 0 1px hsl(var(--h) 60% 50% / 0.22); }
-:root[data-theme="dark"] .mp-mono, :root[data-theme="dark"] .pv-mono { color: hsl(var(--h) 80% 72%); }
-.mp-list { overflow-y: auto; overscroll-behavior: contain; padding: 6px; }
-.mp-group { display: flex; align-items: center; gap: 6px; padding: 10px 10px 4px; font-size: 10.5px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-.mp-group > span { margin-inline-start: auto; font-variant-numeric: tabular-nums; }
-.mp-group .ico { width: 12px; height: 12px; }
-.mp-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; text-align: start; transition: background 0.1s; }
-.mp-row.kb { background: var(--hover); }
-.mp-row.on { background: color-mix(in srgb, var(--accent) 9%, transparent); }
-.mp-row.on.kb { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.mp-check { width: 16px; height: 16px; flex: none; color: var(--accent); }
-.mp-check svg { width: 16px; height: 16px; }
-.mp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.mp-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13.2px; font-weight: 550; color: var(--text); }
-.mp-name-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mp-name .mods, .mt-name .mods { margin: 0; }
-.mp-sub { font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mp-tag { flex: none; font-size: 10px; font-weight: 650; padding: 1px 6px; border-radius: 999px; background: var(--hover); color: var(--text-3); letter-spacing: 0.02em; }
-.mp-tag.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); }
-.mp-tag.acc { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.mp-meta { flex: none; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.mp-eff .ico { width: 13px; height: 13px; }
-.mp-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 16px; text-align: center; font-size: 12.5px; color: var(--text-3); }
-.mp-foot { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px 6px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-3); }
-.mp-foot-label { font-weight: 600; color: var(--text-2); }
-.mp-grow { flex: 1; }
-.mp-foot-now { display: flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; white-space: nowrap; }
-.mp-foot-now b { color: var(--text-2); font-weight: 560; }
-.mp-foot-now .ico { width: 13px; height: 13px; flex: none; }
-.mp-link { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border-radius: 7px; font-size: 12.3px; color: var(--text-2); transition: background 0.12s, color 0.12s; }
-.mp-link:hover { background: var(--hover); color: var(--text); }
-.mp-link .ico { width: 13px; height: 13px; }
-.mp-seg button { height: 24px; padding: 0 10px; font-size: 12px; text-transform: capitalize; }
-@media (max-width: 640px) {
-  .mp-cols { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: min(460px, 66vh); }
-  .mp-rail { flex-direction: row; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--line); padding: 6px; scrollbar-width: none; }
-  .mp-rail-sep, .mp-add span, .mp-hint { display: none; }
-  .mp-prov-name { max-width: 130px; }
-  .mp-add { margin: 0; }
-}
 
 /* =====================================================================================
    Models & accounts (settings-models.js)

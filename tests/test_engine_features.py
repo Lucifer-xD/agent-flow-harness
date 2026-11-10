@@ -964,3 +964,17 @@ def test_a_removed_interface_goes_back_to_studio():
     kept = appstore._retire_interface({"ui": {"interface": "canvas", "preset": "canvas"}})["ui"]
     assert kept == {"interface": "canvas", "preset": "canvas"}
 
+
+
+def test_removed_or_turned_off_provider_leaves_the_picker_at_once(home):
+    provcfg.upsert("one", {"name": "One", "kind": "openai", "base_url": "http://one", "api_key": "k1", "models": [{"id": "a", "name": "A"}]})
+    provcfg.upsert("two", {"name": "Two", "kind": "openai", "base_url": "http://two", "api_key": "k2", "models": [{"id": "b", "name": "B"}]})
+    e = Engine()
+    e.reload_providers()
+    assert {m["providerID"] for m in e.list_models()} == {"one", "two"}
+    provcfg.upsert("two", {"enabled": False})
+    e.reload_providers()
+    assert {m["providerID"] for m in e.list_models()} == {"one"}
+    provcfg.remove("one")
+    e.reload_providers()
+    assert e.list_models() == [] and "one" not in e.models

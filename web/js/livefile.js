@@ -5,6 +5,7 @@
 import { api } from "./api.js";
 import { logoNode } from "./logo.js";
 import { basename, el, ico, toggle } from "./ui.js";
+import { fileIcon } from "./fileicons.js";
 
 let ctx = null;
 const st = { tool: null, kind: null, raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, follow: true, frame: 0, scrolledTo: -1, startedAt: 0, pace: null };
@@ -211,7 +212,7 @@ export function renderLive(body, titleBox) {
   const name = basename(p.path || "");
   const finished = st.done && caughtUp() && (st.pace?.settled ?? true);
   const verb = st.kind === "write" ? (finished ? "Wrote" : "Writing") : finished ? "Edited" : "Editing";
-  titleBox.replaceChildren(logoNode({ size: 26, working: !finished }), el("span", `${verb} ${name || "…"}`),
+  titleBox.replaceChildren(logoNode({ size: 26, working: !finished }), el("span.lf-what", name ? fileIcon(name) : null, `${verb} ${name || "…"}`),
     finished ? el("span.pill-tag", st.error ? "failed" : "done") : el("span.pill-tag.accent", "live"));
 
   let lines = [], marks = new Map(), focus = -1, caret = -1, note = null;
