@@ -395,8 +395,11 @@ BROWSER_VERBS = {
     "click": ("Clicked", "Clicking"), "type": ("Typed into", "Typing into"), "press": ("Pressed", "Pressing"), "scroll": ("Scrolled", "Scrolling"),
     "double_click": ("Double-clicked", "Double-clicking"), "hover": ("Pointed at", "Pointing at"), "drag": ("Dragged", "Dragging"), "back": ("Went back", "Going back"),
     "forward": ("Went forward", "Going forward"), "reload": ("Reloaded", "Reloading"), "evaluate": ("Ran JavaScript", "Running JavaScript"), "console": ("Read the console", "Reading the console"),
-    "close": ("Closed the browser tab", "Closing the browser tab"),
+    "close": ("Closed the browser tab", "Closing the browser tab"), "network": ("Checked the network", "Checking the network"),
+    "sources": ("Read the page's files", "Reading the page's files"),
 }
+CHROME_VERBS = {**BROWSER_VERBS, "open": ("Opened in your browser", "Opening in your browser"), "tabs": ("Listed your tabs", "Listing your tabs"),
+                "switch_tab": ("Switched to your tab", "Switching to your tab"), "close": ("Left the tab", "Leaving the tab")}
 COMPUTER_VERBS = {
     "screenshot": ("Looked at the screen", "Looking at the screen"), "zoom": ("Looked closer", "Looking closer"), "apps": ("Listed apps", "Listing apps"),
     "request_access": ("Asked to use apps", "Asking to use apps"), "launch": ("Opened an app", "Opening an app"), "focus": ("Switched app", "Switching app"),
@@ -437,6 +440,8 @@ def tool_target(p: dict) -> str:
         return str(pick(given, "pattern", "query", "path") or "")
     if name == "browser":
         return str(pick(given, "url", "target", "key", "script", "direction") or "")
+    if name == "chrome":
+        return str(pick(given, "url", "tab", "target", "key", "script", "direction") or "")
     if re.search(r"web|fetch|browse", name):
         return str(pick(given, "url", "query") or "")
     if re.search(r"task|agent", name):
@@ -462,6 +467,8 @@ def tool_verb(p: dict, live: bool) -> str:
         pair = COMPUTER_VERBS.get(action, ("Used the computer", "Using the computer"))
     elif name == "browser":
         pair = BROWSER_VERBS.get(action, ("Used the browser", "Using the browser"))
+    elif name == "chrome":
+        pair = CHROME_VERBS.get(action, ("Used your browser", "Using your browser"))
     elif name == "shell" and given.get("background"):
         pair = ("Started in background", "Starting in background")
     elif name == "jobs":

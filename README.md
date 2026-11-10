@@ -132,6 +132,7 @@ Then type `afh` in a project folder. It's the same AFH, full screen: threads, mo
 
 **Works beyond the code**
 - **A built-in browser:** a tabbed browser in the side panel with DevTools. Watch the agent click and type, or take over any time.
+- **Your own Chrome:** when a task needs your sign-ins or a tab you have open, the agent can work in your real Chrome, Edge or Brave. No extension: your browser asks you to click Allow, and AFH asks about each new site.
 - **Computer use:** for work with no file, command or web route, the agent can use desktop apps. It asks before it touches an app, and a frame around the screen shows while it's working.
 - **Red Team mode:** finds the weaknesses an attacker could use in your own project and reports them. It stays in scope and never changes your code.
 - **Errors caught after edits:** Python, JSON, TOML, JavaScript, TypeScript (your project's `tsc`), Go, PHP, Ruby and your own linters. Problems go straight back to the model.

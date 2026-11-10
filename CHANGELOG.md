@@ -2,6 +2,23 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.26.0 (2026-11-10)
+
+**Your own Chrome: the agent can use your real browser**
+
+AFH can now work in the browser you use every day (Chrome, Edge or Brave), with your sign-ins and your open tabs. Its built-in browser is a separate, clean one for checking its work, and it stays. The new `chrome` tool is for things only your own browser can do.
+
+- **Your sign-ins and your tabs:** ask for something behind a login, such as “check my GitHub notifications” or “summarise the tab I have open”. The agent opens a tab in your browser or works in one of yours. It can list your tabs, switch to one, click, type, scroll, read the page, and look at the console and network.
+- **No extension and no separate profile:** AFH connects through the browser's own remote-debugging switch, in Chrome and Edge 144 or newer. Turn it on once at `chrome://inspect/#remote-debugging`. **Settings → Agent → Your Chrome** opens that page for you and shows when your browser is ready.
+- **You stay in charge:** your browser asks you to click Allow each time AFH connects, and shows a bar while it is connected. AFH then asks about each new site: Allow, Always allow or Don't allow. Always-allowed sites are listed in Settings, and sites on your blocked list are never used, in any thread.
+- **A site you refuse is left again:** if a click lands on a site you say no to, a tab that click opened is closed, and a page that moved goes back.
+- **Careful by design:** the agent is told to stop and ask before anything that buys, sends, posts or deletes, never to type passwords or card numbers, and to treat what a web page says as information, not instructions. Closing AFH never closes your browser, and AFH only closes tabs it opened.
+- **Everywhere:** the Windows and Mac apps, the terminal app and the `afh` command all have it, in English and Arabic. Large and high-resolution windows are handled, so clicks land where the screenshot shows.
+
+**Fixes**
+
+- **Settings → Agent:** the Always-allowed apps list under Computer control now lines up with the rest of its card.
+
 ## 1.25.0 (2026-11-09)
 
 **Three new interfaces: Focus, Compact and Canvas**

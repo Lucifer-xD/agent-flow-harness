@@ -477,7 +477,7 @@ def test_registry_and_specs(monkeypatch):
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("BRAVE_API_KEY", raising=False)
     names = [t.spec.name for t in builtin_tools({})]
-    base = ["read", "write", "edit", "patch", "glob", "grep", "list", "shell", "webfetch", "browser"]
+    base = ["read", "write", "edit", "patch", "glob", "grep", "list", "shell", "webfetch", "browser", "chrome"]
     import sys
     if sys.platform == "win32":  # the computer tool is offered on Windows, on by default
         assert names == base + ["computer"]
@@ -485,6 +485,7 @@ def test_registry_and_specs(monkeypatch):
     else:
         assert names == base
     assert "browser" not in [t.spec.name for t in builtin_tools({"browser": {"enabled": False}})]
+    assert "chrome" not in [t.spec.name for t in builtin_tools({"chrome": {"enabled": False}})]
     with_key = [t.spec.name for t in builtin_tools({"web": {"braveApiKey": "b"}})]
     assert "websearch" in with_key
     monkeypatch.setenv("TAVILY_API_KEY", "t")

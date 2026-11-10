@@ -250,8 +250,10 @@ class Engine:
             self.scheduler.stop()
         self.github.stop()
         from .tools.browser import MANAGER as browser
+        from .tools.chrome import CHROME
 
         await browser.shutdown()
+        await CHROME.shutdown()  # disconnects only: the user's browser and its tabs stay as they are
         for run in list(self.runs.values()):
             run.abort.set()  # not stop(): a thread cut off by closing AFH is resumed on the next start
         await self.jobs.stop_all()

@@ -453,6 +453,9 @@ class Approval(ModalScreen):
             names = ", ".join(a.get("name") or a.get("id") or "App" for a in apps)
             title = meta.get("title") or f"Let AFH use {names}?"
             sub = meta.get("reason") or f"AFH will use the mouse and keyboard in {names} while it works. Press Esc in any window to stop."
+        elif action == "chrome" and meta.get("kind") == "chrome":
+            title = meta.get("title") or f"Let AFH use {meta.get('site') or 'this site'} in your browser?"
+            sub = meta.get("note") or "AFH will see this site the way you do, signed in as you, and can click and type there."
         else:
             title = meta.get("title") or {"edit": "Allow file changes?", "shell": "Run this command?"}.get(action, f"Allow {action}?")
             sub = p.get("message") or ""
@@ -475,7 +478,8 @@ class Approval(ModalScreen):
                     with VerticalScroll(id="scroll"):
                         yield Static(Content("\n").join(sections), classes="-diff" if files else "")
                 yield Input(placeholder="Tell the agent what to do instead (optional), Enter to send", id="why")
-                yield Static(keys("Y allow once   A always in this thread   N no   D decide later"), id="hint")
+                always = "A always for this site" if action == "chrome" else "A always in this thread"
+                yield Static(keys(f"Y allow once   {always}   N no   D decide later"), id="hint")
 
     def action_reply(self, decision: str) -> None:
         self.dismiss((decision, None))

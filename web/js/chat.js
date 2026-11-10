@@ -304,6 +304,7 @@ export function describeTool(p) {
   if (/^(shell|bash|exec|command)$/.test(name)) return { icon: "terminal", label: "Run", target: pick(input, "command", "cmd") || "" };
   if (/^(grep|glob|search|find|list|ls)$/.test(name)) return { icon: "search", label: name[0].toUpperCase() + name.slice(1), target: pick(input, "pattern", "query", "path") || "" };
   if (name === "browser") return { icon: "eye", label: "Browser", target: pick(input, "url", "target", "key", "script", "direction") || "" };
+  if (name === "chrome") return { icon: "globe", label: "Your browser", target: pick(input, "url", "tab", "target", "key", "script", "direction") || "" };
   if (/web|fetch|browse/.test(name)) return { icon: "globe", label: name === "websearch" ? "Search web" : "Fetch", target: pick(input, "url", "query") || "" };
   if (/task|agent/.test(name)) return { icon: "bot", label: "Subagent", target: pick(input, "description", "prompt") || "" };
   if (name === "question") return { icon: "info", label: "Asked", target: pick((input.questions || [])[0] || {}, "question") || "" };
@@ -489,7 +490,10 @@ function renderTool(p, openSet, thread, t0) {
     click: ["Clicked", "Clicking"], type: ["Typed into", "Typing into"], press: ["Pressed", "Pressing"], scroll: ["Scrolled", "Scrolling"],
     double_click: ["Double-clicked", "Double-clicking"], hover: ["Pointed at", "Pointing at"], drag: ["Dragged", "Dragging"],
     back: ["Went back", "Going back"], forward: ["Went forward", "Going forward"], reload: ["Reloaded", "Reloading"],
-    evaluate: ["Ran JavaScript", "Running JavaScript"], console: ["Read the console", "Reading the console"], close: ["Closed the browser tab", "Closing the browser tab"] };
+    evaluate: ["Ran JavaScript", "Running JavaScript"], console: ["Read the console", "Reading the console"], close: ["Closed the browser tab", "Closing the browser tab"],
+    network: ["Checked the network", "Checking the network"], sources: ["Read the page's files", "Reading the page's files"] };
+  const CHROME = { ...BROWSER, open: ["Opened in your browser", "Opening in your browser"], tabs: ["Listed your tabs", "Listing your tabs"],
+    switch_tab: ["Switched to your tab", "Switching to your tab"], close: ["Left the tab", "Leaving the tab"] };
   const COMPUTER = { screenshot: ["Looked at the screen", "Looking at the screen"], zoom: ["Looked closer", "Looking closer"], apps: ["Listed apps", "Listing apps"],
     request_access: ["Asked to use apps", "Asking to use apps"], launch: ["Opened an app", "Opening an app"], focus: ["Switched app", "Switching app"],
     switch_display: ["Switched display", "Switching display"], cursor_position: ["Found the pointer", "Finding the pointer"], move: ["Moved the pointer", "Moving the pointer"],
@@ -500,6 +504,7 @@ function renderTool(p, openSet, thread, t0) {
     set_clipboard: ["Set the clipboard", "Setting the clipboard"], batch: ["Did several steps", "Doing several steps"], teach: ["Showed you a step", "Showing you a step"] };
   const verbs = name === "computer" ? COMPUTER[input0.action] || ["Used the computer", "Using the computer"]
     : name === "browser" ? BROWSER[input0.action] || ["Used the browser", "Using the browser"]
+    : name === "chrome" ? CHROME[input0.action] || ["Used your browser", "Using your browser"]
     : name === "shell" && input0.background ? ["Started in background", "Starting in background"]
     : name === "jobs" ? ({ stop: ["Stopped job", "Stopping job"], list: ["Listed jobs", "Listing jobs"] }[input0.action] || ["Read job output", "Waiting for job output"])
       : name === "harness" ? HARNESS_VERBS[input0.action] || ["Changed AFH setup", "Changing AFH setup"]
@@ -750,7 +755,7 @@ export class ChatView {
       case "synthetic": {
         const n = m.metadata?.notice;
         if (!n) return null;
-        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert", resume: "refresh" };
+        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert", resume: "refresh", chrome: "globe" };
         const label = m.metadata?.label || (n === "goal" ? "Goal not achieved yet — continuing" : n === "hook" ? "A stop hook failed — continuing" : n === "todo" ? "To-do items still open — checking" : "Notice");
         return el(`div.notice.${n}`, anim, ico(icons[n] || "info"), el("span", label), m.text ? el("details", el("summary", "what the agent was told"), el("pre", m.text)) : null);
       }
@@ -962,6 +967,7 @@ export function permissionCard(p, sid, onDone) {
   if (p.action === "question" && Array.isArray(p.metadata?.questions)) return questionCard(p, sid, onDone);
   if (p.action === "design" && p.metadata?.design) return designCard(p, sid, onDone);
   if (p.action === "computer" && p.metadata?.kind === "computer") return computerCard(p, sid, onDone);
+  if (p.action === "chrome" && p.metadata?.kind === "chrome") return chromeSiteCard(p, sid, onDone);
   const action = p.action || "tool";
   const title = p.metadata?.title || (action === "edit" ? "Allow file changes?" : action === "shell" ? "Run this command?" : `Allow ${action}?`);
   const files = p.metadata?.files || [];
@@ -1026,6 +1032,33 @@ export function computerCard(p, sid, onDone) {
     el("div.approval-actions",
       el("button.btn.primary.sm", { on: { click: (e) => reply("once", e.currentTarget) } }, ico("check"), "Allow"),
       el("button.btn.sm", { title: many ? "Don't ask again for these apps" : "Don't ask again for this app", on: { click: (e) => reply("always", e.currentTarget) } }, "Always allow"),
+      el("span.spacer"),
+      el("button.btn.danger.sm", { on: { click: (e) => reply("reject", e.currentTarget) } }, "Don't allow")));
+}
+
+/** The agent wants to use a site in the user's own browser, signed in as them; they allow it (once/always) or not. */
+export function chromeSiteCard(p, sid, onDone) {
+  const m = p.metadata || {};
+  const reply = async (decision, btn) => {
+    const box = btn.closest(".approval");
+    box.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try {
+      await api.post(`/api/sessions/${sid}/permissions/${p.id}`, { decision });
+      onDone?.(p.id);
+    } catch (e) {
+      toast(e.message, "err");
+      box.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
+  };
+  return el("div.approval.computer-approval",
+    el("div.approval-head", el("span.comp-badge", ico("globe")),
+      el("div", el("div", m.title || `Let AFH use ${m.site || "this site"} in your browser?`),
+        el("div.approval-sub", m.note || "AFH will see this site the way you do, signed in as you, and can click and type there."))),
+    el("div.comp-list", el("div.comp-app", el("span.comp-ico", (m.site || "?")[0].toUpperCase()), el("span.comp-name", m.site || ""),
+      el("span.comp-tier.full", `Your ${m.browser || "browser"}`))),
+    el("div.approval-actions",
+      el("button.btn.primary.sm", { on: { click: (e) => reply("once", e.currentTarget) } }, ico("check"), "Allow"),
+      el("button.btn.sm", { title: "Don't ask again for this site", on: { click: (e) => reply("always", e.currentTarget) } }, "Always allow"),
       el("span.spacer"),
       el("button.btn.danger.sm", { on: { click: (e) => reply("reject", e.currentTarget) } }, "Don't allow")));
 }

@@ -1496,6 +1496,17 @@ body.resizing-drawer .workbench, body.resizing-drawer .app { transition: none !i
 .comp-row .comp-name { font-size: 13.5px; }
 .comp-row .comp-tier { font-size: 11.5px; color: var(--text-3); padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; }
 .comp-loading, .comp-empty { padding: 10px 2px; color: var(--text-3); font-size: 13px; }
+.card > .comp-head, .card > .comp-apps { padding-inline: 18px; }
+.card > .comp-apps { padding-bottom: 6px; }
+.chrome-state { margin: 12px 18px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); font-size: 13px; }
+.chrome-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.chrome-line > svg { width: 16px; height: 16px; flex: none; color: var(--text-3); }
+.chrome-line.ok > svg { color: var(--ok, #2fbf71); }
+.chrome-line .comp-tier { font-size: 11.5px; color: var(--text-3); padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; }
+.chrome-steps ol { margin: 8px 0 10px; padding-inline-start: 20px; display: grid; gap: 7px; line-height: 1.5; }
+.chrome-steps code { padding: 1px 6px; border-radius: 6px; background: var(--panel-3); font-size: 12px; user-select: all; }
+.chrome-steps > div { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.chrome-steps .comp-sub { margin: 0; }
 .computer-approval .approval-sub { color: var(--text-2); }
 .comp-badge { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; color: #fff;
   background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #e8337a)); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent); }
