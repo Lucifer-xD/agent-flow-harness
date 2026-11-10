@@ -1,0 +1,146 @@
+/* The film at the top of the home page (js/film.js): a pinned 3D stage you play with your scroll.
+   Wide screens: the captions on the left, the picture on the right. Phones and tall screens: the
+   picture on top, the captions under it. The player bar sits at the bottom, like a video's. */
+
+.film { position: relative; height: 760vh; height: 760svh; background: var(--bg); }
+.film-pin { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; isolation: isolate; }
+.film-pin::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background:
+    radial-gradient(55% 55% at 70% 46%, rgba(255, 150, 60, 0.11), transparent 70%),
+    radial-gradient(40% 40% at 86% 74%, rgba(255, 61, 138, 0.08), transparent 70%),
+    var(--bg);
+}
+[data-theme="dark"] .film-pin::before {
+  background:
+    radial-gradient(55% 55% at 70% 46%, rgba(255, 110, 40, 0.13), transparent 70%),
+    radial-gradient(40% 40% at 86% 74%, rgba(255, 61, 138, 0.1), transparent 70%),
+    var(--bg);
+}
+.film-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* until the 3D is up (and where there's none): the mark at work in 2D, where the 3D will be */
+.film-poster { position: absolute; top: 84px; bottom: 92px; right: max(16px, 3vw); left: calc(max(24px, 5vw) + min(470px, 38vw) + 8px); display: grid; place-items: center; transition: opacity 0.7s var(--ease); pointer-events: none; }
+.film-poster-mark { width: min(560px, 86%); }
+.film-poster-mark .afh-mark, .cta-mark .afh-mark { display: block; width: 100%; height: auto; }
+.film-live .film-poster { opacity: 0; }
+
+/* ---- captions ---- */
+.caps { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.cap {
+  position: absolute; left: max(24px, 5vw); top: 50%; width: min(470px, 38vw);
+  opacity: var(--o, 0); transform: translate3d(0, calc(-50% + var(--dy, 0px)), 0); will-change: opacity, transform;
+}
+.cap.on { pointer-events: auto; }
+.cap-hero { --o: 1; }
+.cap-title { margin: 0; font: 700 clamp(40px, min(5.4vw, 9.5vh), 84px)/0.98 var(--display); letter-spacing: -0.055em; text-wrap: balance; }
+.cap-h { margin: 0; font: 700 clamp(30px, min(3.7vw, 6.6vh), 56px)/1.03 var(--display); letter-spacing: -0.05em; text-wrap: balance; }
+.cap-lead { margin: 22px 0 0; font-size: clamp(16px, 1.22vw, 19px); line-height: 1.55; color: var(--ink-2); text-wrap: pretty; }
+.cap-p { margin: 18px 0 0; max-width: 40ch; font-size: clamp(15.5px, 1.18vw, 18.5px); line-height: 1.55; color: var(--ink-2); text-wrap: pretty; }
+.cap-p b { color: var(--ink); font-weight: 600; }
+.cap-k { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; font: 500 12.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.cap-k b { display: grid; place-items: center; min-width: 30px; height: 22px; padding: 0 7px; border-radius: 7px; background: var(--grad); color: #fff; font-weight: 600; letter-spacing: 0; }
+.cap-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.cap-hero .eyebrow { margin-bottom: 22px; }
+.cap-hint { display: flex; align-items: center; gap: 10px; margin: 24px 0 0; font: 500 13px var(--body); color: var(--ink-3); }
+.mouse { position: relative; flex: none; width: 18px; height: 28px; border: 1.6px solid currentColor; border-radius: 10px; }
+.mouse::after { content: ""; position: absolute; left: 50%; top: 5px; width: 3px; height: 6px; margin-left: -1.5px; border-radius: 2px; background: var(--grad); animation: film-wheel 1.6s var(--ease) infinite; }
+@keyframes film-wheel { 0% { transform: translateY(0); opacity: 1; } 70% { transform: translateY(9px); opacity: 0; } 100% { opacity: 0; } }
+
+/* play / pause */
+.pf-ico { flex: none; display: inline-block; width: 12px; height: 14px; background: currentColor; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.film.playing .pf-ico { clip-path: none; background: linear-gradient(90deg, currentColor 0 34%, transparent 34% 66%, currentColor 66%); }
+.play-film { gap: 10px; }
+.play-film .pf-pause, .film.playing .play-film .pf-play { display: none; }
+.film.playing .play-film .pf-pause { display: inline; }
+
+/* ---- the player bar ---- */
+.player {
+  position: absolute; z-index: 3; left: 50%; bottom: max(16px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px; width: min(760px, calc(100% - 32px)); padding: 8px 8px 8px 8px;
+  border: 1px solid var(--line-2); border-radius: 18px; background: rgb(var(--glass-rgb) / 0.74);
+  backdrop-filter: blur(18px) saturate(1.5); -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow: 0 12px 40px rgb(var(--ink-rgb) / 0.08);
+}
+.pl-play { flex: none; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 12px; background: var(--ink); color: var(--bg); cursor: pointer; transition: transform 0.2s var(--ease); }
+.pl-play:hover { transform: scale(1.05); }
+.pl-play .pf-ico { margin-left: 2px; }
+.film.playing .pl-play .pf-ico { margin-left: 0; }
+.pl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.pl-meta { display: flex; justify-content: space-between; gap: 12px; font: 500 12px var(--mono); color: var(--ink-3); white-space: nowrap; }
+.pl-meta [data-chap] { color: var(--ink); font: 600 13px var(--body); letter-spacing: -0.01em; }
+.pl-track { position: relative; display: flex; align-items: center; gap: 4px; height: 16px; cursor: pointer; touch-action: none; outline: none; border-radius: 6px; }
+.pl-track:focus-visible { box-shadow: 0 0 0 2px var(--accent-ink); }
+.pl-seg { position: relative; flex: 1 1 0; height: 4px; padding: 0; border: 0; border-radius: 3px; background: rgb(var(--ink-rgb) / 0.13); overflow: hidden; cursor: pointer; transition: height 0.2s var(--ease); }
+.pl-track:hover .pl-seg, .pl-track.drag .pl-seg { height: 7px; }
+.pl-seg i { position: absolute; inset: 0; transform-origin: left; transform: scaleX(0); background: var(--grad); }
+.pl-seg span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.pl-thumb { position: absolute; top: 50%; left: 0; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25), 0 0 0 3px rgba(255, 106, 42, 0.35); pointer-events: none; }
+.pl-skip { flex: none; height: 42px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: 12px; background: transparent; color: var(--ink-2); font: 600 13.5px var(--body); cursor: pointer; transition: color 0.2s, border-color 0.2s; }
+.pl-skip:hover { color: var(--ink); border-color: var(--line-3); }
+
+/* ---- phones, tablets standing up, narrow windows: picture on top, captions under it ---- */
+@media not all and (min-width: 700px) and (min-aspect-ratio: 21/20) {
+  .film-pin::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 52%; z-index: 0; pointer-events: none;
+    background: linear-gradient(to bottom, rgb(var(--bg-rgb) / 0), rgb(var(--bg-rgb) / 0.9) 18%, var(--bg) 34%);
+  }
+  .film-poster { top: 66px; bottom: 43%; left: 10px; right: 10px; }
+  .film-poster-mark { width: min(420px, 82%); }
+  .cap {
+    left: max(18px, env(safe-area-inset-left, 0px)); right: max(18px, env(safe-area-inset-right, 0px)); width: auto; max-width: 620px;
+    top: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translate3d(0, var(--dy, 0px), 0);
+  }
+  .cap-title { font-size: clamp(34px, min(9.6vw, 6.2vh), 60px); }
+  .cap-h { font-size: clamp(26px, min(7.4vw, 4.8vh), 44px); }
+  .cap-lead, .cap-p { margin-top: 12px; font-size: clamp(15px, 3.9vw, 17px); line-height: 1.5; }
+  .cap-k { margin-bottom: 12px; }
+  .cap-cta { margin-top: 20px; gap: 10px; }
+  .cap-cta .btn-big { min-height: 50px; padding: 13px 20px; font-size: 15px; }
+  .cap-hero .eyebrow { margin-bottom: 14px; }
+  .cap-hint { margin-top: 16px; }
+  .player { width: calc(100% - 24px); bottom: max(12px, env(safe-area-inset-bottom, 0px)); gap: 10px; padding: 7px; border-radius: 16px; }
+  .pl-play, .pl-skip { height: 40px; }
+  .pl-play { width: 40px; }
+  .pl-skip { padding: 0 12px; }
+}
+@media not all and (min-width: 700px) and (min-aspect-ratio: 21/20) {
+  @media (max-height: 720px) {
+    .cap-hero .cap-lead, .cap-hero .eyebrow { display: none; }
+  }
+  @media (max-width: 400px) {
+    .cap-hero .cap-cta .btn-big { flex: 1 1 0; padding-inline: 12px; }
+    .cap-hint { display: none; }
+  }
+}
+/* short, wide windows (a phone on its side, a small laptop) */
+@media (min-width: 700px) and (min-aspect-ratio: 21/20) and (max-height: 620px) {
+  .cap-lead, .cap-hint, .cap-hero .eyebrow { display: none; }
+  .cap-cta { margin-top: 18px; }
+  .cap-cta .btn-big { min-height: 46px; padding: 11px 18px; font-size: 14.5px; }
+  .player { padding: 6px; }
+  .pl-play, .pl-skip { height: 36px; }
+  .pl-play { width: 36px; }
+}
+
+/* no WebGL: the captions as a plain page */
+.film-static { height: auto; }
+.film-static .film-pin { position: relative; height: auto; overflow: visible; padding: 110px 0 40px; }
+.film-static .film-pin::after, .film-static .film-canvas, .film-static .player { display: none; }
+.film-static .film-poster { position: relative; inset: auto; height: min(42vh, 380px); }
+.film-static .caps { position: relative; display: grid; gap: 64px; padding: 24px max(18px, 5vw) 0; }
+.film-static .cap { position: relative; inset: auto; width: auto; max-width: 640px; opacity: 1; transform: none; pointer-events: auto; }
+
+/* the closing call's mark */
+.cta-mark { width: min(380px, 72%); margin: 0 auto 28px; }
+
+/* below the film, things keep moving with your scroll: the app window tips up into place, the
+   cards rise in (where the browser can tie an animation to scrolling; elsewhere they just show) */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .showcase .window { transform-origin: 50% 100%; animation: film-tilt-in linear both; animation-timeline: view(); animation-range: entry 0% cover 42%; }
+    .bento .tile, .reach-card, .si-card, .mode-explorer, .logo-grid > span { animation: film-rise-in linear both; animation-timeline: view(); animation-range: entry 0% entry 90%; }
+  }
+}
+@keyframes film-tilt-in { from { transform: perspective(1600px) rotateX(32deg) scale(0.86) translateY(60px); opacity: 0.35; } to { transform: none; opacity: 1; } }
+@keyframes film-rise-in { from { transform: perspective(1000px) rotateX(22deg) translateY(56px) scale(0.96); opacity: 0; } to { transform: none; opacity: 1; } }

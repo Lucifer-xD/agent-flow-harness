@@ -1,7 +1,5 @@
-// The home page: the 3D mark at work in the hero and the closing call, the turn chip that ticks
-// through a real turn under it, the strand that fills down "How a turn works", the folding demo,
-// the live file, the modes, the provider logos and the counters. No scroll hijacking: plain scrolling.
-import { createMarks } from "./scene.js";
+// The home page: the film at the top (js/film.js, a pinned 3D stage your scroll plays), then the
+// app, the live file, the modes, the provider logos and the counters.
 import { CODE } from "./code-sample.js";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -13,12 +11,14 @@ const onSight = (el, fn, margin = "0px 0px -15% 0px") => {
   io.observe(el);
 };
 
-// ---- the mark at work, in 3D (or the 2D one where there's no WebGL) ----
-const stages = $$("[data-stage]");
-stages.forEach((s) => { s.innerHTML = window.afhMarkSvg?.(240) || ""; });
-const marks = createMarks($("#scene"));
-stages.forEach((s) => marks.add(s, { tilt: s.hasAttribute("data-tilt") }));
-window.afhMarks = marks;
+// ---- the film ----
+$$("[data-mark-big]").forEach((el) => { el.innerHTML = window.afhMarkSvg?.(240) || ""; });
+const film = $(".film");
+if (film) {
+  import("./film.js")
+    .then(({ createFilm }) => { window.afhFilm = createFilm(film); if (!window.afhFilm) film.classList.add("film-static"); })
+    .catch((e) => { console.error(e); film.classList.add("film-static"); });
+}
 
 // ---- the turn chip: a turn, as the app shows it, on a loop ----
 const chip = $(".turn-chip");

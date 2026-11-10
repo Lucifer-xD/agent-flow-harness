@@ -211,3 +211,6 @@ export function createMarks(canvas, { mobile = matchMedia("(max-width: 760px)").
     refresh: resize,
   };
 }
+
+// The film on the home page builds on the same strands and the same beat.
+export { STRANDS, BEAT, drawn, leftDot, rightDot, glossy };
