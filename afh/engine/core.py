@@ -376,11 +376,11 @@ class Engine:
     def resolve_model(self, ref: dict | None) -> tuple[Provider, ModelInfo]:
         ref = ref or self.default_model()
         if not ref:
-            raise RuntimeError("No model is configured. Add a provider in Settings → Models & providers.")
+            raise RuntimeError("No model is configured. Add a provider in Settings → Models & accounts.")
         provider = self.providers.get(ref.get("providerID", ""))
         model = self.find_model(ref)
         if provider is None:
-            raise RuntimeError(f"Provider '{ref.get('providerID')}' is not configured (Settings → Models & providers).")
+            raise RuntimeError(f"Provider '{ref.get('providerID')}' is not configured (Settings → Models & accounts).")
         if model is None:  # unknown id: still try it, the provider decides
             model = ModelInfo(id=ref["id"], name=ref["id"])
         return provider, model
@@ -406,7 +406,7 @@ class Engine:
                 if ref.get("variant") and m and ref["variant"] not in (m.variants or []):
                     ref = {k: v for k, v in ref.items() if k != "variant"}  # that effort level belonged to the old model
         if not ref:
-            raise RuntimeError("No model is configured. Add a provider in Settings → Models & providers.")
+            raise RuntimeError("No model is configured. Add a provider in Settings → Models & accounts.")
         return {"id": ref["id"], "providerID": ref["providerID"], **({"variant": ref["variant"]} if ref.get("variant") else {})}
 
     def system_prompt_for(self, session: dict, agent: agentmod.AgentConfig) -> str:

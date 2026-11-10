@@ -10,7 +10,8 @@ import { openPalette } from "./palette.js";
 import { openContextEditor } from "./context.js";
 import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
-import { openSettings } from "./settings.js";
+import { SETTINGS_TABS, openSettings } from "./settings.js";
+import { modelPicker } from "./model-picker.js";
 import { openAccount, refreshAccountButton } from "./settings-remote.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
 import { initUpdates } from "./updates.js";
@@ -993,8 +994,7 @@ function showPalette() {
       { group: "Thread", title: "Rename", icon: "edit", run: renameThread },
       { group: "Thread", title: "Fork thread", icon: "branch", run: () => forkThread(t.messages.at(-1)?.id) },
     ] : []),
-    ...[["general", "General"], ["appearance", "Appearance"], ["agent", "Agent"], ["delegation", "Delegation"], ["models", "Models & providers"], ["usage", "Usage & cost"], ["skills", "Skills"], ["mcp", "MCP servers"], ["prompts", "Prompts & agents"], ["commands", "Commands"], ["hooks", "Hooks"], ["schedules", "Schedules"], ["developer", "Developer"], ["remote", "Remote control"], ["bug", "Report a bug"], ["about", "About"]]
-      .map(([id, label]) => ({ group: "Settings", title: label, icon: "settings", keywords: "settings", run: () => openSettings(id, ctx) })),
+    ...SETTINGS_TABS.map(([id, label, ic]) => ({ group: "Settings", title: label, icon: ic, keywords: "settings", run: () => openSettings(id, ctx) })),
     ...S.sessions.slice(0, 80).map((s) => ({ group: "Threads", title: s.title || "New thread", sub: ago(s.time?.updated), icon: s.metadata?.afh?.goal ? "target" : "list", run: () => openThread(s.id) })),
     ...S.models.map((m) => ({ group: "Models", title: m.name, sub: providerName(m.providerID), icon: "cpu", keywords: m.id, run: () => chooseModel({ id: m.id, providerID: m.providerID }) })),
     ...(({ own, classic }) => [...own, ...classic])(themesFor(S.settings.ui.interface)).map((id) => [id, PRESETS[id]]).map(([id, p]) => ({ group: "Themes", title: p.name, sub: p.dark ? "dark" : "light", icon: p.dark ? "moon" : "sun", keywords: "theme color", run: () => applyPreset(id) })),
@@ -1521,49 +1521,16 @@ function autosize() {
   ta.style.height = Math.min(ta.scrollHeight, 260) + "px";
 }
 
-// Two steps: pick a provider, then one of its models. Search jumps straight to models.
+// Model names for the picker and the palette.
 const PROVIDER_NAMES = { "kimi-code-plan-global": "Kimi (kimi.ai)", "kimi-code-plan": "Kimi (kimi.com)", "zai-coding-plan": "Z.AI", openai: "OpenAI", anthropic: "Anthropic", google: "Google", "github-copilot": "GitHub Copilot" };
 const providerName = (pid) => S.providerNames?.[pid] || PROVIDER_NAMES[pid] || pid.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-let lastProvider = null;
-
-function modelMenu(pid = null) {
-  const ref = currentModel();
-  const byProvider = new Map();
-  for (const m of S.models) {
-    if (!byProvider.has(m.providerID)) byProvider.set(m.providerID, []);
-    byProvider.get(m.providerID).push(m);
-  }
-  if (byProvider.size === 1) pid = [...byProvider.keys()][0];
-  const anchor = $("pick-model");
-  if (!pid) {
-    const items = [{ group: "Providers" }];
-    for (const [p, list] of byProvider) {
-      items.push({ title: providerName(p), sub: list.length === 1 ? list[0].name : `${list.length} models`, icon: "cpu", count: list.length, arrow: true, checked: ref?.providerID === p, onSelect: () => modelMenu(p) });
-    }
-    items.push({ sep: true }, { title: "Add or manage providers…", icon: "key", onSelect: () => openSettings("models", ctx) });
-    const all = S.models.map((m) => ({ title: m.name, badges: modalityBadges(m.input), sub: `${providerName(m.providerID)}${m.context ? ` · ${fmtTokens(m.context)} ctx` : ""}`, keywords: `${m.providerID} ${m.id}`, hidden: true, checked: ref && ref.id === m.id && ref.providerID === m.providerID, onSelect: () => chooseModel({ id: m.id, providerID: m.providerID }) }));
-    popover(anchor, items, { search: true, placeholder: "Search all models…", width: 320, align: "right", searchItems: all });
-    return;
-  }
-  lastProvider = pid;
-  const list = byProvider.get(pid) || [];
-  const items = list.map((m) => ({
-    title: m.name, badges: modalityBadges(m.input),
-    sub: `${m.id}${m.context ? ` · ${fmtTokens(m.context)} context` : ""}${m.variants?.length ? ` · effort ${m.variants.join("/")}` : ""}${m.tools ? "" : " · no tools"}`, keywords: m.id,
-    checked: ref && ref.id === m.id && ref.providerID === pid,
-    onSelect: () => chooseModel({ id: m.id, providerID: pid }),
-  }));
-  const header = el("div.pop-header", byProvider.size > 1 ? el("button.icon-btn", { html: icon("chev"), style: { transform: "rotate(180deg)" }, title: "All providers", on: { click: (e) => { e.stopPropagation(); modelMenu(null); } } }) : null, el("span", providerName(pid)), el("span.pi-count", { style: { marginLeft: "auto" } }, `${list.length} models`));
-  const model = findModel(ref);
-  let footer = null;
-  if (model?.variants?.length && ref.providerID === pid) {
-    const seg = el("div.seg");
-    for (const v of ["default", ...model.variants.filter((x) => x !== "default")]) {
-      seg.append(el(`button${(ref.variant || "default") === v ? ".on" : ""}`, { type: "button", on: { click: () => { closePopover(); chooseModel({ ...ref, variant: v === "default" ? undefined : v }); } } }, v));
-    }
-    footer = el("div.pop-variants", el("span", "Effort"), seg);
-  }
-  popover(anchor, items, { search: list.length > 6, placeholder: `Search ${providerName(pid)} models`, width: 340, align: "right", header, footer });
+function modelMenu() {
+  modelPicker($("pick-model"), {
+    models: S.models, current: currentModel(), providerName, align: "right",
+    onPick: (ref) => chooseModel(ref),
+    onManage: () => openSettings("models", ctx),
+    onAdd: () => openSettings("models", ctx, { connect: true }),
+  });
 }
 
 async function contextPopover() {
@@ -2055,7 +2022,7 @@ function wire() {
   $("btn-attach").addEventListener("click", attach);
   $("btn-mic").addEventListener("click", toggleMic);
   $("ctx-meter").addEventListener("click", contextPopover);
-  $("pick-model").addEventListener("click", () => modelMenu(lastProvider && S.models.some((m) => m.providerID === lastProvider) && currentModel()?.providerID === lastProvider ? lastProvider : null));
+  $("pick-model").addEventListener("click", () => modelMenu());
   $("pick-agent").addEventListener("click", agentMenu);
   $("pick-mode").addEventListener("click", modeMenu);
   $("btn-new").addEventListener("click", () => { showHome(); ta.focus(); });

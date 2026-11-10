@@ -25,9 +25,9 @@ from .look import keys
 from .widgets import bar, gradient
 
 SPEEDS = (0.5, 1.0, 1.5, 2.0)
-TABS = [("general", "General"), ("appearance", "Appearance"), ("personalization", "Personalization"), ("agent", "Agent"), ("delegation", "Delegation"), ("models", "Models & providers"),
-        ("usage", "Usage & cost"), ("skills", "Skills"), ("mcp", "MCP servers"), ("prompts", "Prompts & agents"), ("commands", "Commands"), ("hooks", "Hooks"), ("schedules", "Schedules"),
-        ("github", "GitHub"), ("developer", "Developer"), ("remote", "Remote control"), ("bug", "Report a bug"), ("about", "About")]
+TABS = [("general", "General"), ("appearance", "Appearance"), ("personalization", "Personalization"), ("models", "Models & accounts"), ("usage", "Usage & cost"),
+        ("agent", "Agent"), ("delegation", "Delegation"), ("prompts", "Prompts & agents"), ("skills", "Skills"), ("mcp", "MCP servers"), ("commands", "Commands"), ("hooks", "Hooks"),
+        ("schedules", "Schedules"), ("github", "GitHub"), ("remote", "Remote control"), ("developer", "Developer"), ("bug", "Report a bug"), ("about", "About")]
 HOOK_EVENTS = [("Before a tool runs", "pre_tool"), ("After a tool ran", "post_tool"), ("When a run ends", "stop")]
 WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 RECOMMENDED_MCP = [
