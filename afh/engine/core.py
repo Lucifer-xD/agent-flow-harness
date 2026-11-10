@@ -300,13 +300,17 @@ class Engine:
     def reload_providers(self) -> None:
         from .providers.catalog import make_provider
 
-        self.providers = {}
+        # Build both maps fresh: a provider that was removed or turned off must lose its models
+        # at once, not keep them in the picker until AFH restarts.
+        providers: dict = {}
+        models: dict[str, list[ModelInfo]] = {}
         for cfg in provcfg.provider_configs():
             try:
-                self.providers[cfg.id] = make_provider(cfg)
-                self.models[cfg.id] = list(cfg.models)
+                providers[cfg.id] = make_provider(cfg)
+                models[cfg.id] = list(cfg.models)
             except Exception as err:
                 log.warning("provider %s skipped: %s", cfg.id, err)
+        self.providers, self.models = providers, models
 
     def use_account(self, pid: str):
         """Rebuild one provider for the account now in use (engine/accounts.py switched it)."""

@@ -229,7 +229,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
       const m = def && S.models.find((x) => x.id === def.id && x.providerID === def.providerID);
       const change = el("button.btn.sm", { type: "button" }, ico("refresh"), "Change");
       change.addEventListener("click", () => modelPicker(change, {
-        models: S.models, current: def, providerName: (pid) => S.providerNames?.[pid] || pid, align: "right", placeholder: "Search for the default model",
+        getModels: () => S.models, current: def, providerName: (pid) => S.providerNames?.[pid] || pid, align: "right", placeholder: "Search for the default model",
         onPick: (ref) => ctx.saveSettings({ defaultModel: { providerID: ref.providerID, id: ref.id } }).then(() => { toast("Default model saved", "ok", 1400); reload(); }),
       }));
       page.append(el("div.card.dm-card",

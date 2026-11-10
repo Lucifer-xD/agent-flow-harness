@@ -1,5 +1,7 @@
 // Shared UI helpers: icons, DOM builder, markdown, diffs, popovers, modals, toasts.
 
+import { fileIconSvg, kindLabel, langKind } from "./fileicons.js";
+
 const P = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 export const ICONS = {
   plus: P('<path d="M12 5v14M5 12h14"/>'),
@@ -157,7 +159,10 @@ renderer.code = (code, lang) => {
   } catch {
     html = escapeHtml(code);
   }
-  return `<div class="codeblock"><div class="codeblock-head"><span>${escapeHtml(language || "text")}</span><button class="copy-btn" data-copy>${icon("copy").replace("<svg", '<svg class="ico"')}<span>Copy</span></button></div><pre><code class="hljs">${html}</code></pre></div>`;
+  const kind = langKind(language);
+  const label = kind ? kindLabel(kind) : language || "text";
+  const badge = kind ? `<span class="fi fi-${kind}" aria-hidden="true">${fileIconSvg(kind)}</span>` : "";
+  return `<div class="codeblock${kind ? ` lang-${kind}` : ""}"><div class="codeblock-head"><span class="cb-lang">${badge}<span>${escapeHtml(label)}</span></span><button class="copy-btn" data-copy>${icon("copy").replace("<svg", '<svg class="ico"')}<span>Copy</span></button></div><pre><code class="hljs">${html}</code></pre></div>`;
 };
 renderer.link = (href, title, text) => `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"${title ? ` title="${escapeHtml(title)}"` : ""}>${text}</a>`;
 marked.setOptions({ renderer, gfm: true, breaks: false });
@@ -476,4 +481,12 @@ export function contextRing(fraction) {
   const r = 8, c = 2 * Math.PI * r;
   const color = f > 0.85 ? "var(--bad)" : f > 0.6 ? "var(--warn)" : "var(--accent)";
   return `<svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="${r}" fill="none" stroke="var(--panel-3)" stroke-width="2.5"/><circle cx="11" cy="11" r="${r}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" transform="rotate(-90 11 11)" style="transition:stroke-dashoffset .6s var(--ease)"/></svg>`;
+}
+
+/** A small progress ring: how much of a list is done. */
+export function progressRing(done, of, size = 18) {
+  const r = (size - 3) / 2, c = 2 * Math.PI * r, f = of ? Math.min(1, done / of) : 0, h = size / 2;
+  const t = document.createElement("template");
+  t.innerHTML = `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle class="ring-bg" cx="${h}" cy="${h}" r="${r}" fill="none" stroke-width="2.5"/><circle class="ring-fg" cx="${h}" cy="${h}" r="${r}" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${(c * (1 - f)).toFixed(2)}" transform="rotate(-90 ${h} ${h})"/></svg>`;
+  return t.content.firstChild;
 }

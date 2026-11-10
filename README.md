@@ -143,6 +143,7 @@ Then type `afh` in a project folder. It's the same AFH, full screen: threads, mo
 - **One Workbench:** Live, Changes, Browser, Context, Prompt and Agents as tabs on the right.
 - **Live files and commands:** code appears as it's generated, and command output scrolls in as it arrives.
 - **Every step on a timeline:** thinking time, each tool call, tokens per second and how long each reply took.
+- **Replies you can read at a glance:** each reply starts with its model's logo. What the model did on the way folds under one line (*Worked for 32s · Edited 3 files · Ran 1 command*), commands open as a small terminal, every file shows its language's icon, and the end of a reply lists the files it changed.
 
 **You stay in control**
 - **Approval modes:** *Ask first* shows every edit and command for approval, with diffs. *Full access* and *Read only* are one click away. Reading `.env` files always asks.

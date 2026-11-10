@@ -2,7 +2,7 @@
 // background jobs (servers, watchers) it started. The engine owns the state; this draws and edits it.
 
 import { api } from "./api.js";
-import { closePopover, confirmDialog, el, fmtDur, ico, icon, modal, popover, toast, toggle } from "./ui.js";
+import { closePopover, confirmDialog, el, fmtDur, ico, icon, modal, popover, toast, toggle, progressRing } from "./ui.js";
 
 const STORE_KEY = "afh-dock";
 let prefs = { todosOpen: true };
@@ -147,6 +147,7 @@ function todoBlock(t, todos, opts) {
   const wrap = el(`div.dock-todos${isOpen ? ".open" : ""}`);
   const head = el("button.todo-head", { type: "button", title: isOpen ? "Collapse" : "Expand", on: { click: () => { t.todoOpen = !isOpen; if (!allDone) { prefs.todosOpen = !isOpen; savePrefs(); } opts.onChanged?.(); } } },
     el("span.chev", { html: icon("chev") }),
+    c.of ? el("span.todo-ring", progressRing(c.done, c.of, 20)) : null,
     el("span.todo-title", "To-do"),
     c.total ? el("span.todo-count", `${c.done}/${c.of}`) : el("span.todo-count", "empty"),
     el("span.todo-bar", el("i", { style: { width: `${Math.round(frac * 100)}%` } })),
