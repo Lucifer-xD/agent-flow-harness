@@ -2,6 +2,16 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.32.1 (2026-11-11)
+
+**Cleaner icons**
+
+The icons in the Studio chat now stand on their own, without a box around each one.
+
+- **Model logos:** the logo beside each reply, in the model picker and on the model button has no tile behind it. While a reply is being written, the logo itself pulses.
+- **Step icons:** file, command and to-do icons in a reply's steps, and in the bar that sums up the work, are plain icons side by side.
+- **Unchanged:** a provider with no logo keeps its coloured two-letter tile. Focus, Compact and Canvas keep their own look.
+
 ## 1.32.0 (2026-11-10)
 
 **A new chat: replies you can read at a glance**
