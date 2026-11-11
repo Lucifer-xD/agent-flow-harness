@@ -632,7 +632,9 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .um-other { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 5px 6px; margin: 0 -6px; border: 0; border-radius: 6px; background: none;
   font: inherit; font-size: 12.5px; color: var(--text-2); cursor: pointer; text-align: left; }
 .um-other:hover { background: var(--panel-2); color: var(--text); }
+.um-other-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .um-other-val { font-variant-numeric: tabular-nums; }
+.pal-item .pv-mark { flex: none; }
 .um-other-val.warn { color: var(--warn); }
 .um-other-val.bad { color: var(--bad); }
 .ctx-pop h4 { margin: 0 0 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }

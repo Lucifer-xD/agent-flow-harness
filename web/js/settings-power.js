@@ -3,6 +3,7 @@
 
 import { api } from "./api.js";
 import { fmtCost } from "./chat.js";
+import { providerMark } from "./model-picker.js";
 import { basename, confirmDialog, el, fmtTokens, ico, icon, toast, toggle } from "./ui.js";
 
 const header = (title, lead) => [el("h2", title), lead ? el("p.lead", lead) : null];
@@ -369,7 +370,7 @@ export async function usagePane(pane, ctx) {
     };
     [inIn, inOut, inCache].forEach((i) => i.addEventListener("change", savePrice));
     tbody.append(el("tr",
-      el("td", el("div", { style: { fontWeight: 550 } }, m.name), el("div", { style: { color: "var(--text-3)", fontSize: "11.5px" } }, `${p?.name || m.providerID}${m.plan ? " · plan" : ""}`)),
+      el("td", el("div", { style: { fontWeight: 550, display: "flex", alignItems: "center", gap: "8px" } }, providerMark(m.providerID, p?.name || m.providerID, 16), m.name), el("div", { style: { color: "var(--text-3)", fontSize: "11.5px" } }, `${p?.name || m.providerID}${m.plan ? " · plan" : ""}`)),
       el("td.num", String(m.steps)),
       el("td.num", fmtTokens(m.input + m.cacheRead + m.cacheWrite)),
       el("td.num", fmtTokens(m.output)),

@@ -4,7 +4,7 @@ import { el, ico } from "./ui.js";
 
 let open = null;
 
-/** items: [{ title, sub, icon, group, keywords, run }] */
+/** items: [{ title, sub, icon, mark, group, keywords, run }]; mark() returns a node shown in place of the icon */
 export function openPalette(items, { placeholder = "Type a command, thread, model or theme…" } = {}) {
   if (open) { open.close(); return; }
   const input = el("input.pal-input", { placeholder, spellcheck: false });
@@ -33,7 +33,7 @@ export function openPalette(items, { placeholder = "Type a command, thread, mode
     shown.forEach((it, i) => {
       if (!q && it.group !== group) { group = it.group; list.append(el("div.pal-group", group)); }
       list.append(el(`button.pal-item${i === index ? ".on" : ""}`, { type: "button", on: { mousemove: () => { if (index !== i) { index = i; mark(); } }, click: () => run(it) } },
-        ico(it.icon || "chev"), el("span.pal-title", it.title), it.sub ? el("span.pal-sub", it.sub) : null, q ? el("span.pal-tag", it.group) : null));
+        it.mark ? it.mark() : ico(it.icon || "chev"), el("span.pal-title", it.title), it.sub ? el("span.pal-sub", it.sub) : null, q ? el("span.pal-tag", it.group) : null));
     });
     if (!shown.length) list.append(el("div.empty-row", "Nothing matches"));
   };

@@ -2,6 +2,16 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.32.2 (2026-11-11)
+
+**Provider logos in Settings, fewer boxes**
+
+Settings now shows each provider's real logo, the steps in a reply lose their boxes, and a logo bug is fixed.
+
+- **Provider logos in Settings:** every provider shows its real logo on **Models & accounts**, on its own page, on the default model, and in **Connect a provider** (sign in, API key, this computer and search). The usage popup, the command palette and the price table show them too.
+- **Fewer boxes:** in a reply's steps, the **Worked for** line, the added and removed line counts, a command, **checked** and **Thought for** are plain text and icons, with no box around each one.
+- **Fixed:** a provider's logo could turn into a coloured square after switching between light and dark. This affected logos drawn with gradients or masks, such as Antigravity, Gemini and Poe.
+
 ## 1.32.1 (2026-11-11)
 
 **Cleaner icons**
