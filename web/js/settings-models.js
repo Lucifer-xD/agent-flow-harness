@@ -3,7 +3,8 @@
 // way in: sign in with a plan, paste an API key, models on this computer, or a custom endpoint.
 
 import { api, native } from "./api.js";
-import { modelFacts, modelPicker } from "./model-picker.js";
+import { modelFacts, modelPicker, providerMark } from "./model-picker.js";
+import { providerLogo } from "./provider-logos.js";
 import { confirmDialog, copyText, el, fmtTokens, ico, icon, modal, modalityBadges, popover, toast, toggle } from "./ui.js";
 
 const field = (label, input, help) => el("div.field", el("label", label), input, help ? el("div.help", help) : null);
@@ -136,7 +137,14 @@ async function guard(fn, okMsg) {
 
 const hue = (s) => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 const initials = (label) => { const w = String(label).replace(/[()]/g, "").split(/[\s\-_.]+/).filter(Boolean); return ((w[0]?.[0] || "?") + (w[1]?.[0] || "")).toUpperCase(); };
-const mono = (label, id, size = "") => el(`span.pv-mono${size ? "." + size : ""}`, { style: { "--h": String(hue(id)) }, "aria-hidden": "true" }, initials(label));
+// A provider's mark: its real logo, the same one the model picker shows; two letters on the
+// provider's own colour when there is none.
+const mono = (label, id, size = "", url = "") => {
+  const m = providerMark(id, label, size === "lg" ? 46 : 30, url);
+  m.classList.add("pv-slot");
+  if (size) m.classList.add(size);
+  return m;
+};
 const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 const timeOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const LOCAL_IDS = new Set(["ollama", "lmstudio", "vllm", "llamacpp", "llama-cpp", "jan"]);
@@ -233,7 +241,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
         onPick: (ref) => ctx.saveSettings({ defaultModel: { providerID: ref.providerID, id: ref.id } }).then(() => { toast("Default model saved", "ok", 1400); reload(); }),
       }));
       page.append(el("div.card.dm-card",
-        el("div.dm-icon", ico("cpu")),
+        m ? mono(S.providerNames?.[m.providerID] || m.providerID, m.providerID) : el("div.dm-icon", ico("cpu")),
         el("div.dm-text", el("span.dm-label", "Default model"),
           el("b.dm-name", m ? m.name : "None chosen"),
           el("span.dm-sub", m ? [S.providerNames?.[m.providerID] || m.providerID, modelFacts(m)].filter(Boolean).join("  ·  ") : "Pick the model new threads start with")),
@@ -262,7 +270,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
     const shown = p.models.filter((m) => !m.hidden).length;
     const usage = el("div.pv-usage");
     const tile = el(`button.pv-tile${p.enabled === false ? ".off" : ""}`, { type: "button", on: { click: () => go({ provider: p.id, tab: "accounts" }, "fwd") } },
-      el("div.pv-top", mono(p.name, p.id), el("div.pv-name", el("b", p.name), el("span", howConnected(p))), el(`span.pv-state.${st}`, { title: stText }, el("i"), stText)),
+      el("div.pv-top", mono(p.name, p.id, "", p.base_url), el("div.pv-name", el("b", p.name), el("span", howConnected(p))), el(`span.pv-state.${st}`, { title: stText }, el("i"), stText)),
       usage,
       el("div.pv-meta",
         el("span", ico("cpu"), `${shown} of ${p.models.length} models`),
@@ -340,7 +348,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
       body.replaceChildren(inner);
     };
     page.append(back,
-      el("div.pv-hero", mono(p.name, p.id, "lg"),
+      el("div.pv-hero", mono(p.name, p.id, "lg", p.base_url),
         el("div.pv-hero-text", el("h2", p.name), el("div.pv-hero-sub", el(`span.pv-state.${st}`, el("i"), stText), el("span", howConnected(p)), el("code", p.base_url || ""))),
         el("div.pv-hero-actions", testBtn, more)),
       tabs, body);
@@ -624,7 +632,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
       providerForm(box, { cat: c, onCancel: () => { stage.replaceChildren(list); drawList(); }, done: finish });
     };
     const entry = (opts2) => el(`button.cn-item${opts2.on ? ".on" : ""}`, { type: "button", disabled: !!opts2.on, on: { click: opts2.click } },
-      opts2.icon ? el("span.cn-ic", ico(opts2.icon)) : mono(opts2.title, opts2.id || opts2.title),
+      opts2.icon && !providerLogo(opts2.id, opts2.title, opts2.url) ? el("span.cn-ic", ico(opts2.icon)) : mono(opts2.title, opts2.id || opts2.title, "", opts2.url),
       el("span.cn-text", el("b", opts2.title, opts2.tag ? el("span.cn-tag", opts2.tag) : null), el("span", opts2.sub)),
       el("span.cn-go", opts2.on ? el("span.cn-done", ico("check"), "Connected") : { html: icon("chev") }));
     const signInItems = () => SIGN_INS.map((x) => {
@@ -655,7 +663,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
         const box = el("div.cn-local", el("div.cn-scan", el("span.spinner"), "Looking for Ollama, LM Studio, vLLM, llama.cpp and Jan…"));
         parts.push(el("p.cn-lead", "Models running on this computer: free, private, no key."), box);
         api.get("/api/providers/detect-local").then((found) => {
-          box.replaceChildren(...(found.length ? found.map((srv) => entry({ id: srv.id || srv.name, icon: "monitor", title: srv.name, on: srv.configured,
+          box.replaceChildren(...(found.length ? found.map((srv) => entry({ id: srv.catalog || srv.id || srv.name, icon: "monitor", title: srv.name, on: srv.configured,
             sub: `${plural(srv.models.length, "model")} · ${srv.base_url}`, click: async (e) => {
               e.currentTarget.disabled = true;
               const body = srv.catalog ? { catalog: srv.catalog, id: srv.catalog } : { id: srv.id, name: srv.name, kind: "openai", base_url: srv.base_url };

@@ -233,26 +233,25 @@
 
   /* ---- thinking: a sparkle and a line; open, the thoughts sit in a quiet column ---- */
   & .think { margin: 4px 0 8px; }
-  & .think-head { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px 0 8px; border-radius: 99px; color: var(--text-3); font-size: 12.5px; font-weight: 550;
-    border: 1px solid var(--line); transition: background 0.12s, color 0.12s, border-color 0.12s; }
-  & .think-head:hover { background: var(--hover); color: var(--text-2); border-color: var(--line-2); }
+  & .think-head { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0; border: 0; border-radius: 0; color: var(--text-3); font-size: 12.5px; font-weight: 550;
+    transition: color 0.12s; }
+  & .think-head:hover { background: none; color: var(--text); }
   & .think-head .chev { order: 3; width: 13px; height: 13px; opacity: 0.6; transition: transform 0.2s var(--ease-out); }
   & .think.open .think-head .chev { transform: rotate(90deg); }
   & .think-ico { display: grid; place-items: center; color: var(--accent); }
   & .think-ico .ico, & .think-ico svg { width: 14px; height: 14px; }
   & .think.live .think-ico { animation: spark calc(1.6s / var(--anim-speed, 1)) ease-in-out infinite; }
-  & .think.live .think-head { border-color: var(--accent-line); }
   & .think.live .think-label { background: linear-gradient(90deg, var(--text-3) 0%, var(--text) 40%, var(--text-3) 80%); background-size: 200% 100%;
     -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer calc(1.8s / var(--anim-speed, 1)) linear infinite; }
   & .think-body .think-text { margin: 8px 0 4px 14px; border-inline-start: 2px solid var(--accent-line); padding-inline-start: 14px; color: var(--text-3); font-size: 13px; line-height: 1.65; }
 
   /* ---- a reply's work: one bar ("Worked for 42s · Edited 3 files"), the steps in a column under it ---- */
   & .turn-bar { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; margin: 0 0 6px; padding: 7px 12px 7px 10px; border-radius: 14px; text-align: start;
-    border: 1px solid var(--line-2); background: color-mix(in srgb, var(--card) 85%, transparent); color: var(--text); font-size: 13px;
-    transition: background 0.15s, border-color 0.2s, box-shadow 0.2s, margin 0.3s var(--ease-out); }
-  & .turn-bar:hover { background: var(--card); border-color: var(--line-3); }
+    border: 0; background: none; color: var(--text); font-size: 13px;
+    transition: background 0.15s, margin 0.3s var(--ease-out); }
+  & .turn-bar:hover { background: var(--hover); }
   & .turn-bar.shut { margin-bottom: 2px; }
-  & .turn-bar.live { border-color: var(--accent-line); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent); }
+  & .turn-bar.live { box-shadow: none; }
   & .tb-chev { display: grid; place-items: center; width: 20px; height: 20px; flex: none; color: var(--text-3); transform: rotate(90deg); transition: transform 0.25s var(--ease-out); }
   & .tb-chev svg { width: 14px; height: 14px; }
   & .turn-bar.shut .tb-chev { transform: none; }
@@ -307,11 +306,16 @@
   & .tool-target.path { font-family: var(--font); }
   & .tool-target.path .name { font-weight: 650; color: var(--text); }
   & .tool-target.path .dir { color: var(--text-3); }
-  & .tool.run .tool-target { font-family: var(--mono); font-size: 12px; padding: 3px 9px; border-radius: 8px; background: var(--code-bg); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
+  & .tool.run .tool-target { font-family: var(--mono); font-size: 12px; padding: 0; border-radius: 0; background: none; box-shadow: none; color: var(--text); }
   & .tool.run .tool-target::before { content: "$ "; color: var(--accent); font-weight: 700; }
-  & .tool-stat { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-3); }
-  & .tool-stat .plus { padding: 1px 6px; border-radius: 6px; color: var(--add-ink); background: var(--add-bg); }
-  & .tool-stat .minus { padding: 1px 6px; border-radius: 6px; color: var(--del-ink); background: var(--del-bg); margin-inline-start: 4px; }
+  & .tool-stat, & .tool .tool-stat { height: auto; padding: 0; border: 0; border-radius: 0; background: none; gap: 8px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-3); }
+  & .tool-stat .plus { padding: 0; background: none; color: var(--add-ink); }
+  & .tool-stat .minus { padding: 0; background: none; color: var(--del-ink); margin-inline-start: 0; }
+  & .tool.running .tool-stat, & .tool.streaming .tool-stat { color: var(--accent); }
+  & .tool.error .tool-stat { color: var(--bad); }
+  & .diag-chip, & .diag-chip.ok, & .diag-chip.bad, & .diag-chip.hook { height: auto; padding: 0; border-radius: 0; background: none; font-size: 12px; }
+  & .diag-chip .ico { width: 13px; height: 13px; }
+  & .tool-right { gap: 14px; }
   & .tool-chev { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; opacity: 0.45; transition: opacity 0.15s, transform 0.25s var(--ease-out); }
   & .tool-head:hover .tool-chev { opacity: 0.9; }
   & .tool.open > .tool-head .tool-chev { opacity: 0.9; transform: rotate(180deg); }
@@ -334,7 +338,7 @@
   & .tool.plan .tool-ico { background: none; box-shadow: none; }
   & .tool.plan .tool-ico .ring { width: 22px; height: 22px; }
   & .tool.plan .tool-name { font-weight: 600; color: var(--text); font-size: 13px; }
-  & .tool.plan .tool-stat { padding: 2px 9px; border-radius: 99px; background: var(--hover); color: var(--text-2); }
+  & .tool.plan .tool-stat { color: var(--text-2); }
   & .tool.plan > .tool-body > div { margin: 0; border-radius: 0; background: none !important; box-shadow: none !important; }
   & .tool.plan.open > .tool-body > div { margin: 0; border-top: 1px solid var(--line); }
   & .tool.plan .plan-list { margin: 0; padding: 6px 10px 10px; border: 0; background: transparent; box-shadow: none; display: flex; flex-direction: column; gap: 1px; }

@@ -5,6 +5,7 @@
 // sent through it. Click for the details and every other provider. Data: GET /api/usage/limits.
 
 import { api } from "./api.js";
+import { providerMark } from "./model-picker.js";
 import { el, fmtTokens, ico, popover, repositionPopover } from "./ui.js";
 
 const POLL = 60_000; // the server caches live answers for as long
@@ -142,14 +143,14 @@ export async function usagePopover(anchor, pid = U.pid) {
   const body = el("div.um-pop");
   const draw = () => {
     const r = U.reports.get(pid);
-    const head = el("div.um-title", el("b", r?.name || U.names()[pid] || pid), r?.account ? el("span.um-acct", r.account) : null, r?.plan ? el("span.um-plan", r.plan) : null,
+    const head = el("div.um-title", providerMark(pid, r?.name || U.names()[pid] || pid, 18), el("b", r?.name || U.names()[pid] || pid), r?.account ? el("span.um-acct", r.account) : null, r?.plan ? el("span.um-plan", r.plan) : null,
       el("button.icon-btn", { title: "Refresh", type: "button", on: { click: async (e) => { e.stopPropagation(); body.classList.add("loading"); await load(pid, true); body.classList.remove("loading"); draw(); } } }, ico("refresh")));
     const others = [...U.reports.values()].filter((x) => x.providerID !== pid);
     body.replaceChildren(head, ...(r ? detail(r) : [el("div.empty-row", el("span.spinner"))]),
       others.length ? el("div.um-others", el("div.um-head", "Other providers"), ...others.map((o) => {
         const h = headline(o);
         return el("button.um-other", { type: "button", on: { click: (e) => { e.stopPropagation(); pid = o.providerID; draw(); if (!U.loading.has(pid)) load(pid).then(draw); } } },
-          el("span", o.name), h ? el("span", { className: `um-other-val ${h.pct != null ? level(h.pct) : ""}` }, h.text) : el("span.um-other-val.muted", "—"));
+          el("span.um-other-name", providerMark(o.providerID, o.name, 16), o.name), h ? el("span", { className: `um-other-val ${h.pct != null ? level(h.pct) : ""}` }, h.text) : el("span.um-other-val.muted", "—"));
       })) : null);
     repositionPopover?.();
   };

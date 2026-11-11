@@ -1034,7 +1034,7 @@ function showPalette() {
     ] : []),
     ...SETTINGS_TABS.map(([id, label, ic]) => ({ group: "Settings", title: label, icon: ic, keywords: "settings", run: () => openSettings(id, ctx) })),
     ...S.sessions.slice(0, 80).map((s) => ({ group: "Threads", title: s.title || "New thread", sub: ago(s.time?.updated), icon: s.metadata?.afh?.goal ? "target" : "list", run: () => openThread(s.id) })),
-    ...S.models.map((m) => ({ group: "Models", title: m.name, sub: providerName(m.providerID), icon: "cpu", keywords: m.id, run: () => chooseModel({ id: m.id, providerID: m.providerID }) })),
+    ...S.models.map((m) => ({ group: "Models", title: m.name, sub: providerName(m.providerID), icon: "cpu", mark: () => providerMark(m.providerID, providerName(m.providerID), 16), keywords: m.id, run: () => chooseModel({ id: m.id, providerID: m.providerID }) })),
     ...(({ own, classic }) => [...own, ...classic])(themesFor(S.settings.ui.interface)).map((id) => [id, PRESETS[id]]).map(([id, p]) => ({ group: "Themes", title: p.name, sub: p.dark ? "dark" : "light", icon: p.dark ? "moon" : "sun", keywords: "theme color", run: () => applyPreset(id) })),
   ];
   openPalette(items);

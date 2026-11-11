@@ -25,8 +25,8 @@ export function modelFacts(m) {
 }
 
 /** The provider's logo on a soft tile; two letters on the provider's own colour when there is no logo. */
-export function providerMark(pid, label, size = 18) {
-  const svg = providerLogo(pid, label);
+export function providerMark(pid, label, size = 18, url = "") {
+  const svg = providerLogo(pid, label, url);
   const style = { "--h": String(hue(pid)), "--s": `${size}px` };
   return svg
     ? el("span.pv-mark.has-logo", { style, "aria-hidden": "true", html: svg })

@@ -98,7 +98,13 @@ export function providerLogoName(id, name = "", url = "") {
   return "";
 }
 
+// Some logos paint through gradients, masks and filters that they refer to by id. Two copies of
+// one logo on a page would share those ids, and the browser resolves them to the first copy: when
+// that copy is hidden or removed (a closed panel, a redraw after switching theme), the others
+// lose their mask and show as a coloured square. So every copy gets ids of its own.
+let copy = 0;
 export function providerLogo(id, name, url) {
   const n = providerLogoName(id, name, url);
-  return n ? SVG[n] : "";
+  const svg = n ? SVG[n] : "";
+  return svg.includes("_R_0_") ? svg.replaceAll("_R_0_", `_R_${++copy}_`) : svg;
 }
