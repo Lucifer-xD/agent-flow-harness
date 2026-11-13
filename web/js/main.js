@@ -1469,10 +1469,16 @@ function renderComposerState() {
   const busy = !!t && (t.busy || S.busy.has(t.id));
   $("tb-logo").hidden = !busy; // the mark flows beside the title while a model works
   const send = $("btn-send");
-  send.classList.toggle("stop", busy);
-  send.innerHTML = icon(busy ? "stop" : "send");
-  send.title = busy ? "Stop (Esc)" : S.settings.ui.sendKey === "ctrl-enter" ? "Send (Ctrl+Enter)" : "Send (Enter)";
-  send.disabled = !busy && !$("input").value.trim();
+  // While the model works: an empty box stops it; with text in it, the button sends that text as a
+  // note the model reads at its next step, without being stopped (Esc still stops).
+  const typed = !!$("input").value.trim();
+  const noting = busy && typed;
+  send.classList.toggle("stop", busy && !typed);
+  send.classList.toggle("note", noting);
+  send.innerHTML = icon(busy && !typed ? "stop" : "send");
+  send.title = noting ? "Send this note to the model (it keeps working)" : busy ? "Stop (Esc)" : S.settings.ui.sendKey === "ctrl-enter" ? "Send (Ctrl+Enter)" : "Send (Enter)";
+  send.disabled = !busy && !typed;
+  $("input").placeholder = busy ? "Add a note: the model reads it and keeps working…" : "Ask anything…";
 
   // Context meter: the latest step's prompt size against the model's window. Click for details.
   const ctxm = $("ctx-meter");
@@ -1488,7 +1494,7 @@ function renderComposerState() {
 
   renderTps();
   const hint = $("composer-hint");
-  if (busy) hint.replaceChildren(el("span", "Working… press Esc to stop, or type to queue a follow-up"));
+  if (busy) hint.replaceChildren(el("span", noting ? "Enter sends this as a note: the model reads it after its current step and keeps working · Esc stops" : "Working… type a note to change its direction without stopping it · Esc stops"));
   else if (project()) hint.replaceChildren(el("span", MODES[currentMode()].sub), " · ", el("bdi", basename(project())), " · ", el("span", "type / for commands"));
   else hint.replaceChildren();
   renderAttachments();

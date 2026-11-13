@@ -2,6 +2,17 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.32.5 (2026-11-13)
+
+**Send a note while it works**
+
+You can redirect the model in the middle of a task without stopping it: type a note and it reads it at its next step, then carries on.
+
+- **A note, not a stop:** while the model is working, type in the message box and press Enter. The run keeps going; the model gets your note at its next step and changes its approach, its plan or the to-do list as you asked, from where it is.
+- **The box says so:** while it works the box reads **Add a note**, and the button turns from Stop into Send as soon as you type. An empty box still stops the run, and so does Esc.
+- **Sent, then read:** each note shows **Note sent** under it and changes to **Note read** once the model has started a step that includes it.
+- **Good to know:** a note is read when the current step ends, usually within seconds. It does not cut into a sentence the model is writing or a command that is still running.
+
 ## 1.32.4 (2026-11-13)
 
 **Custom endpoints: names, effort levels and logos**

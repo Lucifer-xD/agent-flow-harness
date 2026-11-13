@@ -669,8 +669,13 @@ class Engine:
             msg["command"] = command
         if files:
             msg["files"] = files
+        # Sent while the model is working: a note. The run is not stopped; the model reads the note
+        # at its next step (see Run.take_notes) and carries on from where it is.
+        steer = sid in self.runs
+        if steer:
+            msg["steer"] = True
         self.store.add_message(sid, msg)
-        self.publish(event("session.inbox.enqueued", sid, inboxID=msg["id"], item={"type": "user", "payload": {"text": text, "files": files or []}, "delivery": "steer"}))
+        self.publish(event("session.inbox.enqueued", sid, inboxID=msg["id"], item={"type": "user", "payload": {"text": text, "files": files or []}, "delivery": "steer", "steer": steer}))
         self.publish(event("session.inbox.delivered", sid, inboxID=msg["id"]))
         for sk in mentioned(text, discover(session["location"]["directory"], appstore.AFH_DIR)):
             self.store.add_message(sid, {"id": new_id("msg"), "type": "system", "text": f"Skill {sk.id} ({sk.name}):\n\n{sk.body}", "metadata": {"notice": "skill", "instructionSources": [sk.id]}, "time": {"created": now_ms()}})
