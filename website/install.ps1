@@ -67,7 +67,12 @@ function Install-Afh {
 
             $target = [IO.Path]::Combine($versions, $version)
             if ([IO.Directory]::Exists($target)) { [IO.Directory]::Delete($target, $true) }
-            [IO.Directory]::Move($staging, $target)
+            # The program has just run from this folder, and antivirus may still be reading the new files,
+            # so Windows can refuse the move for a moment. Keep trying for a few seconds before giving up.
+            for ($n = 0; ; $n++) {
+                try { [IO.Directory]::Move($staging, $target); break }
+                catch { if ($n -ge 24) { throw }; [Threading.Thread]::Sleep(250) }
+            }
 
             $bin = [IO.Path]::Combine($root, 'bin')
             [void][IO.Directory]::CreateDirectory($bin)
