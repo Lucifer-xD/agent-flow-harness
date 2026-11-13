@@ -9,9 +9,10 @@ account's models together with the share of quota left on each (``quota``).
 Claude models behind this API want tool-call ids on both halves of a call and VALIDATED function
 calling; their thinking config uses snake_case keys.
 
-Google lists some models once per effort (``gemini-3.8-flash-low``/``-medium``/``-high``). AFH shows
-them as one model whose effort levels are those suffixes (``extra["effort_ids"]``, saved when the
-list is fetched) and sends ``<model>-<effort>`` for the effort picked.
+Google lists some models once per effort (``gemini-4-hydrogen-low``/``-medium``/``-high``/``-xhigh``,
+and the same for the newer Claude models). AFH shows them as one model whose effort levels are those
+suffixes (``extra["effort_ids"]``, saved when the list is fetched) and sends ``<model>-<effort>`` for
+the effort picked.
 """
 
 from __future__ import annotations
@@ -34,9 +35,20 @@ from afh.engine.types import ChatRequest, ModelInfo, ProviderConfig, ProviderEve
 # Chat models the account can pick; image models, routers and completion-only ids are left out.
 _CHAT = ("gemini-", "claude-", "gpt-oss-")
 _SKIP = ("image", "imagen", "-disabled", "-tiered", "chat_", "tab_")
-_EFFORTS = ("minimal", "low", "medium", "high")
-_EFFORT_ID = re.compile(r"^(.+)-(minimal|low|medium|high)$")
-_EFFORT_NAME = re.compile(r"\s*\((minimal|low|medium|high)\)\s*$", re.IGNORECASE)
+_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")  # weakest first: the order the picker shows
+_EFFORT_ID = re.compile(r"^(.+)-(none|minimal|low|medium|high|xhigh|max)$")
+_EFFORT_NAME = re.compile(r"\s*\((none|minimal|low|medium|high|x-?high|extra[ -]high|max|maximum)\)\s*$", re.IGNORECASE)
+
+
+def regrouped(extra: dict, model: str) -> tuple[str, str] | None:
+    """(model, effort) for an id that was one model per effort before AFH grouped it
+    (``gemini-4-hydrogen-xhigh`` is now ``gemini-4-hydrogen`` at ``xhigh``), so a thread that was
+    using the old id carries on with the same model and effort."""
+    for base, efforts in ((extra or {}).get("effort_ids") or {}).items():
+        for e in efforts:
+            if model == f"{base}-{e}":
+                return base, e
+    return None
 
 
 def _is_claude(model: str) -> bool:
@@ -164,7 +176,8 @@ class AntigravityProvider(GeminiProvider):
                 info.reasoning = bool(m["supportsThinking"])
             if _is_claude(mid):
                 info.variants = ["low", "high", "max"] if "thinking" in mid else []
-            match = None if _is_claude(mid) else _EFFORT_ID.match(mid)
+            # the older Claude ids end in "-thinking" and take a thinking budget; the newer ones are listed per effort
+            match = None if _is_claude(mid) and "thinking" in mid else _EFFORT_ID.match(mid)
             if match:
                 groups.setdefault(match.group(1), {})[match.group(2)] = info
             else:
@@ -181,8 +194,14 @@ class AntigravityProvider(GeminiProvider):
             fetched.append(info)
         if effort_ids != (self.config.extra.get("effort_ids") or {}):
             self.config.extra = {**self.config.extra, "effort_ids": effort_ids}
+            patch: dict = {"extra": self.config.extra}
             try:
-                provcfg.upsert(self.config.id, {"extra": self.config.extra})
+                # A model the user had hidden at every effort stays hidden now that it is one entry.
+                hidden = list((provcfg.entry(self.config.id) or {}).get("hidden") or [])
+                gone = [b for b, efforts in effort_ids.items() if b not in hidden and all(f"{b}-{e}" in hidden for e in efforts)]
+                if gone:
+                    patch["hidden"] = hidden + gone
+                provcfg.upsert(self.config.id, patch)
             except Exception:
                 pass
         return catalog.merge_static(self.config, fetched)

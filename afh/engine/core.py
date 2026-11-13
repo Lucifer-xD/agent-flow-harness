@@ -397,6 +397,17 @@ class Engine:
     def model_ref_for(self, session: dict, agent: agentmod.AgentConfig) -> dict:
         ref = session.get("model") or agent.model or self.default_model()
         if ref and not self.model_available(ref):
+            # A model that used to be listed once per effort and is one model now: same model, same effort.
+            from .providers.antigravity import regrouped
+
+            p = self.providers.get(ref.get("providerID"))
+            moved = regrouped(getattr(getattr(p, "config", None), "extra", None) or {}, str(ref.get("id") or ""))
+            if moved and self.model_available({**ref, "id": moved[0]}):
+                ref = {**ref, "id": moved[0], "variant": moved[1]}
+                if session.get("model") and session["model"].get("id") != ref["id"] and session.get("id"):
+                    session["model"] = ref
+                    self.store.update_session(session["id"], model=ref, updated=(session.get("time") or {}).get("updated"))
+        if ref and not self.model_available(ref):
             # A removed provider, or a model that was hidden or dropped from its list: the same model
             # through another provider, else the agent's model, else the default.
             from ..transfer import usable_model
@@ -457,6 +468,12 @@ class Engine:
         tools = list(builtin_tools(self.settings()))
         tools += [JobsTool(), statemod.TodoTool(self), HarnessTool(self), memmod.MemoryTool(self)]
         if agent.kind != "delegate":  # goals belong to the thread the user talks to
+            # Reading other threads is for threads the user writes in: a delegate's "user" is another
+            # model, and a GitHub thread's is whoever wrote the issue.
+            if (session.get("metadata") or {}).get("afh", {}).get("origin") != "github":
+                from .threads import ThreadsTool
+
+                tools.append(ThreadsTool(self))
             tools.append(statemod.GoalTool(self))
             tools.append(QuestionTool())  # delegates report to their lead instead of asking the user
             tools.append(DesignTool())
@@ -516,9 +533,12 @@ class Engine:
     # ---- sessions ----------------------------------------------------------------------------
 
     def create_session(self, directory: str, *, title: str | None = None, agent: str | None = None, model: dict | None = None, mode: str | None = None,
-                       parent_id: str | None = None, permissions: list | None = None, project: str | None = None, worktree: dict | None = None) -> dict:
+                       parent_id: str | None = None, permissions: list | None = None, project: str | None = None, worktree: dict | None = None,
+                       origin: str | None = None) -> dict:
         mode = mode or self.settings().get("defaultMode", "ask")
         afh: dict[str, Any] = {"mode": mode}
+        if origin:  # who writes this thread's prompts when it is not the user ("github")
+            afh["origin"] = origin
         if worktree:
             afh["worktree"] = worktree
             directory = worktree["directory"]

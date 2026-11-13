@@ -2,6 +2,20 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.33.0 (2026-11-13)
+
+**Threads that read each other, and a sharper chat**
+
+A model can now read any of your earlier threads word for word and carry on from where it stopped. The work fold and the answer were redrawn, there are nine new themes, and the newest Gemini and Claude models on Antigravity get an effort choice.
+
+- **Read another thread:** in a new thread, with any model, ask it to "read the session Build a website and continue from where we stopped". The model gets the whole thread from its first message: every message, every tool call and every result, exactly as written. Nothing is summarised, and compaction is ignored.
+- **You decide:** when the model wants to read a thread on its own, a card asks you first: **Allow**, **Always allow** or **Don't allow**. There is no card when you named the thread yourself, or in a Full access thread.
+- **Long threads:** a thread that is bigger than one reply can hold is read in pages, and the pages put end to end are the thread. A model can also read back the beginning of its own thread after it was compacted.
+- **Effort for the newest models:** Gemini 4 Hydrogen (with its Extra high level) and the Claude 5.5 models on Antigravity were listed once per effort. Each is one model now, and you choose the effort in the model picker. A thread that was using one of the old entries keeps its model and effort.
+- **A redrawn reply:** in Studio, a finished reply folds under one line with a strip that has a mark for each step. Opened, the steps sit on a timeline with the model's notes beside them, a line shows where the answer begins, and under every reply you see how long it took, its steps and its tokens.
+- **Nine new themes:** Obsidian, Espresso, Fjord, Mulberry, Moss, Dusk, Linen, Cloud and Ink, each with its own two-colour accent. In every theme, buttons and bars now use that theme's own gradient instead of an orange one.
+- **Fixed:** the live output under a running command sat in two frames, which pushed its text to the right; the icon on the approval cards for apps and sites could not be seen.
+
 ## 1.32.5 (2026-11-13)
 
 **Send a note while it works**

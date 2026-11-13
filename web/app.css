@@ -16,7 +16,8 @@
   --accent-ink: #ffffff;
   --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
   --accent-line: color-mix(in srgb, var(--accent) 45%, transparent);
-  --accent-grad: linear-gradient(135deg, #ffa21f 0%, var(--accent) 45%, var(--accent-2) 100%);
+  --accent-0: #ffa21f;
+  --accent-grad: linear-gradient(135deg, var(--accent-0) 0%, var(--accent) 45%, var(--accent-2) 100%);
 
   --bg: #0f0d0c;
   --bg-side: #121010;
@@ -1522,12 +1523,15 @@ body.resizing-drawer .workbench, body.resizing-drawer .app { transition: none !i
 .comp-badge { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; color: #fff;
   background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #e8337a)); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent); }
 .comp-badge svg { width: 16px; height: 16px; }
+.approval-head .comp-badge .ico { color: #fff; } /* the badge is accent-coloured: an accent icon on it could not be seen */
 .comp-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 2px; }
 .comp-app { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: color-mix(in srgb, var(--text) 4%, transparent); border: 1px solid var(--border); }
 .comp-ico { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; flex: none; overflow: hidden; font-weight: 700; font-size: 12px;
   background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text-2); }
 .comp-ico img { width: 26px; height: 26px; object-fit: contain; }
 .comp-app .comp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.thread-approval .comp-ico svg { width: 14px; height: 14px; }
+.thread-approval .comp-tier { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-3); }
 .comp-tier.full { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 
 /* ==== 2.0: the professional pass ===================================================================

@@ -1,13 +1,14 @@
 // Theme engine. Presets are full, hand-tuned palettes; "custom" derives surfaces from the
-// chosen background and text colors in CSS.
+// chosen background and text colors in CSS. A preset may name the two ends of its accent gradient
+// (accent0 → accent → accent2); the others get ends worked out from the accent itself.
 
 const dark = (bg, side, panel, panel2, panel3, border, border2, text, text2, text3, code) => ({ bg, side, panel, panel2, panel3, border, border2, text, text2, text3, code, dark: true });
 const light = (bg, side, panel, panel2, panel3, border, border2, text, text2, text3, code) => ({ bg, side, panel, panel2, panel3, border, border2, text, text2, text3, code, dark: false });
 
 export const PRESETS = {
-  sunset: { name: "Sunset", accent: "#ff6a2a", ...dark("#0e0d0d", "#121010", "#171515", "#1e1b1a", "#292524", "#2a2625", "#3a3533", "#f2efec", "#b4ada6", "#7e776f", "#0b0a0a") },
-  midnight: { name: "Midnight", accent: "#7c8cff", ...dark("#0b0d14", "#0e1019", "#13161f", "#191d28", "#222735", "#242936", "#343a4b", "#e9ecf5", "#aab0c2", "#737a8e", "#080a10") },
-  forest: { name: "Forest", accent: "#2fbf71", ...dark("#0b110e", "#0e1511", "#121a15", "#17211b", "#1f2c24", "#213026", "#2f4236", "#e6efe9", "#a8b8ad", "#6f8276", "#080d0a") },
+  sunset: { name: "Sunset", accent: "#ff6a2a", accent0: "#ffa21f", accent2: "#ff3d71", ...dark("#0e0d0d", "#121010", "#171515", "#1e1b1a", "#292524", "#2a2625", "#3a3533", "#f2efec", "#b4ada6", "#7e776f", "#0b0a0a") },
+  midnight: { name: "Midnight", accent: "#7c8cff", accent0: "#9cc0ff", accent2: "#b07cff", ...dark("#0b0d14", "#0e1019", "#13161f", "#191d28", "#222735", "#242936", "#343a4b", "#e9ecf5", "#aab0c2", "#737a8e", "#080a10") },
+  forest: { name: "Forest", accent: "#2fbf71", accent0: "#8fe07a", accent2: "#19a8a0", ...dark("#0b110e", "#0e1511", "#121a15", "#17211b", "#1f2c24", "#213026", "#2f4236", "#e6efe9", "#a8b8ad", "#6f8276", "#080d0a") },
   ocean: { name: "Ocean", accent: "#22b8cf", ...dark("#0a1016", "#0d141b", "#111922", "#16202a", "#1d2a36", "#1f2d3a", "#2d4050", "#e4eef5", "#a4b6c4", "#6b8090", "#070c11") },
   rose: { name: "Rose", accent: "#ff3d71", ...dark("#120d10", "#160f13", "#1b1318", "#22181e", "#2c2027", "#2d2129", "#3f2f38", "#f3e9ee", "#bdaab4", "#85737c", "#0d090b") },
   aurora: { name: "Aurora", accent: "#5eead4", ...dark("#0a0f12", "#0c1317", "#10181d", "#152027", "#1c2a32", "#1d2b33", "#2b3e48", "#e5f3f2", "#a2bcbd", "#6a8486", "#070b0d") },
@@ -20,8 +21,8 @@ export const PRESETS = {
   copper: { name: "Copper", accent: "#f2994a", ...dark("#100d0a", "#14100c", "#1a1510", "#221b15", "#2d241c", "#2e251d", "#43372b", "#f5ede4", "#c2b19f", "#8b7a68", "#0b0907") },
   matrix: { name: "Terminal", accent: "#39e58c", ...dark("#060908", "#08100c", "#0b1410", "#0f1b15", "#16261d", "#17271e", "#22382b", "#d9f5e4", "#93b8a2", "#5c8069", "#040705") },
   mono: { name: "Mono", accent: "#ffffff", ...dark("#0c0c0d", "#101011", "#151517", "#1b1b1e", "#242428", "#252529", "#343438", "#ededf0", "#a9a9b2", "#737380", "#09090a") },
-  paper: { name: "Paper", accent: "#e85a1a", ...light("#f6f3ef", "#efebe6", "#fffdfb", "#f3efea", "#e9e3dc", "#e4ddd5", "#d3cabf", "#1b1715", "#5a534d", "#8c847c", "#f1ede8") },
-  snow: { name: "Snow", accent: "#3b6cff", ...light("#f4f6fa", "#eceff5", "#ffffff", "#f1f3f8", "#e6e9f0", "#e1e5ec", "#cdd3dd", "#141821", "#525968", "#8a909c", "#eef1f6") },
+  paper: { name: "Paper", accent: "#e85a1a", accent0: "#f7a02e", accent2: "#e23d63", ...light("#f6f3ef", "#efebe6", "#fffdfb", "#f3efea", "#e9e3dc", "#e4ddd5", "#d3cabf", "#1b1715", "#5a534d", "#8c847c", "#f1ede8") },
+  snow: { name: "Snow", accent: "#3b6cff", accent0: "#5aa2ff", accent2: "#7a4dff", ...light("#f4f6fa", "#eceff5", "#ffffff", "#f1f3f8", "#e6e9f0", "#e1e5ec", "#cdd3dd", "#141821", "#525968", "#8a909c", "#eef1f6") },
   sand: { name: "Sand", accent: "#c26a1b", ...light("#f7f2ea", "#efe8dd", "#fffcf7", "#f3ece2", "#e8dfd2", "#e2d8ca", "#d0c3b2", "#211a12", "#5e5446", "#928775", "#f2ebe1") },
   lilac: { name: "Lilac", accent: "#7a4dff", ...light("#f6f4fb", "#eeebf6", "#ffffff", "#f2eff9", "#e6e1f1", "#e2ddee", "#cec7e0", "#1a1625", "#575068", "#8c859d", "#efecf6") },
   dawn: { name: "Dawn", accent: "#e8436b", ...light("#fbf4f3", "#f4eae9", "#fffbfb", "#f7eeed", "#eddfde", "#e9dad9", "#d8c4c3", "#241517", "#62494c", "#977d80", "#f5ebea") },
@@ -30,6 +31,16 @@ export const PRESETS = {
   matcha: { name: "Matcha", accent: "#4d8a2a", ...light("#f5f7ef", "#ecf0e3", "#fdfef9", "#f1f4ea", "#e5eadb", "#e1e7d5", "#ccd5bd", "#1b2213", "#56604a", "#8a947d", "#eef2e6") },
   ivory: { name: "Ivory", accent: "#9b5de5", ...light("#faf8f3", "#f2efe7", "#fffefb", "#f5f2ea", "#ebe7dc", "#e7e2d6", "#d6cfbf", "#1f1c16", "#5b564b", "#8f8a7e", "#f4f1e9") },
   mint: { name: "Mint", accent: "#1f9d5f", ...light("#f3f9f5", "#eaf3ed", "#ffffff", "#eff6f1", "#e2ece6", "#dde8e1", "#c7d6cc", "#13201a", "#4f5f56", "#86958c", "#ecf3ee") },
+  // Signature themes: each has its own two-colour accent, not only a hue.
+  obsidian: { name: "Obsidian", accent: "#8f7dff", accent0: "#b9a8ff", accent2: "#5fb0ff", ...dark("#0b0b0e", "#0e0e12", "#141419", "#1a1a21", "#23232c", "#25252e", "#353541", "#eeeef3", "#adadba", "#767684", "#08080b") },
+  espresso: { name: "Espresso", accent: "#e0a15e", accent0: "#f3cf8e", accent2: "#d9734a", ...dark("#110e0c", "#15110e", "#1b1612", "#231c17", "#2e251e", "#30261f", "#45382d", "#f3ebe2", "#c2b3a2", "#8a7b6b", "#0d0a08") },
+  fjord: { name: "Fjord", accent: "#7cc0f0", accent0: "#a8e0f5", accent2: "#6ee7c8", ...dark("#0c1114", "#0f1518", "#141b1f", "#1a2328", "#232e34", "#253036", "#35434b", "#e6eef1", "#a6b6bd", "#6e8088", "#090d0f") },
+  mulberry: { name: "Mulberry", accent: "#d98bd1", accent0: "#f2b5d8", accent2: "#9a7dff", ...dark("#120d14", "#160f18", "#1c141f", "#241a28", "#2f2334", "#302435", "#44344a", "#f3eaf4", "#bfadc2", "#88758b", "#0d090f") },
+  moss: { name: "Moss", accent: "#b8d05a", accent0: "#e2ea8a", accent2: "#5fc48a", ...dark("#0e100b", "#12140e", "#171a12", "#1e2218", "#282d20", "#2a2f21", "#3b4230", "#eef0e4", "#b3b8a2", "#7c826b", "#0a0c08") },
+  dusk: { name: "Dusk", accent: "#ff9e7a", accent0: "#ffc88f", accent2: "#c77dff", ...dark("#0f0f17", "#12121c", "#181824", "#1f1f2e", "#29293b", "#2a2a3d", "#3b3b54", "#ececf6", "#adaec6", "#76778f", "#0b0b12") },
+  linen: { name: "Linen", accent: "#0f766e", accent0: "#2bb3a3", accent2: "#0b5ea8", ...light("#f7f5f0", "#efece5", "#fffefb", "#f3f0e9", "#e8e4da", "#e3ded3", "#d0c9bb", "#1a1d1c", "#54595a", "#878c8a", "#f1eee7") },
+  cloud: { name: "Cloud", accent: "#5b5bf0", accent0: "#7f9bff", accent2: "#c05cf0", ...light("#f6f7fb", "#eef0f6", "#ffffff", "#f2f4f9", "#e7eaf2", "#e2e5ee", "#cdd2e0", "#151826", "#50566b", "#878da1", "#eff1f7") },
+  ink: { name: "Ink", accent: "#18181b", accent0: "#52525b", accent2: "#09090b", ...light("#fdfdfc", "#f4f4f2", "#ffffff", "#f3f3f1", "#e9e9e6", "#e4e4e0", "#d1d1cc", "#111113", "#52525a", "#8a8a92", "#f4f4f2") },
   // Editor classics, tuned for AFH's surfaces.
   catppuccin: { name: "Catppuccin Mocha", accent: "#cba6f7", ...dark("#1e1e2e", "#181825", "#232336", "#2a2a3d", "#313244", "#313244", "#45475a", "#cdd6f4", "#a6adc8", "#7f849c", "#11111b") },
   dracula: { name: "Dracula", accent: "#bd93f9", ...dark("#282a36", "#21222c", "#2d2f3d", "#343746", "#3c3f52", "#383a4a", "#4a4d63", "#f8f8f2", "#c4c6d4", "#7d84a8", "#1e1f29") },
@@ -68,6 +79,9 @@ export const PRESETS = {
   "canvas-night": { name: "Nightfall", accent: "#8b8cf8", ...dark("#16181d", "#0c0d10", "#1b1e24", "#22252d", "#2b2f39", "#2a2e37", "#3a3f4b", "#e9ebf1", "#a8adba", "#727786", "#101216") },
   "canvas-pine": { name: "Pine", accent: "#4ade80", ...dark("#141a17", "#0b0f0d", "#19201c", "#1f2823", "#28332d", "#27322c", "#38463e", "#e6efe9", "#a6b5ab", "#6f8076", "#0e1310") },
 };
+
+/** The signature themes, listed first in Settings. */
+export const SIGNATURE = ["obsidian", "espresso", "fjord", "mulberry", "moss", "dusk", "linen", "cloud", "ink"];
 
 /** How the screen changes when the theme does. */
 export const THEME_TRANSITIONS = [["circle", "Circle"], ["diamond", "Diamond"], ["wipe", "Wipe"], ["fade", "Fade"], ["blur", "Blur"], ["none", "None"]];
@@ -184,7 +198,11 @@ export function applyAppearance(ui) {
   set("--text", t.text);
   set("--accent", t.accent);
   set("--accent-ink", luminance(t.accent) > 0.5 ? "#111" : "#fff");
-  set("--accent-2", t.accent === "#ffffff" ? "#c9c9d2" : `color-mix(in srgb, ${t.accent} 70%, #ff3d71)`);
+  // The accent gradient runs accent0 → accent → accent2. A theme's own ends hold while its own accent is in use;
+  // any other accent gets a lighter start and an end turned a little toward violet.
+  const own = !t.custom && !(ui.accentOverride && ui.accent);
+  set("--accent-0", own && t.accent0 ? t.accent0 : `color-mix(in oklch, ${t.accent} 80%, #fff)`);
+  set("--accent-2", t.accent === "#ffffff" ? "#c9c9d2" : own && t.accent2 ? t.accent2 : `color-mix(in oklch, ${t.accent} 76%, #7a5cff)`);
   set("--fs", `${ui.fontSize || 14}px`);
   set("--radius", `${ui.radius ?? 12}px`);
   set("--radius-lg", `${(ui.radius ?? 12) + 6}px`);

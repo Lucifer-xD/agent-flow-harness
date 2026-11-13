@@ -398,6 +398,8 @@ BROWSER_VERBS = {
     "close": ("Closed the browser tab", "Closing the browser tab"), "network": ("Checked the network", "Checking the network"),
     "sources": ("Read the page's files", "Reading the page's files"),
 }
+THREADS_VERBS = {"list": ("Looked through your threads", "Looking through your threads"), "read": ("Read the thread", "Reading the thread"),
+                 "outline": ("Listed the thread's messages", "Listing the thread's messages"), "search": ("Searched the thread", "Searching the thread")}
 CHROME_VERBS = {**BROWSER_VERBS, "open": ("Opened in your browser", "Opening in your browser"), "tabs": ("Listed your tabs", "Listing your tabs"),
                 "switch_tab": ("Switched to your tab", "Switching to your tab"), "close": ("Left the tab", "Leaving the tab")}
 COMPUTER_VERBS = {
@@ -448,6 +450,9 @@ def tool_target(p: dict) -> str:
         return str(pick(given, "description", "prompt") or "")
     if name == "memory":
         return str(pick(given, "text", "old") or "")
+    if name == "threads":
+        meta = (p.get("state") or {}).get("metadata") or {}
+        return str((meta.get("thread") or {}).get("title") or re.sub(r"^ses_\w+$", "", str(pick(given, "thread", "query") or "")))
     if name == "harness":
         return str(pick(given, "source", "name", "id", "url") or "")
     if name == "computer":
@@ -477,6 +482,8 @@ def tool_verb(p: dict, live: bool) -> str:
         pair = HARNESS_VERBS.get(action, ("Changed AFH setup", "Changing AFH setup"))
     elif name == "memory":
         pair = MEMORY_VERBS.get(action, VERBS["memory"])
+    elif name == "threads":
+        pair = THREADS_VERBS.get(action or ("read" if given.get("thread") else "list"), THREADS_VERBS["read"])
     else:
         pair = VERBS.get(name, (p.get("name") or "tool", p.get("name") or "tool"))
     return pair[1] if live else pair[0]

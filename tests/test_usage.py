@@ -332,6 +332,10 @@ def test_antigravity_groups_models_listed_once_per_effort(monkeypatch):
                 "gpt-oss-120b-medium": {"displayName": "GPT-OSS 120B (Medium)"},
                 "gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash Lite"},
                 "claude-opus-4-6-thinking": {"displayName": "Claude Opus 4.6 (Thinking)"},
+                # the 4-series lists an extra-high level, and the newer Claude models come per effort too
+                "gemini-4-hydrogen-low": {"displayName": "Gemini 4 Hydrogen (Low)"}, "gemini-4-hydrogen-high": {"displayName": "Gemini 4 Hydrogen (High)"},
+                "gemini-4-hydrogen-xhigh": {"displayName": "Gemini 4 Hydrogen (XHigh)"},
+                "claude-opus-5-5-low": {"displayName": "Claude Opus 5.5 (Low)"}, "claude-opus-5-5-high": {"displayName": "Claude Opus 5.5 (High)"},
             }})
         seen["body"] = json.loads(request.content)
         return httpx.Response(200, content=_sse([{"response": {"candidates": [{"content": {"parts": [{"text": "ok"}]}, "finishReason": "STOP"}]}}]),
@@ -340,11 +344,18 @@ def test_antigravity_groups_models_listed_once_per_effort(monkeypatch):
     seen = {}
     p = AntigravityProvider(_ag_config(), transport=httpx.MockTransport(handler))
     models = {m.id: m for m in asyncio.run(p.list_models())}
-    assert set(models) == {"gemini-3.8-flash", "gpt-oss-120b", "gemini-3.5-flash-lite", "claude-opus-4-6-thinking"}
+    assert set(models) == {"gemini-3.8-flash", "gpt-oss-120b", "gemini-3.5-flash-lite", "claude-opus-4-6-thinking", "gemini-4-hydrogen", "claude-opus-5-5"}
+    hydrogen = models["gemini-4-hydrogen"]
+    assert hydrogen.name == "Gemini 4 Hydrogen" and hydrogen.variants == ["low", "high", "xhigh"]  # one model, its efforts in order
+    assert models["claude-opus-5-5"].name == "Claude Opus 5.5" and models["claude-opus-5-5"].variants == ["low", "high"]
+    from afh.engine.providers.antigravity import regrouped
+
+    assert regrouped(p.config.extra, "gemini-4-hydrogen-xhigh") == ("gemini-4-hydrogen", "xhigh") and regrouped(p.config.extra, "gemini-3.5-flash-lite") is None
     flash = models["gemini-3.8-flash"]
     assert flash.name == "Gemini 3.8 Flash" and flash.variants == ["low", "medium", "high"] and flash.reasoning
     assert models["gpt-oss-120b"].name == "GPT-OSS 120B" and models["gpt-oss-120b"].variants == []
-    assert saved["antigravity"]["extra"]["effort_ids"] == {"gemini-3.8-flash": ["low", "medium", "high"], "gpt-oss-120b": ["medium"]}
+    assert saved["antigravity"]["extra"]["effort_ids"] == {"gemini-3.8-flash": ["low", "medium", "high"], "gpt-oss-120b": ["medium"],
+                                                           "gemini-4-hydrogen": ["low", "high", "xhigh"], "claude-opus-5-5": ["low", "high"]}
 
     def send(model, variant):
         async def go():
@@ -357,6 +368,9 @@ def test_antigravity_groups_models_listed_once_per_effort(monkeypatch):
     assert body["request"]["generationConfig"]["thinkingConfig"] == {"includeThoughts": True}  # the level is in the id
     assert send("gemini-3.8-flash", "max")["model"] == "gemini-3.8-flash-high"  # an effort it doesn't have: the default
     assert send("gpt-oss-120b", None)["model"] == "gpt-oss-120b-medium"
+    assert send("gemini-4-hydrogen", "xhigh")["model"] == "gemini-4-hydrogen-xhigh"
+    opus = send("claude-opus-5-5", "low")
+    assert opus["model"] == "claude-opus-5-5-low" and "thinkingConfig" not in opus["request"].get("generationConfig", {})  # as before grouping
     assert send("gemini-3.8-flash-low", "high")["model"] == "gemini-3.8-flash-low"  # an old thread's full id still works
     assert send("gemini-3.5-flash-lite", "low")["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "low"
 
