@@ -121,11 +121,31 @@ function mountWindowControls() {
   window.afh.onEvent?.((ev) => { if (ev?.type === "maximized") setMax(!!ev.value); });
 }
 
+// The app's logo flows while any thread is working and rests when none is. An animation that never
+// stops makes the window redraw on every frame, which keeps a laptop's processor and fan busy even
+// when AFH is doing nothing.
+function syncLogos() {
+  const on = S.busy.size > 0;
+  for (const n of [$("brand"), $("tb-logo"), ...document.querySelectorAll(".hero-mark, .wel-mark")]) setWorking(n, on && !n?.hidden);
+}
+function watchBusy() {
+  for (const m of ["add", "delete", "clear"]) {
+    const f = S.busy[m].bind(S.busy);
+    S.busy[m] = (...a) => { const r = f(...a); queueMicrotask(syncLogos); return r; };
+  }
+  // nothing animates in a window nobody can see (minimised, or fully covered)
+  const sleep = () => document.documentElement.classList.toggle("asleep", document.hidden);
+  document.addEventListener("visibilitychange", sleep);
+  sleep();
+  syncLogos();
+}
+
 async function boot() {
   hydrateIcons();
   $("boot-mark").append(logoNode({ size: 110, working: true }));
-  $("brand").prepend(logoNode({ size: 30, working: true }));
-  $("tb-logo").append(logoNode({ size: 30, working: true }));
+  $("brand").prepend(logoNode({ size: 30 }));
+  $("tb-logo").append(logoNode({ size: 30 }));
+  watchBusy();
   apiHooks.onUnauthorized = () => showLogin();
   if (BASE) { // opened through the AFH account (phone app): a way back to the list of computers
     document.body.classList.add("via-relay");
@@ -623,7 +643,7 @@ function showHome() {
   const greet = hour < 5 ? "Good evening" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const recent = S.sessions.slice(0, 4);
   root.append(el("div.hero.hero-2",
-    el("div.hero-top", el("span.hero-mark", logoNode({ size: 72, working: true })),
+    el("div.hero-top", el("span.hero-mark", logoNode({ size: 72, working: S.busy.size > 0 })),
       el("div.hero-text",
         el("h2", name ? `${greet}, ${name}` : greet),
         el("p", el("span", "Working in"), el("span.hero-proj", ico("folder"), basename(project())), el("span.hero-sub", "What are we building?")))),
@@ -651,7 +671,7 @@ function clearWelcome() {
 }
 function mountWelcome(title, ideas) {
   clearWelcome();
-  $("composer-wrap").prepend(el("div.wel-top", el("span.wel-mark", logoNode({ size: 44, working: true })), el("h2.wel-title", title),
+  $("composer-wrap").prepend(el("div.wel-top", el("span.wel-mark", logoNode({ size: 44, working: S.busy.size > 0 })), el("h2.wel-title", title),
     el("p.wel-sub", el("span", "Working in"), el("span.wel-proj", ico("folder"), basename(project())))));
   $("composer").after(el("div.wel-ideas", ideas.map(([name, title, text]) => el("button.wel-idea", { type: "button", title: text, on: { click: () => { setInput(text); $("input").focus(); } } }, ico(name), el("span", title)))));
   document.querySelector(".main").classList.add("welcome");

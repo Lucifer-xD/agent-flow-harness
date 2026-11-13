@@ -710,8 +710,13 @@ export class ChatView {
     if (result.perm) this.renderPermissions();
     if (result.status) this.renderStatus();
     if (this.frame) return;
-    this.frame = requestAnimationFrame(() => {
+    // At most about 30 redraws a second while a reply streams in. Nobody reads faster than that, and
+    // on a 144 Hz screen one redraw per frame re-parsed the growing reply 144 times a second.
+    const wait = Math.max(0, 33 - (performance.now() - (this.painted || 0)));
+    this.frame = 1;
+    setTimeout(() => requestAnimationFrame(() => {
       this.frame = 0;
+      this.painted = performance.now();
       if (this.needAll) {
         this.needAll = false;
         this.pending.clear();
@@ -739,7 +744,7 @@ export class ChatView {
         this.streaming.clear();
       }
       this.follow();
-    });
+    }), wait);
   }
 
   rerender(id) {
@@ -802,10 +807,17 @@ export class ChatView {
     if (instant) return set(s.scrollHeight);
     if (this.following) return;
     this.following = true;
+    // It has to end: a scroll position is a whole pixel on most screens, so a step smaller than one
+    // pixel moves nothing, and a loop that waited for the gap to close would then run on every frame
+    // for ever (a full CPU core, with the app sitting idle). So each step moves at least a pixel, and
+    // the glide gives up after a second or as soon as a step changes nothing.
+    let frames = 0;
     const step = () => {
       const gap = s.scrollHeight - s.clientHeight - s.scrollTop;
-      if (!this.stick || Math.abs(gap) < 1) { this.following = false; if (this.stick) set(s.scrollHeight); return; }
-      set(s.scrollTop + gap * 0.22);
+      if (!this.stick || Math.abs(gap) < 2 || ++frames > 60 || document.hidden) { this.following = false; if (this.stick) set(s.scrollHeight); return; }
+      const before = s.scrollTop;
+      set(before + Math.sign(gap) * Math.max(1, Math.abs(gap) * 0.22));
+      if (s.scrollTop === before) { this.following = false; return; }
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
