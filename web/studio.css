@@ -351,7 +351,9 @@
   & .plan-item.in_progress > span:last-child { font-weight: 600; }
   & .plan-item.in_progress .plan-mark .ico, & .plan-item.in_progress .plan-mark svg { display: none; }
   & .plan-item.in_progress .plan-mark, & .todo-mark.in_progress { border-color: var(--accent); }
-  & .plan-item.in_progress .plan-mark::after, & .todo-mark.in_progress:not(.idle)::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse-soft 1.4s ease-in-out infinite; }
+  & .plan-item.in_progress .plan-mark::after, & .todo-mark.in_progress:not(.idle)::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  /* the dot pulses only while the model is working on it: an animation that never ends keeps the window redrawing */
+  & .msg.live .plan-item.in_progress .plan-mark::after, & .todo-mark.in_progress:not(.idle)::after { animation: pulse-soft 1.4s ease-in-out infinite; }
   & .plan-item.cancelled .plan-mark, & .todo-mark.cancelled { color: var(--text-3); border-style: dashed; }
   & .plan-item.cancelled > span:last-child { color: var(--text-3); text-decoration: line-through; }
 

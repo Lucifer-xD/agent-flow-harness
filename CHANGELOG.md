@@ -2,6 +2,17 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.32.3 (2026-11-12)
+
+**Much lower power use**
+
+AFH no longer keeps the processor busy when it is doing nothing, so a laptop runs cooler and its battery lasts longer.
+
+- **Fixed:** the chat's smooth scroll to the newest message could keep running on every frame for ever, using a whole processor core while AFH sat idle. It now always ends.
+- **The logo rests:** the AFH logo flows while a model is working and stands still when nothing is, instead of moving all the time.
+- **Nothing moves unseen:** the to-do dot pulses only while the model is on that step, and every animation stops while the window is minimised or covered.
+- **Lighter streaming:** while a reply is being written the chat redraws about 30 times a second instead of once per screen frame, which matters most on 120 and 144 Hz screens.
+
 ## 1.32.2 (2026-11-11)
 
 **Provider logos in Settings, fewer boxes**
