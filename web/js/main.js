@@ -12,6 +12,7 @@ import { initLive, liveState, onLiveEvent, renderLive } from "./livefile.js";
 import { logoNode, setWorking } from "./logo.js";
 import { SETTINGS_TABS, openSettings } from "./settings.js";
 import { effortLabel, modelPicker, modelsChanged, providerMark } from "./model-picker.js";
+import { modelLogo } from "./provider-logos.js";
 import { fileIcon } from "./fileicons.js";
 import { openAccount, refreshAccountButton } from "./settings-remote.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
@@ -50,7 +51,7 @@ const view = new ChatView($("messages"), $("thread"), {
   modelName: (ref) => modelName(ref),
   avatar: (live) => logoNode({ size: 28, working: live }),
   rich: () => document.documentElement.dataset.ui === "studio",
-  modelMark: (ref) => providerMark(ref.providerID, providerName(ref.providerID), 26),
+  modelMark: (ref) => providerMark(ref.providerID, providerName(ref.providerID), 26, "", modelLogo(ref.id, findModel(ref)?.name)),
   onReview: () => openDrawer("changes"),
   onFork: (id) => forkThread(id),
   onRetry: () => retryLast(),
@@ -1054,7 +1055,7 @@ function showPalette() {
     ] : []),
     ...SETTINGS_TABS.map(([id, label, ic]) => ({ group: "Settings", title: label, icon: ic, keywords: "settings", run: () => openSettings(id, ctx) })),
     ...S.sessions.slice(0, 80).map((s) => ({ group: "Threads", title: s.title || "New thread", sub: ago(s.time?.updated), icon: s.metadata?.afh?.goal ? "target" : "list", run: () => openThread(s.id) })),
-    ...S.models.map((m) => ({ group: "Models", title: m.name, sub: providerName(m.providerID), icon: "cpu", mark: () => providerMark(m.providerID, providerName(m.providerID), 16), keywords: m.id, run: () => chooseModel({ id: m.id, providerID: m.providerID }) })),
+    ...S.models.map((m) => ({ group: "Models", title: m.name, sub: providerName(m.providerID), icon: "cpu", mark: () => providerMark(m.providerID, providerName(m.providerID), 16, "", modelLogo(m.id, m.name)), keywords: m.id, run: () => chooseModel({ id: m.id, providerID: m.providerID }) })),
     ...(({ own, classic }) => [...own, ...classic])(themesFor(S.settings.ui.interface)).map((id) => [id, PRESETS[id]]).map(([id, p]) => ({ group: "Themes", title: p.name, sub: p.dark ? "dark" : "light", icon: p.dark ? "moon" : "sun", keywords: "theme color", run: () => applyPreset(id) })),
   ];
   openPalette(items);
@@ -1450,7 +1451,7 @@ function renderComposerState() {
   const ref = currentModel();
   const gone = missingModel();
   const effort = ref?.variant && ref.variant !== "default" ? effortLabel(ref.variant) : null;
-  $("pick-model").replaceChildren(ref ? providerMark(ref.providerID, providerName(ref.providerID), 18) : ico("cpu"),
+  $("pick-model").replaceChildren(ref ? providerMark(ref.providerID, providerName(ref.providerID), 18, "", modelLogo(ref.id, findModel(ref)?.name)) : ico("cpu"),
     el("span.lbl", ref ? findModel(ref)?.name || ref.id : "Choose model"), effort ? el("span.eff-badge", effort) : null, el("span.chev", { html: icon("chev-down") }));
   $("pick-model").classList.toggle("empty", !ref);
   $("pick-model").title = gone ? `${gone.id} is no longer available, so ${modelName(ref) || "no model"} is used` : "";

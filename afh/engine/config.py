@@ -260,7 +260,7 @@ def _model(d: dict) -> ModelInfo:
                      cost=d["cost"] if isinstance(d.get("cost"), dict) else None)
 
 
-OVERRIDABLE = ("context", "output", "variants", "input", "reasoning")
+OVERRIDABLE = ("name", "context", "output", "variants", "input", "reasoning")
 SELF_DESCRIBING = {"chatgpt", "antigravity"}  # providers whose model list carries context, effort levels and inputs
 
 
@@ -292,12 +292,18 @@ def models_of(p: dict, pid: str | None = None) -> list[ModelInfo]:
         m = out.get(mid)
         if m is None or not isinstance(ov, dict):
             continue
+        if isinstance(ov.get("name"), str) and ov["name"].strip():
+            m.name = ov["name"].strip()
         if ov.get("context"):
             m.context = int(ov["context"])
         if ov.get("output"):
             m.output = int(ov["output"])
         if isinstance(ov.get("variants"), list):
             m.variants = [str(v) for v in ov["variants"] if str(v).strip()]
+            # An effort is only sent to a model that reasons. An endpoint that lists its models
+            # without saying so (a custom or local server) left the levels you typed doing nothing.
+            if m.variants:
+                m.reasoning = True
         if isinstance(ov.get("input"), list) and ov["input"]:
             m.input = [str(v) for v in ov["input"]]
         if isinstance(ov.get("reasoning"), bool):

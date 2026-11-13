@@ -690,10 +690,11 @@ class Panes:
         m = await self.wait(Picker("Which model?", [Item(x.get("name") or x["id"], x, S.fmt_tokens(x.get("context")) if x.get("context") else "") for x in p.get("models") or []]))
         if not m:
             return
-        out = await self.wait(Form(m.get("name") or m["id"], [Field("context", "Context window (tokens)", "number", m.get("context") or ""), Field("output", "Output limit (tokens)", "number", m.get("output") or ""),
+        out = await self.wait(Form(m.get("name") or m["id"], [Field("name", "Name", value=m.get("name") or m["id"], help="What AFH calls this model. The provider still gets its id."),
+                                                              Field("context", "Context window (tokens)", "number", m.get("context") or ""), Field("output", "Output limit (tokens)", "number", m.get("output") or ""),
                                                               Field("variants", "Effort levels", value=", ".join(m.get("variants") or []), help="Comma-separated, like low, medium, high"), Field("input", "Takes images", "switch", "image" in (m.get("input") or []))]))
         if out:
-            body = {"context": int(out["context"] or 0) or None, "output": int(out["output"] or 0) or None, "variants": [x.strip() for x in out["variants"].split(",") if x.strip()], "input": ["text", "image"] if out["input"] else ["text"]}
+            body = {"name": (out.get("name") or "").strip() or None, "context": int(out["context"] or 0) or None, "output": int(out["output"] or 0) or None, "variants": [x.strip() for x in out["variants"].split(",") if x.strip()], "input": ["text", "image"] if out["input"] else ["text"]}
             await self.ui.api("PUT", f"/api/providers/{p['id']}/models/{m['id']}", body)
 
     async def prices(self, p: dict) -> None:

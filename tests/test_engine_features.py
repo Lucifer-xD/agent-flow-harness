@@ -742,6 +742,11 @@ def test_models_get_real_facts_from_models_dev(home):
     # the user's own correction wins
     fixed = {m.id: m for m in provcfg.models_of({"catalog": "zai-coding", "overrides": {"glm-5.3": {"context": 123456, "variants": ["high"]}}}, "zai-coding")}["glm-5.3"]
     assert fixed.context == 123456 and fixed.variants == ["high"]
+    # a custom endpoint's model can be given a readable name, and effort levels typed for a model the
+    # endpoint listed as non-reasoning make it one (otherwise the effort is never sent)
+    mine = provcfg.models_of({"fetched": [{"id": "lab/Big-Model-Q4-GGUF", "reasoning": False}],
+                              "overrides": {"lab/Big-Model-Q4-GGUF": {"name": "Big Model", "variants": ["low", "high"]}}}, "my-server")[0]
+    assert mine.name == "Big Model" and mine.id == "lab/Big-Model-Q4-GGUF" and mine.reasoning and mine.variants == ["low", "high"]
 
 
 def test_a_second_compaction_summarises_from_the_first_and_keeps_everything(home, tmp_path):

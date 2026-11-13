@@ -1186,7 +1186,7 @@ async def test_provider(pid: str, body: dict = Body(default={})):
 
 @app.put("/api/providers/{pid}/models/{mid:path}")
 def override_model(pid: str, mid: str, body: dict = Body(...)):
-    """Correct a model's facts by hand (context, output, effort levels, inputs). An empty body resets it."""
+    """Correct a model's facts by hand (name, context, output, effort levels, inputs). An empty body resets it."""
     p = provcfg.entry(pid)
     if not p:
         raise KeyError(pid)
@@ -1194,6 +1194,9 @@ def override_model(pid: str, mid: str, body: dict = Body(...)):
     clean = {k: body[k] for k in provcfg.OVERRIDABLE if k in body and body[k] not in (None, "", [])}
     if "variants" in body and isinstance(body["variants"], list):
         clean["variants"] = [str(v).strip().lower() for v in body["variants"] if str(v).strip()]
+    name = str(clean.pop("name", "") or "").strip()[:80]
+    if name and name != mid:  # the id itself is what a model is called when it has no name
+        clean["name"] = name
     if clean:
         overrides[mid] = clean
     else:

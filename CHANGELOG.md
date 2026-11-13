@@ -2,6 +2,16 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.32.4 (2026-11-13)
+
+**Custom endpoints: names, effort levels and logos**
+
+Models on a custom endpoint or a server on your computer can have a readable name, their effort levels now take effect, and they get a logo.
+
+- **Name a model:** the model editor (the pencil beside a model in **Models & accounts**) has a **Name** field. AFH shows that name in the chat and the picker and still sends the provider its id, so `lab/Some-Model-Q4-GGUF` can simply be called what it is.
+- **Fixed: effort levels on custom endpoints:** effort levels typed for a model that its endpoint did not list as a reasoning model were shown in the picker but never sent. They are sent now.
+- **Logos for custom endpoints:** a provider with no logo of its own takes the logo of the model family it runs: Qwen, Llama, DeepSeek, Mistral, Gemma and others. A server whose models are all one family gets that logo as a provider; otherwise each model shows its own.
+
 ## 1.32.3 (2026-11-12)
 
 **Much lower power use**

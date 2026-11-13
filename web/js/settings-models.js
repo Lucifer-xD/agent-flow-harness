@@ -4,7 +4,7 @@
 
 import { api, native } from "./api.js";
 import { modelFacts, modelPicker, providerMark } from "./model-picker.js";
-import { providerLogo } from "./provider-logos.js";
+import { familyLogo, modelLogo, providerLogo } from "./provider-logos.js";
 import { confirmDialog, copyText, el, fmtTokens, ico, icon, modal, modalityBadges, popover, toast, toggle } from "./ui.js";
 
 const field = (label, input, help) => el("div.field", el("label", label), input, help ? el("div.help", help) : null);
@@ -139,13 +139,15 @@ const hue = (s) => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charC
 const initials = (label) => { const w = String(label).replace(/[()]/g, "").split(/[\s\-_.]+/).filter(Boolean); return ((w[0]?.[0] || "?") + (w[1]?.[0] || "")).toUpperCase(); };
 // A provider's mark: its real logo, the same one the model picker shows; two letters on the
 // provider's own colour when there is none.
-const mono = (label, id, size = "", url = "") => {
-  const m = providerMark(id, label, size === "lg" ? 46 : 30, url);
+const mono = (label, id, size = "", url = "", fallback = "") => {
+  const m = providerMark(id, label, size === "lg" ? 46 : 30, url, fallback);
   m.classList.add("pv-slot");
   if (size) m.classList.add(size);
   return m;
 };
 const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+// the models a provider shows in the picker (all of them when every one is hidden)
+const shownModels = (p) => { const on = (p.models || []).filter((m) => !m.hidden); return on.length ? on : p.models || []; };
 const timeOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const LOCAL_IDS = new Set(["ollama", "lmstudio", "vllm", "llamacpp", "llama-cpp", "jan"]);
 
@@ -241,7 +243,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
         onPick: (ref) => ctx.saveSettings({ defaultModel: { providerID: ref.providerID, id: ref.id } }).then(() => { toast("Default model saved", "ok", 1400); reload(); }),
       }));
       page.append(el("div.card.dm-card",
-        m ? mono(S.providerNames?.[m.providerID] || m.providerID, m.providerID) : el("div.dm-icon", ico("cpu")),
+        m ? mono(S.providerNames?.[m.providerID] || m.providerID, m.providerID, "", "", modelLogo(m.id, m.name)) : el("div.dm-icon", ico("cpu")),
         el("div.dm-text", el("span.dm-label", "Default model"),
           el("b.dm-name", m ? m.name : "None chosen"),
           el("span.dm-sub", m ? [S.providerNames?.[m.providerID] || m.providerID, modelFacts(m)].filter(Boolean).join("  ·  ") : "Pick the model new threads start with")),
@@ -270,7 +272,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
     const shown = p.models.filter((m) => !m.hidden).length;
     const usage = el("div.pv-usage");
     const tile = el(`button.pv-tile${p.enabled === false ? ".off" : ""}`, { type: "button", on: { click: () => go({ provider: p.id, tab: "accounts" }, "fwd") } },
-      el("div.pv-top", mono(p.name, p.id, "", p.base_url), el("div.pv-name", el("b", p.name), el("span", howConnected(p))), el(`span.pv-state.${st}`, { title: stText }, el("i"), stText)),
+      el("div.pv-top", mono(p.name, p.id, "", p.base_url, familyLogo(shownModels(p))), el("div.pv-name", el("b", p.name), el("span", howConnected(p))), el(`span.pv-state.${st}`, { title: stText }, el("i"), stText)),
       usage,
       el("div.pv-meta",
         el("span", ico("cpu"), `${shown} of ${p.models.length} models`),
@@ -348,7 +350,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
       body.replaceChildren(inner);
     };
     page.append(back,
-      el("div.pv-hero", mono(p.name, p.id, "lg", p.base_url),
+      el("div.pv-hero", mono(p.name, p.id, "lg", p.base_url, familyLogo(shownModels(p))),
         el("div.pv-hero-text", el("h2", p.name), el("div.pv-hero-sub", el(`span.pv-state.${st}`, el("i"), stText), el("span", howConnected(p)), el("code", p.base_url || ""))),
         el("div.pv-hero-actions", testBtn, more)),
       tabs, body);
@@ -507,6 +509,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
 
   /** Hand corrections for one model: AFH uses them over models.dev and the provider's own list. */
   function editModel(p, m) {
+    const nameIn = el("input.inp", { value: m.name || m.id, placeholder: m.id, maxLength: 80 });
     const ctxIn = el("input.inp", { type: "number", min: 1000, value: m.context || "" });
     const outIn = el("input.inp", { type: "number", min: 256, value: m.output || "" });
     const effIn = el("input.inp", { value: (m.variants || []).join(", "), placeholder: "low, high, max" });
@@ -516,12 +519,13 @@ export async function modelsPane(pane, ctx, opts = {}) {
       return el("label.chk", box, el("span", k));
     }));
     const save = async (reset) => {
-      const body = reset ? {} : { context: Number(ctxIn.value) || null, output: Number(outIn.value) || null, variants: effIn.value.split(",").map((v) => v.trim()).filter(Boolean), input: ["text", ...[...kinds].filter((k) => k !== "text")] };
+      const body = reset ? {} : { name: nameIn.value.trim() && nameIn.value.trim() !== m.id ? nameIn.value.trim() : null, context: Number(ctxIn.value) || null, output: Number(outIn.value) || null, variants: effIn.value.split(",").map((v) => v.trim()).filter(Boolean), input: ["text", ...[...kinds].filter((k) => k !== "text")] };
       if (await guard(() => api.put(`/api/providers/${p.id}/models/${encodeURIComponent(m.id)}`, body), reset ? "Back to the catalog's facts" : "Saved")) { dlg.close(); reload(); }
     };
     const dlg = modal(el("div.m-body.dlg",
       el("h2", `Edit ${m.name}`),
       el("p.lead", "AFH reads these from models.dev and the provider. Correct them here if they are wrong; your values win."),
+      field("Name", nameIn, m.name !== m.id ? `What AFH calls it. The provider still gets its id: ${m.id}` : "What AFH calls it in the chat and the picker. The provider still gets the id."),
       el("div.grid2", field("Context window (tokens)", ctxIn), field("Max output (tokens)", outIn)),
       field("Effort levels", effIn, "Comma-separated, as the API names them. “default” (no effort sent) is always offered."),
       field("Takes in besides text", checks),
