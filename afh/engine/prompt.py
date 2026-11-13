@@ -118,6 +118,12 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
                      "README first for the exact command and required environment variables, and ask the user for API keys you do not have. "
                      "After installing, confirm it worked (the skill is listed, the server is connected with tools) and tell the user; if a "
                      "server fails, read the error, fix the command and add it again. `harness` with action `list` shows everything installed.")
+    if "threads" in have:
+        lines.append("- **Other threads** (`threads` tool): the user's earlier threads (they may say sessions or chats), and this thread from before "
+                     "it was compacted, word for word: every message, tool call and result, never a summary. When the user asks you to continue or "
+                     "look at earlier work (\"read the 'build a website' session and carry on\"), find the thread with `list`, read it from the start "
+                     "to its last character, page after page, then carry on from where it stopped, checking the real files first since they may have "
+                     "changed. When you need a detail that a summary of this thread lost, read it back with `thread: \"this\"`.")
     lines.append("- **Error checks**: after you edit files, AFH checks them (syntax, types, lint) and appends any problems to the tool result. Fix them.")
     lines.append("- **Context**: long threads are summarised automatically and old tool outputs may be shortened. Re-run a tool if you need its full output again.")
     lines.append("- **The user's controls**: approval modes (some actions ask the user first), undo, context editing, hooks that may block a tool or "

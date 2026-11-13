@@ -47,13 +47,17 @@ def prune_history(messages: list[ChatMessage], context: int, system: str = "") -
         return 0
     tool_idx = [i for i, m in enumerate(messages) if m.role == "tool"]
     candidates = tool_idx[:-PRUNE_KEEP] if len(tool_idx) > PRUNE_KEEP else []
+    # Pages of another thread (the `threads` tool) go last: the model asked for them word for word,
+    # so everything else is shortened before them.
+    candidates.sort(key=lambda i: messages[i].tool_name == "threads")
     trimmed = 0
     for i in candidates:
         m = messages[i]
         if len(m.text) <= PRUNE_HEAD * 2:
             continue
         saved = len(m.text) - PRUNE_HEAD
-        m.text = m.text[:PRUNE_HEAD] + f"\n… [{saved:,} characters of this old output were removed to save context; run the tool again if you need it]"
+        again = "read that page again with the same offset" if m.tool_name == "threads" else "run the tool again"
+        m.text = m.text[:PRUNE_HEAD] + f"\n… [{saved:,} characters of this old output were removed to save context; {again} if you need it]"
         est -= int(saved / 3.6)
         trimmed += 1
         if est <= context * PRUNE_TO:

@@ -456,6 +456,11 @@ class Approval(ModalScreen):
         elif action == "chrome" and meta.get("kind") == "chrome":
             title = meta.get("title") or f"Let AFH use {meta.get('site') or 'this site'} in your browser?"
             sub = meta.get("note") or "AFH will see this site the way you do, signed in as you, and can click and type there."
+        elif action == "threads" and meta.get("kind") == "thread":
+            t = meta.get("thread") or {}
+            title = meta.get("title") or f"Let the model read the thread \"{t.get('title') or 'Untitled'}\"?"
+            facts = " · ".join(x for x in (f"{t.get('messages')} messages" if t.get("messages") is not None else "", str(t.get("project") or "")) if x)
+            sub = (meta.get("note") or "It gets the whole thread, word for word, from its first message.") + (f"\n{facts}" if facts else "")
         else:
             title = meta.get("title") or {"edit": "Allow file changes?", "shell": "Run this command?"}.get(action, f"Allow {action}?")
             sub = p.get("message") or ""
@@ -472,7 +477,7 @@ class Approval(ModalScreen):
                 for f in files:
                     sections.append(Content.styled(f" {f.get('status') or 'change'} · {f.get('file')}", "bold"))
                     sections.append(diff_content(f.get("patch"), 120, path=f.get("file")))
-                if not files and not meta.get("command") and p.get("resources"):
+                if not files and not meta.get("command") and p.get("resources") and meta.get("kind") != "thread":
                     sections.append(Content.styled("\n".join(str(r) for r in p["resources"]), "$afh-text2"))
                 if sections:
                     with VerticalScroll(id="scroll"):

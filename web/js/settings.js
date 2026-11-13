@@ -3,7 +3,7 @@
 // card, row, field, seg), restyled together in settings.css.
 
 import { api, native } from "./api.js";
-import { INTERFACES, INTERFACE_LOOKS, MESSAGE_ANIMS, PRESETS, THEME_TRANSITIONS, applyAppearance, defaultLook, interfacePatch, luminance, resolveTheme, themeTransition, themesFor } from "./appearance.js";
+import { INTERFACES, INTERFACE_LOOKS, MESSAGE_ANIMS, PRESETS, SIGNATURE, THEME_TRANSITIONS, applyAppearance, defaultLook, interfacePatch, luminance, resolveTheme, themeTransition, themesFor } from "./appearance.js";
 import { delegationPane } from "./delegate.js";
 import { arabicFor } from "./i18n.js";
 import { logoNode } from "./logo.js";
@@ -346,14 +346,15 @@ const PANES = {
     const presetGrid = el("div.preset-groups");
     const drawPresets = () => {
       presetGrid.replaceChildren();
-      const darkGrid = el("div.preset-grid"), lightGrid = el("div.preset-grid"), ownGrid = el("div.preset-grid");
+      const darkGrid = el("div.preset-grid"), lightGrid = el("div.preset-grid"), ownGrid = el("div.preset-grid"), sigGrid = el("div.preset-grid");
       const iface = INTERFACES.find((x) => x.id === (u.interface || "studio")) || INTERFACES[0];
       const { own, classic } = themesFor(iface.id);
       if (own.length) presetGrid.append(el("div.preset-group-title", ico("sparkle"), `${iface.name} themes`), ownGrid);
+      presetGrid.append(el("div.preset-group-title", ico("sparkle"), "Signature themes"), sigGrid);
       presetGrid.append(el("div.preset-group-title", ico("moon"), own.length ? "Classic dark themes" : "Dark themes"), darkGrid, el("div.preset-group-title", ico("sun"), own.length ? "Classic light themes" : "Light themes"), lightGrid);
       for (const id of [...own, ...classic]) {
         const p = PRESETS[id];
-        (own.includes(id) ? ownGrid : p.dark ? darkGrid : lightGrid).append(el(`button.preset${u.preset === id ? ".on" : ""}`, { type: "button", style: { background: p.bg, color: p.text, borderColor: u.preset === id ? p.accent : "transparent" }, on: { click: async (e) => {
+        (own.includes(id) ? ownGrid : SIGNATURE.includes(id) ? sigGrid : p.dark ? darkGrid : lightGrid).append(el(`button.preset${u.preset === id ? ".on" : ""}`, { type: "button", style: { background: p.bg, color: p.text, borderColor: u.preset === id ? p.accent : "transparent" }, on: { click: async (e) => {
           // Picking a theme also makes it your favourite for its mode, and switches to that mode.
           const patch = { preset: id, accentOverride: false, bg: p.bg, text: p.text, accent: p.accent, [p.dark ? "darkPreset" : "lightPreset"]: id };
           const nowDark = document.documentElement.dataset.theme === "dark";
@@ -362,7 +363,7 @@ const PANES = {
           themeTransition(u, () => applyAppearance({ ...ctx.S.settings.ui, ...patch }), e.currentTarget);
           await save(patch); drawPresets(); drawCustom();
         } } },
-          el("span.preset-dot", { style: { background: p.accent } }), el("span", p.name), el("span.preset-sub", p.dark ? "dark" : "light")));
+          el("span.preset-dot", { style: { background: p.accent2 ? `linear-gradient(135deg, ${p.accent0 || p.accent}, ${p.accent} 50%, ${p.accent2})` : p.accent } }), el("span", p.name), el("span.preset-sub", p.dark ? "dark" : "light")));
       }
       darkGrid.append(el(`button.preset${u.preset === "custom" ? ".on" : ""}`, { type: "button", style: { background: u.bg, color: u.text, borderColor: u.preset === "custom" ? u.accent : "transparent" }, on: { click: async () => { u.preset = "custom"; await save({ preset: "custom" }); drawPresets(); drawCustom(); } } },
         el("span.preset-dot", { style: { background: u.accent } }), el("span", "Custom"), el("span.preset-sub", "your colors")));

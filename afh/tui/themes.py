@@ -1,4 +1,4 @@
-"""The app's themes as terminal colours (the classic 46 plus each interface's own). The table comes from web/js/appearance.js, and a test
+"""The app's themes as terminal colours (the classic and signature ones plus each interface's own). The table comes from web/js/appearance.js, and a test
 keeps the two the same: id: (name, accent, dark, (bg, side, panel, panel2, panel3, border, border2,
 text, text2, text3, code))."""
 from __future__ import annotations
@@ -54,6 +54,15 @@ PRESETS: dict[str, tuple] = {
     'gruvboxlight': ('Gruvbox Light', '#d65d0e', False, ('#fbf1c7', '#f2e5bc', '#fdf6d8', '#f2e5bc', '#ebdbb2', '#e5d5ad', '#d5c4a1', '#3c3836', '#665c54', '#928374', '#f2e5bc')),
     'nordlight': ('Nord Light', '#5e81ac', False, ('#eceff4', '#e5e9f0', '#f8f9fb', '#e9edf2', '#dfe4ec', '#d8dee9', '#c2cad8', '#2e3440', '#4c566a', '#7b869a', '#e5e9f0')),
     'contrastlight': ('High Contrast Light', '#0047ff', False, ('#ffffff', '#ffffff', '#ffffff', '#f2f2f2', '#e6e6e6', '#6b6b6b', '#3d3d3d', '#000000', '#1a1a1a', '#404040', '#f2f2f2')),
+    'obsidian': ('Obsidian', '#8f7dff', True, ('#0b0b0e', '#0e0e12', '#141419', '#1a1a21', '#23232c', '#25252e', '#353541', '#eeeef3', '#adadba', '#767684', '#08080b')),
+    'espresso': ('Espresso', '#e0a15e', True, ('#110e0c', '#15110e', '#1b1612', '#231c17', '#2e251e', '#30261f', '#45382d', '#f3ebe2', '#c2b3a2', '#8a7b6b', '#0d0a08')),
+    'fjord': ('Fjord', '#7cc0f0', True, ('#0c1114', '#0f1518', '#141b1f', '#1a2328', '#232e34', '#253036', '#35434b', '#e6eef1', '#a6b6bd', '#6e8088', '#090d0f')),
+    'mulberry': ('Mulberry', '#d98bd1', True, ('#120d14', '#160f18', '#1c141f', '#241a28', '#2f2334', '#302435', '#44344a', '#f3eaf4', '#bfadc2', '#88758b', '#0d090f')),
+    'moss': ('Moss', '#b8d05a', True, ('#0e100b', '#12140e', '#171a12', '#1e2218', '#282d20', '#2a2f21', '#3b4230', '#eef0e4', '#b3b8a2', '#7c826b', '#0a0c08')),
+    'dusk': ('Dusk', '#ff9e7a', True, ('#0f0f17', '#12121c', '#181824', '#1f1f2e', '#29293b', '#2a2a3d', '#3b3b54', '#ececf6', '#adaec6', '#76778f', '#0b0b12')),
+    'linen': ('Linen', '#0f766e', False, ('#f7f5f0', '#efece5', '#fffefb', '#f3f0e9', '#e8e4da', '#e3ded3', '#d0c9bb', '#1a1d1c', '#54595a', '#878c8a', '#f1eee7')),
+    'cloud': ('Cloud', '#5b5bf0', False, ('#f6f7fb', '#eef0f6', '#ffffff', '#f2f4f9', '#e7eaf2', '#e2e5ee', '#cdd2e0', '#151826', '#50566b', '#878da1', '#eff1f7')),
+    'ink': ('Ink', '#18181b', False, ('#fdfdfc', '#f4f4f2', '#ffffff', '#f3f3f1', '#e9e9e6', '#e4e4e0', '#d1d1cc', '#111113', '#52525a', '#8a8a92', '#f4f4f2')),
     'focus': ('Graphite', '#8fb4ff', True, ('#1a1a1c', '#141415', '#212124', '#29292d', '#333338', '#303035', '#42424a', '#ececee', '#b4b4bb', '#7e7e87', '#131314')),
     'focus-umber': ('Umber', '#e8a56a', True, ('#1b1917', '#151311', '#23201d', '#2b2723', '#36312c', '#332e29', '#47403a', '#efebe6', '#b9b1a8', '#847c73', '#141210')),
     'focus-chalk': ('Chalk', '#2f6feb', False, ('#ffffff', '#f6f6f7', '#ffffff', '#f2f2f4', '#e8e8eb', '#e5e5e9', '#d2d2d8', '#18181b', '#55555e', '#8b8b95', '#f5f5f7')),

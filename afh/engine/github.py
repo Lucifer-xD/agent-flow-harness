@@ -298,7 +298,8 @@ class GithubAgent:
         if isinstance(ref, str) and "/" in ref:
             pid, _, mid = ref.partition("/")
             ref = {"providerID": pid, "id": mid}
-        s = self.engine.create_session(wt["directory"], project=task["path"], worktree=wt, title=f"#{number} {title}"[:80], mode=cfg["mode"], model=ref or None)
+        # origin: this thread's prompt is the issue's text, not the user's own words (it gets no `threads` tool)
+        s = self.engine.create_session(wt["directory"], project=task["path"], worktree=wt, title=f"#{number} {title}"[:80], mode=cfg["mode"], model=ref or None, origin="github")
         task["session"] = s["id"]
         await self.engine.prompt(s["id"], prompt_for(task, title, body, is_pr))
         if not await self.wait(s["id"]):

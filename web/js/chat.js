@@ -318,6 +318,8 @@ export function describeTool(p) {
   if (name === "design") return { icon: "sparkle", label: "Design", target: input.title || "" };
   if (/todo/.test(name)) return { icon: "list", label: "Plan", target: "" };
   if (name === "memory") return { icon: "book", label: "Memory", target: pick(input, "text", "old") || "" };
+  // a thread is shown by its title; until the result brings it, an id says nothing to the user
+  if (name === "threads") return { icon: "scroll", label: "Threads", target: p.state?.metadata?.thread?.title || String(pick(input, "thread", "query") || "").replace(/^ses_\w+$/, "") };
   if (name === "harness") return { icon: "plug", label: (HARNESS_VERBS[input.action] || ["Harness"])[0], target: pick(input, "source", "name", "id", "url") || "" };
   if (name === "computer") return { icon: input.action === "teach" ? "book" : "mouse-pointer", label: "Computer",
     target: pick(input, "intent", "title", "app", "key", "text", "direction") || (input.action === "batch" ? `${(input.actions || []).length} steps` : "") || (Array.isArray(input.apps) ? input.apps.join(", ") : "") };
@@ -365,6 +367,8 @@ const VERBS = {
   skill: ["Loaded skill", "Loading skill"], question: ["Asked", "Asking"], design: ["Showed design options", "Preparing design options"], todowrite: ["Planned", "Planning"], todoread: ["Checked plan", "Checking plan"],
   memory: ["Updated project memory", "Updating project memory"],
 };
+const THREADS_VERBS = { list: ["Looked through your threads", "Looking through your threads"], read: ["Read the thread", "Reading the thread"],
+  outline: ["Listed the thread's messages", "Listing the thread's messages"], search: ["Searched the thread", "Searching the thread"] };
 const MEMORY_VERBS = { add: ["Remembered", "Remembering"], remove: ["Forgot", "Forgetting"], replace: ["Corrected memory", "Correcting memory"], list: ["Checked memory", "Checking memory"] };
 const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name) ? "edit" : /^(shell|bash|execute)$/.test(name) ? "run" : /^(read|glob|grep|list|ls)$/.test(name) ? "read" : /web|fetch/.test(name) ? "web" : "other");
 
@@ -553,6 +557,7 @@ function renderTool(p, openSet, thread, t0) {
     : name === "jobs" ? ({ stop: ["Stopped job", "Stopping job"], list: ["Listed jobs", "Listing jobs"] }[input0.action] || ["Read job output", "Waiting for job output"])
       : name === "harness" ? HARNESS_VERBS[input0.action] || ["Changed AFH setup", "Changing AFH setup"]
       : name === "memory" ? MEMORY_VERBS[input0.action] || VERBS.memory
+      : name === "threads" ? THREADS_VERBS[input0.action || (input0.thread ? "read" : "list")] || THREADS_VERBS.read
       : VERBS[name] || [p.name, p.name];
   const patches = info.edit ? toolPatches(p) : [];
   const meta = p.state?.metadata || {};
@@ -564,6 +569,8 @@ function renderTool(p, openSet, thread, t0) {
   else if (status === "error") stat = el("span.tool-stat", { style: { color: "var(--bad)" } }, "failed");
   else if (status === "streaming") stat = el("span.tool-stat", "preparing");
   else if (status === "running") stat = el("span.tool-stat", name === "jobs" && input0.wait ? `waiting up to ${input0.wait}s` : "running");
+  else if (name === "threads" && meta.action === "read" && meta.total != null) stat = el("span.tool-stat", { title: `Characters ${meta.from.toLocaleString()} to ${meta.to.toLocaleString()} of ${meta.total.toLocaleString()}, word for word` },
+    meta.done && !meta.from ? "the whole thread" : meta.done ? "to the end" : `${Math.round((meta.to * 100) / Math.max(1, meta.total))}% read`);
   else if (meta.job) stat = el("span.tool-stat", el("span.job-id", meta.job.id), meta.job.running ? " running" : meta.job.stopped ? " stopped" : ` exited ${meta.job.exitCode ?? ""}`);
   const diag = meta.diagnostics;
   const diagChip = diag ? el(`span.diag-chip.${diag.ok ? "ok" : "bad"}`, { title: `Checked with ${diag.ran.join(", ")}` }, ico(diag.ok ? "shield-check" : "alert"), diag.ok ? "checked" : `${diag.problems} problem${diag.problems === 1 ? "" : "s"}`) : null;
@@ -610,7 +617,8 @@ function renderTool(p, openSet, thread, t0) {
       const inputText = typeof input === "string" ? input : input && Object.keys(input).length ? (kind === "run" ? pick(input, "command", "cmd") : JSON.stringify(input, null, 2)) : "";
       if (inputText) sections.push(el("div.tool-section", el("div.tool-section-label", kind === "run" ? "Command" : "Input"), el("pre.tool-pre", inputText)));
     }
-    if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output"), el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + "\n…" : out)));
+    if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output"),
+      el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + `\n… (the model received all ${out.length.toLocaleString()} characters; the first 20,000 are drawn here)` : out)));
     if (errText) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", errText)));
   }
   // Browser screenshots stay visible under the card's header; click one to see it full size.
@@ -968,20 +976,65 @@ export class ChatView {
       el("button.icon-btn", { title: "Fork thread from here", html: icon("branch"), on: { click: () => this.opts.onFork(m.id) } }));
     const avatar = el("div.avatar", this.opts.avatar ? this.opts.avatar(m.live) : null);
     const files = rich && last && !m.live ? this.turnFiles(list.slice(j, i + 1)) : null;
+    const T = rich ? this.turnOf(m) : null;
+    const foot = rich && actions ? this.replyFoot(T, m, actions) : actions;
     // Studio: everything the model did on the way (its notes, thinking and steps) sits in one work column
     // under a "Worked for …" bar; the answer at the end of the reply stays outside it.
     let body = el("div.msg-body", parts);
-    const T = rich ? this.turnOf(m) : null;
     if (T && T.tools.length) {
       let from = parts.length;
       if (last && !m.live) while (from > 0 && (kinds[from - 1] === "text" || kinds[from - 1] === "note")) from--;
       const work = parts.slice(0, from);
+      const answer = parts.slice(from);
       body = el("div.msg-body",
         cont ? null : this.turnBar(T),
+        cont ? null : this.turnTrack(T),
         work.length ? el(`div.work${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { dataset: { turn: T.id } }, el("div.work-in", work)) : null,
-        ...parts.slice(from));
+        // With the work open, a line says where the steps end and the answer begins.
+        answer.length && last && !m.live ? el(`div.answer-mark${T.collapsed ? ".shut" : ""}`, { dataset: { turn: T.id } }, "Answer") : null,
+        answer.length ? el("div.answer", answer) : null);
     }
-    return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}${T && T.tools.length ? ".has-work" : ""}`, anim, avatar, cont ? null : meta, body, files, actions);
+    return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}${T && T.tools.length ? ".has-work" : ""}`, anim, avatar, cont ? null : meta, body, files, foot);
+  }
+
+  /** How long a whole reply took: the live run's own clock, else first start to last finish, else its steps added up. */
+  turnMs(T) {
+    const first = T.msgs[0], end = T.msgs[T.msgs.length - 1];
+    const finish = Math.max(0, ...T.msgs.map((x) => x.time?.completed || (x.time?.created && x.durationMs ? x.time.created + x.durationMs : 0)));
+    return end?.turnMs || (finish && first?.time?.created ? finish - first.time.created : 0) || T.msgs.reduce((n, x) => n + (stepStats(x).dur || 0), 0);
+  }
+
+  /** Under a finished reply: copy and fork on one side, what the whole reply took on the other. */
+  replyFoot(T, m, actions) {
+    const msgs = T?.msgs?.length ? T.msgs : [m];
+    const ms = T ? this.turnMs(T) : stepStats(m).dur || 0;
+    const sum = (f) => msgs.reduce((n, x) => n + (f(x) || 0), 0);
+    const tokens = sum((x) => (x.tokens ? (x.tokens.input || 0) + (x.tokens.cache?.read || 0) + (x.tokens.cache?.write || 0) + (x.tokens.output || 0) : 0));
+    const out = sum((x) => x.tokens?.output);
+    const cost = sum((x) => x.cost);
+    const end = msgs[msgs.length - 1];
+    const at = end.time?.completed || end.time?.created;
+    const steps = T?.tools.length || 0;
+    actions.className = "rf-actions";
+    return el("div.reply-foot", actions, el("div.rf-stats",
+      ms > 0 ? el("span", { title: "How long the whole reply took" }, fmtDur(ms)) : null,
+      steps ? el("span", `${steps} ${steps === 1 ? "step" : "steps"}`) : null,
+      tokens ? el("span", { title: `${tokens.toLocaleString()} tokens across ${msgs.length} model ${msgs.length === 1 ? "call" : "calls"}${out ? `, ${out.toLocaleString()} of them written by the model` : ""}` }, `${fmtTokens(tokens)} tokens`) : null,
+      cost > 0 ? el("span", { title: "What this reply cost" }, fmtCost(cost)) : null,
+      at ? el("span", new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })) : null));
+  }
+
+  /** One thin segment per step, coloured by what the step was: a folded reply's work at a glance. */
+  turnTrack(T) {
+    const MAX = 60;
+    const every = Math.max(1, T.tools.length / MAX);
+    const shown = T.tools.filter((_, k) => Math.floor(k / every) !== Math.floor((k - 1) / every));
+    return el(`div.turn-track${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { dataset: { turn: T.id }, "aria-hidden": "true" }, shown.map((p) => {
+      const name = (p.name || "").toLowerCase(), st = p.state?.status, info = describeTool(p);
+      const verb = (VERBS[name] || [info.label])[0];
+      return el(`i.${st === "error" ? "bad" : /^(todo|todowrite|goal|question)$/.test(name) ? "plan" : kindOf(name)}${st === "running" || st === "streaming" ? ".now" : ""}`,
+        { title: `${verb}${info.target ? " " + info.target : ""}`.slice(0, 120) });
+    }));
   }
 
   /** The reply `m` belongs to: its messages, its steps, whether it is still running and folded. */
@@ -1002,23 +1055,23 @@ export class ChatView {
   /** "Worked for 1m 12s · Edited 3 files · Ran 2 commands": click to fold or unfold the work. */
   turnBar(T) {
     const sum = stepSummary(T.tools);
-    const first = T.msgs[0], end = T.msgs[T.msgs.length - 1];
-    // How long the reply took: the live run's own clock, else first start to last finish, else the steps added up.
-    const finish = Math.max(0, ...T.msgs.map((x) => x.time?.completed || (x.time?.created && x.durationMs ? x.time.created + x.durationMs : 0)));
-    const ms = end?.turnMs || (finish && first?.time?.created ? finish - first.time.created : 0) || T.msgs.reduce((n, x) => n + (stepStats(x).dur || 0), 0);
+    const first = T.msgs[0];
+    const ms = this.turnMs(T);
     const start = first?.time?.created || Date.now();
+    const failed = T.tools.filter((p) => p.state?.status === "error").length;
     const bar = el(`button.turn-bar${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { type: "button", dataset: { turn: T.id }, "aria-expanded": String(!T.collapsed), on: { click: () => {
       const shut = !bar.classList.contains("shut");
       this.openTools.delete(shut ? "t:" + T.id : "tc:" + T.id);
       this.openTools.add(shut ? "tc:" + T.id : "t:" + T.id);
       this.applyTurn(T.id, shut);
     } } },
-      el("span.tb-chev", { html: icon("chev") }),
-      T.live ? el("span.tb-what", el("span.tb-pulse"), "Working", el("span.dur.live-dur", { dataset: { start: String(start) } }, fmtDur(Date.now() - start)))
-        : el("span.tb-what", ms > 0 ? `Worked for ${fmtDur(ms)}` : "Worked"),
-      el("span.tb-bits", sum.bits.map((b) => el("span.steps-bit", b))),
+      T.live ? el("span.tb-mark.live", el("span.tb-pulse")) : el("span.tb-mark", { html: icon("check") }),
+      T.live ? el("span.tb-what", "Working", el("span.dur.live-dur", { dataset: { start: String(start) } }, fmtDur(Date.now() - start)))
+        : el("span.tb-what", "Worked", ms > 0 ? el("span.dur", `for ${fmtDur(ms)}`) : null),
+      el("span.tb-bits", sum.bits.map((b) => el("span.steps-bit", b)), failed ? el("span.steps-bit.bad", `${failed} failed`) : null),
       el("span.steps-icons", sum.icons),
-      el("span.steps-n", `${T.tools.length} ${T.tools.length === 1 ? "step" : "steps"}`));
+      el("span.steps-n", `${T.tools.length} ${T.tools.length === 1 ? "step" : "steps"}`),
+      el("span.tb-chev", { html: icon("chev-down") }));
     return bar;
   }
 
@@ -1160,6 +1213,7 @@ export function permissionCard(p, sid, onDone) {
   if (p.action === "design" && p.metadata?.design) return designCard(p, sid, onDone);
   if (p.action === "computer" && p.metadata?.kind === "computer") return computerCard(p, sid, onDone);
   if (p.action === "chrome" && p.metadata?.kind === "chrome") return chromeSiteCard(p, sid, onDone);
+  if (p.action === "threads" && p.metadata?.kind === "thread") return threadCard(p, sid, onDone);
   const action = p.action || "tool";
   const title = p.metadata?.title || (action === "edit" ? "Allow file changes?" : action === "shell" ? "Run this command?" : `Allow ${action}?`);
   const files = p.metadata?.files || [];
@@ -1251,6 +1305,36 @@ export function chromeSiteCard(p, sid, onDone) {
     el("div.approval-actions",
       el("button.btn.primary.sm", { on: { click: (e) => reply("once", e.currentTarget) } }, ico("check"), "Allow"),
       el("button.btn.sm", { title: "Don't ask again for this site", on: { click: (e) => reply("always", e.currentTarget) } }, "Always allow"),
+      el("span.spacer"),
+      el("button.btn.danger.sm", { on: { click: (e) => reply("reject", e.currentTarget) } }, "Don't allow")));
+}
+
+/** The model wants to read another thread, word for word; the user allows it (once, or always in this thread) or not. */
+export function threadCard(p, sid, onDone) {
+  const m = p.metadata || {};
+  const t = m.thread || {};
+  const reply = async (decision, btn) => {
+    const box = btn.closest(".approval");
+    box.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try {
+      await api.post(`/api/sessions/${sid}/permissions/${p.id}`, { decision });
+      onDone?.(p.id);
+    } catch (e) {
+      toast(e.message, "err");
+      box.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
+  };
+  const when = t.updated ? new Date(t.updated).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "";
+  const facts = [t.messages != null ? `${t.messages} message${t.messages === 1 ? "" : "s"}` : "", when, t.project || ""].filter(Boolean).join(" · ");
+  return el("div.approval.computer-approval.thread-approval",
+    el("div.approval-head", el("span.comp-badge", ico("scroll")),
+      el("div", el("div", m.title || `Let the model read the thread "${t.title || "Untitled"}"?`),
+        el("div.approval-sub", m.note || "It gets the whole thread, word for word, from its first message."))),
+    el("div.comp-list", el("div.comp-app", el("span.comp-ico", ico("scroll")), el("span.comp-name", { title: t.title || "" }, t.title || "Untitled"),
+      facts ? el("span.comp-tier", facts) : null)),
+    el("div.approval-actions",
+      el("button.btn.primary.sm", { on: { click: (e) => reply("once", e.currentTarget) } }, ico("check"), "Allow"),
+      el("button.btn.sm", { title: "Let the model read any of your threads in this thread without asking again", on: { click: (e) => reply("always", e.currentTarget) } }, "Always allow"),
       el("span.spacer"),
       el("button.btn.danger.sm", { on: { click: (e) => reply("reject", e.currentTarget) } }, "Don't allow")));
 }
