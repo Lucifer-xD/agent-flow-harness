@@ -4,7 +4,7 @@
 // so removing a provider or hiding a model in Settings shows at once.
 
 import { closePopover, el, fmtTokens, ico, icon, popover } from "./ui.js";
-import { providerLogo } from "./provider-logos.js";
+import { familyLogo, modelLogo, providerLogo } from "./provider-logos.js";
 
 const RECENT_KEY = "afh-recent-models";
 const same = (a, b) => !!a && !!b && a.id === b.id && a.providerID === b.providerID;
@@ -25,8 +25,9 @@ export function modelFacts(m) {
 }
 
 /** The provider's logo on a soft tile; two letters on the provider's own colour when there is no logo. */
-export function providerMark(pid, label, size = 18, url = "") {
-  const svg = providerLogo(pid, label, url);
+export function providerMark(pid, label, size = 18, url = "", fallback = "") {
+  // `fallback`: a logo to use when the provider has none of its own (see modelLogo and familyLogo)
+  const svg = providerLogo(pid, label, url) || fallback;
   const style = { "--h": String(hue(pid)), "--s": `${size}px` };
   return svg
     ? el("span.pv-mark.has-logo", { style, "aria-hidden": "true", html: svg })
@@ -99,7 +100,7 @@ export function modelPicker(anchor, opts) {
       g.get(m.providerID).push(m);
     }
     const parts = [];
-    for (const [pid, ms] of g) parts.push(el("div.mpk-group", providerMark(pid, name(pid), 18), el("span", name(pid))), ...ms.map(row));
+    for (const [pid, ms] of g) parts.push(el("div.mpk-group", providerMark(pid, name(pid), 18, "", familyLogo(ms)), el("span", name(pid))), ...ms.map(row));
     if (!g.size) {
       parts.push(el("div.mpk-empty", ico(models.length ? "search" : "cpu"),
         el("b", models.length ? `Nothing matches “${query}”` : "No models yet"),
@@ -122,7 +123,7 @@ export function modelPicker(anchor, opts) {
     const was = same(m, current) ? current.variant || "default" : "default";
     const head = el("div.mpk-step",
       el("button.mpk-back", { type: "button", title: "Back to models", on: { click: () => { drawModels(); input.focus(); } }, html: icon("chev") }),
-      providerMark(m.providerID, name(m.providerID), 22),
+      providerMark(m.providerID, name(m.providerID), 22, "", modelLogo(m.id, m.name)),
       el("span.mpk-step-t", el("b", m.name), el("small", "Choose the effort")));
     const opts2 = levels.map((v, i) => {
       const [label, sub] = EFFORT[v] || [effortLabel(v), ""];

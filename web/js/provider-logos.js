@@ -103,8 +103,32 @@ export function providerLogoName(id, name = "", url = "") {
 // that copy is hidden or removed (a closed panel, a redraw after switching theme), the others
 // lose their mask and show as a coloured square. So every copy gets ids of its own.
 let copy = 0;
+const own = (svg) => (svg && svg.includes("_R_0_") ? svg.replaceAll("_R_0_", `_R_${++copy}_`) : svg || "");
 export function providerLogo(id, name, url) {
   const n = providerLogoName(id, name, url);
-  const svg = n ? SVG[n] : "";
-  return svg.includes("_R_0_") ? svg.replaceAll("_R_0_", `_R_${++copy}_`) : svg;
+  return n ? own(SVG[n]) : "";
+}
+
+// A model's own family, for a provider that has no logo (a custom endpoint, a server on this
+// computer): a Qwen model shows Qwen's logo, a Llama model Meta's, and so on. Matched on the model's
+// id and name, so "unsloth/Qwen3.8-27B-GGUF" is Qwen.
+const FAMILIES = [["qwen", "qwen"], ["qwq", "qwen"], ["deepseek", "deepseek"], ["claude", "claude"], ["gpt", "openai"], ["gemini", "gemini"], ["gemma", "gemini"],
+  ["grok", "grok"], ["mistral", "mistral"], ["mixtral", "mistral"], ["codestral", "mistral"], ["devstral", "mistral"], ["magistral", "mistral"], ["ministral", "mistral"],
+  ["llama", "meta"], ["kimi", "kimi"], ["moonshot", "moonshot"], ["glm", "zhipu"], ["minimax", "minimax"], ["doubao", "doubao"], ["hunyuan", "hunyuan"],
+  ["command-r", "cohere"], ["mimo", "xiaomimimo"], ["lfm", "liquid"], ["solar", "upstage"], ["sonar", "perplexity"]];
+export function modelLogoName(id, name = "") {
+  const hay = `${id || ""} ${name || ""}`.toLowerCase();
+  for (const [w, n] of FAMILIES) if (hay.includes(w)) return n;
+  return "";
+}
+/** The logo of the family a model belongs to, or "". */
+export function modelLogo(id, name) {
+  const n = modelLogoName(id, name);
+  return n ? own(SVG[n]) : "";
+}
+/** One logo for a whole list of models when they all belong to one family (a server that only runs Qwen), else "". */
+export function familyLogo(models) {
+  const names = new Set((models || []).map((m) => modelLogoName(m.id, m.name)));
+  const n = names.size === 1 ? [...names][0] : "";
+  return n ? own(SVG[n]) : "";
 }
