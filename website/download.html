@@ -48,7 +48,7 @@
           <p class="lead">The AFH desktop app for Windows. Also for Mac, and for your terminal or phone if you want them. No account needed.</p>
           <nav class="dl-ways" aria-label="Ways to get AFH"><a href="#desktop" class="on">Desktop app</a><a href="#terminal">Terminal</a><a href="#phone">Phone</a></nav>
           <div class="dl-buttons" id="desktop">
-            <a class="btn btn-big dl-win" data-download href="/downloads/AFH-Setup-1.32.4.exe">
+            <a class="btn btn-big dl-win" data-download href="/downloads/AFH-Setup-1.32.5.exe">
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.4 1.2L21 21v-8.5h-9.6zm0-15.4v7.2H21V3z"/></svg>
               Windows
             </a>
@@ -57,13 +57,13 @@
           </div>
           <p class="dl-mac">On a Mac, the first time: <a href="#mac">how to open it</a>. On Linux: use the <a href="#terminal">terminal app</a>.</p>
           <ul class="dl-meta">
-            <li>Version <b data-version>1.32.4</b></li>
+            <li>Version <b data-version>1.32.5</b></li>
             <li><b data-size>146 MB</b></li>
             <li>Released <b data-date>Nov 10, 2026</b></li>
             <li>Windows 10 &amp; 11, 64-bit</li>
           </ul>
           <ol class="dl-steps">
-            <li><span>Run <b data-file>AFH-Setup-1.32.4.exe</b>. If Windows says it protected your PC, choose <b>More info → Run anyway</b>.</span></li>
+            <li><span>Run <b data-file>AFH-Setup-1.32.5.exe</b>. If Windows says it protected your PC, choose <b>More info → Run anyway</b>.</span></li>
             <li><span>Sign in or add a key in <b>Settings → Models &amp; accounts</b> — ChatGPT, Copilot, Grok, an API key, or a model on your PC.</span></li>
             <li><span>Open a folder and say what you want, like you'd tell a teammate.</span></li>
           </ol>
@@ -74,12 +74,12 @@
           <p class="progress-ring"><i></i>Your download is starting…</p>
           <h2 class="display">Almost<br><span class="grad-text">there.</span></h2>
           <ol class="next">
-            <li><span>Open <b data-file>AFH-Setup-1.32.4.exe</b> from your Downloads.</span></li>
+            <li><span>Open <b data-file>AFH-Setup-1.32.5.exe</b> from your Downloads.</span></li>
             <li><span>If Windows says it protected your PC, choose <b>More info → Run anyway</b>. AFH is new, so Windows doesn't know it yet.</span></li>
             <li><span>AFH opens when it's installed. Go to <b>Settings → Models &amp; accounts</b> to sign in or add a key.</span></li>
             <li><span>Pick a folder, type what you want, and watch it work. <a href="/docs#first-thread">Your first thread →</a></span></li>
           </ol>
-          <p class="retry">Download didn't start? <a data-download href="/downloads/AFH-Setup-1.32.4.exe">Try again</a> · <a href="/docs">Read the guide</a></p>
+          <p class="retry">Download didn't start? <a data-download href="/downloads/AFH-Setup-1.32.5.exe">Try again</a> · <a href="/docs">Read the guide</a></p>
         </div>
       </div>
     </section>
@@ -95,9 +95,10 @@
     </section>
 
     <section class="panel release" data-reveal aria-label="This release">
-      <div class="release-head"><b>AFH <span data-version>1.32.4</span></b><span class="badge green">Latest</span><time datetime="2026-11-13" data-date>Nov 13, 2026</time></div>
+      <div class="release-head"><b>AFH <span data-version>1.32.5</span></b><span class="badge green">Latest</span><time datetime="2026-11-13" data-date>Nov 13, 2026</time></div>
       <h4>What's in this release</h4>
       <ul>
+        <li>1.32.5: send the model a note while it works: it reads it at its next step and keeps going, without being stopped.</li>
         <li>1.32.4: name your models, effort levels that work on custom endpoints, and a logo for custom endpoints from the model they run.</li>
         <li>1.32.3: much lower power use: an idle AFH no longer keeps the processor busy, so a laptop runs cooler and its battery lasts longer.</li>
         <li>1.32.2: provider logos all through Settings, fewer boxes in a reply's steps, and a fix for logos that turned into a coloured square after switching theme.</li>
@@ -226,7 +227,7 @@
           <p>Turn it off, or check by hand, in <b>Settings → About → Updates</b>.</p>
           <h3 style="margin-top:22px">Check the file</h3>
           <p>To make sure the installer arrived intact, compare its SHA-512 with the one on the download card:</p>
-          <div class="code-line"><code>Get-FileHash .\<span data-file>AFH-Setup-1.32.4.exe</span> -Algorithm SHA512</code><button class="icon-btn" type="button" data-copy-cmd>Copy</button></div>
+          <div class="code-line"><code>Get-FileHash .\<span data-file>AFH-Setup-1.32.5.exe</span> -Algorithm SHA512</code><button class="icon-btn" type="button" data-copy-cmd>Copy</button></div>
         </div>
       </div>
     </section>

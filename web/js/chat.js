@@ -81,10 +81,15 @@ export function applyEvent(t, ev) {
     case "session.inbox.enqueued": {
       const item = d.item || {};
       if (item.type === "user" && !t.byId.has(d.inboxID)) {
-        addMessage(t, { id: d.inboxID, type: "user", text: item.payload?.text || "", files: item.payload?.files, time: { created: ev.created || Date.now() }, pending: true });
+        addMessage(t, { id: d.inboxID, type: "user", text: item.payload?.text || "", files: item.payload?.files, time: { created: ev.created || Date.now() }, pending: true, steer: !!item.steer });
         return { all: true };
       }
       return null;
+    }
+    case "session.inbox.read": { // the model has started a step that includes these notes
+      let any = false;
+      for (const id of d.inboxIDs || []) { const m = t.byId.get(id); if (m) { m.read = ev.created || Date.now(); any = true; } }
+      return any ? { all: true } : null;
     }
     case "session.inbox.delivered": {
       const m = t.byId.get(d.inboxID);
@@ -838,7 +843,10 @@ export class ChatView {
         const content = !cmd ? [m.text || ""]
           : cmd.name === "goal" ? [el("span.cmd-chip.goal", ico("target"), "Goal"), " ", cmd.args]
             : [el("span.cmd-chip", `/${cmd.name}`), cmd.args ? ` ${cmd.args}` : "", el("details.cmd-full", el("summary", "prompt"), el("div", m.text || ""))];
-        return el("div.msg.user", anim, el("div.bubble", { style: m.pending ? { opacity: 0.7 } : null }, content, files.length ? el("div.att", files) : null), actions);
+        // a note sent while the model was working: it says whether the model has read it yet
+        const note = m.steer ? el(`div.note-state${m.read ? ".read" : ""}`, ico(m.read ? "check" : "clock"),
+          m.read ? "Note read. The model carried on with it." : "Note sent. The model reads it after its current step, without stopping.") : null;
+        return el(`div.msg.user${m.steer ? ".is-note" : ""}`, anim, el("div.bubble", { style: m.pending ? { opacity: 0.7 } : null }, content, files.length ? el("div.att", files) : null), note, actions);
       }
       case "synthetic": {
         const n = m.metadata?.notice;

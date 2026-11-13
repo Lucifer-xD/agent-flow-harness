@@ -749,6 +749,38 @@ def test_models_get_real_facts_from_models_dev(home):
     assert mine.name == "Big Model" and mine.id == "lab/Big-Model-Q4-GGUF" and mine.reasoning and mine.variants == ["low", "high"]
 
 
+def test_a_note_sent_during_a_run_reaches_the_model_without_stopping_it(home, tmp_path):
+    """Type while the model works: the run is not stopped, the next step's history holds the note
+    (marked as one, so the model adjusts instead of starting over), and the note is recorded as read."""
+    from afh.engine.runner import STEER_NOTE
+
+    class Steered(FakeProvider):
+        async def stream(self, req):
+            first = not self.requests
+            async for ev in super().stream(req):
+                if first and ev["type"] == "usage":  # the user types while the first answer is still coming in
+                    await self.engine.prompt(self.sid, "Use tabs, not spaces.")
+                yield ev
+
+    p = Steered(["Writing the file with spaces.", "Switched to tabs. Done."])
+    e = make_engine(p)
+
+    async def go():
+        e.loop = asyncio.get_running_loop()
+        p.engine, p.sid = e, e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full")["id"]
+        await e.prompt(p.sid, "Write hello.py")
+        await e.runs[p.sid].task
+
+    asyncio.run(go())
+    assert len(p.requests) == 2  # one run, two steps: nothing was stopped or restarted
+    assert p.requests[1].messages[-1].role == "user" and p.requests[1].messages[-1].text == STEER_NOTE + "Use tabs, not spaces."
+    assert not p.requests[0].messages[-1].text.startswith(STEER_NOTE)  # the message that started the run is an ordinary one
+    note = next(m for m in e.store.list_messages(p.sid) if m.get("text") == "Use tabs, not spaces.")
+    assert note.get("steer") and note.get("read")
+    types = [ev["type"] for ev in e.events]
+    assert "session.inbox.read" in types and "session.execution.interrupted" not in types and types.count("session.execution.started") == 1
+
+
 def test_a_second_compaction_summarises_from_the_first_and_keeps_everything(home, tmp_path):
     p = FakeProvider(["r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10"])
     e = make_engine(p)

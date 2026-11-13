@@ -118,6 +118,10 @@ class ProviderError(Exception):
         return {"type": e.get("kind") or "ProviderError", "message": e.get("message", ""), "status": e.get("status"), "response": e.get("response")}
 
 
+STEER_NOTE = ("[The user sent this note while you were working. You were not stopped. Take it into account now: change your approach, "
+              "your plan or the to-do list if it asks for that, then carry on from where you are. Don't start over, and don't stop just to reply to it.]\n\n")
+
+
 def live_start(messages: list[dict]) -> int:
     """Index of the latest compaction: the model sees it and what follows. Everything before stays in
     the thread for the user to read; the compaction summary stands in for it."""
@@ -139,7 +143,10 @@ def to_chat(messages: list[dict], vision: bool = False) -> list[ChatMessage]:
     for m in live:
         t = m.get("type")
         if t == "user":
-            out.append(ChatMessage("user", m.get("text", ""), images=[f.get("uri", "") for f in m.get("files", []) if str(f.get("uri", "")).startswith("data:")]))
+            text = m.get("text", "")
+            if m.get("steer"):  # a note the user sent mid-run: say so, or a model may treat it as a brand-new task
+                text = STEER_NOTE + text
+            out.append(ChatMessage("user", text, images=[f.get("uri", "") for f in m.get("files", []) if str(f.get("uri", "")).startswith("data:")]))
         elif t in ("synthetic", "system"):
             if m.get("text"):
                 out.append(ChatMessage("user", m["text"]))
@@ -186,6 +193,16 @@ class Run:
         self.step_files: list[tuple[str, str]] = []  # (tool call id, absolute path) changed in this step
         self.msg: dict | None = None  # the step being answered, as streamed so far
 
+    def take_notes(self) -> None:
+        """The step about to start is the first one whose history holds the notes sent meanwhile: mark them read."""
+        if not self.queued:
+            return
+        notes, self.queued = self.queued, []
+        for m in notes:
+            m["read"] = now_ms()
+            self.engine.store.save_message(self.sid, m)
+        self.emit("session.inbox.read", inboxIDs=[m["id"] for m in notes])
+
     def stop(self) -> None:
         """Stop now: whatever the run is waiting on (the model, a command, a retry pause) is cancelled."""
         self.abort.set()
@@ -217,6 +234,7 @@ class Run:
             for step in range(max_steps):
                 if self.abort.is_set():
                     raise Interrupted()
+                self.take_notes()
                 e.check_budget(self.session)
                 await e.maybe_compact(self.session, agent)  # also mid-run: long tool chains can outgrow the window
                 model_ref = e.model_ref_for(self.session, agent)
@@ -250,8 +268,7 @@ class Run:
                     raise Interrupted()
                 if not tool_calls:
                     if self.queued:
-                        self.queued.clear()
-                        continue  # a follow-up arrived while answering: go around once more
+                        continue  # a note arrived while answering: go around once more so the model reads it
                     nudge = await e.on_agent_stop(self)
                     if nudge and not self.abort.is_set():
                         note = {"id": new_id("msg"), "type": "synthetic", "text": nudge["text"], "time": {"created": now_ms()},
@@ -266,8 +283,6 @@ class Run:
                 await self._run_tools(tool_calls, msg, tools, gate, agent)
                 await self._diagnose(msg)
                 store.save_message(self.sid, msg)
-                if self.queued:
-                    self.queued.clear()
             else:
                 self.emit("session.notice", kind="limit", label=f"Stopped after {max_steps} steps (the per-run limit) — send a message to continue")
             self.emit("session.execution.succeeded")
