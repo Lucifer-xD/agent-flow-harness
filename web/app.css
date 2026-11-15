@@ -325,7 +325,9 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .msg.assistant .msg-meta, .msg.assistant .msg-body, .msg.assistant .msg-actions { grid-column: 2; }
 .msg.assistant.cont { margin-top: calc(4px * var(--pad)); }
 .msg.assistant.cont .avatar { visibility: hidden; }
-.msg.assistant:has(+ .msg.assistant.cont) { margin-bottom: 0; }
+/* .more: another message of the same reply follows (set by the chat view). This was a :has(+ …) rule; with one
+   of those on every message, the browser re-styled hundreds of elements whenever anything in the thread changed. */
+.msg.assistant.more { margin-bottom: 0; }
 .msg-meta { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 12px; margin-bottom: 6px; opacity: 0; transition: opacity 0.2s; }
 .msg.assistant:hover .msg-meta, .msg.assistant.live .msg-meta, :root[data-meta="on"] .msg-meta { opacity: 1; }
 .msg-meta .model { color: var(--text-2); font-weight: 550; }
@@ -1297,7 +1299,7 @@ body.resizing-drawer .workbench, body.resizing-drawer .app { transition: none !i
 
 /* smoothness: off-screen messages cost nothing, effects are cheaper, motion stays on the compositor */
 .thread-inner > .msg, .thread-inner > .think, .thread-inner > .notice { content-visibility: auto; contain-intrinsic-size: auto 120px; }
-.thread-inner > .msg.live, .thread-inner > .msg:last-of-type { content-visibility: visible; }
+.thread-inner > .msg.live, .thread-inner > .msg.last-msg { content-visibility: visible; } /* .last-msg is set by the chat view (a :last-of-type here re-styled every message on every change) */
 .thread { contain: strict; }
 .scrim { backdrop-filter: none; background: rgba(5, 5, 10, 0.55); }
 .glass .composer { backdrop-filter: blur(12px); }
@@ -2590,3 +2592,9 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 .acct-bar .ab-pct { font-variant-numeric: tabular-nums; color: var(--text-3); }
 .acct-prefs { display: grid; gap: 4px; }
 .notice.account { color: var(--text-2); }
+
+/* while a run is on, a message cannot be undone to (the button comes back when it ends) */
+.thread-busy .undo-btn { display: none; }
+
+/* the drawer sidebar's scrim and edge handle: only Split uses them (web/split.css) */
+.sb-scrim, .sb-handle { display: none; }

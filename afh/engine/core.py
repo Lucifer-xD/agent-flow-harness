@@ -139,6 +139,7 @@ class Engine:
     async def start(self) -> None:
         self.loop = asyncio.get_running_loop()
         try:
+            self.regroup_models()
             self.reload_providers()
             await self.start_mcp()
             self.error = None
@@ -311,6 +312,36 @@ class Engine:
             except Exception as err:
                 log.warning("provider %s skipped: %s", cfg.id, err)
         self.providers, self.models = providers, models
+
+    def regroup_models(self) -> None:
+        """Models that Google lists once per effort are one model with an effort choice. A list stored by an
+        older AFH is regrouped here, and the threads and the default that pointed at one of the old entries
+        follow it with the same effort."""
+        from .providers.antigravity import regroup_stored, regrouped
+
+        for pid, entry in list((provcfg.load().get("providers") or {}).items()):
+            if entry.get("kind") != "antigravity" and pid != "antigravity":
+                continue
+            try:
+                patch = regroup_stored(entry)
+                if not patch:
+                    continue
+                provcfg.upsert(pid, patch)
+                extra = patch["extra"]
+
+                def moved(ref):
+                    hit = regrouped(extra, str(ref.get("id") or "")) if isinstance(ref, dict) and ref.get("providerID") == pid else None
+                    return {**ref, "id": hit[0], "variant": hit[1]} if hit else None
+
+                for row in self.store.db.execute("SELECT id, model, updated FROM session WHERE model IS NOT NULL"):
+                    new = moved(json.loads(row["model"]))
+                    if new:
+                        self.store.update_session(row["id"], model=new, updated=row["updated"])
+                new = moved(self.settings().get("defaultModel"))
+                if new:
+                    appstore.save_settings({"defaultModel": new})
+            except Exception as err:
+                log.warning("models of %s not regrouped: %s", pid, err)
 
     def use_account(self, pid: str):
         """Rebuild one provider for the account now in use (engine/accounts.py switched it)."""

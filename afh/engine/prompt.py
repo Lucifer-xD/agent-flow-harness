@@ -45,7 +45,8 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
              "You run inside AFH, which gives you more than file and shell tools. Use these on your own judgment; the user does not have to ask for them."]
     if "goal" in have:
         lines.append("- **Goal** (`goal` tool): rarely needed. Do NOT set a goal for ordinary tasks - features, fixes, questions, multi-step "
-                     "work - plan those with `todo` and just do them. Set one only when the user asks for a goal, or tells you to keep going on "
+                     "work - plan those with `todo` and just do them, and never turn the user's message into a goal just because it is a task. "
+                     "Set one only when the user asks for a goal, or when the task really needs one: they tell you to keep going on "
                      "your own until something is true (\"don't stop until the tests pass\", \"work on this overnight\"). While a goal is active, "
                      "AFH may send you back to work when you stop: if the goal turns out impossible, or you tried and keep failing the same way, "
                      "call `goal` with status \"blocked\" and explain - never retry the same thing over and over.")

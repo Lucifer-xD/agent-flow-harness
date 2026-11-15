@@ -162,27 +162,10 @@ class TodoTool:
             text += f"\n\nNote: {len(running)} items are in progress. Keep exactly one in progress: finish it, then start the next."
         elif not running and open_todos(todos):
             text += "\n\nNote: nothing is in progress. Mark the item you are working on now as in_progress."
-        auto = self._auto_goal(ctx.session_id, todos)
-        if auto:
-            text += (f"\n\nAFH set this task as the thread's goal (the user sees it): {auto['text']}\n"
-                     "When everything is done and verified, report it with goal status \"achieved\" (or \"blocked\" if you need the user). "
-                     "You may replace it with a sharper goal using goal status \"set\".")
-        return ToolResult(text=text, metadata={"todos": todos, "counts": todo_counts(todos), **({"autoGoal": auto} if auto else {})})
-
-    def _auto_goal(self, sid: str, todos: list[dict]) -> dict | None:
-        """A multi-step plan without a goal: make the user's request the goal, so the thread always shows
-        what it is working toward. Off unless settings.goals.auto is true."""
-        e = self.engine
-        settings = e.settings().get("goals", {})
-        if not settings.get("auto", False) or len(todos) < 3 or e.goal(sid):
-            return None
-        request = next((m for m in reversed(e.store.list_messages(sid)) if m.get("type") == "user"), None)
-        text = " ".join(((request or {}).get("text") or "").split())
-        if len(text) < 12:
-            return None
-        if len(text) > 300:
-            text = text[:297].rsplit(" ", 1)[0] + "…"
-        return e.set_goal(sid, text, "", settings.get("autopilot", True), settings.get("maxTurns"), by="auto")
+        # A plan is not a goal. A thread gets a goal only when the user sets one, or when the model decides the
+        # task needs one and calls `goal` itself (there used to be a setting that made every request with a
+        # three-step plan the thread's goal; it is gone).
+        return ToolResult(text=text, metadata={"todos": todos, "counts": todo_counts(todos)})
 
 
 def _todo_report(todos: list[dict], title: str) -> str:

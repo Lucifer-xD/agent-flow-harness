@@ -55,6 +55,40 @@ def _is_claude(model: str) -> bool:
     return "claude" in model.lower()
 
 
+def regroup_stored(entry: dict) -> dict | None:
+    """A patch for a stored provider whose model list was saved before per-effort ids were one model
+    (``gemini-4-hydrogen-xhigh`` beside ``gemini-4-hydrogen``, ``claude-opus-5-5-low``/``-high``): the same
+    grouping ``list_models`` does, so it holds from the first start after an update, not only after the
+    list is fetched again. None when there is nothing to regroup."""
+    fetched = [dict(m) for m in entry.get("fetched") or [] if isinstance(m, dict)]
+    extra = dict(entry.get("extra") or {})
+    effort_ids = {k: list(v) for k, v in (extra.get("effort_ids") or {}).items()}
+    by_id = {m.get("id"): m for m in fetched}
+    stray: dict[str, dict[str, dict]] = {}
+    for m in fetched:
+        mid = str(m.get("id") or "")
+        match = None if mid in effort_ids or (_is_claude(mid) and "thinking" in mid) else _EFFORT_ID.match(mid)
+        if match:
+            stray.setdefault(match.group(1), {})[match.group(2)] = m
+    if not stray:
+        return None
+    members_of = {id(m) for members in stray.values() for m in members.values()}
+    out = [m for m in fetched if id(m) not in members_of]
+    for base, members in stray.items():
+        efforts = [e for e in _EFFORTS if e in members or e in effort_ids.get(base, [])]
+        head = by_id.get(base)
+        if head is None:
+            src = members["high" if "high" in members else [e for e in _EFFORTS if e in members][-1]]
+            head = {**src, "id": base, "name": _EFFORT_NAME.sub("", str(src.get("name") or "")) or base}
+            out.append(head)
+        head["variants"] = efforts if len(efforts) > 1 else []
+        head["reasoning"] = bool(head.get("reasoning")) or len(efforts) > 1
+        effort_ids[base] = efforts
+    hidden = list(entry.get("hidden") or [])
+    gone = [b for b in stray if b not in hidden and all(f"{b}-{e}" in hidden for e in effort_ids[b])]
+    return {"fetched": out, "extra": {**extra, "effort_ids": effort_ids}, **({"hidden": hidden + gone} if gone else {})}
+
+
 class AntigravityProvider(GeminiProvider):
     call_ids = True
 

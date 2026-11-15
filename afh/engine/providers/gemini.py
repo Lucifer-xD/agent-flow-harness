@@ -15,6 +15,7 @@ Knobs read from ``config.extra``: ``budgets`` (variant → thinkingBudget), ``ke
 from __future__ import annotations
 
 import json
+import re
 from typing import AsyncIterator
 
 import httpx
@@ -31,6 +32,13 @@ DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com"
 BUDGETS = {"low": 1024, "medium": 4096, "high": 8192, "xhigh": 16384, "max": 24576}
 LEVELS = {"low": "low", "medium": "medium", "high": "high", "max": "high"}  # Gemini 3 ``thinkingLevel``
 SKIP_SIGNATURE = "skip_thought_signature_validator"
+_GENERATION = re.compile(r"gemini-(\d+)")
+
+
+def wants_signature(model: str) -> bool:
+    """Gemini 3 and every later generation refuse a function call that comes back without a thought signature."""
+    m = _GENERATION.search(model.lower())
+    return bool(m) and int(m.group(1)) >= 3
 # Finish reasons that mean the model was cut off rather than done.
 BLOCKED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "MALFORMED_FUNCTION_CALL", "IMAGE_SAFETY"}
 # The JSON-schema keys Gemini's OpenAPI subset accepts; anything else (exclusiveMinimum, const,
@@ -104,7 +112,7 @@ class GeminiProvider:
 
     def translate_messages(self, messages: list[ChatMessage], model: str = "") -> list[dict]:
         out: list[dict] = []
-        gemini3 = "gemini-3" in model.lower()
+        signed = wants_signature(model)
 
         def push(role: str, parts: list[dict]) -> None:
             if out and out[-1]["role"] == role:
@@ -129,10 +137,12 @@ class GeminiProvider:
                     parts.append({"text": m.text})
                 for c in m.tool_calls:
                     part: dict = {"functionCall": {"name": c.name, "args": c.input, **({"id": c.id} if self.call_ids else {})}}
-                    sig = self._signatures.get(c.id)
+                    # The signature saved with the call in the thread (it survives a restart), else the one
+                    # this adapter still remembers, else the placeholder Google documents for a call that has none.
+                    sig = c.signature or self._signatures.get(c.id)
                     if sig:
                         part["thoughtSignature"] = sig
-                    elif gemini3:
+                    elif signed:
                         part["thoughtSignature"] = SKIP_SIGNATURE
                     parts.append(part)
                 if parts:
@@ -193,7 +203,8 @@ class GeminiProvider:
                             self._remember(cid, part["thoughtSignature"])
                         yield {"type": "tool.start", "id": cid, "name": fc["name"]}
                         yield {"type": "tool.delta", "id": cid, "text": raw}
-                        yield {"type": "tool.end", "id": cid, "name": fc["name"], "input": args, "raw": raw}
+                        sig = part.get("thoughtSignature")
+                        yield {"type": "tool.end", "id": cid, "name": fc["name"], "input": args, "raw": raw, **({"signature": sig} if sig else {})}
                 if cand.get("finishReason"):
                     finish = cand["finishReason"]
             if isinstance(ev.get("usageMetadata"), dict):

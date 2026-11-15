@@ -364,7 +364,7 @@ class Panes:
             R("choice", "Compact at", a.get("compactAt") or 80, "How full the context gets before older messages are summarised", self.saver("agent", "compactAt"), [("40% of the window", 40), ("60% of the window", 60), ("80% of the window", 80)]),
             self.toggle("agent", "todoNudge", "Send it back once if the to-do list isn't finished"),
             head("Goals"),
-            self.toggle("goals", "auto", "Treat every first message as a goal", default=False), self.toggle("goals", "autopilot", "Autopilot on new goals"),
+            self.toggle("goals", "autopilot", "Autopilot on new goals"),
             R("number", "Continuations per message", g.get("maxTurns") or 3, "", self.saver("goals", "maxTurns")),
             head("Error checks after edits"),
             self.toggle("diagnostics", "enabled", "Check files after the agent edits them"), self.toggle("diagnostics", "typescript", "TypeScript"), self.toggle("diagnostics", "ruff", "Ruff (Python)"),

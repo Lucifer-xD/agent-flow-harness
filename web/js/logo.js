@@ -27,10 +27,22 @@ export function logoSvg({ size = 28, working = false, cls = "", mono = false } =
   return `<svg class="afh-logo${working ? " working" : ""}${cls ? " " + cls : ""}" width="${size}" height="${h}" viewBox="0 0 240 140" fill="none" aria-hidden="true"><defs>${defs}</defs>${body}</svg>`;
 }
 
-export function logoNode(opts) {
-  const t = document.createElement("template");
-  t.innerHTML = logoSvg(opts);
-  return t.content.firstElementChild;
+const made = new Map();
+export function logoNode(opts = {}) {
+  // The mark is on every reply, so its markup is parsed once per look and copied after that. Each copy gets
+  // its own gradient ids: a gradient that sits in a hidden copy would leave the strands of the others unpainted.
+  const key = [opts.size, !!opts.working, opts.cls || "", !!opts.mono].join("|");
+  let t = made.get(key);
+  if (!t) {
+    t = document.createElement("template");
+    t.innerHTML = logoSvg(opts);
+    made.set(key, t);
+  }
+  const n = t.content.firstElementChild.cloneNode(true);
+  const id = `afh${++uid}`;
+  n.querySelectorAll("linearGradient").forEach((g, i) => { g.id = `${id}g${i}`; });
+  for (const p of n.querySelectorAll(".strand")) p.setAttribute("stroke", `url(#${id}g${p.classList[1].slice(1)})`);
+  return n;
 }
 
 /** Toggle the working animation on one logo node or every logo inside `root`. */

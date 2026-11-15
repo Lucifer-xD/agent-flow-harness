@@ -500,7 +500,7 @@ def test_gemini_stream_text_reasoning_tool_usage_finish():
     call_id = events[3]["id"]
     assert events[3]["name"] == "read" and call_id.startswith("call_")
     assert events[4] == {"type": "tool.delta", "id": call_id, "text": '{"path": "a.txt"}'}
-    assert events[5] == {"type": "tool.end", "id": call_id, "name": "read", "input": {"path": "a.txt"}, "raw": '{"path": "a.txt"}'}
+    assert events[5] == {"type": "tool.end", "id": call_id, "name": "read", "input": {"path": "a.txt"}, "raw": '{"path": "a.txt"}', "signature": "sigXYZ"}
     assert events[6] == {"type": "usage", "input": 18, "output": 15, "reasoning": 6, "cache_read": 2, "cache_write": 0}
     assert events[7] == {"type": "finish", "reason": "tool_calls"}
 
@@ -519,6 +519,18 @@ def test_gemini_stream_text_reasoning_tool_usage_finish():
                ChatMessage(role="tool", text="hello", tool_call_id=call_id)]
     contents = p.translate_messages(history, "gemini-3-pro")
     assert contents[1]["parts"][0] == {"functionCall": {"name": "read", "args": {"path": "a.txt"}}, "thoughtSignature": "sigXYZ"}
+    # The signature also travels with the call itself (the thread stores it), so an adapter that never saw the
+    # reply, as after a restart, still sends it back.
+    assert next(e for e in events if e["type"] == "tool.end")["signature"] == "sigXYZ"
+    fresh = GeminiProvider(cfg("gemini"))
+    history[1].tool_calls[0].signature = "sigXYZ"
+    assert fresh.translate_messages(history, "gemini-4-hydrogen")[1]["parts"][0]["thoughtSignature"] == "sigXYZ"
+    # A call with no signature at all (made by another model, or before signatures were stored) gets the
+    # placeholder on Gemini 3 and on every later generation, not only on ids that say "gemini-3".
+    history[1].tool_calls[0].signature = ""
+    for model, placeholder in (("gemini-4-hydrogen", True), ("gemini-3.8-flash", True), ("gemini-12-x", True), ("gemini-2.5-pro", False), ("claude-opus-5-5", False)):
+        part = fresh.translate_messages(history, model)[1]["parts"][0]
+        assert (part.get("thoughtSignature") == "skip_thought_signature_validator") is placeholder, model
 
 
 def test_gemini_translation_round_trip_and_variants():

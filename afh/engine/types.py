@@ -85,6 +85,7 @@ class ToolCall:
     id: str
     name: str
     input: dict
+    signature: str = ""  # what the provider attached to this call and wants back with it (Gemini's thoughtSignature)
 
 
 @dataclass

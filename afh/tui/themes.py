@@ -63,6 +63,8 @@ PRESETS: dict[str, tuple] = {
     'linen': ('Linen', '#0f766e', False, ('#f7f5f0', '#efece5', '#fffefb', '#f3f0e9', '#e8e4da', '#e3ded3', '#d0c9bb', '#1a1d1c', '#54595a', '#878c8a', '#f1eee7')),
     'cloud': ('Cloud', '#5b5bf0', False, ('#f6f7fb', '#eef0f6', '#ffffff', '#f2f4f9', '#e7eaf2', '#e2e5ee', '#cdd2e0', '#151826', '#50566b', '#878da1', '#eff1f7')),
     'ink': ('Ink', '#18181b', False, ('#fdfdfc', '#f4f4f2', '#ffffff', '#f3f3f1', '#e9e9e6', '#e4e4e0', '#d1d1cc', '#111113', '#52525a', '#8a8a92', '#f4f4f2')),
+    'split': ('Clear', '#2f5bff', False, ('#ffffff', '#f6f7f9', '#ffffff', '#f3f4f7', '#eceef3', '#e6e8ee', '#d5d9e2', '#12141a', '#4b5160', '#878d9b', '#f7f8fa')),
+    'split-night': ('Night', '#7c93ff', True, ('#0e0f12', '#0a0b0d', '#15171b', '#1a1c21', '#23262d', '#23262d', '#33373f', '#eceef2', '#a9aebb', '#6f7583', '#0b0c0e')),
     'focus': ('Graphite', '#8fb4ff', True, ('#1a1a1c', '#141415', '#212124', '#29292d', '#333338', '#303035', '#42424a', '#ececee', '#b4b4bb', '#7e7e87', '#131314')),
     'focus-umber': ('Umber', '#e8a56a', True, ('#1b1917', '#151311', '#23201d', '#2b2723', '#36312c', '#332e29', '#47403a', '#efebe6', '#b9b1a8', '#847c73', '#141210')),
     'focus-chalk': ('Chalk', '#2f6feb', False, ('#ffffff', '#f6f6f7', '#ffffff', '#f2f2f4', '#e8e8eb', '#e5e5e9', '#d2d2d8', '#18181b', '#55555e', '#8b8b95', '#f5f5f7')),

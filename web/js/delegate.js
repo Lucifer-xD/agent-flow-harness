@@ -73,8 +73,14 @@ export function onChildEvent(childId, result, view) {
       if (p) { info.msg = m.id; info.tool = p.id; break; }
     }
   }
-  if (info.msg) view.update({ msg: info.msg });
+  // A working helper sends events all the time (every word it writes). Its card in the lead's thread is
+  // redrawn a few times a second at most: redrawing the lead's whole message on every event made the app crawl.
+  if (info.msg && !cardTimers.has(info.msg)) {
+    const id = info.msg;
+    cardTimers.set(id, setTimeout(() => { cardTimers.delete(id); view.update({ msg: id }); }, 220));
+  }
 }
+const cardTimers = new Map();
 
 /** After a thread loads: register its existing children so cards can Watch them and stream live ones. */
 export async function syncChildren(parentId) {

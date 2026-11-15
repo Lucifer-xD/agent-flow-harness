@@ -57,7 +57,7 @@ const SHOW_DONE_MS = 4500; // a finished goal or list stays a moment so you see 
 function celebrate(t, key) {
   t[key] = Date.now() + SHOW_DONE_MS;
   setTimeout(() => {
-    const part = document.querySelector(key === "goalShownUntil" ? ".dock-goal" : ".dock-todos");
+    const part = document.querySelector(key === "goalShownUntil" ? ".dock-goal" : ".dock-todos, .plan-strip");
     part?.classList.add("leaving");
     setTimeout(() => ctxRedraw?.(), 380);
   }, SHOW_DONE_MS);
@@ -84,12 +84,90 @@ export function renderDock(box, t, opts = {}) {
   const todos = t?.todos && (!allDone(t.todos) || now < (t.todosShownUntil || 0) || t.showTodos) ? t.todos : [];
   const show = !!t && (goal || todos.length || t.showTodos);
   box.classList.toggle("on", !!show);
+  box.classList.toggle("slim", !!show && !!opts.slim);
   if (!show) { box.replaceChildren(); return; }
+  if (opts.slim) { box.replaceChildren(planStrip(t, goal, todos, opts)); return; }
   const card = el("div.dock-card");
   if (goal) card.append(goalRow(t, goal, opts));
   if (todos.length || t.showTodos) card.append(todoBlock(t, todos, opts));
   box.replaceChildren(card);
   t.justDone = null;
+}
+
+// ---- Split: one line above the message box, and the Plan tab in the panel -----------------------
+
+/** "2/4" for the Plan tab's badge; empty when the thread has no list. */
+export function planCount(t) {
+  const c = counts(t?.todos || []);
+  return c.of ? `${c.done}/${c.of}` : "";
+}
+
+/** The plan as one line: the step being worked on, a mark per step, how far it is, and the goal. A click opens the Plan tab. */
+function planStrip(t, goal, todos, opts) {
+  const c = counts(todos);
+  const live = todos.filter((x) => x.status !== "cancelled");
+  const current = todos.find((x) => x.status === "in_progress") || todos.find((x) => x.status === "pending");
+  const finished = c.of > 0 && c.done === c.of;
+  const gst = goal?.status || "active";
+  const now = !live.length ? goal.text : finished ? "Every step is done" : current ? (current.status === "in_progress" && current.activeForm) || current.content : "Plan";
+  return el(`button.plan-strip${opts.busy ? ".busy" : ""}${finished ? ".done" : ""}${live.length ? "" : ".goal-only"}`, { type: "button", title: "Open the plan", on: { click: () => opts.onOpen?.() } },
+    live.length ? el("span.ps-ring", finished ? ico("check") : progressRing(c.done, c.of, 18)) : el(`span.ps-ring.goal.${gst}`, ico(gst === "achieved" ? "check" : gst === "blocked" ? "alert" : "target")),
+    el("span.ps-now", { title: now }, now),
+    live.length ? el("span.ps-steps", { "aria-hidden": "true" }, live.slice(0, 40).map((x) => el(`i.${x.status}`))) : null,
+    live.length ? el("span.ps-count", `${c.done}/${c.of}`) : null,
+    goal && live.length ? el(`span.ps-goal.${gst}`, { title: `Goal: ${goal.text}` }, ico(gst === "achieved" ? "check" : "target"), el("span", goal.text)) : null,
+    el("span.ps-go", { html: icon("chev") }));
+}
+
+/**
+ * The Plan tab (Split): the goal as a card, then the steps as a numbered list on a line. Same data and the
+ * same editing as the dock (tick a step, double-click to reword it, add or remove one).
+ * opts: { busy, onEditGoal(), onNewGoal() }
+ */
+export function renderPlan(box, t, opts = {}) {
+  if (!box) return;
+  if (!t) { box.replaceChildren(el("div.drawer-empty", ico("checklist"), el("div", "Open a thread to see its plan."))); return; }
+  const goal = t.goal || null;
+  const todos = t.todos || [];
+  const c = counts(todos);
+  const live = todos.filter((x) => x.status !== "cancelled");
+  const list = el("div.plan-list");
+  for (const x of todos) list.append(todoItem(t, x, todos, opts.busy));
+  box.replaceChildren(el("div.plan",
+    goal ? goalCard(t, goal, opts)
+      : el("button.plan-nogoal", { type: "button", on: { click: () => opts.onNewGoal?.() } }, el("span.pn-ico", ico("target")),
+        el("span.pn-text", el("b", "Set a goal"), el("small", "The model keeps working until it is reached")), el("span.pn-go", ico("plus"))),
+    el("section.plan-steps",
+      el("div.plan-head", el("span.plan-title", "Steps"),
+        c.of ? el("span.plan-count", `${c.done} of ${c.of} done`) : null,
+        c.of ? el("span.plan-bar", { "aria-hidden": "true" }, live.slice(0, 60).map((x) => el(`i.${x.status}`))) : null),
+      todos.length ? list : el("div.plan-empty", ico("checklist"), el("span", "No steps yet. The model writes a plan when the work has several parts. You can also add your own.")),
+      addRow(t, todos))));
+}
+
+/** The goal in the Plan tab: what it is, when it counts as done, what the model last reported, and its switches. */
+function goalCard(t, goal, opts) {
+  const st = goal.status || "active";
+  const auto = goal.autopilot && st === "active";
+  const label = st === "achieved" ? "Goal achieved" : st === "blocked" ? "Goal blocked" : st === "paused" ? "Goal paused" : "Goal";
+  const by = goal.by === "agent" ? "set by the model" : "";
+  const chip = auto
+    ? el("button.goal-chip.auto", { type: "button", title: "Autopilot keeps the model working until it reports the goal achieved or blocked. Click to turn it off.", on: { click: () => patchGoal(t, { autopilot: false }, "Autopilot off") } },
+      el("span.pulse-dot"), goal.exhausted ? "Autopilot paused" : `Autopilot ${goal.turns || 0}/${goal.maxTurns || 3}`)
+    : st === "active" ? el("button.goal-chip", { type: "button", title: "Turn autopilot on: the model keeps going until the goal is achieved", on: { click: () => patchGoal(t, { autopilot: true }, "Autopilot on") } }, "Autopilot off")
+      : null;
+  const notes = (goal.progress || []).filter((n) => n?.summary).slice(-3);
+  const end = (st === "achieved" || st === "blocked") && goal.summary ? goal.summary : "";
+  return el(`section.plan-goal.${st}`,
+    el("div.pg-top",
+      el("span.pg-badge", ico(st === "achieved" ? "check" : st === "blocked" ? "alert" : "target"), label),
+      by ? el("span.pg-by", by) : null, el("span.spacer"), chip,
+      el("button.icon-btn.sm", { title: "Edit goal", html: icon("edit"), on: { click: () => opts.onEditGoal?.() } }),
+      el("button.icon-btn.sm", { title: "Goal actions", html: icon("more"), on: { click: (e) => goalMenu(e.currentTarget, t, goal, opts) } })),
+    el("div.pg-text", goal.text),
+    goal.criteria ? el("div.pg-when", el("span", "Done when"), goal.criteria) : null,
+    end ? el("div.pg-end", end) : null,
+    notes.length && !end ? el("div.pg-notes", notes.map((n) => el("div.pg-note", el("i"), el("span", n.summary)))) : null);
 }
 
 function goalRow(t, goal, opts) {

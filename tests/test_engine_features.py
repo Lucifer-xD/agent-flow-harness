@@ -662,23 +662,20 @@ def test_fit_history_leaves_out_the_oldest_and_says_so():
     assert runmod.estimate_tokens(msgs) <= 20_000
 
 
-def test_with_auto_goals_on_a_three_step_plan_gets_a_goal_from_the_request(home, tmp_path):
-    plan = {"todos": [{"content": "a", "status": "in_progress"}, {"content": "b", "status": "pending"}, {"content": "c", "status": "pending"}]}
-    p = FakeProvider([[("todo", plan)], [("goal", {"status": "set", "text": "sharper goal", "criteria": "tests pass"})], "ok"])
-    e = make_engine(p)
-    s = asyncio.run(run_prompt(e, tmp_path, "please add a parser module with tests", agent={"todoNudge": False}, goals={"autopilot": False, "auto": True}))
-    parts = tool_results(e, s["id"])
-    assert "AFH set this task as the thread's goal" in text_of(parts[0])
-    g = e.goal(s["id"])
-    assert g["text"] == "sharper goal" and g["by"] == "agent"  # the model may replace an automatic goal
-
-
-def test_auto_goal_can_be_turned_off(home, tmp_path):
+def test_a_request_never_becomes_a_goal_by_itself(home, tmp_path):
+    """A plan is not a goal: even with the old "goals for every multi-step task" setting still on in someone's
+    settings, a thread gets a goal only when the user sets one or the model calls `goal` itself."""
     plan = {"todos": [{"content": "a", "status": "in_progress"}, {"content": "b", "status": "pending"}, {"content": "c", "status": "pending"}]}
     p = FakeProvider([[("todo", plan)], "ok"])
     e = make_engine(p)
-    s = asyncio.run(run_prompt(e, tmp_path, "please add a parser module with tests", agent={"todoNudge": False}, goals={"auto": False}))
+    s = asyncio.run(run_prompt(e, tmp_path, "please add a parser module with tests", agent={"todoNudge": False}, goals={"auto": True}))
     assert e.goal(s["id"]) is None
+    assert "goal" not in text_of(tool_results(e, s["id"])[0]).lower()
+    # the model can still set one when the task needs it
+    p2 = FakeProvider([[("goal", {"status": "set", "text": "all tests pass", "criteria": "pytest is green"})], "ok"])
+    e2 = make_engine(p2)
+    s2 = asyncio.run(run_prompt(e2, tmp_path, "keep going until the tests pass", agent={"todoNudge": False}, goals={"autopilot": False}))
+    assert e2.goal(s2["id"])["text"] == "all tests pass" and e2.goal(s2["id"])["by"] == "agent"
 
 
 # ---- 1.6: picking up after a restart ---------------------------------------------------------------------
@@ -1015,3 +1012,42 @@ def test_removed_or_turned_off_provider_leaves_the_picker_at_once(home):
     provcfg.remove("one")
     e.reload_providers()
     assert e.list_models() == [] and "one" not in e.models
+
+
+def test_a_tool_calls_signature_is_kept_in_the_thread(home, tmp_path):
+    """Gemini wants the signature that came with a function call sent back with it. It is stored on the call,
+    so the history built after a restart (a new adapter that never saw the reply) still carries it."""
+    class Signed(FakeProvider):
+        async def stream(self, req):
+            async for ev in super().stream(req):
+                yield {**ev, "signature": "sig-1"} if ev["type"] == "tool.end" else ev
+
+    p = Signed([[("todo", {"todos": [{"content": "a", "status": "in_progress"}]})], "done"])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "go"))
+    stored = e.store.list_messages(s["id"])
+    assert tool_results(e, s["id"])[0]["signature"] == "sig-1"
+    call = next(c for m in runmod.to_chat(stored) for c in m.tool_calls)
+    assert call.signature == "sig-1"
+    assert p.requests[1].messages[1].tool_calls[0].signature == "sig-1"  # and the next step of the same run sent it
+
+
+def test_models_listed_per_effort_are_regrouped_at_start(home, tmp_path):
+    """The stored list of an older AFH: the per-effort entries become one model, and a thread and the default
+    that pointed at one of them keep the same model at the same effort."""
+    provcfg.upsert("antigravity", {"name": "Antigravity", "kind": "antigravity", "base_url": "https://g", "extra": {"effort_ids": {"gemini-4-hydrogen": ["low", "high"]}},
+                                   "fetched": [{"id": "gemini-4-hydrogen", "name": "Gemini 4 Hydrogen", "variants": ["low", "high"], "reasoning": True},
+                                               {"id": "gemini-4-hydrogen-xhigh", "name": "Gemini 4 Hydrogen (XHigh)", "reasoning": True}]})
+    old = {"providerID": "antigravity", "id": "gemini-4-hydrogen-xhigh"}
+    appstore.save_settings({"defaultModel": old})
+    e = Engine()
+    sid = e.store.create_session(str(tmp_path), model=old)["id"]
+    other = e.store.create_session(str(tmp_path), model={"providerID": "fake", "id": "gemini-4-hydrogen-xhigh"})["id"]
+    e.regroup_models()
+    new = {"providerID": "antigravity", "id": "gemini-4-hydrogen", "variant": "xhigh"}
+    assert e.store.get_session(sid)["model"] == new and appstore.load_settings()["defaultModel"] == new
+    assert e.store.get_session(other)["model"]["id"] == "gemini-4-hydrogen-xhigh"  # another provider's model is not touched
+    stored = provcfg.entry("antigravity")
+    assert [m["id"] for m in stored["fetched"]] == ["gemini-4-hydrogen"] and stored["fetched"][0]["variants"] == ["low", "high", "xhigh"]
+    e.regroup_models()  # a second start changes nothing
+    assert e.store.get_session(sid)["model"] == new

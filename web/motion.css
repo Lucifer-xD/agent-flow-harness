@@ -1,0 +1,34 @@
+/* Motion that costs nothing while the model works.
+
+   Loaded last, so the keyframes here replace the ones of the same name in the other stylesheets.
+
+   While a reply is being worked on, several things move for as long as it takes: the spinning ring on the
+   running step, the shimmering label, the light on the work line, the dot beside a busy thread. An animation
+   of background-position, box-shadow, left or a custom property has to be repainted by the page itself on
+   every frame of the screen, 60 to 165 times a second, for the whole run. Together they kept the page busy
+   about 40% of the time before it did any real work, which is what made scrolling, the sidebar and
+   switching interface stutter during a run.
+
+   Every endless animation here moves only `transform` and `opacity`, which the browser plays on its own
+   without the page. If you add an endless animation, keep to those two properties. */
+
+/* the ring around a running step: the ring turns, instead of its gradient being redrawn at a new angle */
+@keyframes spin-ring { to { transform: rotate(1turn); } }
+
+/* a working label breathes instead of a gradient sliding through its letters */
+@keyframes shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes f-shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* small status dots: a soft beat instead of a growing shadow */
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.78); } }
+@keyframes mark-glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes cv-ping { 0%, 100% { opacity: 1; } 50% { opacity: 0.78; } }
+
+/* a helper's card: the rail beats, and the bar across its top slides by transform */
+@keyframes rail-flow { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.deleg-progress::after { left: 0; }
+@keyframes indeterminate { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+/* Split: the light that runs along the work line is a short bar that slides, not a moving background */
+:root[data-ui="split"] .turn-bar.live::after { inset: auto auto 0 0; width: 42%; background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: auto; }
+@keyframes sp-sweep { from { transform: translateX(-100%); } to { transform: translateX(240%); } }
