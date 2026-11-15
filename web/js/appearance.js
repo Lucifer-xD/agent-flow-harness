@@ -63,6 +63,9 @@ export const PRESETS = {
   gruvboxlight: { name: "Gruvbox Light", accent: "#d65d0e", ...light("#fbf1c7", "#f2e5bc", "#fdf6d8", "#f2e5bc", "#ebdbb2", "#e5d5ad", "#d5c4a1", "#3c3836", "#665c54", "#928374", "#f2e5bc") },
   nordlight: { name: "Nord Light", accent: "#5e81ac", ...light("#eceff4", "#e5e9f0", "#f8f9fb", "#e9edf2", "#dfe4ec", "#d8dee9", "#c2cad8", "#2e3440", "#4c566a", "#7b869a", "#e5e9f0") },
   contrastlight: { name: "High Contrast Light", accent: "#0047ff", ...light("#ffffff", "#ffffff", "#ffffff", "#f2f2f2", "#e6e6e6", "#6b6b6b", "#3d3d3d", "#000000", "#1a1a1a", "#404040", "#f2f2f2") },
+  // Split's own themes: plain white or near-black, one blue accent, hairlines instead of shadows
+  split: { name: "Clear", accent: "#2f5bff", accent0: "#5a8bff", accent2: "#7a4dff", ...light("#ffffff", "#f6f7f9", "#ffffff", "#f3f4f7", "#eceef3", "#e6e8ee", "#d5d9e2", "#12141a", "#4b5160", "#878d9b", "#f7f8fa") },
+  "split-night": { name: "Night", accent: "#7c93ff", accent0: "#9fb4ff", accent2: "#b28cff", ...dark("#0e0f12", "#0a0b0d", "#15171b", "#1a1c21", "#23262d", "#23262d", "#33373f", "#eceef2", "#a9aebb", "#6f7583", "#0b0c0e") },
   // Focus's own themes: quiet neutrals, the accent used sparingly
   focus: { name: "Graphite", accent: "#8fb4ff", ...dark("#1a1a1c", "#141415", "#212124", "#29292d", "#333338", "#303035", "#42424a", "#ececee", "#b4b4bb", "#7e7e87", "#131314") },
   "focus-umber": { name: "Umber", accent: "#e8a56a", ...dark("#1b1917", "#151311", "#23201d", "#2b2723", "#36312c", "#332e29", "#47403a", "#efebe6", "#b9b1a8", "#847c73", "#141210") },
@@ -143,6 +146,7 @@ let styleTag = null;
 /** Interfaces: the layout and treatment of the whole app. Each one has its own themes and starts in
  *  its own look (light or dark); the classic themes, custom colors, light and dark work with all of them. */
 export const INTERFACES = [
+  { id: "split", name: "Split", sub: "Side by side: the conversation stays short on the left (your message, one line for the work, the answer) and everything the model did sits in an Activity panel on the right." },
   { id: "studio", name: "Studio", sub: "The classic AFH layout: a sidebar of threads, a reading column and a floating composer." },
   { id: "focus", name: "Focus", sub: "Just the conversation: a calm centered column, your messages as soft pills, steps as quiet single lines and a large rounded message box." },
   { id: "compact", name: "Compact", sub: "Built for long working sessions: turns read like a thread with names and avatars, steps stack into one tidy list, and the message box is docked along the bottom." },
@@ -152,6 +156,7 @@ export const INTERFACES = [
 /** Each interface's look: the mode it starts in, its dark and light themes, and the themes made for it
  *  (shown first in Settings; other interfaces don't list them). */
 export const INTERFACE_LOOKS = {
+  split: { mode: "light", dark: "split-night", light: "split", own: ["split", "split-night"] },
   studio: { mode: "dark", dark: "sunset", light: "paper", own: [], show: ["sunset", "midnight", "forest", "paper"] },
   focus: { mode: "dark", dark: "focus", light: "focus-chalk", own: ["focus", "focus-umber", "focus-chalk", "focus-sage"] },
   compact: { mode: "dark", dark: "compact", light: "compact-day", own: ["compact", "compact-carbon", "compact-tide", "compact-day"] },

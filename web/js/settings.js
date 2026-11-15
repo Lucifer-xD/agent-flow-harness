@@ -254,6 +254,10 @@ function thumbColors(id, ui) {
 function interfaceThumb(id, ui) {
   const i = (cls) => el(`i.${cls}`);
   const style = thumbColors(id, ui);
+  if (id === "split") return el("span.ui-thumb.studio", { "aria-hidden": "true", style },
+    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
+    el("span.t-main", el("span.t-col", i("t-you"), i("t-tool"), i("t-say"), i("t-say.s")), el("span.t-box")),
+    el("span.t-side", { style: { borderInlineStart: "1px solid color-mix(in srgb, currentColor 14%, transparent)" } }, i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s"), i("t-line")));
   if (id === "focus") return el("span.ui-thumb.focus", { "aria-hidden": "true", style },
     el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
     el("span.t-main", el("span.t-col", i("t-you"), i("t-step"), i("t-say"), i("t-say"), i("t-say.s")), i("t-box")));

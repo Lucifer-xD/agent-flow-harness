@@ -2,6 +2,20 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.33.1 (2026-11-15)
+
+**Split: the chat on the left, the work on the right**
+
+A fifth interface that keeps the conversation short and puts every step in a panel beside it, and a much faster app in every interface.
+
+- **A new interface, Split:** pick it in Settings → Appearance → Interface. The conversation stays on the left: your message in a filled bubble, the model's reply under its logo and name. Everything the model did sits in an Activity panel on the right, where each step opens in place, the numbers filter edits, commands and failures, and a failed step opens by itself. It has its own two themes, Clear and Night.
+- **Only the model's words in the chat:** while it works, the chat shows the sentences the model writes. Commands, files and tests stay in Activity. The panel follows the run on its own: Activity when work starts, Live while a file is being written.
+- **The plan in its own tab:** the goal and the to-do list live in a Plan tab in the panel: the goal as a card with what counts as done and the latest progress, then the steps as a numbered list. Above the message box there is one line with the step being worked on and how far the plan is; click it to open Plan.
+- **Threads in a drawer:** in Split the thread list is off screen until you want it. The arrow on the window's left edge, the top-bar button or Ctrl+B slides it in; picking a thread, clicking outside or Esc puts it away, and the pin keeps it beside the chat.
+- **Faster everywhere:** a change in a long thread no longer restyles every message, a running reply redraws only what changed, and the endless animations stopped costing frames. Opening the sidebar and switching the interface no longer stutter.
+- **Fixed:** scrolling up during a run could leave the chat empty until you scrolled down again; the chat no longer stops following the reply when the page shifts on its own; a goal is set only when a task needs one or you ask for it (the setting that made one for every task is gone).
+- **Fixed:** a thread on Gemini 4 could stop with “Function call is missing a thought_signature” once AFH had been restarted; the effort choice for the newest Antigravity models now shows as soon as AFH starts; shortcuts such as Ctrl+S in computer use failed while the keyboard was on a layout without Latin letters, such as Arabic.
+
 ## 1.33.0 (2026-11-13)
 
 **Threads that read each other, and a sharper chat**

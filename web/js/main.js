@@ -18,7 +18,7 @@ import { openAccount, refreshAccountButton } from "./settings-remote.js";
 import { exportThread, openImportDialog } from "./transfer-ui.js";
 import { initUpdates } from "./updates.js";
 import { initUsage, refreshUsage, renderUsage } from "./usage.js";
-import { applyWorkEvent, goalsPopover, jobsPopover, loadJobs, openGoalDialog, renderDock, renderJobsChip, setRedraw, syncState } from "./work.js";
+import { applyWorkEvent, goalsPopover, jobsPopover, loadJobs, openGoalDialog, renderDock, renderPlan, planCount, renderJobsChip, setRedraw, syncState } from "./work.js";
 import {
   ago, basename, closePopover, confirmDialog, contextRing, dayGroup, diffView, el, escapeHtml, fmtTokens,
   hydrateIcons, ico, icon, modal, modalityBadges, popover, promptDialog, repositionPopover, toast,
@@ -50,7 +50,11 @@ const view = new ChatView($("messages"), $("thread"), {
   settings: () => S.settings,
   modelName: (ref) => modelName(ref),
   avatar: (live) => logoNode({ size: 28, working: live }),
-  rich: () => document.documentElement.dataset.ui === "studio",
+  rich: () => ["studio", "split"].includes(document.documentElement.dataset.ui),
+  // Split: a reply's steps are drawn in the workbench's Activity tab, not inside the conversation
+  split: () => document.documentElement.dataset.ui === "split",
+  activityHost: () => (S.drawer === "activity" ? wbBody("activity") : null),
+  onActivity: (why) => { if (why === "select" && S.drawer !== "activity") showTab("activity"); else syncActivityBadge(); },
   modelMark: (ref) => providerMark(ref.providerID, providerName(ref.providerID), 26, "", modelLogo(ref.id, findModel(ref)?.name)),
   onReview: () => openDrawer("changes"),
   onFork: (id) => forkThread(id),
@@ -65,7 +69,7 @@ const view = new ChatView($("messages"), $("thread"), {
   },
 });
 // Studio draws replies differently (grouped steps, logos), so switching the interface redraws the thread.
-new MutationObserver(() => { if (view.thread) view.renderAll(true); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-ui"] });
+new MutationObserver(() => { if (view.thread) view.renderAll(true); syncSplit(true); if (S.drawer === "activity") view.drawActivity(true); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-ui"] });
 
 // ---- boot -----------------------------------------------------------------------
 
@@ -187,7 +191,12 @@ async function boot() {
   initDelegate(ctx);
   initLive(ctx);
   // A file being written opens the Live tab, unless you are busy in the Browser, Context or Agents tab.
-  ctx.openLive = () => { if (!S.drawer || S.drawer === "changes" || S.drawer === "harness") showTab("live"); };
+  // A file being written opens the Live tab by itself. In Split the panel follows the model: Live while
+  // the file is being written, back to Activity when it is done (see `follow`).
+  ctx.openLive = () => {
+    if (isSplit()) return follow.writing();
+    if (!S.drawer || S.drawer === "changes" || S.drawer === "harness") showTab("live");
+  };
   ctx.renderLive = () => { if (S.drawer === "live") renderLive(wbBody("live"), wbTitle("live")); };
   hooks.delegation = (p, o) => delegationCard(p, { ...o, onWatch: openWatch });
   wire();
@@ -606,7 +615,7 @@ async function openThread(id) {
   loadJobs(t).then(() => { if (S.current === t) renderWork(); });
   renderComposerState();
   refreshDrawer("thread");
-  if (sidebarMode() === "hidden") { $("app").classList.remove("sb-open"); applySidebar(); } // phones: the overlay sidebar closes once a thread is picked
+  closeSidebarOverlay(); // a sidebar lying over the chat (Split's drawer, a phone) closes once a thread is picked
   $("input").focus();
   if (S.settings.lastThread !== id) { S.settings.lastThread = id; api.put("/api/settings", { lastThread: id }).catch(() => {}); }
 }
@@ -952,7 +961,8 @@ function hideRailTip() {
 let railFrame = 0;
 function updateRailActive() {
   if (railFrame || !railIds.length) return;
-  railFrame = requestAnimationFrame(() => {
+  // a few times a second is plenty for the marker beside the chat, and it measures every message it points at
+  railFrame = setTimeout(() => requestAnimationFrame(() => {
     railFrame = 0;
     const line = $("thread").getBoundingClientRect().top + 110;
     let active = railIds[0];
@@ -965,7 +975,7 @@ function updateRailActive() {
       if (on && !b.classList.contains("active")) b.scrollIntoView({ block: "nearest" });
       b.classList.toggle("active", on);
     }
-  });
+  }), 120);
 }
 
 function jumpTo(id) {
@@ -1108,7 +1118,17 @@ function wireDrawerResize() {
 
 function renderWork() {
   const t = S.current;
-  renderDock($("work-dock"), t, { busy: !!t && (t.busy || S.busy.has(t.id)), onEditGoal: () => editGoal(), onChanged: renderWork });
+  const dockOpts = { busy: !!t && (t.busy || S.busy.has(t.id)), onEditGoal: () => editGoal(), onChanged: renderWork };
+  if (isSplit()) {
+    // Split: above the message box there is one line (the step being worked on, how far the plan is, the goal);
+    // the goal and the whole list live in the panel's Plan tab, where there is room for them.
+    if (S.drawer === "plan") renderPlan(wbBody("plan"), t, { ...dockOpts, onNewGoal: () => editGoal() }); // first: the dock clears the "just ticked" marks
+    renderDock($("work-dock"), t, { ...dockOpts, slim: true, onOpen: () => showTab("plan") });
+    const n = planCount(t);
+    const b = $("wb-plan-count");
+    b.hidden = !n;
+    b.textContent = n || "";
+  } else renderDock($("work-dock"), t, dockOpts);
   renderJobsChip($("jobs-pill"), t);
   renderSubagentsChip(subChip, t);
   const gb = $("btn-goal");
@@ -1234,8 +1254,8 @@ async function copyThread() {
 // Each tab keeps its own body, so switching never loses what was drawn. `openDrawer`/`closeDrawer`
 // keep their old names and toggle semantics for the chips, the palette and the live pane.
 
-const WB_TABS = ["live", "changes", "browser", "context", "harness", "watch"];
-const WB_CHIP = { live: "btn-live", changes: "btn-changes", browser: "btn-browser", context: "btn-context", harness: "btn-harness" };
+const WB_TABS = ["activity", "plan", "live", "changes", "browser", "context", "harness", "watch"];
+const WB_CHIP = { activity: "btn-activity", live: "btn-live", changes: "btn-changes", browser: "btn-browser", context: "btn-context", harness: "btn-harness" };
 const WB_TAB_KEY = "afh-wb-tab";
 const wbTab = (kind) => document.querySelector(`#wb-tabs .wb-tab[data-tab="${kind}"]`);
 const wbPane = (kind) => document.querySelector(`#wb-panes .wb-pane[data-pane="${kind}"]`);
@@ -1256,6 +1276,7 @@ function showTab(kind) {
   S.drawer = kind;
   const wb = $("workbench");
   wb.classList.add("open");
+  $("app").classList.add("wb-open");
   wb.setAttribute("aria-hidden", "false");
   for (const k of WB_TABS) {
     wbPane(k).hidden = k !== kind;
@@ -1278,6 +1299,7 @@ function closeDrawer() {
   S.drawer = null;
   const wb = $("workbench");
   wb.classList.remove("open");
+  $("app").classList.remove("wb-open");
   wb.setAttribute("aria-hidden", "true");
   for (const k of WB_TABS) {
     wbTab(k).classList.remove("on");
@@ -1297,6 +1319,93 @@ function reopenWorkbench() {
   showTab(last);
 }
 
+const isSplit = () => document.documentElement.dataset.ui === "split";
+
+/** Split: the panel follows the model on its own. A run starts: Activity. A file is being written or edited:
+ *  Live, then back to Activity once the file is finished. Picking a tab yourself during a run holds the panel
+ *  there until the run ends, and the Follow switch in the panel's header turns the whole thing off. */
+const follow = {
+  held: false, // the user picked a tab during this run
+  ours: false, // the panel is on Live because we put it there
+  timer: 0,
+  on() {
+    let v = "1";
+    try { v = localStorage.getItem("afh-split-follow") ?? "1"; } catch {}
+    return v !== "0";
+  },
+  set(on) {
+    try { localStorage.setItem("afh-split-follow", on ? "1" : "0"); } catch {}
+    this.sync();
+  },
+  active() { return isSplit() && this.on() && !this.held; },
+  sync() {
+    const b = $("wb-auto");
+    b.hidden = !isSplit();
+    b.classList.toggle("on", this.on());
+    b.setAttribute("aria-checked", String(this.on()));
+    wbTab("activity").classList.toggle("busy", !!S.current && S.busy.has(S.current.id));
+    wbTab("live").classList.toggle("busy", !!liveState.tool && !liveState.done && liveState.kind !== "run");
+  },
+  started() { // a run began in the thread on screen
+    this.held = false;
+    this.ours = false;
+    if (this.active() && S.drawer !== "activity") showTab("activity");
+    this.sync();
+  },
+  writing() { // the model started writing or editing a file
+    clearTimeout(this.timer);
+    if (!S.drawer && isSplit()) showTab("activity");
+    if (this.active() && S.drawer !== "live") { this.ours = true; showTab("live"); }
+    this.sync();
+  },
+  written(id) { // that file's tool call ended: once it has been typed out on screen, go back
+    if (!this.ours) return this.sync();
+    clearTimeout(this.timer);
+    const back = (tries) => {
+      if (liveState.tool !== id || !this.ours) return this.sync(); // another file started, or the user took over
+      const typed = !liveState.pace || liveState.pace.settled || liveState.pace.pos >= liveState.pace.full.length;
+      if (!typed && tries < 40) { this.timer = setTimeout(() => back(tries + 1), 200); return; }
+      this.timer = setTimeout(() => {
+        if (liveState.tool === id && this.ours && this.active() && S.drawer === "live") showTab("activity");
+        this.ours = false;
+        this.sync();
+      }, 700);
+    };
+    back(0);
+  },
+  ended() { // the run is over
+    clearTimeout(this.timer);
+    if (this.ours && this.active() && S.drawer === "live") showTab("activity");
+    this.held = false;
+    this.ours = false;
+    this.sync();
+  },
+  picked() { // the user clicked a tab
+    this.ours = false;
+    clearTimeout(this.timer);
+    if (S.current && S.busy.has(S.current.id)) this.held = true;
+  },
+};
+
+/** Split keeps the workbench open on Activity: its tab and chip exist only there, and it opens with the thread. */
+function syncSplit(open = false) {
+  const on = isSplit();
+  follow.sync();
+  applySidebar();
+  wbTab("activity").hidden = !on;
+  wbTab("plan").hidden = !on;
+  $("btn-activity").hidden = !on;
+  if (on && open && S.current && !S.drawer) showTab("activity");
+  if (!on && (S.drawer === "activity" || S.drawer === "plan")) closeDrawer();
+  syncPills();
+}
+function syncActivityBadge() {
+  const n = view.activityCount?.() || 0;
+  const b = $("wb-activity-count");
+  b.hidden = !n;
+  b.textContent = String(n);
+}
+
 /** The Agents tab shows only when there is something to show: a watched subagent or subagents in this thread. */
 function syncWatchTab() {
   const t = S.current;
@@ -1314,6 +1423,8 @@ async function refreshDrawer(reason = "changes") {
   const t = S.current;
   updateChangesBadge();
   syncWatchTab();
+  syncSplit(reason === "thread");
+  syncActivityBadge();
   if (!S.drawer || S.drawer === "browser") return;
   if (!t) {
     for (const k of WB_TABS) if (k !== "browser") { wbBody(k).replaceChildren(el("div.drawer-empty", ico(wbTab(k).querySelector(".ico").dataset.icon || "list"), el("div", "Open a thread to use the workbench."))); wbTitle(k).replaceChildren(); }
@@ -1329,6 +1440,14 @@ async function refreshDrawer(reason = "changes") {
       return;
     }
     await renderWatch(body, title, { onOpenAsThread: (id) => { closeDrawer(); openThread(id); } });
+    return;
+  }
+  if (S.drawer === "activity") {
+    view.drawActivity(true);
+    return;
+  }
+  if (S.drawer === "plan") {
+    renderWork();
     return;
   }
   if (S.drawer === "live") {
@@ -1587,6 +1706,7 @@ function autosize() {
   const ta = $("input");
   ta.style.height = "auto";
   ta.style.height = Math.min(ta.scrollHeight, 260) + "px";
+  $("composer").classList.toggle("is-empty", !ta.value); // the send button is dim until there is something to send
 }
 
 // Model names for the picker and the palette.
@@ -1930,10 +2050,11 @@ function onEvent(ev) {
   trackEvent(ev); // delegation children register themselves on session.created
   const sid = ev.data?.sessionID || ev.data?.session_id || (type.startsWith("session.") ? ev.data?.id : null);
   if (type === "session.execution.started" && sid) S.busy.add(sid);
+  if (type === "session.execution.started" && sid && sid === S.current?.id) queueMicrotask(() => follow.started());
   if (type.startsWith("session.execution.")) queueMicrotask(syncBrowserRuns); // the agent's bar in its browser tab
   if (/^session\.execution\.(succeeded|failed|interrupted)$/.test(type) && sid) {
     S.busy.delete(sid);
-    if (S.current?.id === sid) renderComposerState();  // settle the dock/to-do spinner the moment the run ends
+    if (S.current?.id === sid) { renderComposerState(); follow.ended(); }  // settle the dock/to-do spinner the moment the run ends
   }
   if (/^session\.(created|deleted|renamed|archived|unarchived|forked|moved|execution\.(started|succeeded|failed|interrupted))$/.test(type)) {
     if (type === "session.renamed" && sid) {
@@ -1964,7 +2085,11 @@ function onEvent(ev) {
   }
   if (t.needsReload && S.current === t && /^session\.execution\.(succeeded|failed|interrupted)$/.test(type)) { t.needsReload = false; setTimeout(() => reloadCurrent(t.id), 300); }
   if (type === "session.tool.called") registerDelegation(t, ev.data);
-  if (S.current === t && type.startsWith("session.tool.")) { onLiveEvent(ev); renderSubagentsChip(subChip, t); }
+  if (S.current === t && type.startsWith("session.tool.")) {
+    onLiveEvent(ev);
+    renderSubagentsChip(subChip, t);
+    if ((type === "session.tool.success" || type === "session.tool.failed") && ev.data?.id === liveState.tool && liveState.kind !== "run") follow.written(ev.data.id);
+  }
   if (!result) return;
   if (S.current === t) {
     view.update(result);
@@ -2027,8 +2152,32 @@ function sidebarMode() {
   return innerWidth < HIDE_BELOW ? "hidden" : "open";
 }
 
+// Split: the thread list is not on screen at all until you ask for it. The handle on the window's left edge,
+// the button at the start of the top bar or Ctrl+B slides it in as a drawer over the chat; picking a thread,
+// clicking outside it or Esc closes it again. The pin in its header keeps it docked beside the chat instead.
+const SPLIT_SB_KEY = "afh-sidebar-split";
+let splitPin = "";
+try { splitPin = localStorage.getItem(SPLIT_SB_KEY) || ""; } catch {}
+const splitDesk = () => isSplit() && innerWidth > PHONE_BELOW;
+
 function applySidebar() {
   const app = $("app");
+  const split = splitDesk();
+  const docked = split && splitPin === "open";
+  app.classList.toggle("sb-drawer", split && !docked);
+  app.classList.toggle("sb-docked", docked);
+  $("sb-handle").hidden = !split || docked;
+  const pin = $("btn-collapse");
+  pin.title = !split ? "Hide sidebar (Ctrl+B)" : docked ? "Hide the threads (Ctrl+B)" : "Keep the threads open beside the chat";
+  if (pin.dataset.icon !== (split && !docked ? "pin" : "sidebar")) { pin.dataset.icon = split && !docked ? "pin" : "sidebar"; pin.innerHTML = icon(pin.dataset.icon); }
+  if (split) {
+    app.classList.toggle("sb-hidden", !docked);
+    if (docked) app.classList.remove("sb-open");
+    $("btn-expand").hidden = docked;
+    $("btn-expand").classList.toggle("on", app.classList.contains("sb-open"));
+    return;
+  }
+  $("btn-expand").classList.remove("on");
   const mode = sidebarMode();
   app.classList.toggle("sb-hidden", mode === "hidden");
   if (mode !== "hidden") app.classList.remove("sb-open");
@@ -2037,6 +2186,11 @@ function applySidebar() {
 
 function toggleSidebar() {
   const app = $("app");
+  if (splitDesk()) {
+    if (splitPin === "open") setSplitPin(""); // docked: put it away
+    else app.classList.toggle("sb-open");
+    return applySidebar();
+  }
   if (app.classList.contains("sb-open")) app.classList.remove("sb-open");
   else if (innerWidth <= PHONE_BELOW) app.classList.add("sb-open");
   else {
@@ -2046,8 +2200,34 @@ function toggleSidebar() {
   applySidebar();
 }
 
+function setSplitPin(v) {
+  splitPin = v;
+  try { localStorage.setItem(SPLIT_SB_KEY, v); } catch {}
+  if (!v) $("app").classList.remove("sb-open");
+}
+
+/** The pin in the sidebar's header. Split: dock the drawer beside the chat, or put a docked one away. */
+function pinSidebar() {
+  if (!splitDesk()) return toggleSidebar();
+  setSplitPin(splitPin === "open" ? "" : "open");
+  applySidebar();
+}
+
+/** Close the sidebar when it is lying over the chat (Split's drawer, a phone's overlay). */
+function closeSidebarOverlay() {
+  const app = $("app");
+  if (!app.classList.contains("sb-open")) return false;
+  app.classList.remove("sb-open");
+  applySidebar();
+  return true;
+}
+
 /** Bring the sidebar into view over the chat without changing what is remembered (Ctrl+K). */
 function revealSidebar() {
+  if (splitDesk()) {
+    if (splitPin !== "open") { $("app").classList.add("sb-open"); applySidebar(); }
+    return;
+  }
   if (sidebarMode() !== "hidden") return;
   $("app").classList.add("sb-open");
   applySidebar();
@@ -2055,6 +2235,8 @@ function revealSidebar() {
 
 function wireSidebar() {
   $("sb-search").addEventListener("click", () => $("thread-search").focus());
+  $("sb-scrim").addEventListener("click", closeSidebarOverlay);
+  $("sb-handle").addEventListener("click", toggleSidebar);
   addEventListener("resize", applySidebar);
   applySidebar();
 }
@@ -2094,7 +2276,7 @@ function wire() {
   $("pick-model").addEventListener("click", () => modelMenu());
   $("pick-agent").addEventListener("click", agentMenu);
   $("pick-mode").addEventListener("click", modeMenu);
-  $("btn-new").addEventListener("click", () => { showHome(); ta.focus(); });
+  $("btn-new").addEventListener("click", () => { showHome(); closeSidebarOverlay(); ta.focus(); });
   $("project-picker").addEventListener("click", projectMenu);
   $("btn-settings").addEventListener("click", () => openSettings("general", ctx));
   if ($("btn-account")) {
@@ -2110,7 +2292,8 @@ function wire() {
   $("btn-harness").addEventListener("click", () => openDrawer("harness"));
   $("btn-context").addEventListener("click", () => openDrawer("context"));
   $("btn-live").addEventListener("click", () => openDrawer("live"));
-  $("wb-tabs").addEventListener("click", (e) => { const tab = e.target.closest(".wb-tab"); if (tab) showTab(tab.dataset.tab); });
+  $("wb-tabs").addEventListener("click", (e) => { const tab = e.target.closest(".wb-tab"); if (tab) { follow.picked(); showTab(tab.dataset.tab); } });
+  $("wb-auto").addEventListener("click", () => { follow.set(!follow.on()); follow.held = false; toast(follow.on() ? "The panel follows the model again" : "The panel stays where you put it", "ok", 1600); });
   $("btn-goal").addEventListener("click", () => {
     const t = S.current;
     if (t && (t.goal || t.goalHistory?.length || t.todoHistory?.length)) goalsPopover($("btn-goal"), t, { onEdit: editGoal, onNew: () => openGoalDialog({ thread: { ...t, goal: null, id: t.id }, onSaved: (g) => { t.goal = g; renderWork(); } }) });
@@ -2126,7 +2309,7 @@ function wire() {
   wireDrawerResize();
   wireComposerHeight();
   $("btn-drawer-close").addEventListener("click", closeDrawer);
-  $("btn-collapse").addEventListener("click", toggleSidebar);
+  $("btn-collapse").addEventListener("click", pinSidebar);
   $("btn-expand").addEventListener("click", toggleSidebar);
   $("jump").addEventListener("click", () => { view.stick = true; view.scrollToEnd(); });
   $("thread-search").addEventListener("input", (e) => { S.search = e.target.value; renderThreads(); });
@@ -2140,6 +2323,7 @@ function wire() {
     else if (mod && e.key === ",") { e.preventDefault(); openSettings("general", ctx); }
     else if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); revealSidebar(); $("thread-search").focus(); }
     else if (mod && e.key.toLowerCase() === "p") { e.preventDefault(); showPalette(); }
+    else if (e.key === "Escape" && !overlay && $("app").classList.contains("sb-open")) { e.preventDefault(); closeSidebarOverlay(); }
     else if (e.key === "Escape" && !overlay && S.current && (S.current.busy || S.busy.has(S.current.id))) { e.preventDefault(); interrupt(); }
   });
   setInterval(renderThreads, 60_000);

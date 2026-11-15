@@ -270,6 +270,11 @@ def parse_combo(combo: str) -> list[int]:
             out.append(VK[name])
         elif len(p) == 1:
             code = user32.VkKeyScanW(p)
+            if code == -1 and p.isascii() and p.isalnum():
+                # The keyboard is on a layout without Latin letters (Arabic, for one): "s" has no key there, but
+                # Ctrl+S is still the S key. A letter's or digit's virtual key is its own code on every layout.
+                out.append(ord(p.upper()))
+                continue
             if code == -1:
                 raise ValueError(f"'{p}' has no key on this keyboard layout; use the type action for it")
             vk, shift = code & 0xFF, (code >> 8) & 0xFF

@@ -16,6 +16,7 @@ export const ICONS = {
   stop: '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>',
   paperclip: P('<path d="m21 11-8.6 8.6a5 5 0 0 1-7-7L14 4a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4L15.6 7"/>'),
   x: P('<path d="M18 6 6 18M6 6l12 12"/>'),
+  pin: P('<path d="M12 17v5"/><path d="M8 3h8l-1 6 3 4H6l3-4z"/>'),
   check: P('<path d="M20 6 9 17l-5-5"/>'),
   copy: P('<rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>'),
   more: P('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>'),
@@ -92,17 +93,27 @@ export function hydrateIcons(root = document) {
 }
 
 // el("div.cls#id", {attrs, on: {click}}, children...)
+const specs = new Map(); // "div.cls#id" → { tag, cls, id }: drawing a thread calls el() tens of thousands of times
 export function el(spec, props, ...children) {
   if (props == null || typeof props !== "object" || props instanceof Node || Array.isArray(props)) {
     if (props !== undefined && props !== null) children.unshift(props);
     props = {};
   }
-  const [, tag = "div", rest = ""] = spec.match(/^([a-z0-9]*)(.*)$/i);
-  const node = document.createElement(tag || "div");
-  for (const part of rest.match(/[.#][^.#]+/g) || []) {
-    if (part[0] === ".") node.classList.add(part.slice(1));
-    else node.id = part.slice(1);
+  let s = specs.get(spec);
+  if (!s) {
+    const [, tag = "div", rest = ""] = spec.match(/^([a-z0-9]*)(.*)$/i);
+    const cls = [];
+    let id = "";
+    for (const part of rest.match(/[.#][^.#]+/g) || []) {
+      if (part[0] === ".") cls.push(part.slice(1));
+      else id = part.slice(1);
+    }
+    s = { tag: tag || "div", cls: cls.join(" "), id };
+    if (specs.size < 4000) specs.set(spec, s);
   }
+  const node = document.createElement(s.tag);
+  if (s.cls) node.className = s.cls;
+  if (s.id) node.id = s.id;
   for (const [k, v] of Object.entries(props)) {
     if (v == null || v === false) continue;
     if (k === "on") for (const [ev, fn] of Object.entries(v)) node.addEventListener(ev, fn);
@@ -142,7 +153,13 @@ for (const proto of [Element.prototype, DocumentFragment.prototype]) {
   }
 }
 
-export const ico = (name, cls = "") => el(`span.ico${cls ? "." + cls : ""}`, { html: icon(name) });
+const icos = new Map();
+export const ico = (name, cls = "") => {
+  const key = name + "|" + cls;
+  let n = icos.get(key);
+  if (!n) { n = el(`span.ico${cls ? "." + cls : ""}`, { html: icon(name) }); icos.set(key, n); }
+  return n.cloneNode(true);
+};
 
 export function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -171,6 +188,20 @@ export function markdown(text) {
   const html = DOMPurify.sanitize(marked.parse(text || ""), { ADD_ATTR: ["target", "data-copy"] });
   // Each block takes its direction from its own text: Arabic right to left, English left to right.
   return html.replace(/<(p|ul|ol|li|h[1-6]|blockquote|table)(?=[\s>])/g, '<$1 dir="auto"');
+}
+
+/** markdown() for text that is finished (not being written right now): parsing, colouring the code and cleaning
+ *  the result is the dearest part of drawing a message, and a thread is drawn again whenever a run ends, the
+ *  interface changes or a step lands. The same text gives the same page, so it is worked out once. */
+const mdDone = new Map();
+export function markdownDone(text) {
+  text = text || "";
+  let html = mdDone.get(text);
+  if (html !== undefined) { mdDone.delete(text); mdDone.set(text, html); return html; } // newest last
+  html = markdown(text);
+  mdDone.set(text, html);
+  if (mdDone.size > 1500) mdDone.delete(mdDone.keys().next().value);
+  return html;
 }
 
 document.addEventListener("click", async (e) => {

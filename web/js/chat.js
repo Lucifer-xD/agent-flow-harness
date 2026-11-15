@@ -3,7 +3,7 @@
 
 import { api } from "./api.js";
 import { designCard, renderDesignTool } from "./design.js";
-import { el, ico, icon, markdown, diffView, patchFromStrings, copyText, fmtDur, fmtTokens, basename, toast, progressRing } from "./ui.js";
+import { el, ico, icon, markdown, markdownDone, diffView, patchFromStrings, copyText, fmtDur, fmtTokens, basename, toast, progressRing } from "./ui.js";
 import { fileIcon } from "./fileicons.js";
 import { effortLabel } from "./model-picker.js";
 
@@ -67,7 +67,7 @@ function part(m, type, ordinal) {
 function tool(m, id, name) {
   let p = m.content.find((x) => x.type === "tool" && x.id === id);
   if (!p) {
-    p = { type: "tool", id, name: name || "tool", state: { status: "streaming", input: "" } };
+    p = { type: "tool", id, name: name || "tool", state: { status: "streaming", input: "" }, time: { created: Date.now() } };
     m.content.push(p);
   }
   if (name) p.name = name;
@@ -82,7 +82,7 @@ export function applyEvent(t, ev) {
       const item = d.item || {};
       if (item.type === "user" && !t.byId.has(d.inboxID)) {
         addMessage(t, { id: d.inboxID, type: "user", text: item.payload?.text || "", files: item.payload?.files, time: { created: ev.created || Date.now() }, pending: true, steer: !!item.steer });
-        return { all: true };
+        return { msg: d.inboxID };
       }
       return null;
     }
@@ -95,7 +95,7 @@ export function applyEvent(t, ev) {
       const m = t.byId.get(d.inboxID);
       if (m) m.pending = false;
       t.phase = "delivered";
-      return { status: true };
+      return m ? { msg: m.id, status: true } : { status: true };
     }
     case "session.execution.started":
       t.busy = true;
@@ -108,13 +108,13 @@ export function applyEvent(t, ev) {
       t.busy = false;
       t.retry = null;
       finishLive(t);
-      return { status: true, all: true };
+      return { status: true, tail: true }; // the reply that just ended is redrawn; the rest of the thread stays as it is
     case "session.execution.failed":
       t.busy = false;
       t.retry = null;
       t.error = d.error || { message: "The run failed" };
       finishLive(t);
-      return { status: true, all: true };
+      return { status: true, tail: true };
     case "session.retry.scheduled": {
       t.retryError = d.error || t.retryError;
       if (!d.assistantMessageID) { // an older engine: only the status line can show it
@@ -132,7 +132,9 @@ export function applyEvent(t, ev) {
       const m = assistant(t, d.assistantMessageID, d);
       m.startedAt = d.started || Date.now();
       t.phase = "working"; // the model has the request and is producing the reply
-      return { all: true, status: true };
+      // Only this message is drawn (and, in update(), the one before it, which stops being the end of the reply).
+      // This used to redraw the whole thread at every step of a reply, which is what made a long thread stutter.
+      return { msg: m.id, status: true };
     }
     case "session.served": {
       const m = assistant(t, d.assistantMessageID);
@@ -234,7 +236,7 @@ export function applyEvent(t, ev) {
       const m = d.message || { id: ev.id, type: "synthetic", text: "", metadata: { notice: d.kind, label: d.label } };
       m.time = m.time || { created: ev.created || Date.now() };
       addMessage(t, m);
-      return { all: true };
+      return { msg: m.id };
     }
     case "session.compaction.started":
       t.compacting = { done: 0, total: 0, messages: d.messages };
@@ -373,6 +375,9 @@ const MEMORY_VERBS = { add: ["Remembered", "Remembering"], remove: ["Forgot", "F
 const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name) ? "edit" : /^(shell|bash|execute)$/.test(name) ? "run" : /^(read|glob|grep|list|ls)$/.test(name) ? "read" : /web|fetch/.test(name) ? "web" : "other");
 
 
+/** A step that did not work: the tool failed, or the command it ran ended with an error or timed out. */
+const stepFailed = (p) => p.state?.status === "error" || (p.state?.metadata?.exit_code ?? 0) !== 0 || !!p.state?.metadata?.timed_out;
+
 /** What a group of steps did, in short phrases, and a few icons for the files and kinds of work. */
 function stepSummary(tools) {
   const edits = new Set(), reads = new Set();
@@ -405,7 +410,15 @@ function stepSummary(tools) {
     web ? `Browsed ${n(web, "page", "pages")}` : null,
     other ? `${n(other, "other step", "other steps")}` : null,
   ].filter(Boolean).slice(0, 3);
-  return { bits, icons: icons.map((x) => el("span.si", x.node)) };
+  const stats = [
+    edits.size ? ["edit", `Edited ${n(edits.size, "file", "files")}`] : null,
+    runs ? ["terminal", `Ran ${n(runs, "command", "commands")}`] : null,
+    reads.size ? ["file", `Read ${n(reads.size, "file", "files")}`] : null,
+    searches ? ["search", `Searched ${n(searches, "time", "times")}`] : null,
+    web ? ["globe", `Browsed ${n(web, "page", "pages")}`] : null,
+    other ? ["zap", n(other, "other step", "other steps")] : null,
+  ].filter(Boolean);
+  return { bits, stats, counts: { edits: edits.size, runs, reads: reads.size, searches, web, other }, icons: icons.map((x) => el("span.si", x.node)) };
 }
 
 function pathNode(target) {
@@ -426,7 +439,7 @@ function renderTodoTool(p, openSet, t0) {
   const of = todos.filter((x) => x.status !== "cancelled").length;
   const read = p.state?.metadata?.read;
   const live = status === "streaming" || status === "running";
-  const card = el(`div.tool.plan.${status}${openSet.has(p.id) || (!openSet.has("x" + p.id) && todos.length <= 8) ? ".open" : ""}`, { dataset: { tool: p.id } });
+  const card = el(`div.tool.plan.${status}${openSet.has(p.id) || (!openSet.has("x" + p.id) && todos.length <= 8 && done === 0 && !read) ? ".open" : ""}`, { dataset: { tool: p.id } });
   const head = el("button.tool-head", { type: "button", on: { click: () => { const o = card.classList.toggle("open"); openSet[o ? "add" : "delete"](p.id); openSet[o ? "delete" : "add"]("x" + p.id); } } },
     t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
     el("span.tool-ico", live ? el("span.spinner") : status === "error" ? ico("alert") : todos.length ? progressRing(done, of, 18) : ico("checklist")),
@@ -522,6 +535,110 @@ function stepClock(ms) {
   return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+// ---- what a step shows when it is opened ----------------------------------------
+
+const escHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const LANGS = { py: "python", ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript", html: "xml", htm: "xml", vue: "xml",
+  svg: "xml", yml: "yaml", md: "markdown", sh: "bash", ps1: "powershell", rs: "rust", kt: "kotlin", cs: "csharp", h: "cpp", hpp: "cpp", cc: "cpp" };
+
+/** Source text as highlighted HTML, by the file's extension; plain when the language isn't known. */
+function highlighted(code, file) {
+  const ext = (String(file || "").split(".").pop() || "").toLowerCase();
+  const lang = LANGS[ext] || ext;
+  try {
+    if (code.length < 200000 && window.hljs?.getLanguage(lang)) return window.hljs.highlight(code, { language: lang }).value;
+  } catch { /* fall through to plain text */ }
+  return escHtml(code);
+}
+
+const copyDetail = (text) => el("button.dt-copy", { type: "button", title: "Copy", html: icon("copy"), on: { click: async (e) => { e.stopPropagation(); await copyText(text); toast("Copied", "ok", 1200); } } });
+
+/** `text` with every match of the search pattern marked. */
+function marked(text, pattern) {
+  let re = null;
+  try { re = pattern ? new RegExp(pattern, "gi") : null; } catch { re = null; }
+  if (!re) return [text];
+  const out = [];
+  let at = 0, m, guard = 0;
+  while ((m = re.exec(text)) && guard++ < 50) {
+    if (!m[0]) { re.lastIndex++; continue; }
+    if (m.index > at) out.push(text.slice(at, m.index));
+    out.push(el("mark", m[0]));
+    at = m.index + m[0].length;
+  }
+  out.push(text.slice(at));
+  return out;
+}
+
+/** Arguments as rows of name and value instead of raw JSON. */
+function argRows(input) {
+  return el("div.dt-args", Object.entries(input).map(([k, v]) => {
+    const text = typeof v === "string" ? v : JSON.stringify(v, null, 2);
+    return el("div.dt-arg", el("span.dt-key", k), text.includes("\n") || text.length > 140 ? el("pre.dt-val.long", text.length > 6000 ? text.slice(0, 6000) + "\n…" : text) : el("span.dt-val", text));
+  }));
+}
+
+/** The opened view of a step, drawn for the kind of step it is. null = the plain input and output. */
+function toolDetail(p, name, input, out, meta) {
+  if (p.state?.status === "error" || !out) return null;
+  if (name === "read" && !meta.directory) {
+    const nums = [], code = [];
+    for (const row of out.split("\n")) {
+      const m = /^(\d+): ?(.*)$/.exec(row);
+      if (m) { nums.push(m[1]); code.push(m[2]); }
+    }
+    if (!nums.length) return null;
+    const file = meta.path || input.path || "";
+    const text = code.join("\n");
+    return el("div.dt.dt-file",
+      el("div.dt-head", fileIcon(file), el("b", basename(file)),
+        el("span.dt-sub", meta.total_lines != null ? `lines ${nums[0]} to ${nums[nums.length - 1]} of ${meta.total_lines}` : `${nums.length} lines`), el("span.dt-grow"), copyDetail(text)),
+      el("div.dt-code", el("pre.dt-gutter", { "aria-hidden": "true" }, nums.join("\n")), el("pre.dt-src", el("code.hljs", { html: highlighted(text, file) }))));
+  }
+  if (name === "grep") {
+    const files = new Map();
+    let more = "";
+    for (const row of out.split("\n")) {
+      const m = /^(.*?):(\d+): ?(.*)$/.exec(row);
+      if (m) (files.get(m[1]) || files.set(m[1], []).get(m[1])).push([m[2], m[3]]);
+      else if (row.startsWith("(more")) more = row.replace(/^\(|\)$/g, "");
+    }
+    if (!files.size) return null;
+    const total = [...files.values()].reduce((n, x) => n + x.length, 0);
+    let shown = 0;
+    return el("div.dt.dt-hits",
+      el("div.dt-head", ico("search"), el("b", `${total} ${total === 1 ? "match" : "matches"}`), el("span.dt-sub", `in ${files.size} ${files.size === 1 ? "file" : "files"}`),
+        input.pattern ? el("code.dt-pat", input.pattern) : null, el("span.dt-grow"), copyDetail(out)),
+      el("div.dt-scroll", [...files].map(([file, hits]) => shown > 300 ? null : el("div.dt-group",
+        el("div.dt-file-row", fileIcon(file), pathNode(file), el("span.dt-n", String(hits.length))),
+        hits.map(([no, text]) => (shown++ > 300 ? null : el("div.dt-hit", el("span.dt-ln", no), el("span.dt-tx", marked(text.replace(/^\s+/, ""), input.pattern)))))))),
+      more || shown > 300 ? el("div.dt-foot", more || "Only the first 300 matches are drawn here") : null);
+  }
+  if (name === "glob") {
+    const rows = out.split("\n").filter((r) => r && !r.startsWith("(more"));
+    if (!rows.length || /^No files match/.test(rows[0])) return null;
+    return el("div.dt.dt-hits",
+      el("div.dt-head", ico("search"), el("b", `${meta.count ?? rows.length} ${(meta.count ?? rows.length) === 1 ? "file" : "files"}`), input.pattern ? el("code.dt-pat", input.pattern) : null, el("span.dt-grow"), copyDetail(out)),
+      el("div.dt-scroll", rows.slice(0, 300).map((f) => el("div.dt-file-row", fileIcon(f), pathNode(f)))),
+      rows.length > 300 || meta.count > rows.length ? el("div.dt-foot", `Showing ${Math.min(300, rows.length)} of ${meta.count ?? rows.length}`) : null);
+  }
+  if (name === "websearch" && Array.isArray(meta.results) && meta.results.length) {
+    return el("div.dt.dt-web", el("div.dt-head", ico("globe"), el("b", `${meta.results.length} results`), input.query ? el("code.dt-pat", input.query) : null),
+      el("div.dt-scroll", meta.results.map((r) => {
+        let host = "";
+        try { host = new URL(r.url).host; } catch { host = r.url || ""; }
+        return el("div.dt-result", el("div.dt-result-t", r.title || host), el("div.dt-result-u", host), r.snippet ? el("div.dt-result-s", r.snippet) : null);
+      })));
+  }
+  if (name === "webfetch" && meta.url) {
+    let host = "";
+    try { host = new URL(meta.url).host; } catch { host = meta.url; }
+    return el("div.dt.dt-web", el("div.dt-head", ico("globe"), el("b", meta.title || host), el("span.dt-sub", host), meta.status ? el("span.dt-sub", `HTTP ${meta.status}`) : null, el("span.dt-grow"), copyDetail(out)),
+      el("pre.dt-text", out.length > 12000 ? out.slice(0, 12000) + `\n… (${out.length.toLocaleString()} characters; the first 12,000 are drawn here)` : out));
+  }
+  return null;
+}
+
 function renderTool(p, openSet, thread, t0) {
   const name = (p.name || "tool").toLowerCase();
   if (name === "subagent" && hooks.delegation) return hooks.delegation(p, { thread, open: openSet });
@@ -567,6 +684,7 @@ function renderTool(p, openSet, thread, t0) {
     stat = el("span.tool-stat", el("span.plus", `+${a}`), el("span.minus", `−${r}`));
   } else if (meta.blockedBy) stat = el("span.tool-stat", { style: { color: "var(--warn)" } }, "blocked by hook");
   else if (status === "error") stat = el("span.tool-stat", { style: { color: "var(--bad)" } }, "failed");
+  else if (kind === "run" && (meta.timed_out || (meta.exit_code ?? 0) !== 0)) stat = el("span.tool-stat.bad", meta.timed_out ? "timed out" : `exit ${meta.exit_code}`);
   else if (status === "streaming") stat = el("span.tool-stat", "preparing");
   else if (status === "running") stat = el("span.tool-stat", name === "jobs" && input0.wait ? `waiting up to ${input0.wait}s` : "running");
   else if (name === "threads" && meta.action === "read" && meta.total != null) stat = el("span.tool-stat", { title: `Characters ${meta.from.toLocaleString()} to ${meta.to.toLocaleString()} of ${meta.total.toLocaleString()}, word for word` },
@@ -580,9 +698,9 @@ function renderTool(p, openSet, thread, t0) {
   const targetNode = kind === "edit" || kind === "read" ? pathNode(target) : el("span.tool-target", { title: target }, target);
 
   // The card style: icon tile, verb, target, outcome — expandable.
-  const card = el(`div.tool.${kind}.${status}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
+  const card = el(`div.tool.${kind}.${status}${stepFailed(p) ? ".failed" : ""}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
   // Header: icon tile · verb · target chip · (status, checks, hooks) at the right · chevron.
-  const head = el("button.tool-head", { type: "button", on: { click: () => { card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
+  const head = el("button.tool-head", { type: "button", on: { click: () => { card.fill?.(); card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
     t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
     el(`span.tool-ico${(kind === "edit" || kind === "read") && target && name !== "glob" && name !== "grep" ? ".is-file" : ""}`,
       live && !((kind === "edit" || kind === "read") && target) ? el("span.spinner")
@@ -592,6 +710,17 @@ function renderTool(p, openSet, thread, t0) {
     el("span.tool-name", live ? verbs[1] : verbs[0]),
     targetNode,
     el("span.tool-right", stat, diagChip, hookChip, el("span.tool-chev", { html: icon("chev-down") })));
+  // What a step shows when it is open is built only when it is open (or when its arguments are still
+  // streaming in). A reply is redrawn many times a second while it works, and building every closed step's
+  // view each time (a file re-coloured, a search re-marked) is what made a long thread crawl.
+  const body = el("div");
+  let filled = false;
+  card.fill = () => {
+    if (filled) return;
+    filled = true;
+    body.append(...details().filter(Boolean));
+  };
+  const details = () => {
   const sections = [];
   const out = toolText(p.state?.content);
   const errText = p.state?.error ? p.state.error.message || JSON.stringify(p.state.error) : "";
@@ -613,14 +742,24 @@ function renderTool(p, openSet, thread, t0) {
   } else {
     if (patches.length) for (const x of patches) sections.push(el("div.tool-section", patches.length > 1 ? el("div.tool-section-label", fileIcon(x.file || ""), basename(x.file)) : null, diffView(x.patch)));
     else {
-      const input = p.state?.input;
-      const inputText = typeof input === "string" ? input : input && Object.keys(input).length ? (kind === "run" ? pick(input, "command", "cmd") : JSON.stringify(input, null, 2)) : "";
-      if (inputText) sections.push(el("div.tool-section", el("div.tool-section-label", kind === "run" ? "Command" : "Input"), el("pre.tool-pre", inputText)));
+      const detail = toolDetail(p, name, input0, out, meta);
+      if (detail) sections.push(detail);
+      else {
+        const input = p.state?.input;
+        if (typeof input === "string" ? input : kind === "run") sections.push(el("div.tool-section", el("div.tool-section-label", kind === "run" ? "Command" : "Input"), el("pre.tool-pre", typeof input === "string" ? input : pick(input || {}, "command", "cmd") || "")));
+        else if (input && Object.keys(input).length) sections.push(el("div.tool-section", el("div.tool-section-label", "Input"), argRows(input)));
+        if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output", el("span.dt-grow"), copyDetail(out)),
+          el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + `\n… (the model received all ${out.length.toLocaleString()} characters; the first 20,000 are drawn here)` : out)));
+      }
     }
-    if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output"),
+    // An edit shows its diff; what the tool said back is only worth a look when the checks found problems.
+    if (patches.length && out && meta.diagnostics && !meta.diagnostics.ok) sections.push(el("div.tool-section", el("div.tool-section-label", "Checks"),
       el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + `\n… (the model received all ${out.length.toLocaleString()} characters; the first 20,000 are drawn here)` : out)));
     if (errText) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", errText)));
   }
+  return sections;
+  };
+  if (card.classList.contains("open") || status === "streaming" || status === "error") card.fill();
   // Browser screenshots stay visible under the card's header; click one to see it full size.
   const shots = (p.state?.content || []).filter((c) => c.type === "image" && c.uri);
   const gallery = shots.length ? el("div.tool-shots", { dataset: { n: String(shots.length) } }, shots.map((c) => el("img.tool-shot", { src: c.uri, alt: "Browser screenshot", loading: "lazy", on: { click: () => viewImage(c.uri) } }))) : null;
@@ -628,13 +767,15 @@ function renderTool(p, openSet, thread, t0) {
   const tail = live ? liveTail(p) : "";
   const liveOut = tail ? el("div.tool-live", el("pre.tool-live-pre", tail)) : null;
   // Native .append stringifies null ("null" text node), so leave the gallery out when there is none.
-  card.append(head, ...(liveOut ? [liveOut] : []), ...(gallery ? [gallery] : []), el("div.tool-body", el("div", sections)));
+  card.append(head, ...(liveOut ? [liveOut] : []), ...(gallery ? [gallery] : []), el("div.tool-body", body));
   return card;
 }
 
 // ---- view -----------------------------------------------------------------------
 
 const WINDOW = 150; // messages drawn at once; "Show earlier" adds more
+// one formatter for every message's time: toLocaleTimeString() builds a new one on each call, which is slow
+const clock = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit" });
 const toolIds = (root) => new Set([...root.querySelectorAll("[data-tool]")].map((n) => n.dataset.tool));
 
 /** Cards that were already on screen keep still when their message re-renders (no replayed fade-in). */
@@ -657,20 +798,47 @@ export class ChatView {
     this.frame = 0;
     this.stick = true;
     this.autoScrolling = false;
-    // Programmatic scrolls must not flip `stick`; only the user's own scrolling does.
-    scroller.addEventListener("scroll", () => {
-      if (!this.autoScrolling) this.stick = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 60;
+    // Following stops only when YOU scroll away. A scroll event also fires when the page shifts under you
+    // (a step is redrawn taller or shorter, the browser re-anchors, a big output arrives): taking that for
+    // "the user scrolled up" left the chat behind the newest step until you scrolled down again. So a scroll
+    // counts as yours only right after your own wheel, touch, key or a press on the scrollbar; reaching the
+    // bottom always turns following back on.
+    this.userAt = 0;
+    this.pressed = false;
+    const mine = () => { this.userAt = performance.now(); };
+    const scrolled = () => {
+      const atEnd = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 60;
+      if (atEnd) this.stick = true;
+      else if (!this.autoScrolling && (this.pressed || performance.now() - this.userAt < 900)) this.stick = false;
       opts.onScroll?.(this.stick, scroller.scrollTop);
-    });
-    scroller.addEventListener("wheel", (e) => { if (e.deltaY < 0) this.stick = false; }, { passive: true });
-    scroller.addEventListener("touchmove", () => { this.stick = false; }, { passive: true });
+    };
+    // Measuring the page makes the browser lay it out there and then. When you scroll, that is done at once
+    // (the chat must stop following the moment you leave the bottom). When the scroll is the chat following
+    // a reply by itself, it happens on every frame while the page is also being changed, so it is done a few
+    // times a second instead: laying the page out twice per frame was part of what made a run stutter.
+    let scrollTimer = 0;
+    scroller.addEventListener("scroll", () => {
+      if (this.pressed || performance.now() - this.userAt < 900) { clearTimeout(scrollTimer); scrollTimer = 0; return scrolled(); }
+      if (!scrollTimer) scrollTimer = setTimeout(() => { scrollTimer = 0; scrolled(); }, 140);
+    }, { passive: true });
+    scroller.addEventListener("wheel", (e) => { mine(); if (e.deltaY < 0) this.stick = false; }, { passive: true });
+    scroller.addEventListener("touchstart", mine, { passive: true });
+    scroller.addEventListener("touchmove", () => { mine(); this.stick = false; }, { passive: true });
+    scroller.addEventListener("pointerdown", (e) => { if (e.target === scroller) { this.pressed = true; mine(); } }); // the scrollbar itself
+    addEventListener("pointerup", () => { if (this.pressed) { this.pressed = false; mine(); } });
+    addEventListener("keydown", (e) => { if (/^(PageUp|PageDown|ArrowUp|ArrowDown|Home|End| )$/.test(e.key)) mine(); });
   }
 
   mount(thread) {
     const switching = this.thread && this.thread.id !== thread.id;
     if (switching || !this.thread) this.window = WINDOW;
+    const same = this.thread && this.thread.id === thread.id; // the same thread loaded again (a run ended): what you opened stays open
     this.thread = thread;
-    this.openTools.clear();
+    if (!same) {
+      this.actTurn = null;
+      this.actFilter = "";
+      this.openTools.clear();
+    }
     this.stick = true;
     this.renderAll();
     requestAnimationFrame(() => this.scrollToEnd(true));
@@ -683,7 +851,21 @@ export class ChatView {
     const t = this.thread;
     const seen = new Set(this.nodes.keys());
     const seenTools = quiet ? toolIds(this.root) : new Set();
+    // Someone reading further up stays on the message they were reading: drawing the thread again empties it
+    // for a moment, which used to throw them to the top.
+    let held = null;
+    if (quiet && !this.stick && t) {
+      const top = this.scroller.getBoundingClientRect().top;
+      for (const [id, n] of this.nodes) {
+        const r = n.getBoundingClientRect();
+        if (r.bottom > top + 4) { held = { id, off: r.top - top }; break; }
+      }
+    }
+    this.lastNode = null;
     this.nodes.clear();
+    this.workNodes = new Map();
+    this.actList = null;
+    this.actShown = null;
     this.root.replaceChildren();
     if (!t) return;
     // Very long threads (imports run to thousands of messages) draw only the newest part.
@@ -712,6 +894,24 @@ export class ChatView {
     this.root.append(this.permBox, this.statusBox);
     this.renderPermissions();
     this.renderStatus();
+    this.root.classList.toggle("thread-busy", !!t.busy);
+    this.markLast();
+    if (held) {
+      const n = this.nodes.get(held.id);
+      if (n) this.scroller.scrollTop += n.getBoundingClientRect().top - this.scroller.getBoundingClientRect().top - held.off;
+    }
+    if (this.opts.split?.()) { this.drawActivity(true); this.opts.onActivity?.(); }
+  }
+
+  /** The newest message carries a class. (A `:last-of-type` rule did this before, and with one of those the
+   *  browser re-styles every message in the thread whenever any message is added, removed or redrawn.) */
+  markLast() {
+    let n = this.permBox?.previousElementSibling;
+    while (n && !n.classList.contains("msg")) n = n.previousElementSibling;
+    if (n === this.lastNode) return;
+    this.lastNode?.classList.remove("last-msg");
+    n?.classList.add("last-msg");
+    this.lastNode = n || null;
   }
 
   // Coalesce bursts of streaming events into at most one DOM update per frame. Deltas only
@@ -719,6 +919,7 @@ export class ChatView {
   update(result) {
     if (!result || !this.thread) return;
     if (result.all) this.needAll = true;
+    if (result.tail) this.needTail = true;
     if (result.msg) (result.stream ? this.streaming : this.pending).add(result.msg);
     if (result.perm) this.renderPermissions();
     if (result.status) this.renderStatus();
@@ -731,15 +932,28 @@ export class ChatView {
       this.frame = 0;
       this.painted = performance.now();
       if (this.needAll) {
-        this.needAll = false;
+        this.needAll = this.needTail = false;
         this.pending.clear();
         this.streaming.clear();
         this.renderAll(true);
       } else {
+        if (this.needTail) { // a run ended: everything from the last request on is drawn again (its reply folds, gets its footer)
+          this.needTail = false;
+          const msgs = this.thread.messages;
+          let i = msgs.length - 1;
+          while (i > 0 && msgs[i].type !== "user") i--;
+          for (const m of msgs.slice(Math.max(0, i))) this.pending.add(m.id);
+        }
         for (const id of this.streaming) if (!this.pending.has(id) && !this.patchLive(id)) this.pending.add(id);
         // Studio: a reply's bar (on its first message) sums up the whole reply, and the message before a new
         // one turns from answer into work, so both redraw too; then the reply's fold is applied everywhere.
         const turns = new Set();
+        for (const id of [...this.pending]) { // a message drawn for the first time: the one before it is no longer the last
+          if (this.nodes.has(id)) continue;
+          const m = this.thread.byId.get(id);
+          const prev = m?.type === "assistant" ? this.neighbors(m).prev : null;
+          if (prev?.type === "assistant") this.pending.add(prev.id);
+        }
         if (this.opts.rich?.()) {
           for (const id of [...this.pending]) {
             const m = this.thread.byId.get(id);
@@ -753,9 +967,12 @@ export class ChatView {
         }
         for (const id of this.pending) this.rerender(id);
         for (const m of turns) { const T = this.turnOf(m); this.applyTurn(T.id, T.collapsed, T.live); }
+        if (turns.size && this.opts.split?.()) { this.drawActivity(false); this.opts.onActivity?.(); }
         this.pending.clear();
         this.streaming.clear();
       }
+      this.root.classList.toggle("thread-busy", !!this.thread.busy);
+      this.markLast();
       this.follow();
     }), wait);
   }
@@ -769,7 +986,15 @@ export class ChatView {
       stillAnimations(fresh, toolIds(old));
       old.replaceWith(fresh);
     }
-    else if (fresh) this.permBox.before(fresh);
+    else if (fresh) {
+      let anchor = this.permBox;
+      const list = this.thread.messages;
+      for (let i = list.indexOf(m) + 1; i > 0 && i < list.length; i++) {
+        const n = this.nodes.get(list[i].id);
+        if (n?.isConnected) { anchor = n; break; }
+      }
+      anchor.before(fresh);
+    }
     else if (old) old.remove();
     if (fresh) this.nodes.set(id, fresh);
     else this.nodes.delete(id);
@@ -778,8 +1003,9 @@ export class ChatView {
   /** Update the streaming parts of a message in place. False when a full re-render is needed. */
   patchLive(id) {
     const m = this.thread.byId.get(id);
-    const node = this.nodes.get(id);
-    if (!m || !node) return false;
+    const here = this.nodes.get(id), there = this.workNodes?.get(id);
+    if (!m || (!here && !there)) return false;
+    const node = { querySelector: (sel) => here?.querySelector(sel) || there?.querySelector(sel) || null };
     for (const p of m.content) {
       if (p.type === "tool") {
         if (p.state?.status === "running" && p.state.metadata?.live) {
@@ -794,10 +1020,12 @@ export class ChatView {
         if (!pre) return false;
         pre.textContent = p.state.input;
       } else if (p.live) {
-        const target = node.querySelector(`[data-part="${p.type}:${p.ordinal}"]`);
-        if (!target) return false;
-        if (p.type === "reasoning") target.textContent = p.text || "…";
-        else patchBlocks(target, markdown(p.text));
+        const targets = [here, there].map((r) => r?.querySelector(`[data-part="${p.type}:${p.ordinal}"]`)).filter(Boolean);
+        if (!targets.length) return false;
+        for (const target of targets) {
+          if (p.type === "reasoning") target.textContent = p.text || "…";
+          else patchBlocks(target, markdown(p.text));
+        }
       }
     }
     return true;
@@ -810,7 +1038,9 @@ export class ChatView {
   /** Once a second while busy: advance the visible timers without re-rendering anything else. */
   tick() {
     const now = Date.now();
-    for (const n of this.root.querySelectorAll(".pending-row .timer, .live-dur")) n.textContent = fmtDur(now - Number(n.dataset.start || now));
+    for (const box of [this.root, this.opts.activityHost?.()]) {
+      for (const n of box?.querySelectorAll(".pending-row .timer, .live-dur") || []) n.textContent = fmtDur(now - Number(n.dataset.start || now));
+    }
   }
 
   // Eased follow: closes the gap a little each frame, so growing content glides instead of jumping.
@@ -844,8 +1074,8 @@ export class ChatView {
         const files = (m.files || []).map((f) => String(f.uri || "").startsWith("data:image/")
           ? el("img.msg-img", { src: f.uri, alt: f.name || "", title: f.name || "", on: { click: () => viewImage(f.uri) } })
           : el("span.file-chip", fileIcon(f.name || f.uri || ""), el("span", f.name || basename(f.uri))));
-        const actions = this.opts.onRevert && !m.pending && !this.thread.busy ? el("div.msg-actions.user-actions",
-          el("button.icon-btn", { title: "Undo to here — rewind the thread and the files to just before this message", html: icon("refresh"), on: { click: () => this.opts.onRevert(m.id) } }),
+        const actions = this.opts.onRevert && !m.pending ? el("div.msg-actions.user-actions",
+          el("button.icon-btn.undo-btn", { title: "Undo to here — rewind the thread and the files to just before this message", html: icon("refresh"), on: { click: () => this.opts.onRevert(m.id) } }),
           el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(m.text || ""); toast("Copied", "ok", 1200); } } })) : null;
         const cmd = m.command;
         const content = !cmd ? [m.text || ""]
@@ -874,7 +1104,7 @@ export class ChatView {
           el("button.think-head", { type: "button", on: { click: () => { box.classList.toggle("open"); this.openThinks[box.classList.contains("open") ? "add" : "delete"](key); } } },
             el("span.chev", { html: icon("chev") }), el("span.compact-ico", { html: icon("archive") }),
             el("span.think-label", n ? `Compacted ${n} earlier message${n === 1 ? "" : "s"} — summary` : "Earlier context was compacted — summary")),
-          el("div.think-body", el("div", m.text ? el("div.compact-text.md", { html: markdown(m.text) }) : el("div.compact-text", "No summary was kept for this compaction."))));
+          el("div.think-body", el("div", m.text ? el("div.compact-text.md", { html: markdownDone(m.text) }) : el("div.compact-text", "No summary was kept for this compaction."))));
         return box;
       }
       case "model-switched":
@@ -916,6 +1146,7 @@ export class ChatView {
     while (j > 0 && list[j - 1].type !== "user") j--;
     const t0 = list[j - 1]?.time?.created || m.time?.created || 0; // when this turn began
     const last = next?.type !== "assistant";
+    const inRun = !!this.thread.busy && !list.slice(i + 1).some((x) => x.type === "user"); // part of the reply being worked on right now
     const rich = !!this.opts.rich?.(); // Studio: a reply's work folds under one bar, a logo on each reply, files changed at the end
     const parts = [];
     const kinds = []; // what each part is: think, text, tool, note
@@ -935,10 +1166,15 @@ export class ChatView {
         add(box, "think");
       } else if (p.type === "text") {
         if (!p.text && !p.live) continue;
-        const md = el("div.md", { html: markdown(p.text), dataset: { part: `text:${p.ordinal}` } });
+        const md = el("div.md", { html: p.live ? markdown(p.text) : markdownDone(p.text), dataset: { part: `text:${p.ordinal}` } });
         if (p.live && p === lastText) md.lastElementChild ? md.lastElementChild.classList.add("caret") : md.classList.add("caret");
         add(md, "text");
       } else if (p.type === "tool") {
+        // (keyed by message too: some providers number their calls from 1 in every reply)
+        if (rich && this.opts.split?.() && stepFailed(p) && !(this.sawFailed ||= new Set()).has(m.id + ":" + p.id)) {
+          this.sawFailed.add(m.id + ":" + p.id);
+          if (m.live || this.thread.busy) this.openTools.add(p.id); // only as it happens, not for old replies
+        }
         add(renderTool(p, this.openTools, this.thread, t0), "tool");
       }
     }
@@ -953,7 +1189,7 @@ export class ChatView {
     // Output already includes reasoning; input is the uncached part, so add what the cache served.
     const tokens = m.tokens ? fmtTokens((m.tokens.input || 0) + (m.tokens.cache?.read || 0) + (m.tokens.cache?.write || 0) + (m.tokens.output || 0)) + " tokens" : null;
     const cost = m.cost != null && m.cost > 0 ? fmtCost(m.cost) : null;
-    const when = m.time?.created ? new Date(m.time.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+    const when = m.time?.created ? clock.format(m.time.created) : null;
     const { dur, tps } = stepStats(m);
     const turnDone = last && m.turnMs ? m.turnMs : null;
     const meta = el("div.msg-meta",
@@ -971,21 +1207,37 @@ export class ChatView {
         : dur != null ? [el("span.dot"), el("span.dur", { title: turnDone ? `this step ${fmtDur(dur)} · whole reply ${fmtDur(turnDone)}` : "completed in" }, `completed in ${fmtDur(turnDone || dur)}`)] : null,
       tps ? [el("span.dot"), el("span.dur", { title: "output tokens per second (provider count ÷ streaming time)" }, `${Math.round(tps)} tok/s`)] : null);
     const text = last && !m.live ? this.turnText(m) : "";
-    const actions = m.live || !last || this.thread.busy ? null : el("div.msg-actions",
+    const actions = m.live || !last || inRun ? null : el("div.msg-actions",
       text ? el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(text); toast("Copied", "ok", 1400); } } }) : null,
       el("button.icon-btn", { title: "Fork thread from here", html: icon("branch"), on: { click: () => this.opts.onFork(m.id) } }));
     const avatar = el("div.avatar", this.opts.avatar ? this.opts.avatar(m.live) : null);
-    const files = rich && last && !m.live ? this.turnFiles(list.slice(j, i + 1)) : null;
+    const split = rich && !!this.opts.split?.();
+    const files = rich && !split && last && !m.live ? this.turnFiles(list.slice(j, i + 1)) : null;
     const T = rich ? this.turnOf(m) : null;
     const foot = rich && actions ? this.replyFoot(T, m, actions) : actions;
     // Studio: everything the model did on the way (its notes, thinking and steps) sits in one work column
     // under a "Worked for …" bar; the answer at the end of the reply stays outside it.
     let body = el("div.msg-body", parts);
+    if (split && T) {
+      // What is still being written at the end of the newest message reads as the answer; once a step follows it, it was a note.
+      let from = parts.length;
+      if (last) while (from > 0 && (kinds[from - 1] === "text" || kinds[from - 1] === "note")) from--;
+      const work = parts.slice(0, from), answer = parts.slice(from);
+      this.placeWork(m, T, work.length ? el("div.act-msg", { dataset: { mid: m.id } }, work) : null);
+      // While the reply is being worked on, the conversation shows it happening: what the model says as it goes
+      // and one line per step. When it is done they fold away under the work line, leaving the answer.
+      const feed = T.live ? this.feedOf(m, T, last) : [];
+      if (cont && !answer.length && !foot && !feed.length) return null;
+      body = el("div.msg-body", cont || !(T.tools.length || T.live) ? null : this.turnBar(T), feed.length ? el("div.feed", feed) : null, answer.length ? el("div.answer", answer) : null);
+      return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}${last ? "" : ".more"}${feed.length ? ".has-feed" : ""}`, anim, avatar, cont ? null : meta, body, foot);
+    }
+    let workOnly = false; // a later message of the reply that holds nothing but work: it takes no room while the reply is folded
     if (T && T.tools.length) {
       let from = parts.length;
       if (last && !m.live) while (from > 0 && (kinds[from - 1] === "text" || kinds[from - 1] === "note")) from--;
       const work = parts.slice(0, from);
       const answer = parts.slice(from);
+      workOnly = cont && work.length > 0 && !answer.length;
       body = el("div.msg-body",
         cont ? null : this.turnBar(T),
         cont ? null : this.turnTrack(T),
@@ -994,7 +1246,192 @@ export class ChatView {
         answer.length && last && !m.live ? el(`div.answer-mark${T.collapsed ? ".shut" : ""}`, { dataset: { turn: T.id } }, "Answer") : null,
         answer.length ? el("div.answer", answer) : null);
     }
-    return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}${T && T.tools.length ? ".has-work" : ""}`, anim, avatar, cont ? null : meta, body, files, foot);
+    return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}${last ? "" : ".more"}${T && T.tools.length ? ".has-work" : ""}${workOnly ? ".work-only" : ""}${workOnly && T.collapsed ? ".work-shut" : ""}`,
+      anim, avatar, cont ? null : meta, body, files, foot);
+  }
+
+
+  // ---- Split: a reply's steps live in the Activity panel, not in the conversation ----
+
+  /** Split, while a reply is live: what the model says as it goes (its notes), for the conversation. The steps
+   *  themselves (commands, files, searches) are the Activity panel's job and are not repeated here; the work
+   *  line above the notes says what it is doing right now. The text still being written at the end of the
+   *  newest message is left out: that is shown as the answer. */
+  feedOf(m, T, last) {
+    let upto = m.content.length;
+    if (last) while (upto > 0 && m.content[upto - 1].type !== "tool") upto--;
+    const out = [];
+    for (const p of m.content.slice(0, upto)) {
+      if (p.type === "text" && p.text) out.push(el("div.md.feed-note", { html: p.live ? markdown(p.text) : markdownDone(p.text), dataset: { part: `text:${p.ordinal}` } }));
+    }
+    return out;
+  }
+
+  /** Keep the work of message `m` (its notes, thoughts and steps) for the Activity panel, in place when it is on show. */
+  placeWork(m, T, fresh) {
+    const map = (this.workNodes ||= new Map());
+    const old = map.get(m.id);
+    if (fresh) map.set(m.id, fresh);
+    else map.delete(m.id);
+    if (!this.actList || this.actShown !== T.id) return; // another reply is on show, or the panel is closed
+    if (old?.isConnected) {
+      if (fresh) { stillAnimations(fresh, toolIds(old)); old.replaceWith(fresh); }
+      else old.remove();
+    } else if (fresh) {
+      fresh.classList.add("new");
+      const next = T.msgs.slice(T.msgs.indexOf(m) + 1).map((x) => map.get(x.id)).find((n) => n?.isConnected);
+      if (next) next.before(fresh);
+      else this.actList.append(fresh);
+    }
+  }
+
+  /** Show only one kind of step in the panel ("edit", "run", "failed"), or everything (""). */
+  filterActivity(kind) {
+    this.actFilter = this.actFilter === kind ? "" : kind;
+    this.drawActivity(false);
+  }
+
+  /** Scroll the panel to a step and mark it for a moment. */
+  showStep(id) {
+    const row = this.actList?.querySelector(`[data-tool="${id}"]`);
+    if (!row) return;
+    if (this.actFilter) { this.actFilter = ""; this.drawActivity(false); }
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+    row.classList.remove("flash");
+    void row.offsetWidth;
+    row.classList.add("flash");
+    setTimeout(() => row.classList.remove("flash"), 1300);
+  }
+
+  /** The reply on show as plain text, one line per step: for pasting somewhere else. */
+  activityText(T) {
+    const t0 = T.msgs[0]?.time?.created || 0;
+    return T.tools.map((p) => {
+      const name = (p.name || "").toLowerCase(), info = describeTool(p), meta = p.state?.metadata || {};
+      const ended = stepFailed(p) ? (meta.exit_code != null ? `exit ${meta.exit_code}` : "failed") : "";
+      return [p.time?.created && t0 ? stepClock(p.time.created - t0) : "", (VERBS[name] || [info.label])[0], info.target || "", ended].filter(Boolean).join("  ");
+    }).join("\n");
+  }
+
+  /** The first message of every reply in the thread, oldest first. */
+  turnStarts() {
+    const out = [];
+    let prev = null;
+    for (const m of this.thread?.messages || []) {
+      if (m.type === "assistant" && prev !== "assistant") out.push(m);
+      if (m.type === "assistant" || m.type === "user") prev = m.type;
+    }
+    return out;
+  }
+
+  /** How many steps the newest reply has (the Activity tab's badge). */
+  activityCount() {
+    const starts = this.turnStarts();
+    return starts.length ? this.turnOf(starts[starts.length - 1]).tools.length : 0;
+  }
+
+  /** Show one reply's steps in the Activity panel; the newest reply follows along unless another was picked. */
+  selectTurn(id) {
+    const starts = this.turnStarts();
+    this.actTurn = starts.length && starts[starts.length - 1].id === id ? null : id;
+    this.opts.onActivity?.("select");
+    this.drawActivity(true);
+  }
+
+  drawActivity(full) {
+    const host = this.opts.activityHost?.();
+    if (!host) { this.actList = null; this.actShown = null; return; }
+    const starts = this.turnStarts();
+    const first = (this.actTurn && starts.find((m) => m.id === this.actTurn)) || starts[starts.length - 1];
+    if (!first) {
+      this.actList = null;
+      this.actShown = null;
+      host.replaceChildren(el("div.drawer-empty", ico("activity"), el("div", this.thread ? "Every step of a reply shows here while the model works." : "Open a thread to see its activity.")));
+      return;
+    }
+    const T = this.turnOf(first);
+    if (this.actFor !== T.id) { this.actFor = T.id; host.classList.remove("away"); } // another reply: it starts at its newest step
+    const stuck = !host.classList.contains("away"); // kept by the panel's scroll listener: measuring here would lay the page out on every redraw
+    if (full || this.actShown !== T.id || !this.actList?.isConnected) {
+      this.actShown = null; // while filling in, nothing is placed twice
+      for (const m of T.msgs) if (!this.workNodes?.has(m.id)) this.renderMessage(m, true);
+      this.actShown = T.id;
+      this.actList = el("div.act-list", T.msgs.map((m) => this.workNodes?.get(m.id)).filter(Boolean));
+      host.replaceChildren(this.actList);
+      if (!host.dataset.actWatch) { // once per panel: leaving the bottom while it works offers a way back
+        host.dataset.actWatch = "1";
+        host.addEventListener("scroll", () => host.classList.toggle("away", host.scrollHeight - host.clientHeight - host.scrollTop > 140), { passive: true });
+      }
+      host.append(el("button.act-jump", { type: "button", on: { click: () => host.scrollTo({ top: host.scrollHeight, behavior: "smooth" }) } }, ico("arrow-down"), "Latest step"));
+      this.actSig = "";
+    }
+    // The head (numbers, strip) is rebuilt only when what it shows has changed, not on every redraw of the reply.
+    const sig = [T.id, T.live, starts.length, this.actFilter || "", T.tools.map((p) => (p.state?.status || "s")[0] + (stepFailed(p) ? "!" : "")).join(""),
+      T.tools.every((p) => this.openTools.has(p.id))].join("|");
+    if (sig !== this.actSig) {
+      this.actSig = sig;
+      const head = this.activityHead(T, starts);
+      if (host.firstElementChild?.classList.contains("act-head")) host.firstElementChild.replaceWith(head);
+      else host.prepend(head);
+    }
+    this.actList.classList.toggle("empty", !this.actList.childElementCount);
+    this.actList.dataset.filter = this.actFilter || "";
+    host.classList.toggle("live", T.live);
+    for (const n of this.root.querySelectorAll(".turn-bar")) n.classList.toggle("on", n.dataset.turn === T.id);
+    if (T.live && stuck && !this.actFilter) host.scrollTop = 1e7; // the bottom, without reading the height first
+  }
+
+  /** The top of the Activity panel: which request this is, and what the reply came to. */
+  activityHead(T, starts) {
+    const c = stepSummary(T.tools).counts;
+    const failed = T.tools.filter(stepFailed).length;
+    const ms = this.turnMs(T);
+    const k = starts.findIndex((m) => m.id === T.id);
+    const msgs = this.thread.messages;
+    let ask = "";
+    for (let i = msgs.indexOf(T.msgs[0]) - 1; i >= 0; i--) if (msgs[i].type === "user") { ask = msgs[i].text || ""; break; }
+    const go = (d) => { const m = starts[k + d]; if (m) this.selectTurn(m.id); };
+    // A number that changed since the last draw ticks; a cell is also the filter for its kind of step.
+    // The head is redrawn many times a second while a reply streams, so the tick carries on from where it was.
+    const was = this.actWas?.id === T.id ? this.actWas : { at: {} };
+    const now = { id: T.id, edits: c.edits, runs: c.runs, failed, at: { ...was.at } };
+    for (const key of ["edits", "runs", "failed"]) if (was[key] != null && was[key] !== now[key]) now.at[key] = Date.now();
+    this.actWas = now;
+    const f = this.actFilter || "";
+    const cell = (value, label, kind, cls = "", key = "") => {
+      const age = key && now.at[key] ? Date.now() - now.at[key] : 1e9;
+      return el(`button.act-cell${cls}${kind === f && kind ? ".on" : ""}${age < 500 ? ".tick" : ""}`,
+        { type: "button", style: age < 500 ? { "--age": `-${age}ms` } : null, title: kind ? (kind === f ? "Show every step again" : "Show only these steps") : "Show every step",
+          on: { click: () => this.filterActivity(kind) } }, el("b", value), el("span", label));
+    };
+    const start = T.msgs[0]?.time?.created || Date.now();
+    const open = T.tools.length && T.tools.every((p) => this.openTools.has(p.id));
+    const all = () => {
+      for (const p of T.tools) this.openTools[open ? "delete" : "add"](p.id);
+      for (const n of this.actList?.querySelectorAll(".tool") || []) { if (!open) n.fill?.(); n.classList.toggle("open", !open); }
+      this.drawActivity(false);
+    };
+    return el("div.act-head",
+      el("div.act-ask",
+        el("span.act-q", { title: ask }, ask.replace(/\s+/g, " ").slice(0, 160) || "This reply"),
+        el("span.act-tools",
+          T.tools.length ? el("button.icon-btn", { type: "button", title: open ? "Close every step" : "Open every step", html: icon(open ? "chev" : "chev-down"), on: { click: all } }) : null,
+          T.tools.length ? el("button.icon-btn", { type: "button", title: "Copy the steps as text", html: icon("copy"), on: { click: async () => { await copyText(this.activityText(T)); toast("Steps copied", "ok", 1400); } } }) : null),
+        starts.length > 1 ? el("span.act-nav",
+          el("button.icon-btn", { type: "button", title: "The reply before", disabled: k <= 0, html: icon("chev"), on: { click: () => go(-1) } }),
+          el("span", `${k + 1} / ${starts.length}`),
+          el("button.icon-btn", { type: "button", title: "The reply after", disabled: k >= starts.length - 1, html: icon("chev"), on: { click: () => go(1) } })) : null),
+      el("div.act-sum",
+        T.live ? cell(el("span.live-dur", { dataset: { start: String(start) } }, fmtDur(Date.now() - start)), "working", "", ".live") : cell(ms > 0 ? fmtDur(ms) : "0s", "worked", ""),
+        cell(String(c.edits), c.edits === 1 ? "file edited" : "files edited", "edit", "", "edits"),
+        cell(String(c.runs), c.runs === 1 ? "command" : "commands", "run", "", "runs"),
+        cell(String(failed), "failed", "failed", failed ? ".bad" : "", "failed")),
+      // every step as a small mark, in order: click one to go to it
+      T.tools.length ? el(`div.act-strip${T.tools.length > 60 ? ".dense" : ""}`, T.tools.slice(-400).map((p) => {
+        const name = (p.name || "").toLowerCase(), st = p.state?.status, info = describeTool(p);
+        return el(`i.${stepFailed(p) ? "bad" : /^(todo|todowrite|goal|question)$/.test(name) ? "plan" : kindOf(name)}${st === "running" || st === "streaming" ? ".now" : ""}`,
+          { title: `${(VERBS[name] || [info.label])[0]} ${info.target || ""}`.trim().slice(0, 120), on: { click: () => this.showStep(p.id) } });
+      })) : null);
   }
 
   /** How long a whole reply took: the live run's own clock, else first start to last finish, else its steps added up. */
@@ -1021,18 +1458,18 @@ export class ChatView {
       steps ? el("span", `${steps} ${steps === 1 ? "step" : "steps"}`) : null,
       tokens ? el("span", { title: `${tokens.toLocaleString()} tokens across ${msgs.length} model ${msgs.length === 1 ? "call" : "calls"}${out ? `, ${out.toLocaleString()} of them written by the model` : ""}` }, `${fmtTokens(tokens)} tokens`) : null,
       cost > 0 ? el("span", { title: "What this reply cost" }, fmtCost(cost)) : null,
-      at ? el("span", new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })) : null));
+      at ? el("span", clock.format(at)) : null));
   }
 
   /** One thin segment per step, coloured by what the step was: a folded reply's work at a glance. */
   turnTrack(T) {
-    const MAX = 60;
+    const MAX = 240;
     const every = Math.max(1, T.tools.length / MAX);
     const shown = T.tools.filter((_, k) => Math.floor(k / every) !== Math.floor((k - 1) / every));
-    return el(`div.turn-track${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { dataset: { turn: T.id }, "aria-hidden": "true" }, shown.map((p) => {
+    return el(`div.turn-track${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}${shown.length > 48 ? ".dense" : ""}`, { dataset: { turn: T.id }, "aria-hidden": "true" }, shown.map((p) => {
       const name = (p.name || "").toLowerCase(), st = p.state?.status, info = describeTool(p);
       const verb = (VERBS[name] || [info.label])[0];
-      return el(`i.${st === "error" ? "bad" : /^(todo|todowrite|goal|question)$/.test(name) ? "plan" : kindOf(name)}${st === "running" || st === "streaming" ? ".now" : ""}`,
+      return el(`i.${stepFailed(p) ? "bad" : /^(todo|todowrite|goal|question)$/.test(name) ? "plan" : kindOf(name)}${st === "running" || st === "streaming" ? ".now" : ""}`,
         { title: `${verb}${info.target ? " " + info.target : ""}`.slice(0, 120) });
     }));
   }
@@ -1058,26 +1495,38 @@ export class ChatView {
     const first = T.msgs[0];
     const ms = this.turnMs(T);
     const start = first?.time?.created || Date.now();
-    const failed = T.tools.filter((p) => p.state?.status === "error").length;
-    const bar = el(`button.turn-bar${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { type: "button", dataset: { turn: T.id }, "aria-expanded": String(!T.collapsed), on: { click: () => {
+    const failed = T.tools.filter(stepFailed).length;
+    const busy = T.live ? [...T.tools].reverse().find((p) => p.state?.status === "running" || p.state?.status === "streaming") : null;
+    const doing = busy ? `${(VERBS[(busy.name || "").toLowerCase()] || [0, describeTool(busy).label])[1]} ${describeTool(busy).target || ""}`.trim().slice(0, 90) : "";
+    const split = !!this.opts.split?.();
+    const bar = el(`button.turn-bar${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}${split && this.actShown === T.id ? ".on" : ""}`, { type: "button", dataset: { turn: T.id }, "aria-expanded": String(!T.collapsed), on: { click: () => {
+      if (split) return this.selectTurn(T.id);
       const shut = !bar.classList.contains("shut");
       this.openTools.delete(shut ? "t:" + T.id : "tc:" + T.id);
       this.openTools.add(shut ? "tc:" + T.id : "t:" + T.id);
       this.applyTurn(T.id, shut);
     } } },
       T.live ? el("span.tb-mark.live", el("span.tb-pulse")) : el("span.tb-mark", { html: icon("check") }),
-      T.live ? el("span.tb-what", "Working", el("span.dur.live-dur", { dataset: { start: String(start) } }, fmtDur(Date.now() - start)))
-        : el("span.tb-what", "Worked", ms > 0 ? el("span.dur", `for ${fmtDur(ms)}`) : null),
-      el("span.tb-bits", sum.bits.map((b) => el("span.steps-bit", b)), failed ? el("span.steps-bit.bad", `${failed} failed`) : null),
-      el("span.steps-icons", sum.icons),
-      el("span.steps-n", `${T.tools.length} ${T.tools.length === 1 ? "step" : "steps"}`),
-      el("span.tb-chev", { html: icon("chev-down") }));
+      el("span.tb-main",
+        el("span.tb-title", el("span.tb-what", T.live ? "Working" : "Worked"),
+          T.live ? el("span.dur.live-dur", { dataset: { start: String(start) } }, fmtDur(Date.now() - start)) : ms > 0 ? el("span.dur", `for ${fmtDur(ms)}`) : null,
+          el("span.tb-chev", { html: icon("chev") })),
+        // what it is doing right now (so a folded reply still says it), then what it has done so far
+        el("span.tb-stats", doing ? el("span.tb-stat.now", doing) : null, failed ? el("span.tb-stat.bad", ico("alert"), `${failed} failed`) : null,
+          sum.stats.map(([i, text]) => el("span.tb-stat", ico(i), text)))),
+      split ? el("span.tb-go", el("span.tb-go-t", `${T.tools.length} ${T.tools.length === 1 ? "step" : "steps"}`), el("span.tb-go-i", { html: icon("chev") }))
+        : el("span.tb-side", el("span.steps-icons", sum.icons), el("span.steps-n", `${T.tools.length} ${T.tools.length === 1 ? "step" : "steps"}`)));
     return bar;
   }
 
   applyTurn(id, shut, live) {
     for (const n of this.root.querySelectorAll(`[data-turn="${id}"]`)) {
       n.classList.toggle("shut", shut);
+      if (n.classList.contains("work")) n.closest(".msg")?.classList.toggle("work-shut", shut);
+      if (!shut && live == null && n.classList.contains("work")) {
+        n.classList.add("opening");
+        setTimeout(() => n.classList.remove("opening"), 700);
+      }
       if (live != null) n.classList.toggle("live", live);
       if (n.classList.contains("turn-bar")) n.setAttribute("aria-expanded", String(!shut));
     }
@@ -1170,7 +1619,7 @@ export function errorCard(err, { model, onRetry, onChangeModel } = {}) {
   const e = typeof err === "string" ? { message: err } : err || {};
   const msg = String(e.message || e.type || "Something went wrong");
   const text = `${e.type || ""} ${msg} ${e.status || ""}`;
-  let title = e.type && !/error$/i.test(e.type) ? e.type : "The run failed";
+  let title = e.type && !/error$/i.test(e.type) && !/^(http|network|blocked|auth|provider)$/i.test(e.type) ? e.type : "The run failed";
   let hint = "";
   if (/ConnectionRefused|ECONNREFUSED|ENOTFOUND|fetch failed|unable to connect|network/i.test(text)) {
     title = "Couldn't reach the provider";
@@ -1190,6 +1639,9 @@ export function errorCard(err, { model, onRetry, onChangeModel } = {}) {
   } else if (/context|too long|maximum.*tokens|\b413\b/i.test(text)) {
     title = "The conversation is too long for this model";
     hint = "Use Context to trim or delete messages, start a fresh thread, or pick a model with a bigger context window.";
+  } else if (/\b400\b|invalid.argument|bad request/i.test(text)) {
+    title = "The provider refused the request";
+    hint = "Something in what was sent is not accepted by this model. It is not about your account: retry, and if it happens again switch models for this thread.";
   } else if (/\b5\d\d\b|internal server|overloaded|unavailable/i.test(text)) {
     title = "The provider had a problem";
     hint = "That's on their side. Retry in a bit or switch models.";

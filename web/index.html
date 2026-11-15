@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="interfaces.css" />
   <link rel="stylesheet" href="settings.css" />
   <link rel="stylesheet" href="studio.css" />
+  <link rel="stylesheet" href="split.css" />
+  <link rel="stylesheet" href="motion.css" />
 </head>
 <body>
   <div id="boot" class="boot">
@@ -42,6 +44,10 @@
       </div>
     </aside>
 
+    <!-- Split: the thread list is a drawer. The scrim closes it; the handle on the window's edge opens it. -->
+    <div class="sb-scrim" id="sb-scrim"></div>
+    <button class="sb-handle" id="sb-handle" type="button" title="Show your threads (Ctrl+B)" hidden><span class="ico" data-icon="chev"></span></button>
+
     <main class="main">
       <header class="topbar">
         <button class="icon-btn" id="btn-expand" title="Show sidebar (Ctrl+B)" hidden></button>
@@ -54,6 +60,7 @@
           <button class="chip-btn" id="btn-memory" title="Memory: what the agent knows about this project" hidden><span class="ico" data-icon="book"></span>Memory<span class="badge" id="memory-count" hidden></span></button>
           <!-- the workbench tabs, as a segmented control -->
           <div class="tb-seg" id="tb-seg" role="group" aria-label="Workbench">
+            <button class="chip-btn" id="btn-activity" title="Activity: every step of a reply, in order" hidden><span class="ico" data-icon="activity"></span>Activity</button>
             <button class="chip-btn" id="btn-live" title="Watch files being written or edited"><span class="ico" data-icon="eye"></span>Live</button>
             <button class="chip-btn" id="btn-changes" title="Changed files"><span class="ico" data-icon="diff"></span>Changes<span class="badge" id="changes-count" hidden></span></button>
             <button class="chip-btn" id="btn-browser" title="Browser: browse the web and watch the agent use it" hidden><span class="ico" data-icon="globe"></span>Browser</button>
@@ -75,7 +82,7 @@
         <div class="jump" id="jump" hidden><span class="ico" data-icon="arrow-down"></span></div>
         <div class="work-dock" id="work-dock"></div>
         <div class="slash-menu" id="slash-menu" hidden></div>
-        <form class="composer" id="composer">
+        <form class="composer is-empty" id="composer">
           <div class="attachments" id="attachments"></div>
           <textarea id="input" rows="1" placeholder="Ask anything…" spellcheck="true"></textarea>
           <div class="composer-bar">
@@ -108,6 +115,8 @@
       <div class="wb-resize" id="wb-resize" title="Drag to resize · double-click to reset"></div>
       <header class="wb-head">
         <div class="wb-tabs" id="wb-tabs" role="tablist">
+          <button class="wb-tab" type="button" role="tab" data-tab="activity" title="Activity" hidden><span class="ico" data-icon="activity"></span><span class="wb-lbl">Activity</span><span class="badge wb-badge" id="wb-activity-count" hidden></span></button>
+          <button class="wb-tab" type="button" role="tab" data-tab="plan" title="Plan: the goal and the to-do list" hidden><span class="ico" data-icon="checklist"></span><span class="wb-lbl">Plan</span><span class="badge wb-badge" id="wb-plan-count" hidden></span></button>
           <button class="wb-tab" type="button" role="tab" data-tab="live" title="Live"><span class="ico" data-icon="eye"></span><span class="wb-lbl">Live</span></button>
           <button class="wb-tab" type="button" role="tab" data-tab="changes" title="Changes"><span class="ico" data-icon="diff"></span><span class="wb-lbl">Changes</span><span class="badge wb-badge" id="wb-changes-count" hidden></span></button>
           <button class="wb-tab" type="button" role="tab" data-tab="browser" title="Browser" hidden><span class="ico" data-icon="globe"></span><span class="wb-lbl">Browser</span></button>
@@ -115,9 +124,13 @@
           <button class="wb-tab" type="button" role="tab" data-tab="harness" title="Prompt"><span class="ico" data-icon="scroll"></span><span class="wb-lbl">Prompt</span></button>
           <button class="wb-tab" type="button" role="tab" data-tab="watch" title="Agents" hidden><span class="ico" data-icon="bot"></span><span class="wb-lbl">Agents</span></button>
         </div>
+        <button class="wb-auto" id="wb-auto" type="button" role="switch" aria-checked="true" hidden
+          title="Follow the model: show Activity while it works, Live while it writes a file, then come back"><span class="ico" data-icon="zap"></span><span>Follow</span></button>
         <button class="icon-btn" id="btn-drawer-close" title="Close"></button>
       </header>
       <div class="wb-panes" id="wb-panes">
+        <section class="wb-pane wb-pane-activity" data-pane="activity" hidden><div class="drawer-head" hidden><div class="drawer-title" data-title="activity"></div></div><div class="drawer-body" data-body="activity"></div></section>
+        <section class="wb-pane wb-pane-plan" data-pane="plan" hidden><div class="drawer-head" hidden><div class="drawer-title" data-title="plan"></div></div><div class="drawer-body" data-body="plan"></div></section>
         <section class="wb-pane" data-pane="live" hidden><div class="drawer-head"><div class="drawer-title" data-title="live"></div></div><div class="drawer-body" data-body="live"></div></section>
         <section class="wb-pane" data-pane="changes" hidden><div class="drawer-head"><div class="drawer-title" data-title="changes"></div></div><div class="drawer-body" data-body="changes"></div></section>
         <section class="wb-pane wb-pane-browser" data-pane="browser" hidden><aside class="browser-pane" id="browser-pane" aria-label="Browser"></aside></section>

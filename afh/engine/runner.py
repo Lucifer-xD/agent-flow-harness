@@ -162,7 +162,7 @@ def to_chat(messages: list[dict], vision: bool = False) -> list[ChatMessage]:
         elif t == "assistant":
             text = "\n\n".join(p.get("text", "") for p in m.get("content", []) if p.get("type") == "text" and p.get("text"))
             reasoning = "\n".join(p.get("text", "") for p in m.get("content", []) if p.get("type") == "reasoning" and p.get("text"))
-            calls = [ToolCall(p["id"], p["name"], p.get("state", {}).get("input") if isinstance(p.get("state", {}).get("input"), dict) else {})
+            calls = [ToolCall(p["id"], p["name"], p.get("state", {}).get("input") if isinstance(p.get("state", {}).get("input"), dict) else {}, p.get("signature") or "")
                      for p in m.get("content", []) if p.get("type") == "tool"]
             if not text and not calls:
                 continue
@@ -387,6 +387,8 @@ class Run:
                             except json.JSONDecodeError:
                                 inp = {"_raw": raw}
                         part["state"] = {"status": "pending", "input": inp}
+                        if ev.get("signature"):  # the model wants this back with the call; kept in the thread so a restart doesn't lose it
+                            part["signature"] = ev["signature"]
                         self.emit("session.tool.input.ended", assistantMessageID=msg["id"], id=ev["id"], text=raw)
                         tool_calls.append(ToolCall(ev["id"], ev["name"], inp))
                     elif t == "usage":

@@ -375,6 +375,30 @@ def test_antigravity_groups_models_listed_once_per_effort(monkeypatch):
     assert send("gemini-3.5-flash-lite", "low")["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "low"
 
 
+def test_a_list_stored_before_grouping_is_regrouped_at_start():
+    """After an update the stored model list is still the old one (it is only fetched on request): the per-effort
+    entries in it become one model each, and what was hidden at every effort stays hidden."""
+    from afh.engine.providers.antigravity import regroup_stored, regrouped
+
+    entry = {"kind": "antigravity", "extra": {"effort_ids": {"gemini-4-hydrogen": ["low", "medium", "high"], "gpt-oss-120b": ["medium"]}},
+             "hidden": ["claude-opus-5-5-low", "claude-sonnet-5-5-low", "claude-sonnet-5-5-high", "claude-opus-4-6-thinking"],
+             "fetched": [{"id": "gemini-4-hydrogen", "name": "Gemini 4 Hydrogen", "variants": ["low", "medium", "high"], "reasoning": True},
+                         {"id": "gemini-4-hydrogen-xhigh", "name": "Gemini 4 Hydrogen (XHigh)", "variants": [], "reasoning": True},
+                         {"id": "claude-opus-5-5-high", "name": "Claude Opus 5.5 (High)", "variants": []}, {"id": "claude-opus-5-5-low", "name": "Claude Opus 5.5 (Low)", "variants": []},
+                         {"id": "claude-sonnet-5-5-low", "name": "Claude Sonnet 5.5 (Low)"}, {"id": "claude-sonnet-5-5-high", "name": "Claude Sonnet 5.5 (High)"},
+                         {"id": "claude-opus-4-6-thinking", "name": "Claude Opus 4.6 (Thinking)", "variants": ["low", "high", "max"]},
+                         {"id": "gpt-oss-120b", "name": "GPT-OSS 120B", "variants": []}, {"id": "gemini-3.5-flash-lite", "name": "Gemini 3.5 Flash Lite"}]}
+    patch = regroup_stored(entry)
+    models = {m["id"]: m for m in patch["fetched"]}
+    assert set(models) == {"gemini-4-hydrogen", "claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-4-6-thinking", "gpt-oss-120b", "gemini-3.5-flash-lite"}
+    assert models["gemini-4-hydrogen"]["variants"] == ["low", "medium", "high", "xhigh"] and models["gemini-4-hydrogen"]["name"] == "Gemini 4 Hydrogen"
+    assert models["claude-opus-5-5"]["name"] == "Claude Opus 5.5" and models["claude-opus-5-5"]["variants"] == ["low", "high"] and models["claude-opus-5-5"]["reasoning"]
+    assert patch["extra"]["effort_ids"]["gemini-4-hydrogen"] == ["low", "medium", "high", "xhigh"] and patch["extra"]["effort_ids"]["gpt-oss-120b"] == ["medium"]
+    assert "claude-sonnet-5-5" in patch["hidden"] and "claude-opus-5-5" not in patch["hidden"]  # hidden at every effort / only at one
+    assert regrouped(patch["extra"], "gemini-4-hydrogen-xhigh") == ("gemini-4-hydrogen", "xhigh")
+    assert regroup_stored({**entry, **patch}) is None  # nothing left to do the second time
+
+
 def test_gemini_schemas_keep_only_what_google_accepts():
     from afh.engine.providers.gemini import clean_schema
 
