@@ -834,7 +834,10 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .ctx-ta.mono { font: 12px/1.5 var(--mono); }
 .revert-bar { position: sticky; top: 8px; z-index: 2; display: flex; align-items: center; gap: 12px; margin: 8px 0 14px; padding: 10px 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--accent-line); box-shadow: var(--glow); font-size: 13px; animation: drop-in 0.35s var(--spring) both; }
 .composer-wrap > .revert-bar { position: relative; top: auto; width: 100%; max-width: var(--chat-w); margin: 0 auto 8px; }
-.revert-bar > .ico { color: var(--accent); }
+/* the icon is a span too: without this it took half the bar and pushed the words to the right */
+.revert-bar > .ico { flex: none; display: grid; place-items: center; width: 18px; height: 18px; color: var(--accent); }
+.revert-bar > .ico svg { width: 16px; height: 16px; }
+.revert-bar > .btn { flex: none; }
 .revert-bar span { flex: 1; color: var(--text-2); }
 .revert-bar span b { color: var(--text); }
 .builtin-box { margin-bottom: 8px; }
@@ -2599,3 +2602,19 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 
 /* the drawer sidebar's scrim and edge handle: only Split uses them (web/split.css) */
 .sb-scrim, .sb-handle { display: none; }
+
+/* The agent and access pills in the message box carry a colour, so the mode you are in is seen at a glance:
+   Build blue, Plan violet, Delegate amber, Red Team red (your own agents keep the colour you gave them);
+   Ask first green, Full access orange, Read only teal. Same in every interface and theme. */
+#pick-agent { --pill-c: #3b82f6; }
+#pick-agent[data-agent="plan"] { --pill-c: #a855f7; }
+#pick-agent[data-agent="delegate"] { --pill-c: #f59e0b; }
+#pick-agent[data-agent="redteam"] { --pill-c: #ef4444; }
+#pick-agent.has-agent-color { --pill-c: var(--agent-color); }
+#pick-mode.mode-ask { --pill-c: #22a06b; }
+#pick-mode.mode-full { --pill-c: #f97316; }
+#pick-mode.mode-readonly { --pill-c: #0ea5b7; }
+:root .composer #pick-agent, :root .composer #pick-mode { color: color-mix(in srgb, var(--pill-c) 78%, var(--text)); background: color-mix(in srgb, var(--pill-c) 13%, transparent); border-color: transparent; font-weight: 550; }
+:root .composer #pick-agent:hover, :root .composer #pick-mode:hover { color: color-mix(in srgb, var(--pill-c) 78%, var(--text)); background: color-mix(in srgb, var(--pill-c) 22%, transparent); }
+:root .composer #pick-agent > .ico, :root .composer #pick-mode > .ico, :root .composer #pick-agent > svg, :root .composer #pick-mode > svg { color: var(--pill-c); }
+:root .composer #pick-agent .chev, :root .composer #pick-mode .chev { color: color-mix(in srgb, var(--pill-c) 60%, var(--text-3)); }

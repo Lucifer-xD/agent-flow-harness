@@ -2,6 +2,13 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.34.1 (2026-11-17)
+
+**The mode you are in, in colour**
+
+- **Coloured modes in the message box:** Build, Plan, Delegate and Red Team each carry a colour, and so do Ask first, Full access and Read only, so you can see at a glance how the thread is set. Your own agents keep the colour you gave them.
+- **Fixed:** after a rewind, the words of the "Keep / Put it back" bar were pushed to the right by an oversized icon.
+
 ## 1.34.0 (2026-11-16)
 
 **Flow and Onyx: two new interfaces, and an undo you can aim**

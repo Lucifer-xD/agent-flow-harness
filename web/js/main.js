@@ -1633,6 +1633,7 @@ function renderComposerState() {
   const agent = S.agents.find((a) => a.id === currentAgent());
   const agentChip = $("pick-agent");
   agentChip.replaceChildren(ico(agentIcon(agent)), el("span.lbl", agent?.name || currentAgent()), el("span.chev", { html: icon("chev-down") }));
+  agentChip.dataset.agent = agent?.id || currentAgent() || ""; // the pill takes its colour from the agent (app.css)
   agentChip.style.setProperty("--agent-color", agent?.color || "");
   agentChip.classList.toggle("has-agent-color", !!agent?.color);
   const mode = MODES[currentMode()] || MODES.ask;

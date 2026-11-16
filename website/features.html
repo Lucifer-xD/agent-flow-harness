@@ -25,6 +25,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/pages.css">
+  <link rel="stylesheet" href="/world.css">
   <script type="importmap">
     { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -37,18 +38,21 @@
   <header data-nav></header>
 
   <main>
-    <section class="page-hero staged">
-      <div class="page-stage" data-stage aria-hidden="true"></div>
-      <div class="page-copy">
-        <p class="kicker" data-reveal>Features</p>
-        <h1 class="display" data-reveal style="--d:.08s">Everything<br><span class="grad-text">AFH does.</span></h1>
-        <p class="lead" data-reveal style="--d:.16s">An agent that plans its own work, splits it across helpers and shows you every line as it lands — with the controls to steer it, stop it and rewind it.</p>
-        <div class="cta-row" data-reveal style="--d:.24s">
-          <a class="btn btn-primary" href="/download" data-os-cta>Download AFH</a>
-          <a class="btn btn-ghost" href="/docs">Getting started</a>
+    <!-- the page opens on the same place as the home, seen from its own angle -->
+    <div class="world w-banner" data-view="features">
+      <canvas id="world" aria-hidden="true"></canvas>
+      <section class="page-hero staged">
+        <div class="page-copy">
+          <p class="kicker" data-reveal>Features</p>
+          <h1 class="display" data-reveal style="--d:.08s">Everything<br><span class="grad-text">AFH does.</span></h1>
+          <p class="lead" data-reveal style="--d:.16s">An agent that plans its own work, splits it across helpers and shows you every line as it lands — with the controls to steer it, stop it and rewind it.</p>
+          <div class="cta-row" data-reveal style="--d:.24s">
+            <a class="btn btn-primary" href="/download" data-os-cta>Download AFH</a>
+            <a class="btn btn-ghost" href="/docs">Getting started</a>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
 
     <nav class="subnav" aria-label="Feature groups">
       <a href="#plan">Plans</a><a href="#modes">Modes</a><a href="#agents">Agents</a><a href="#watch">Watch it work</a><a href="#control">Control</a><a href="#long">Long sessions</a><a href="#yours">Make it yours</a><a href="#build">Build on it</a><a href="#reach">Terminal &amp; GitHub</a>
@@ -448,5 +452,6 @@
   <footer data-footer></footer>
   <script src="/js/layout.js"></script>
   <script type="module" src="/js/page.js"></script>
+  <script type="module" src="/js/world.js"></script>
 </body>
 </html>
