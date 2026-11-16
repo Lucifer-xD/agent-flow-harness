@@ -2,6 +2,19 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.34.0 (2026-11-16)
+
+**Flow and Onyx: two new interfaces, and an undo you can aim**
+
+Two new ways to lay out the app, a rewind that lets you choose what goes back, and commands that show what they really run.
+
+- **A new interface, Flow:** pick it in Settings → Appearance → Interface. Your threads sit on a soft canvas and the conversation is one clean sheet. The model's words stay in full view; what it does appears between them as tidy blocks: commands share one terminal box, file changes are file rows with the diff inside, reading and searching are quiet lines. When the reply is done the work folds away and the answer stands alone.
+- **A new interface, Onyx:** dense and monochrome, set in Google Sans, with a near-black conversation card on a dark shell and one quiet blue. While the model works its words and steps simply appear; when it finishes they fold under one "Worked for…" line. Steps that follow each other are grouped ("Explored files, ran commands, edited file"), projects show as folders, and menus, Settings and dialogs share the same look. Its light mode is the same design on white.
+- **Undo with three choices:** the undo arrow under each of your messages is always there now and asks what to take back: the chat and the files, the chat only, or the file changes only. Nothing is final until you choose Keep or Put it back.
+- **Commands show what they run:** a command sent through ssh, bash or PowerShell is shown as the command itself, with the wrapper as a small tag. Each command carries the icon of its program (Python, npm, Git, Docker and many more), and a download's progress bar is folded into one line instead of filling the chat.
+- **The plan in reach:** in Flow and Onyx a band on the message box shows the step in hand and how far the plan is; a click opens the whole plan and the goal right there.
+- **Fixed:** the "Put it back / Keep" bar could vanish a moment after an undo; putting an undo back lost the saved file versions, so those files could not be undone again; a file with no counted lines said "+0 −0"; plan steps faded out in Split's Activity while a reply ran.
+
 ## 1.33.1 (2026-11-15)
 
 **Split: the chat on the left, the work on the right**

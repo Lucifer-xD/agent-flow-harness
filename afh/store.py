@@ -40,7 +40,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "logoAnim": True,
         "themeTransition": "circle",  # circle | diamond | wipe | fade | blur | none
         "msgAnim": "rise",  # rise | fade | slide | pop | blur | none
-        "interface": "studio",  # split | studio | focus | compact | canvas: the layout and its parts; the theme still sets the colors
+        "interface": "studio",  # studio | flow | onyx | split | focus | compact | canvas: the layout and its parts; the theme still sets the colors
         "glass": True,
         "customCss": "",
         "sendKey": "enter",  # enter | ctrl-enter

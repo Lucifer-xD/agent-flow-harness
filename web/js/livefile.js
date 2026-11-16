@@ -6,7 +6,7 @@ import { api } from "./api.js";
 import { logoNode } from "./logo.js";
 import { basename, el, ico, toggle } from "./ui.js";
 import { fileIcon } from "./fileicons.js";
-import { tidyOutput } from "./tidy.js";
+import { tidyOutput, commandKind } from "./tidy.js";
 
 let ctx = null;
 const st = { tool: null, kind: null, raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, follow: true, frame: 0, scrolledTo: -1, startedAt: 0, pace: null };
@@ -300,7 +300,8 @@ export function renderLive(body, titleBox) {
 /** A running command as a terminal: the command line, then its output as it arrives. */
 function renderRun(body, titleBox) {
   const finished = st.done;
-  titleBox.replaceChildren(logoNode({ size: 26, working: !finished }), el("span", finished ? "Ran a command" : "Running a command"),
+  const ck = commandKind(st.command);
+  titleBox.replaceChildren(logoNode({ size: 26, working: !finished }), el("span.lf-what", !ck ? ico("terminal") : ck.startsWith("app:") ? ico(ck.slice(4)) : fileIcon(ck, { kind: true }), finished ? "Ran a command" : "Running a command"),
     finished ? el("span.pill-tag", st.error ? "failed" : "done") : el("span.pill-tag.accent", "live"));
   const v = paneFor(body);
   v.path.textContent = st.command;
