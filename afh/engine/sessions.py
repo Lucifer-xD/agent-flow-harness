@@ -253,6 +253,14 @@ class Store:
             self.db.execute("INSERT INTO snapshot(session_id, message_id, seq, path, existed, content, created) VALUES (?,?,?,?,?,?,?)",
                             (sid, mid, seq, path, 1 if existed else 0, content, now_ms()))
 
+    def restore_snapshots(self, sid: str, snaps: list[dict]) -> None:
+        """Put back the snapshots a rewind set aside, at the position its message has now."""
+        rows = [(s, self.message_seq(sid, s["message_id"]) or s.get("seq") or 0) for s in snaps]
+        with self.lock:
+            for s, seq in rows:
+                self.db.execute("INSERT INTO snapshot(session_id, message_id, seq, path, existed, content, created) VALUES (?,?,?,?,?,?,?)",
+                                (sid, s["message_id"], seq, s["path"], 1 if s["existed"] else 0, s["content"], now_ms()))
+
     def snapshots_from(self, sid: str, seq: int) -> list[dict]:
         rows = self.db.execute("SELECT * FROM snapshot WHERE session_id=? AND seq>=? ORDER BY seq, id", (sid, seq))
         return [{"path": r["path"], "existed": bool(r["existed"]), "content": r["content"], "seq": r["seq"], "message_id": r["message_id"]} for r in rows]

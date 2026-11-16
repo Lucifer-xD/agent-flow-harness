@@ -833,6 +833,7 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 .ctx-ta.dim { color: var(--text-2); }
 .ctx-ta.mono { font: 12px/1.5 var(--mono); }
 .revert-bar { position: sticky; top: 8px; z-index: 2; display: flex; align-items: center; gap: 12px; margin: 8px 0 14px; padding: 10px 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--accent-line); box-shadow: var(--glow); font-size: 13px; animation: drop-in 0.35s var(--spring) both; }
+.composer-wrap > .revert-bar { position: relative; top: auto; width: 100%; max-width: var(--chat-w); margin: 0 auto 8px; }
 .revert-bar > .ico { color: var(--accent); }
 .revert-bar span { flex: 1; color: var(--text-2); }
 .revert-bar span b { color: var(--text); }

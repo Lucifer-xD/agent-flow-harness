@@ -5,6 +5,7 @@ import { api } from "./api.js";
 import { designCard, renderDesignTool } from "./design.js";
 import { el, ico, icon, markdown, markdownDone, diffView, patchFromStrings, copyText, fmtDur, fmtTokens, basename, toast, progressRing } from "./ui.js";
 import { fileIcon } from "./fileicons.js";
+import { tidyOutput, shortCommand } from "./tidy.js";
 import { effortLabel } from "./model-picker.js";
 
 // ---- state ----------------------------------------------------------------------
@@ -375,6 +376,15 @@ const MEMORY_VERBS = { add: ["Remembered", "Remembering"], remove: ["Forgot", "F
 const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name) ? "edit" : /^(shell|bash|execute)$/.test(name) ? "run" : /^(read|glob|grep|list|ls)$/.test(name) ? "read" : /web|fetch/.test(name) ? "web" : "other");
 
 
+/** Flow draws steps as blocks by family: commands are a terminal, file changes are file rows, looking around
+ *  (reading, searching, the web) is a quiet line. Steps of one family that follow each other join into one block. */
+const isFlowUI = () => ["flow", "onyx"].includes(document.documentElement.dataset.ui);
+const isOnyxUI = () => document.documentElement.dataset.ui === "onyx";
+const stepFamily = (p) => {
+  const name = (p.name || "").toLowerCase(), kind = kindOf(name);
+  return /todo/.test(name) ? "plan" : kind === "edit" ? "file" : kind === "run" ? "run" : kind === "read" || kind === "web" ? "look" : "other";
+};
+
 /** A step that did not work: the tool failed, or the command it ran ended with an error or timed out. */
 const stepFailed = (p) => p.state?.status === "error" || (p.state?.metadata?.exit_code ?? 0) !== 0 || !!p.state?.metadata?.timed_out;
 
@@ -431,7 +441,7 @@ function pathNode(target) {
 const TODO_MARK = { completed: "check", cancelled: "x", in_progress: "zap", pending: null };
 
 /** The agent's `todo` call: the list as it stands after the call, not raw JSON. */
-function renderTodoTool(p, openSet, t0) {
+function renderTodoTool(p, openSet, t0, thread) {
   const status = p.state?.status || "streaming";
   const input = typeof p.state?.input === "object" ? p.state.input : {};
   const todos = p.state?.metadata?.todos || (Array.isArray(input.todos) && !input.merge ? input.todos : []);
@@ -439,6 +449,7 @@ function renderTodoTool(p, openSet, t0) {
   const of = todos.filter((x) => x.status !== "cancelled").length;
   const read = p.state?.metadata?.read;
   const live = status === "streaming" || status === "running";
+  if (isFlowUI() && todos.length && !live && !read) return flowPlanStep(p, openSet, thread, todos, done, of, status);
   const card = el(`div.tool.plan.${status}${openSet.has(p.id) || (!openSet.has("x" + p.id) && todos.length <= 8 && done === 0 && !read) ? ".open" : ""}`, { dataset: { tool: p.id } });
   const head = el("button.tool-head", { type: "button", on: { click: () => { const o = card.classList.toggle("open"); openSet[o ? "add" : "delete"](p.id); openSet[o ? "delete" : "add"]("x" + p.id); } } },
     t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
@@ -450,6 +461,50 @@ function renderTodoTool(p, openSet, t0) {
   const list = el("div.plan-list", todos.map((x) => el(`div.plan-item.${x.status || "pending"}`, el("span.plan-mark", TODO_MARK[x.status] ? ico(TODO_MARK[x.status]) : null), el("span", x.status === "in_progress" && x.activeForm ? x.activeForm : x.content))));
   const err = p.state?.error ? el("pre.tool-pre.tool-error", p.state.error.message || "") : null;
   card.append(head, el("div.tool-body", el("div", todos.length ? list : null, err)));
+  return card;
+}
+
+/** Flow: a plan step says what changed. The first call (or a rewritten list) is the plan itself, shown as a
+ *  checklist; every later call is one line: the step that was just finished, or the one now in hand. The whole
+ *  list is one click away on each of them. */
+function flowPlanStep(p, openSet, thread, todos, done, of, status) {
+  let was = null; // the list as the plan call before this one left it
+  if (thread) {
+    let seen = false;
+    scan: for (let i = thread.messages.length - 1; i >= 0; i--) {
+      const x = thread.messages[i];
+      if (x.type === "user") { if (seen) break; continue; } // only within this reply: a new request starts with the plan in full
+      if (x.type !== "assistant") continue;
+      for (let k = x.content.length - 1; k >= 0; k--) {
+        const q = x.content[k];
+        if (q === p) { seen = true; continue; }
+        if (!seen || q.type !== "tool" || !/todo/.test((q.name || "").toLowerCase())) continue;
+        const t = q.state?.metadata?.todos || q.state?.input?.todos;
+        if (Array.isArray(t) && t.length) { was = t; break scan; }
+      }
+    }
+  }
+  const same = !!was && was.length === todos.length && was.every((x, i) => x.content === todos[i].content);
+  const fresh = same ? todos.filter((x, i) => x.status === "completed" && was[i].status !== "completed") : [];
+  const now = todos.find((x) => x.status === "in_progress");
+  const finished = of > 0 && done === of;
+  const [what, task] = !same ? ["Plan", `${of} ${of === 1 ? "step" : "steps"}`]
+    : finished ? ["Plan complete", ""]
+      : fresh.length ? ["Done", fresh[fresh.length - 1].content + (fresh.length > 1 ? `  +${fresh.length - 1}` : "")]
+        : now ? ["Now", now.activeForm || now.content] : ["Plan updated", ""];
+  const open = openSet.has(p.id) || (!same && !openSet.has("x" + p.id));
+  const card = el(`div.tool.plan.${status}${same ? ".upd" : ".first"}${finished ? ".alldone" : ""}${open ? ".open" : ""}`, { dataset: { tool: p.id } });
+  const head = el("button.tool-head", { type: "button", on: { click: () => { const o = card.classList.toggle("open"); openSet[o ? "add" : "delete"](p.id); openSet[o ? "delete" : "add"]("x" + p.id); } } },
+    el("span.tool-ico", status === "error" ? ico("alert") : finished || (same && fresh.length) ? ico("check") : same ? progressRing(done, of, 16) : ico("checklist")),
+    el("span.tool-name", what),
+    el("span.tool-target", { title: task }, task),
+    el("span.plan-bar", { "aria-hidden": "true" }, todos.filter((x) => x.status !== "cancelled").slice(0, 40).map((x) => el(`i.${x.status || "pending"}`))),
+    el("span.tool-stat", `${done}/${of}`),
+    el("span.tool-chev", { html: icon("chev-down") }));
+  const list = el("div.plan-list", todos.map((x, i) => el(`div.plan-item.${x.status || "pending"}`,
+    el("span.plan-mark", TODO_MARK[x.status] ? ico(TODO_MARK[x.status]) : el("span.plan-n", String(i + 1))), el("span.plan-text", x.status === "in_progress" && x.activeForm ? x.activeForm : x.content))));
+  const err = p.state?.error ? el("pre.tool-pre.tool-error", p.state.error.message || "") : null;
+  card.append(head, el("div.tool-body", el("div", list, err)));
   return card;
 }
 
@@ -525,7 +580,7 @@ function patchBlocks(target, html) {
 /** The last lines of a running command's output, or "" when the tool isn't streaming any. */
 function liveTail(p) {
   const out = p.state?.metadata?.live ? toolText(p.state.content) : "";
-  return out ? out.replace(/\s+$/, "").split("\n").slice(-LIVE_LINES).join("\n") : "";
+  return out ? tidyOutput(out.replace(/\s+$/, "")).split("\n").slice(-LIVE_LINES).join("\n") : "";
 }
 
 /** m:ss since the turn started, for the activity margin (Paper). */
@@ -642,7 +697,7 @@ function toolDetail(p, name, input, out, meta) {
 function renderTool(p, openSet, thread, t0) {
   const name = (p.name || "tool").toLowerCase();
   if (name === "subagent" && hooks.delegation) return hooks.delegation(p, { thread, open: openSet });
-  if (name === "todo") return renderTodoTool(p, openSet, t0);
+  if (name === "todo") return renderTodoTool(p, openSet, t0, thread);
   if (name === "goal") { const g = renderGoalTool(p, openSet); if (g) return g; }
   if (name === "question") { const q = renderQuestionTool(p); if (q) return q; }
   if (name === "design") { const d = renderDesignTool(p); if (d) return d; }
@@ -695,10 +750,13 @@ function renderTool(p, openSet, thread, t0) {
   const hookRuns = meta.hooks || [];
   const hookChip = hookRuns.length && !meta.blockedBy ? el(`span.diag-chip.hook${hookRuns.some((h) => h.code !== 0) ? ".bad" : ""}`, { title: hookRuns.map((h) => `${h.event} · ${h.name}: exit ${h.code}`).join("\n") }, ico("hook"), `${hookRuns.length} hook${hookRuns.length > 1 ? "s" : ""}`) : null;
   const target = name === "jobs" ? input0.id || "" : info.target || "";
-  const targetNode = kind === "edit" || kind === "read" ? pathNode(target) : el("span.tool-target", { title: target }, target);
+  // Flow: a command reads as what it runs; the wrapper it goes through (ssh, a shell) is a small tag at the end of the line
+  const cmdShort = kind === "run" && name !== "jobs" && isFlowUI() ? shortCommand(target) : null;
+  const targetNode = kind === "edit" || kind === "read" ? pathNode(target) : el("span.tool-target", { title: target }, cmdShort ? cmdShort.text : target);
 
   // The card style: icon tile, verb, target, outcome — expandable.
-  const card = el(`div.tool.${kind}.${status}${stepFailed(p) ? ".failed" : ""}${openSet.has(p.id) ? ".open" : ""}`, { dataset: { tool: p.id } });
+  // (a command short enough to read whole on its line is not repeated inside the opened box)
+  const card = el(`div.tool.${kind}.${status}${stepFailed(p) ? ".failed" : ""}${openSet.has(p.id) ? ".open" : ""}${cmdShort && !cmdShort.via && cmdShort.text.length <= 72 ? ".cmd-fits" : ""}`, { dataset: { tool: p.id } });
   // Header: icon tile · verb · target chip · (status, checks, hooks) at the right · chevron.
   const head = el("button.tool-head", { type: "button", on: { click: () => { card.fill?.(); card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
     t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
@@ -709,7 +767,8 @@ function renderTool(p, openSet, thread, t0) {
             : ico(name === "jobs" ? "activity" : info.icon)),
     el("span.tool-name", live ? verbs[1] : verbs[0]),
     targetNode,
-    el("span.tool-right", stat, diagChip, hookChip, el("span.tool-chev", { html: icon("chev-down") })));
+    el("span.tool-right", cmdShort?.via ? el("span.tool-via", { title: target }, cmdShort.via) : null,
+      cmdShort && !live && meta.duration_ms >= 100 ? el("span.tool-dur", fmtDur(meta.duration_ms)) : null, stat, diagChip, hookChip, el("span.tool-chev", { html: icon("chev-down") })));
   // What a step shows when it is open is built only when it is open (or when its arguments are still
   // streaming in). A reply is redrawn many times a second while it works, and building every closed step's
   // view each time (a file re-coloured, a search re-marked) is what made a long thread crawl.
@@ -722,7 +781,7 @@ function renderTool(p, openSet, thread, t0) {
   };
   const details = () => {
   const sections = [];
-  const out = toolText(p.state?.content);
+  const out = kind === "run" ? tidyOutput(toolText(p.state?.content)) : toolText(p.state?.content); // a download's progress redraws fold into one line
   const errText = p.state?.error ? p.state.error.message || JSON.stringify(p.state.error) : "";
   if (kind === "run" && name !== "jobs" && !patches.length) {
     // A command opens as a small terminal: the command, then its output, with how it ended.
@@ -1075,7 +1134,7 @@ export class ChatView {
           ? el("img.msg-img", { src: f.uri, alt: f.name || "", title: f.name || "", on: { click: () => viewImage(f.uri) } })
           : el("span.file-chip", fileIcon(f.name || f.uri || ""), el("span", f.name || basename(f.uri))));
         const actions = this.opts.onRevert && !m.pending ? el("div.msg-actions.user-actions",
-          el("button.icon-btn.undo-btn", { title: "Undo to here — rewind the thread and the files to just before this message", html: icon("refresh"), on: { click: () => this.opts.onRevert(m.id) } }),
+          el("button.icon-btn.undo-btn", { title: "Rewind or undo from here", html: icon("undo"), on: { click: (e) => this.opts.onRevert(m.id, e.currentTarget) } }),
           el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(m.text || ""); toast("Copied", "ok", 1200); } } })) : null;
         const cmd = m.command;
         const content = !cmd ? [m.text || ""]
@@ -1152,6 +1211,7 @@ export class ChatView {
     const kinds = []; // what each part is: think, text, tool, note
     const add = (node, kind) => { parts.push(node); kinds.push(kind); };
     const lastText = [...m.content].reverse().find((p) => p.type === "text");
+    let joins = null; // Flow: worked out once per draw, when the first step needs it
     for (const p of m.content) {
       if (p.type === "reasoning") {
         if (!settings.ui.showReasoning || (!p.text && !p.live)) continue;
@@ -1171,11 +1231,17 @@ export class ChatView {
         add(md, "text");
       } else if (p.type === "tool") {
         // (keyed by message too: some providers number their calls from 1 in every reply)
-        if (rich && this.opts.split?.() && stepFailed(p) && !(this.sawFailed ||= new Set()).has(m.id + ":" + p.id)) {
+        const flow = rich && isFlowUI();
+        if (rich && (this.opts.split?.() || flow) && stepFailed(p) && !(this.sawFailed ||= new Set()).has(m.id + ":" + p.id)) {
           this.sawFailed.add(m.id + ":" + p.id);
           if (m.live || this.thread.busy) this.openTools.add(p.id); // only as it happens, not for old replies
         }
-        add(renderTool(p, this.openTools, this.thread, t0), "tool");
+        const node = renderTool(p, this.openTools, this.thread, t0);
+        if (flow && node?.classList) { // which block it belongs to, and whether it joins the step before or after it
+          const j = (joins ||= this.joinsOf(m, settings)).get(p);
+          if (j) node.classList.add("fam-" + j.fam, ...(j.prev ? ["join-prev"] : []), ...(j.next ? ["join-next"] : []));
+        }
+        add(node, "tool");
       }
     }
     const stopped = m.stopped || isStop(m.error);
@@ -1241,7 +1307,7 @@ export class ChatView {
       body = el("div.msg-body",
         cont ? null : this.turnBar(T),
         cont ? null : this.turnTrack(T),
-        work.length ? el(`div.work${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { dataset: { turn: T.id } }, el("div.work-in", work)) : null,
+        work.length ? el(`div.work${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { dataset: { turn: T.id } }, el("div.work-in", isOnyxUI() ? this.groupSteps(m, work, kinds) : work)) : null,
         // With the work open, a line says where the steps end and the answer begins.
         answer.length && last && !m.live ? el(`div.answer-mark${T.collapsed ? ".shut" : ""}`, { dataset: { turn: T.id } }, "Answer") : null,
         answer.length ? el("div.answer", answer) : null);
@@ -1250,6 +1316,27 @@ export class ChatView {
       anim, avatar, cont ? null : meta, body, files, foot);
   }
 
+
+  /** Flow: for every step of the reply `m` belongs to, its family and whether the step right before or after it
+   *  is of the same family with nothing said or thought in between (then the two are drawn as one block). */
+  joinsOf(m, settings) {
+    const T = this.turnOf(m);
+    const seq = [];
+    for (const x of T.msgs) {
+      for (const p of x.content) {
+        if (p.type === "tool") seq.push(p);
+        else if (p.type === "text" ? !!p.text?.trim() : p.type === "reasoning" && settings.ui.showReasoning && (p.text || p.live)) seq.push(null);
+      }
+    }
+    const map = new Map();
+    seq.forEach((p, i) => {
+      if (!p) return;
+      const fam = stepFamily(p), joinable = fam === "run" || fam === "file" || fam === "look";
+      const a = seq[i - 1], b = seq[i + 1];
+      map.set(p, { fam, prev: joinable && !!a && stepFamily(a) === fam, next: joinable && !!b && stepFamily(b) === fam });
+    });
+    return map;
+  }
 
   // ---- Split: a reply's steps live in the Activity panel, not in the conversation ----
 
@@ -1508,7 +1595,7 @@ export class ChatView {
     } } },
       T.live ? el("span.tb-mark.live", el("span.tb-pulse")) : el("span.tb-mark", { html: icon("check") }),
       el("span.tb-main",
-        el("span.tb-title", el("span.tb-what", T.live ? "Working" : "Worked"),
+        el("span.tb-title", el("span.tb-what", T.live ? (isOnyxUI() && doing ? doing : "Working") : "Worked"),
           T.live ? el("span.dur.live-dur", { dataset: { start: String(start) } }, fmtDur(Date.now() - start)) : ms > 0 ? el("span.dur", `for ${fmtDur(ms)}`) : null,
           el("span.tb-chev", { html: icon("chev") })),
         // what it is doing right now (so a folded reply still says it), then what it has done so far
@@ -1559,8 +1646,52 @@ export class ChatView {
         const k = Math.max(f.lastIndexOf("/"), f.lastIndexOf("\\"));
         const dir = k > 0 ? f.slice(0, k).split(/[\\/]/).filter(Boolean).slice(-2).join("/") : "";
         return el("button.tf-row", { type: "button", title: f, on: { click: review } }, fileIcon(f), el("span.tf-name", f.slice(k + 1)), dir ? el("span.tf-dir", dir) : null,
-          el("span.tool-stat", el("span.plus", `+${s.a}`), el("span.minus", `−${s.r}`)));
+          // a file with no counted lines (a new empty file, a binary, a move) says "changed" instead of "+0 −0"
+          s.a || s.r ? el("span.tool-stat", el("span.plus", `+${s.a}`), el("span.minus", `−${s.r}`)) : el("span.tool-stat.none", "changed"));
       })));
+  }
+
+  /** Onyx: steps that follow one another are folded under one line that says what they were ("Explored files,
+   *  ran commands, edited file"). The run being worked on is open; a click opens or closes any of them. */
+  groupSteps(m, work, kinds) {
+    const out = [];
+    let run = [], n = 0;
+    const flush = (tail) => {
+      if (!run.length) return;
+      const nodes = run;
+      run = [];
+      if (!nodes.some((x) => x.classList?.contains("tool"))) return out.push(...nodes); // thinking alone stays a line of its own
+      const key = `${m.id}:${n++}`;
+      const seen = [], count = {};
+      for (const x of nodes) {
+        const c = x.classList, k = !c?.contains("tool") ? null : c.contains("run") ? "run" : c.contains("edit") ? "edit" : c.contains("read") || c.contains("web") ? "look" : "other";
+        if (!k) continue;
+        count[k] = (count[k] || 0) + 1;
+        if (!seen.includes(k)) seen.push(k);
+      }
+      const say = { look: (c) => (c > 1 ? "explored files" : "explored"), run: (c) => (c > 1 ? "ran commands" : "ran command"), edit: (c) => (c > 1 ? "edited files" : "edited file"), other: (c) => (c > 1 ? "used tools" : "used a tool") };
+      const label = seen.map((k) => say[k](count[k])).join(", ");
+      const busy = nodes.some((x) => x.classList?.contains("running") || x.classList?.contains("streaming"));
+      const open = this.openTools.has("g:" + key) || ((busy || (tail && m.live)) && !this.openTools.has("gc:" + key));
+      const head = el("button.sg-head", { type: "button", "aria-expanded": String(open), on: { click: () => {
+        const now = !g.classList.contains("open");
+        this.openTools.delete(now ? "gc:" + key : "g:" + key);
+        this.openTools.add(now ? "g:" + key : "gc:" + key);
+        g.classList.toggle("open", now);
+        head.setAttribute("aria-expanded", String(now));
+      } } }, el("span.sg-label", label.charAt(0).toUpperCase() + label.slice(1)), el("span.sg-chev", { html: icon("chev") }));
+      const g = el(`div.step-group${open ? ".open" : ""}${busy ? ".live" : ""}`, { dataset: { group: key } }, head, el("div.sg-body", el("div.sg-in", nodes)));
+      out.push(g);
+    };
+    work.forEach((node, i) => {
+      if (!node) return;
+      const step = (kinds[i] === "tool" || kinds[i] === "think") && !node.classList?.contains("plan"); // the plan and its updates stay lines of their own
+      if (step) return run.push(node);
+      flush(false);
+      out.push(node);
+    });
+    flush(true);
+    return out;
   }
 
   renderPermissions() {

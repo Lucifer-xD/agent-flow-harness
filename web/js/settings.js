@@ -254,6 +254,9 @@ function thumbColors(id, ui) {
 function interfaceThumb(id, ui) {
   const i = (cls) => el(`i.${cls}`);
   const style = thumbColors(id, ui);
+  if (id === "flow" || id === "onyx") return el("span.ui-thumb.canvas", { "aria-hidden": "true", style },
+    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
+    el("span.t-body", el("span.t-sheet", i("t-you"), i("t-say"), i("t-tool"), i("t-tool"), i("t-say.s"), i("t-box"))));
   if (id === "split") return el("span.ui-thumb.studio", { "aria-hidden": "true", style },
     el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
     el("span.t-main", el("span.t-col", i("t-you"), i("t-tool"), i("t-say"), i("t-say.s")), el("span.t-box")),

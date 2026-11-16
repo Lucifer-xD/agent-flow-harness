@@ -6,6 +6,7 @@ import { api } from "./api.js";
 import { logoNode } from "./logo.js";
 import { basename, el, ico, toggle } from "./ui.js";
 import { fileIcon } from "./fileicons.js";
+import { tidyOutput } from "./tidy.js";
 
 let ctx = null;
 const st = { tool: null, kind: null, raw: "", input: null, file: null, filePath: null, loading: null, done: false, error: null, follow: true, frame: 0, scrolledTo: -1, startedAt: 0, pace: null };
@@ -305,7 +306,7 @@ function renderRun(body, titleBox) {
   v.path.textContent = st.command;
   v.path.title = st.command;
   v.path.classList.add("cmd");
-  const out = (st.out || "").replace(/\s+$/, "");
+  const out = tidyOutput((st.out || "").replace(/\s+$/, ""));
   v.note.textContent = out ? "" : finished ? "(no output)" : "Waiting for the first output…";
   v.note.hidden = !!out;
   v.code.hidden = !out;
