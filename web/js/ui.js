@@ -1,10 +1,12 @@
 // Shared UI helpers: icons, DOM builder, markdown, diffs, popovers, modals, toasts.
 
 import { fileIconSvg, kindLabel, langKind } from "./fileicons.js";
+import { ONYX_ICONS } from "./icons-onyx.js";
 
 const P = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 export const ICONS = {
   plus: P('<path d="M12 5v14M5 12h14"/>'),
+  undo: P('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
   search: P('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
   settings: P('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   sidebar: P('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/>'),
@@ -82,13 +84,18 @@ export function modalityBadges(input) {
   return el("span.mods", { title: kinds.map((k) => MODALITY[k][1]).join(" · ") }, kinds.map((k) => el("span.mod", { html: icon(MODALITY[k][0]) })));
 }
 
+/** The drawing for an icon. Onyx has its own set (Material Symbols); every other interface uses the app's. */
 export function icon(name) {
+  if (document.documentElement.dataset.ui === "onyx" && ONYX_ICONS[name]) return ONYX_ICONS[name];
   return ICONS[name] || ICONS.sparkle;
 }
 
 export function hydrateIcons(root = document) {
   root.querySelectorAll("[data-icon]").forEach((n) => {
-    if (!n.firstChild) n.innerHTML = icon(n.dataset.icon);
+    if (!n.firstChild || n.dataset.iconSet !== (document.documentElement.dataset.ui === "onyx" ? "onyx" : "app")) {
+      n.innerHTML = icon(n.dataset.icon);
+      n.dataset.iconSet = document.documentElement.dataset.ui === "onyx" ? "onyx" : "app";
+    }
   });
 }
 

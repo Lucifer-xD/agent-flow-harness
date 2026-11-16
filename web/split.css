@@ -458,7 +458,7 @@
   /* ---- the Plan tab: the goal as a card, the steps as a numbered list on a line ---- */
   & .wb-pane-plan .drawer-body { padding: 14px 14px 22px; }
   & .plan { display: flex; flex-direction: column; gap: 12px; }
-  & .plan > * { animation: sp-row 0.3s var(--ease-out) both; }
+  & .wb-pane-plan .plan > * { animation: sp-row 0.3s var(--ease-out) both; } /* the Plan tab only: a plan step in Activity is also a ".plan", and its parts must not fade in again on every redraw */
   & .plan-goal { position: relative; padding: 12px 12px 14px 17px; border: 1px solid var(--sp-line); border-radius: 14px; background: var(--bg); overflow: hidden; }
   & .plan-goal::before { content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 3px; background: var(--accent); }
   & .plan-goal.achieved::before { background: var(--ok); } & .plan-goal.blocked::before { background: var(--bad); } & .plan-goal.paused::before { background: var(--panel-3); }

@@ -486,7 +486,7 @@ def replace_messages(sid: str, body: dict = Body(...)):
 @app.post("/api/sessions/{sid}/revert")
 def revert_stage(sid: str, body: dict = Body(...)):
     session_or_404(sid)
-    return engine.revert_stage(sid, body["messageId"], files=bool(body.get("files", True)))
+    return engine.revert_stage(sid, body["messageId"], files=bool(body.get("files", True)), messages=bool(body.get("messages", True)))
 
 
 @app.post("/api/sessions/{sid}/revert/commit")

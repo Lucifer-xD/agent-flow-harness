@@ -1117,12 +1117,13 @@ class Engine:
 
     # ---- undo (revert) ------------------------------------------------------------------------------
 
-    def revert_stage(self, sid: str, message_id: str, files: bool = True) -> dict:
+    def revert_stage(self, sid: str, message_id: str, files: bool = True, messages: bool = True) -> dict:
+        """Go back to just before a message: set aside the messages from it on, restore the files changed since, or both."""
         seq = self.store.message_seq(sid, message_id)
         if seq is None:
             raise KeyError(message_id)
         self.revert_clear(sid)
-        removed = self.store.messages_from(sid, seq)
+        removed = self.store.messages_from(sid, seq) if messages else []
         restored: list[FileDiff] = []
         stash_files: list[dict] = []
         if files:
@@ -1139,10 +1140,12 @@ class Engine:
                 elif p.exists():
                     p.unlink()
                 restored.append(FileDiff(file=path, patch="", status="modified" if snap["existed"] else "deleted"))
-        self.stashes[sid] = {"seq": seq, "messages": removed, "files": stash_files}
-        self.store.delete_messages_from(sid, seq)
-        self.publish(event("session.revert.staged", sid, revert={"messageID": message_id, "files": [f.to_dict() for f in restored]}))
-        return {"messageID": message_id, "files": [f.to_dict() for f in restored]}
+        # the saved file versions go with their messages: "Put it back" must bring back the way to undo them too
+        self.stashes[sid] = {"seq": seq, "messages": removed, "files": stash_files, "snapshots": self.store.snapshots_from(sid, seq) if messages else []}
+        if messages:
+            self.store.delete_messages_from(sid, seq)
+        self.publish(event("session.revert.staged", sid, revert={"messageID": message_id, "files": [f.to_dict() for f in restored], "messages": messages}))
+        return {"messageID": message_id, "files": [f.to_dict() for f in restored], "messages": messages}
 
     def revert_commit(self, sid: str) -> None:
         self.stashes.pop(sid, None)
@@ -1161,6 +1164,7 @@ class Engine:
                 p.unlink()
         for m in stash["messages"]:
             self.store.add_message(sid, m)
+        self.store.restore_snapshots(sid, stash.get("snapshots") or [])
         self.publish(event("session.revert.cleared", sid))
 
     # ---- changes / usage ----------------------------------------------------------------------------

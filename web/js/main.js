@@ -50,7 +50,7 @@ const view = new ChatView($("messages"), $("thread"), {
   settings: () => S.settings,
   modelName: (ref) => modelName(ref),
   avatar: (live) => logoNode({ size: 28, working: live }),
-  rich: () => ["studio", "split"].includes(document.documentElement.dataset.ui),
+  rich: () => ["studio", "split", "flow", "onyx"].includes(document.documentElement.dataset.ui),
   // Split: a reply's steps are drawn in the workbench's Activity tab, not inside the conversation
   split: () => document.documentElement.dataset.ui === "split",
   activityHost: () => (S.drawer === "activity" ? wbBody("activity") : null),
@@ -59,7 +59,7 @@ const view = new ChatView($("messages"), $("thread"), {
   onReview: () => openDrawer("changes"),
   onFork: (id) => forkThread(id),
   onRetry: () => retryLast(),
-  onRevert: (id) => revertTo(id),
+  onRevert: (id, anchor) => revertMenu(id, anchor),
   onChangeModel: () => modelMenu(),
   onStatus: () => { renderComposerState(); renderRail(); },
   onScroll: (stick, top) => {
@@ -585,9 +585,20 @@ function renderThreads() {
       el("span.th-del", { title: "Delete thread", html: icon("trash"), on: { click: (e) => { e.stopPropagation(); deleteThread(s.id); } } }));
     box.append(item);
   });
+  onyxProjects(box);
+}
+
+/** Onyx: your other projects sit under this one's threads as closed folders; a click opens that project. */
+function onyxProjects(box) {
+  if (document.documentElement.dataset.ui !== "onyx" || S.search) return;
+  for (const p of (S.settings.projects || []).filter((x) => x !== project()).slice(0, 8)) {
+    box.append(el("button.th-proj", { type: "button", title: p, on: { click: () => switchProject(p) } }, ico("folder"), el("span.th-proj-name", basename(p))));
+  }
 }
 
 async function openThread(id) {
+  const rb = document.querySelector(".revert-bar"); // a rewind waiting for "Keep" belongs to the thread it was made in
+  if (rb && rb.dataset.thread !== id) rb.remove();
   closePopover();
   let t = S.threads.get(id);
   const session = S.sessions.find((s) => s.id === id) || (await api.get(`/api/sessions/${id}`));
@@ -768,27 +779,47 @@ async function reloadCurrent(id = S.current?.id) {
   refreshSessionsSoon();
 }
 
-async function revertTo(messageId) {
+/** Going back from one of your messages: the chat, the files changed since, or both. */
+function revertMenu(messageId, anchor) {
+  if (!anchor?.isConnected) return revertTo(messageId, "both");
+  popover(anchor, [
+    { title: "Rewind chat and files", sub: "Back to just before this message", icon: "undo", onSelect: () => revertTo(messageId, "both") },
+    { title: "Rewind the chat only", sub: "Your files stay as they are now", icon: "list", onSelect: () => revertTo(messageId, "chat") },
+    { title: "Undo file changes only", sub: "The chat stays as it is", icon: "file", onSelect: () => revertTo(messageId, "files") },
+  ], { width: 280 });
+}
+
+async function revertTo(messageId, mode = "both") {
   const t = S.current;
   if (!t) return;
   const undone = t.messages.find((m) => m.id === messageId);
   let staged;
   try {
-    staged = await api.post(`/api/sessions/${t.id}/revert`, { messageId, files: true });
+    staged = await api.post(`/api/sessions/${t.id}/revert`, { messageId, files: mode !== "chat", messages: mode !== "files" });
   } catch (e) {
     return toast(e.message, "err", 6000);
   }
   const files = staged?.files?.length || 0;
+  if (mode === "files" && !files) { // nothing was changed on disk after that message: there is nothing to keep or put back
+    try { await api.post(`/api/sessions/${t.id}/revert/clear`); } catch {}
+    return toast("No file was changed after that message", "ok", 3000);
+  }
+  const nFiles = `${files} file${files > 1 ? "s" : ""}`;
+  const said = mode === "files" ? ["Files restored. ", `${nFiles} went back to how ${files > 1 ? "they were" : "it was"} before that message; the chat is unchanged. Keep it, or put everything back.`]
+    : mode === "chat" ? ["Chat rewound. ", "Messages after that point are set aside; your files were not touched. Keep it, or put everything back."]
+    : ["Rewound. ", `Messages after that point are set aside${files ? ` and ${nFiles} restored on disk` : ""}. Keep it, or put everything back.`];
   document.querySelector(".revert-bar")?.remove();
-  const bar = el("div.revert-bar", ico("refresh"),
-    el("span", el("b", "Rewound. "), `Messages after that point are set aside${files ? ` and ${files} file${files > 1 ? "s" : ""} restored on disk` : ""}. Keep it, or put everything back.`),
+  const bar = el("div.revert-bar", ico("undo"),
+    el("span", el("b", said[0]), said[1]),
     el("button.btn.ghost.sm", { on: { click: async () => { try { await api.post(`/api/sessions/${t.id}/revert/clear`); } catch (e) { toast(e.message, "err"); } bar.remove(); reloadCurrent(t.id); } } }, "Put it back"),
     el("button.btn.primary.sm", { on: { click: async () => { try { await api.post(`/api/sessions/${t.id}/revert/commit`); toast("Undone", "ok"); } catch (e) { toast(e.message, "err"); } bar.remove(); reloadCurrent(t.id); } } }, ico("check"), "Keep"));
   await reloadCurrent(t.id);
-  $("messages").prepend(bar);
+  // It sits on top of the message box, not in the conversation: the conversation is redrawn as events come in.
+  bar.dataset.thread = t.id;
+  ($("composer-wrap") || $("messages")).prepend(bar);
   bar.scrollIntoView({ behavior: "smooth", block: "nearest" });
   // The message you undid goes back into the composer, ready to edit and send again.
-  if (undone?.type === "user" && undone.text) {
+  if (mode !== "files" && undone?.type === "user" && undone.text) {
     const input = $("input");
     input.value = undone.text;
     autosize();
@@ -1116,14 +1147,35 @@ function wireDrawerResize() {
 
 // ---- goal, to-do list, background jobs, worktree ------------------------------------------
 
+// Flow: the plan sheet above the message box closes on a click outside it, or Esc
+document.addEventListener("pointerdown", (e) => {
+  if (!S.planPop || e.target.closest?.("#work-dock, #overlay-root")) return;
+  S.planPop = false;
+  renderWork();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !S.planPop || e.target.closest?.("#overlay-root")) return;
+  S.planPop = false;
+  renderWork();
+});
+
 function renderWork() {
   const t = S.current;
   const dockOpts = { busy: !!t && (t.busy || S.busy.has(t.id)), onEditGoal: () => editGoal(), onChanged: renderWork };
-  if (isSplit()) {
-    // Split: above the message box there is one line (the step being worked on, how far the plan is, the goal);
+  if (planInPanel()) {
+    // Split and Flow: above the message box there is one line (the step being worked on, how far the plan is, the goal);
     // the goal and the whole list live in the panel's Plan tab, where there is room for them.
     if (S.drawer === "plan") renderPlan(wbBody("plan"), t, { ...dockOpts, onNewGoal: () => editGoal() }); // first: the dock clears the "just ticked" marks
-    renderDock($("work-dock"), t, { ...dockOpts, slim: true, onOpen: () => showTab("plan") });
+    const dock = $("work-dock");
+    // Flow: the line opens in place, as a sheet above the message box with the goal and every step (the Plan tab shows the same)
+    renderDock(dock, t, { ...dockOpts, slim: true, onOpen: () => { if (isFlow()) { S.planPop = !S.planPop; renderWork(); } else showTab("plan"); } });
+    const pop = isFlow() && S.planPop && dock.classList.contains("on");
+    dock.classList.toggle("pop-open", !!pop);
+    if (pop) {
+      const sheet = el("div.plan-pop");
+      renderPlan(sheet, t, { ...dockOpts, onNewGoal: () => editGoal() });
+      dock.prepend(sheet);
+    } else if (!dock.classList.contains("on")) S.planPop = false;
     const n = planCount(t);
     const b = $("wb-plan-count");
     b.hidden = !n;
@@ -1320,6 +1372,10 @@ function reopenWorkbench() {
 }
 
 const isSplit = () => document.documentElement.dataset.ui === "split";
+/** Flow, and Onyx which is built on it: the same reply and plan parts, another look. */
+const isFlow = () => ["flow", "onyx"].includes(document.documentElement.dataset.ui);
+/** Split and Flow keep the plan in the panel's Plan tab, with one slim line above the message box. */
+const planInPanel = () => isSplit() || isFlow();
 
 /** Split: the panel follows the model on its own. A run starts: Activity. A file is being written or edited:
  *  Live, then back to Activity once the file is finished. Picking a tab yourself during a run holds the panel
@@ -1393,10 +1449,10 @@ function syncSplit(open = false) {
   follow.sync();
   applySidebar();
   wbTab("activity").hidden = !on;
-  wbTab("plan").hidden = !on;
+  wbTab("plan").hidden = !planInPanel();
   $("btn-activity").hidden = !on;
   if (on && open && S.current && !S.drawer) showTab("activity");
-  if (!on && (S.drawer === "activity" || S.drawer === "plan")) closeDrawer();
+  if ((!on && S.drawer === "activity") || (!planInPanel() && S.drawer === "plan")) closeDrawer();
   syncPills();
 }
 function syncActivityBadge() {

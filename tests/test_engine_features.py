@@ -833,6 +833,29 @@ def test_sending_after_an_undo_keeps_the_undo(home, tmp_path):
     assert [m["text"] for m in e.store.list_messages(sid) if m["type"] == "user"] == ["first, edited"]
 
 
+def test_undo_can_take_back_only_the_files_or_only_the_chat(home, tmp_path):
+    e = make_engine(FakeProvider(["first answer"]))
+    sid = asyncio.run(run_prompt(e, tmp_path, "first"))["id"]
+    msgs = e.store.list_messages(sid)
+    user = next(m for m in msgs if m["type"] == "user")
+    f = tmp_path / "a.txt"
+    f.write_text("before")
+    e.store.record_snapshot(sid, msgs[-1]["id"], str(f))
+    f.write_text("after")
+    # files only: the file goes back, every message stays
+    out = e.revert_stage(sid, user["id"], files=True, messages=False)
+    assert f.read_text() == "before" and len(out["files"]) == 1 and len(e.store.list_messages(sid)) == len(msgs)
+    e.revert_clear(sid)  # put it back
+    assert f.read_text() == "after" and len(e.store.list_messages(sid)) == len(msgs)
+    # chat only: the messages go, the file is left alone
+    e.revert_stage(sid, user["id"], files=False, messages=True)
+    assert f.read_text() == "after" and not e.store.list_messages(sid)
+    # putting the chat back brings back the way to undo its files
+    e.revert_clear(sid)
+    out = e.revert_stage(sid, user["id"], files=True, messages=False)
+    assert f.read_text() == "before" and len(out["files"]) == 1 and len(e.store.list_messages(sid)) == len(msgs)
+
+
 # ---- project memory: facts kept between threads -------------------------------------------------------
 
 

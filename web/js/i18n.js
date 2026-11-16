@@ -97,6 +97,7 @@ const AR = {
   "Starting the engine…": "جارٍ تشغيل المحرك…", "AFH couldn't start": "تعذّر تشغيل AFH", "Technical details": "تفاصيل تقنية", "Retry": "أعد المحاولة",
   // conversation
   "Thinking": "يفكّر", "Thoughts": "الأفكار", "Working": "يعمل", "Stopped": "توقف", "You": "أنت", "Assistant": "المساعد", "Copy": "نسخ", "Copied": "تم النسخ",
+  "Rewind or undo from here": "تراجع أو أرجِع من هنا", "Rewind chat and files": "أرجِع المحادثة والملفات", "Back to just before this message": "إلى ما قبل هذه الرسالة مباشرة", "Rewind the chat only": "أرجِع المحادثة فقط", "Your files stay as they are now": "ملفاتك تبقى كما هي الآن", "Undo file changes only": "تراجع عن تغييرات الملفات فقط", "The chat stays as it is": "المحادثة تبقى كما هي", "No file was changed after that message": "لم يتغير أي ملف بعد تلك الرسالة",
   "Fork thread from here": "انسخ المحادثة من هنا", "Undo to here — rewind the thread and the files to just before this message": "تراجع إلى هنا — أرجع المحادثة والملفات إلى ما قبل هذه الرسالة",
   "Sending your message": "جارٍ إرسال رسالتك", "The run failed": "فشل التشغيل", "Change model": "غيّر النموذج", "Raw response": "الاستجابة الخام",
   "Couldn't reach the provider": "تعذّر الوصول إلى المزوّد", "The provider rejected the credentials": "رفض المزوّد بيانات الاعتماد", "Rate limited": "تم تجاوز حد الطلبات",
