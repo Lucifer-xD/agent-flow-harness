@@ -26,6 +26,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/pages.css">
+  <link rel="stylesheet" href="/world.css">
   <script type="importmap">
     { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -38,16 +39,19 @@
   <header data-nav></header>
 
   <main class="wrap">
-    <section class="page-hero staged tui-hero">
-      <div class="page-stage" data-stage aria-hidden="true"></div>
-      <div class="page-copy">
-        <p class="kicker" data-reveal>Terminal</p>
-        <h1 class="display" data-reveal style="--d:.08s">All of AFH.<br><span class="grad-text">In your terminal.</span></h1>
-        <p class="lead" data-reveal style="--d:.16s">The same agent as the desktop app, full screen in any terminal. Threads, models, approvals, goals, helpers, every setting. It runs on its own: no desktop app needed.</p>
-        <div data-install data-reveal style="--d:.24s"></div>
-        <p class="install-note" data-reveal style="--d:.3s">Then go to a project folder and type <code>afh</code>. Windows, Mac and 64-bit Linux. No admin rights needed.</p>
-      </div>
-    </section>
+    <!-- the page opens on the same place as the home, seen from its own angle -->
+    <div class="world w-banner" data-view="cli">
+      <canvas id="world" aria-hidden="true"></canvas>
+      <section class="page-hero staged tui-hero">
+        <div class="page-copy">
+          <p class="kicker" data-reveal>Terminal</p>
+          <h1 class="display" data-reveal style="--d:.08s">All of AFH.<br><span class="grad-text">In your terminal.</span></h1>
+          <p class="lead" data-reveal style="--d:.16s">The same agent as the desktop app, full screen in any terminal. Threads, models, approvals, goals, helpers, every setting. It runs on its own: no desktop app needed.</p>
+          <div data-install data-reveal style="--d:.24s"></div>
+          <p class="install-note" data-reveal style="--d:.3s">Then go to a project folder and type <code>afh</code>. Windows, Mac and 64-bit Linux. No admin rights needed.</p>
+        </div>
+      </section>
+    </div>
 
     <section class="section" data-reveal>
       <figure class="tui-shot"><img src="/assets/tui-chat-light.png" data-dark="/assets/tui-chat-dark.png" width="1560" height="950" alt="AFH in a terminal: threads on the left, a strand running down the conversation into the animated AFH mark at the message box"></figure>
@@ -164,5 +168,6 @@
   <footer data-footer></footer>
   <script src="/js/layout.js"></script>
   <script type="module" src="/js/page.js"></script>
+  <script type="module" src="/js/world.js"></script>
 </body>
 </html>

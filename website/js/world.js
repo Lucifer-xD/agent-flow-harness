@@ -23,7 +23,7 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Without WebGL the page is still a page: the words lay themselves out one under another (html.no3d in world.css).
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: "high-performance" }); }
-catch (e) { document.documentElement.classList.add("no3d"); document.getElementById("veil").classList.add("w-gone"); throw e; }
+catch (e) { document.documentElement.classList.add("no3d"); document.getElementById("veil")?.classList.add("w-gone"); throw e; }
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, mobile ? 1.25 : 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -236,14 +236,18 @@ function param(p) {
 
 // ---- the page: scroll, the words, the corners ----
 const caps = [...document.querySelectorAll(".w-cap")].map((el) => ({ el, a: +el.dataset.a, b: +el.dataset.b }));
-const rail = document.getElementById("rail"), count = document.getElementById("count"), hint = document.getElementById("hint"), sec = document.getElementById("world-sec");
+const rail = document.getElementById("rail"), count = document.getElementById("count"), hint = document.getElementById("hint");
+// The home has the journey (#world-sec); an inner page has a banner: one view of the place, drifting slowly.
+const sec = document.getElementById("world-sec") || document.querySelector(".world.w-banner"), banner = sec.classList.contains("w-banner");
+const VIEWS = { features: [-0.9, 46, 9, 11], docs: [0.7, 52, 14, 11], download: [0.02, 62, 22, 9], changelog: [-2.25, 58, 11, 10], models: [2.4, 52, 16, 10], cli: [-0.35, 42, 7.5, 10], api: [1.55, 50, 10, 11] };
+const view = VIEWS[sec.dataset.view] || [-0.75, 150, 30, 10]; // angle around the mark, distance, height, the height it looks at
 let target = 0, prog = 0, px = 0, py = 0, tx = 0, ty = 0;
 // The journey is as long as its section: progress is how far the section has scrolled past the top of the screen.
-const readScroll = () => { const max = sec.offsetHeight - innerHeight; target = max > 0 ? Math.min(1, Math.max(0, -sec.getBoundingClientRect().top / max)) : 0; };
+const readScroll = () => { if (banner) return; const max = sec.offsetHeight - innerHeight; target = max > 0 ? Math.min(1, Math.max(0, -sec.getBoundingClientRect().top / max)) : 0; };
 addEventListener("scroll", readScroll, { passive: true });
 addEventListener("pointermove", (e) => { tx = e.clientX / innerWidth - 0.5; ty = e.clientY / innerHeight - 0.5; }, { passive: true });
 function resize() {
-  const w = innerWidth, h = innerHeight;
+  const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = camera.aspect < 0.9 ? 52 : 40; camera.updateProjectionMatrix(); buildPath(); readScroll();
 }
 addEventListener("resize", resize); resize();
@@ -262,12 +266,17 @@ function frame() {
   wake = Math.min(1, wake + dt * 0.42);                       // the mark lights up from its left dots when the page opens
   uniforms.uTime.value = t; uniforms.uWake.value = wake;
 
-  const u = param(prog);
-  path.pos.getPoint(u, camera.position); path.look.getPoint(u, look);
-  const sway = 1 - smooth(Math.min(1, Math.max(0, (prog - 0.86) / 0.12)));
+  if (banner) {
+    const a = view[0] + Math.sin(t * 0.045) * 0.16, r = view[1] * (camera.aspect < 0.9 ? 1.45 : 1);
+    camera.position.set(Math.sin(a) * r, view[2], Math.cos(a) * r); look.set(0, view[3], 0);
+  } else {
+    const u = param(prog);
+    path.pos.getPoint(u, camera.position); path.look.getPoint(u, look);
+  }
+  const sway = banner ? 0.6 : 1 - smooth(Math.min(1, Math.max(0, (prog - 0.86) / 0.12)));
   camera.position.x += (Math.sin(t * 0.21) * 0.6 + px * 4) * sway; camera.position.y += (Math.sin(t * 0.17 + 1.3) * 0.35 - py * 2) * sway;
   const floor = land(camera.position.x, camera.position.z) + 2.2; if (camera.position.y < floor) camera.position.y = floor;
-  up.copy(UP_Y).lerp(UP_TOP, smooth(Math.min(1, Math.max(0, (prog - 0.86) / 0.13)))).normalize();
+  up.copy(UP_Y).lerp(UP_TOP, banner ? 0 : smooth(Math.min(1, Math.max(0, (prog - 0.86) / 0.13)))).normalize();
   camera.up.copy(up); camera.lookAt(look);
 
   // the dots answer the light that reaches them, like the app's mark: a pulse as a packet leaves or arrives
@@ -277,7 +286,7 @@ function frame() {
   }
   for (const h of halos) if (!dots.some((d) => d.halo === h)) h.material.opacity = h.userData.base * wake;
   lamps.forEach((l, i) => { l.intensity = (i === 1 ? 900 : 650) * wake * (0.9 + 0.1 * Math.sin(t * 0.9 + i)); });
-  const near = smooth(Math.min(1, Math.max(0, (prog - 0.4) / 0.12))) * (1 - smooth(Math.min(1, Math.max(0, (prog - 0.82) / 0.08))));
+  const near = banner ? 1 : smooth(Math.min(1, Math.max(0, (prog - 0.4) / 0.12))) * (1 - smooth(Math.min(1, Math.max(0, (prog - 0.82) / 0.08))));
   slabs.forEach((f, i) => { f.material.opacity = Math.min(1, Math.max(0, near * 1.5 - i * 0.12)); });
   for (let i = 0; i < dust.n; i++) {
     dust.pos[i * 3] += Math.sin(t * 0.13 + dust.seed[i]) * 0.006; dust.pos[i * 3 + 1] += Math.cos(t * 0.11 + dust.seed[i] * 2) * 0.004;
@@ -295,9 +304,11 @@ function frame() {
     c.el.classList.toggle("w-on", o > 0.5);
     if (prog >= c.a - 0.02) chapter = i;
   });
-  if (chapter !== shown) { shown = chapter; count.textContent = String(chapter + 1).padStart(2, "0"); }
-  rail.style.transform = `scaleX(${prog.toFixed(4)})`;
-  hint.classList.toggle("w-off", prog > 0.03);
+  if (!banner) {
+    if (chapter !== shown) { shown = chapter; count.textContent = String(chapter + 1).padStart(2, "0"); }
+    rail.style.transform = `scaleX(${prog.toFixed(4)})`;
+    hint.classList.toggle("w-off", prog > 0.03);
+  }
 
   if (fpsEl) { frames++; fpsT += dt; if (fpsT > 0.5) { fpsEl.textContent = `${Math.round(frames / fpsT)} fps`; frames = 0; fpsT = 0; } }
   requestAnimationFrame(frame);
@@ -307,16 +318,18 @@ renderer.compile(scene, camera);
 /** Sharpest pixel ratio this GPU draws in under ~10 ms a frame, measured at the heaviest view (close to the cables). */
 function calibrate() {
   const gl = renderer.getContext(), top = Math.min(devicePixelRatio || 1, mobile ? 1.25 : 1.5);
-  path.pos.getPoint(param(0.47), camera.position); path.look.getPoint(param(0.47), look); camera.up.copy(UP_Y); camera.lookAt(look);
+  if (banner) { camera.position.set(Math.sin(view[0]) * view[1], view[2], Math.cos(view[0]) * view[1]); look.set(0, view[3], 0); }
+  else { path.pos.getPoint(param(0.47), camera.position); path.look.getPoint(param(0.47), look); }
+  camera.up.copy(UP_Y); camera.lookAt(look);
   for (const r of [top, 1.25, 1, 0.85, 0.7].filter((x, i, a) => x <= top && a.indexOf(x) === i)) {
-    renderer.setPixelRatio(r); renderer.setSize(innerWidth, innerHeight, false);
+    renderer.setPixelRatio(r); renderer.setSize(canvas.clientWidth || innerWidth, canvas.clientHeight || innerHeight, false);
     renderer.render(scene, camera); gl.finish();
     const t0 = performance.now(); for (let i = 0; i < 5; i++) { renderer.render(scene, camera); gl.finish(); }
     if ((performance.now() - t0) / 5 <= 10) break;
   }
 }
 uniforms.uWake.value = 1; calibrate(); uniforms.uWake.value = 0;
-requestAnimationFrame(() => { document.getElementById("veil").classList.add("w-gone"); frame(); });
+requestAnimationFrame(() => { document.getElementById("veil")?.classList.add("w-gone"); frame(); });
 window.afhWorld = {
   seek: (p) => { scrollTo(0, scrollY + sec.getBoundingClientRect().top + p * (sec.offsetHeight - innerHeight)); target = prog = p; },
   /** Milliseconds a frame really costs on this GPU (render + wait for the GPU), averaged over n frames. */

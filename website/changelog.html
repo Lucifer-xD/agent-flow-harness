@@ -25,6 +25,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/pages.css">
+  <link rel="stylesheet" href="/world.css">
   <script type="importmap">
     { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -37,16 +38,28 @@
   <header data-nav></header>
 
   <main>
-    <section class="page-hero">
-      <p class="kicker" data-reveal>Changelog</p>
-      <h1 class="display" data-reveal style="--d:.08s">What's <span class="grad-text">new.</span></h1>
-      <p class="lead" data-reveal style="--d:.16s">Every release of AFH. The app updates itself, so you'll get each one shortly after it lands here.</p>
-    </section>
+    <!-- the page opens on the same place as the home, seen from its own angle -->
+    <div class="world w-banner" data-view="changelog">
+      <canvas id="world" aria-hidden="true"></canvas>
+      <section class="page-hero">
+        <p class="kicker" data-reveal>Changelog</p>
+        <h1 class="display" data-reveal style="--d:.08s">What's <span class="grad-text">new.</span></h1>
+        <p class="lead" data-reveal style="--d:.16s">Every release of AFH. The app updates itself, so you'll get each one shortly after it lands here.</p>
+      </section>
+    </div>
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.34.0" data-reveal>
-          <div class="rel-head"><h2>1.34.0</h2><time datetime="2026-11-16">Nov 16, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.34.1" data-reveal>
+          <div class="rel-head"><h2>1.34.1</h2><time datetime="2026-11-17">Nov 17, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">The mode you are in, in colour</p>
+          <ul>
+            <li><b>Coloured modes in the message box:</b> Build, Plan, Delegate and Red Team each carry a colour, and so do Ask first, Full access and Read only, so you can see at a glance how the thread is set. Your own agents keep the colour you gave them.</li>
+            <li><b>Fixed:</b> after a rewind, the words of the &ldquo;Keep / Put it back&rdquo; bar were pushed to the right by an oversized icon.</li>
+          </ul>
+        </article>
+        <article class="panel rel" id="v1.34.0" data-reveal>
+          <div class="rel-head"><h2>1.34.0</h2><time datetime="2026-11-16">Nov 16, 2026</time></div>
           <p class="title">Flow and Onyx: two new interfaces, and an undo you can aim</p>
           <p>Two new ways to lay out the app, a rewind that lets you choose what goes back, and commands that show what they really run.</p>
           <ul>
@@ -691,5 +704,6 @@
   <footer data-footer></footer>
   <script src="/js/layout.js"></script>
   <script type="module" src="/js/page.js"></script>
+  <script type="module" src="/js/world.js"></script>
 </body>
 </html>
