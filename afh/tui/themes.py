@@ -68,7 +68,7 @@ PRESETS: dict[str, tuple] = {
     'flow': ('Day', '#f0561d', False, ('#ffffff', '#f2f2f4', '#ffffff', '#f5f5f7', '#eaeaee', '#e7e7ec', '#d8d8df', '#111115', '#4d4f5a', '#8a8c97', '#fafafb')),
     'flow-night': ('Night', '#ff7a3d', True, ('#161619', '#0d0d0f', '#161619', '#1e1e22', '#29292e', '#26262b', '#36363d', '#eeeef1', '#a7a8b2', '#6e707b', '#111113')),
     'onyx': ('Onyx', '#2f71e3', True, ('#070708', '#111114', '#131317', '#15151a', '#1f1f24', '#1b1b1c', '#272728', '#ffffff', '#bcbdc6', '#87888f', '#0d0d11')),
-    'onyx-day': ('Onyx Day', '#2f75c3', False, ('#ffffff', '#fafafa', '#ffffff', '#f9f9f9', '#f0f0f1', '#eeeeee', '#e2e2e2', '#0a0a0c', '#3f3f46', '#71717a', '#f9f9f9')),
+    'onyx-day': ('Onyx Day', '#2b6fd9', False, ('#ffffff', '#f3f3f5', '#ffffff', '#f6f6f8', '#ececef', '#e9e9ec', '#dcdce1', '#0a0a0c', '#3a3a41', '#6b6b74', '#f6f6f8')),
     'focus': ('Graphite', '#8fb4ff', True, ('#1a1a1c', '#141415', '#212124', '#29292d', '#333338', '#303035', '#42424a', '#ececee', '#b4b4bb', '#7e7e87', '#131314')),
     'focus-umber': ('Umber', '#e8a56a', True, ('#1b1917', '#151311', '#23201d', '#2b2723', '#36312c', '#332e29', '#47403a', '#efebe6', '#b9b1a8', '#847c73', '#141210')),
     'focus-chalk': ('Chalk', '#2f6feb', False, ('#ffffff', '#f6f6f7', '#ffffff', '#f2f2f4', '#e8e8eb', '#e5e5e9', '#d2d2d8', '#18181b', '#55555e', '#8b8b95', '#f5f5f7')),

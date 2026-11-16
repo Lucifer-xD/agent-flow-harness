@@ -68,7 +68,7 @@ export const PRESETS = {
   "flow-night": { name: "Night", accent: "#ff7a3d", accent0: "#ffb13d", accent2: "#ff4f86", ...dark("#161619", "#0d0d0f", "#161619", "#1e1e22", "#29292e", "#26262b", "#36363d", "#eeeef1", "#a7a8b2", "#6e707b", "#111113") },
   // Onyx's own themes: a near-black card on a slightly lighter shell (or white on off-white), one quiet blue, the rest monochrome
   onyx: { name: "Onyx", accent: "#2f71e3", accent0: "#2f71e3", accent2: "#2f71e3", ...dark("#070708", "#111114", "#131317", "#15151a", "#1f1f24", "#1b1b1c", "#272728", "#ffffff", "#bcbdc6", "#87888f", "#0d0d11") },
-  "onyx-day": { name: "Onyx Day", accent: "#2f75c3", accent0: "#2f75c3", accent2: "#2f75c3", ...light("#ffffff", "#fafafa", "#ffffff", "#f9f9f9", "#f0f0f1", "#eeeeee", "#e2e2e2", "#0a0a0c", "#3f3f46", "#71717a", "#f9f9f9") },
+  "onyx-day": { name: "Onyx Day", accent: "#2b6fd9", accent0: "#2b6fd9", accent2: "#2b6fd9", ...light("#ffffff", "#f3f3f5", "#ffffff", "#f6f6f8", "#ececef", "#e9e9ec", "#dcdce1", "#0a0a0c", "#3a3a41", "#6b6b74", "#f6f6f8") },
   split: { name: "Clear", accent: "#2f5bff", accent0: "#5a8bff", accent2: "#7a4dff", ...light("#ffffff", "#f6f7f9", "#ffffff", "#f3f4f7", "#eceef3", "#e6e8ee", "#d5d9e2", "#12141a", "#4b5160", "#878d9b", "#f7f8fa") },
   "split-night": { name: "Night", accent: "#7c93ff", accent0: "#9fb4ff", accent2: "#b28cff", ...dark("#0e0f12", "#0a0b0d", "#15171b", "#1a1c21", "#23262d", "#23262d", "#33373f", "#eceef2", "#a9aebb", "#6f7583", "#0b0c0e") },
   // Focus's own themes: quiet neutrals, the accent used sparingly
@@ -151,7 +151,7 @@ let styleTag = null;
 /** Interfaces: the layout and treatment of the whole app. Each one has its own themes and starts in
  *  its own look (light or dark); the classic themes, custom colors, light and dark work with all of them. */
 export const INTERFACES = [
-  { id: "flow", name: "Flow", sub: "The main AFH interface: your threads on the side, the conversation on one clean sheet. The model talks as it works, its steps run down one line beside its words, and a panel opens on the right when you want the details." },
+  { id: "flow", name: "Flow", sub: "The main AFH interface: your threads on the side, the conversation on one clean sheet. The model talks as it works, its steps are tidy blocks between its words, and a panel opens on the right when you want the details." },
   { id: "onyx", name: "Onyx", sub: "Dense and monochrome: the conversation is a near-black card on a dark shell, set in Google Sans, with a glass message box, pill buttons and one quiet blue. Light is the same design on white." },
   { id: "split", name: "Split", sub: "Side by side: the conversation stays short on the left (your message, one line for the work, the answer) and everything the model did sits in an Activity panel on the right." },
   { id: "studio", name: "Studio", sub: "The classic AFH layout: a sidebar of threads, a reading column and a floating composer." },

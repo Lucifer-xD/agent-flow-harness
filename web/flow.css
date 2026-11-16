@@ -439,7 +439,22 @@
   & .rf-actions .icon-btn:hover { background: var(--fl-hover); color: var(--text); }
   & .rf-stats { display: flex; align-items: center; gap: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 0.2s; }
   & .msg.assistant:hover .rf-stats, & .msg.assistant:focus-within .rf-stats { opacity: 1; }
-  & .notice { padding: 8px 12px; border-radius: 10px; border: 0; background: var(--fl-sunk); font-size: 12.5px; }
+  /* a notice from the app (to-dos still open, the goal not reached, a hook that failed): one quiet line, like a step.
+     "what the agent was told" sits at its end; opened, it drops under the line as a thin-edged card. */
+  & .notice { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; min-height: 28px; margin: 6px 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; font-size: 13px; line-height: 20px; color: var(--text-3); }
+  & .notice::before { display: none; }
+  & .notice > .ico { display: grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--text-3); }
+  & .notice > .ico svg { width: 15px; height: 15px; }
+  & .notice.hook > .ico { color: var(--bad); }
+  & .notice > span { min-width: 0; color: var(--text-2); }
+  & .notice details { flex: 0 1 auto; width: auto; min-width: 0; margin: 0; padding: 0; border: 0; font-size: 12.5px; color: var(--text-3); }
+  & .notice details[open] { flex: 1 1 100%; width: 100%; }
+  & .notice summary { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 6px; margin-inline-start: -6px; border-radius: 8px; list-style: none; cursor: pointer; color: var(--text-3); transition: background 0.15s, color 0.15s; }
+  & .notice summary::-webkit-details-marker { display: none; }
+  & .notice summary::after { content: "\203A"; font-size: 15px; line-height: 1; transition: transform 0.2s var(--fl-ease); }
+  & .notice details[open] summary::after { transform: rotate(90deg); }
+  & .notice summary:hover { background: var(--fl-hover); color: var(--text-2); }
+  & .notice pre { margin: 2px 0 6px; padding: 8px 12px; border: 1px solid var(--fl-line); border-radius: 10px; background: var(--code-bg); font: 12px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; color: var(--text-2); }
   & .approval { border-radius: 14px; border: 1px solid var(--fl-line); background: var(--fl-sheet); box-shadow: var(--fl-sh-2); }
   & .approval .btn { border-radius: 10px; }
   & .approval .btn.primary { background: var(--fl-ink); border-color: transparent; color: var(--fl-on-ink); box-shadow: none; filter: none; }

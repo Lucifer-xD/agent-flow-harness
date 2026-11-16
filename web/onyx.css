@@ -36,16 +36,17 @@
   --ox-row: rgb(10 10 12 / 0.042);
   --ox-row-2: rgb(10 10 12 / 0.075);
   --ox-selected: #ffffff;
-  --ox-selected-sh: inset 0 1px 0 #ffffff, inset 0 0 0 1px rgb(10 10 12 / 0.055);
+  --ox-selected-sh: 0 0 0 1px rgb(10 10 12 / 0.07), 0 1px 2px rgb(10 10 12 / 0.06);
   --ox-glass: #ffffff;
   --ox-glass-edge: rgb(10 10 12 / 0.065);
   --ox-hi: rgb(255 255 255 / 1);
-  --ox-glass-sh: 0 14px 34px -10px rgb(10 10 12 / 0.06), 0 2px 6px -1px rgb(10 10 12 / 0.025);
+  --ox-glass-sh: 0 18px 40px -14px rgb(10 10 12 / 0.16), 0 3px 8px -2px rgb(10 10 12 / 0.06);
+  --ox-card-sh: 0 0 0 1px rgb(10 10 12 / 0.07), 0 1px 2px rgb(10 10 12 / 0.03), 0 14px 36px -20px rgb(10 10 12 / 0.14);
   --ox-chip-sh: 0 4px 12px -4px rgb(16 24 40 / 0.16), 0 1px 2px rgb(16 24 40 / 0.06);
-  --ox-frame: #f9f9f9;
+  --ox-frame: #f3f3f5;
   --ox-raised: #ffffff;
-  --ox-box-sh: inset 0 1px 0 #ffffff, 0 0 0 1px rgb(10 10 12 / 0.06), 0 0 0 5px var(--ox-frame), 0 0 0 6px rgb(10 10 12 / 0.065), 0 12px 28px -10px rgb(10 10 12 / 0.06), 0 2px 6px -1px rgb(10 10 12 / 0.03);
-  --ox-box-sh-on: inset 0 1px 0 #ffffff, 0 0 0 1px rgb(10 10 12 / 0.09), 0 0 0 5px var(--ox-frame), 0 0 0 6px rgb(10 10 12 / 0.065), 0 12px 28px -10px rgb(10 10 12 / 0.07), 0 2px 6px -1px rgb(10 10 12 / 0.04);
+  --ox-box-sh: inset 0 1px 0 #ffffff, 0 0 0 1px rgb(10 10 12 / 0.08), 0 0 0 5px var(--ox-frame), 0 0 0 6px rgb(10 10 12 / 0.07), 0 18px 40px -16px rgb(10 10 12 / 0.16), 0 3px 8px -2px rgb(10 10 12 / 0.05);
+  --ox-box-sh-on: inset 0 1px 0 #ffffff, 0 0 0 1px rgb(10 10 12 / 0.14), 0 0 0 5px var(--ox-frame), 0 0 0 6px rgb(10 10 12 / 0.08), 0 20px 44px -16px rgb(10 10 12 / 0.2), 0 3px 8px -2px rgb(10 10 12 / 0.06);
   --ox-send-sh: inset 0 1px 0 rgb(255 255 255 / 0.32), inset 0 -1.5px 0 rgb(0 0 0 / 0.125), 0 1px 2px rgb(10 10 12 / 0.12), 0 4px 10px -2px rgb(10 10 12 / 0.11);
   --ox-well: rgb(10 10 12 / 0.055);
   --ox-well-edge: rgb(10 10 12 / 0.06);
@@ -69,6 +70,7 @@
     --ox-glass-edge: rgb(255 255 255 / 0.085);
     --ox-hi: rgb(255 255 255 / 0.085);
     --ox-glass-sh: 0 20px 44px -12px rgb(0 0 0 / 0.375), 0 3px 10px -2px rgb(0 0 0 / 0.275);
+    --ox-card-sh: 0 0 0 1px var(--ox-card-edge);
     --ox-chip-sh: 0 4px 12px -4px rgb(0 0 0 / 0.5), 0 1px 2px rgb(0 0 0 / 0.3);
     --ox-frame: #0d0d11;
     --ox-raised: #15151a;
@@ -81,6 +83,24 @@
     --ox-key-sh: inset 0 1px 0 rgb(255 255 255 / 0.11), 0 0 0 0.5px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.275), 0 3px 8px -2px rgb(0 0 0 / 0.225);
     --ox-placeholder: #636470;
   }
+
+  /* light: a white key for New thread, your message in the shell's tint, text one step heavier so it stays crisp on white */
+  &[data-theme="light"] .new-thread { background: #ffffff; box-shadow: var(--ox-key-sh); }
+  &[data-theme="light"] .new-thread:hover { background: #ffffff; box-shadow: var(--ox-key-sh), 0 4px 12px -6px rgb(10 10 12 / 0.18); }
+  &[data-theme="light"] .msg.user .bubble { background: var(--bg-side); box-shadow: inset 0 0 0 1px rgb(10 10 12 / 0.05); }
+  &[data-theme="light"] body, &[data-theme="light"] .work .md, &[data-theme="light"] .answer .md, &[data-theme="light"] .msg-body > .md, &[data-theme="light"] .msg.user .bubble,
+  &[data-theme="light"] .composer textarea, &[data-theme="light"] .th-title { font-weight: 400; }
+  &[data-theme="light"] .work .tool-name, &[data-theme="light"] .work .tool-target, &[data-theme="light"] .sg-head, &[data-theme="light"] .think-head, &[data-theme="light"] .tb-what, &[data-theme="light"] .turn-bar .tb-title .dur { font-weight: 400; }
+  &[data-theme="light"] .th-item.active .th-title { font-weight: 500; }
+  &[data-theme="light"] .work .term .term-out, &[data-theme="light"] .work .tool-live-pre, &[data-theme="light"] .live-term { color: var(--text-2); }
+  &[data-theme="light"] .msg.assistant .md a { color: #2360c4; }
+  &[data-theme="light"] .wb-tabs { box-shadow: inset 0 1px 2px rgb(10 10 12 / 0.04); }
+  &[data-theme="light"] .modal { box-shadow: 0 0 0 1px rgb(10 10 12 / 0.08), 0 40px 90px -24px rgb(10 10 12 / 0.3); }
+  &[data-theme="light"] .card { background: #ffffff; box-shadow: 0 1px 2px rgb(10 10 12 / 0.03); }
+  &[data-theme="light"] .pop, &[data-theme="light"] .pal, &[data-theme="light"] .toast { box-shadow: 0 0 0 1px rgb(10 10 12 / 0.08), var(--ox-glass-sh); }
+  &[data-theme="light"] .diff-line.add { background: color-mix(in srgb, var(--ok, #1a7f37) 11%, #fff); }
+  &[data-theme="light"] .diff-line.del { background: color-mix(in srgb, var(--bad) 9%, #fff); }
+  &[data-theme="light"] .wel-mark { opacity: 0.2; filter: grayscale(1) brightness(0.4); }
 
   /* Flow's parts, in this look */
   --fl-line: var(--ox-line);
@@ -96,7 +116,7 @@
   --fl-sh-1: none;
   --fl-sh-2: var(--ox-chip-sh);
   --fl-sh-3: var(--ox-glass-sh);
-  --fl-sheet-sh: 0 0 0 1px var(--ox-card-edge);
+  --fl-sheet-sh: var(--ox-card-sh);
 
   & body { font-size: 14px; line-height: 20px; font-weight: 350; }
   & :is(b, strong) { font-weight: 550; }
@@ -107,7 +127,7 @@
 
   /* ================= the shell: threads and the top bar sit on it, the conversation is a card set into it ================= */
   & .main { isolation: isolate; background: none; box-shadow: none; border-radius: 0; overflow: visible; }
-  & .main::before { content: ""; position: absolute; inset: 44px 0 0; z-index: -1; border-radius: 12px; background: var(--bg); box-shadow: 0 0 0 1px var(--ox-card-edge); pointer-events: none; }
+  & .main::before { content: ""; position: absolute; inset: 44px 0 0; z-index: -1; border-radius: 12px; background: var(--bg); box-shadow: var(--ox-card-sh); pointer-events: none; }
   & .main > .thread, & .main > #thread { border-radius: 12px; }
   & .workbench { border-radius: 12px; transition: width 0.3s var(--ox-ease), margin 0.3s var(--ox-ease); }
 
@@ -230,7 +250,9 @@
   & .msg-meta { display: none; }
   & .turn-bar { position: static; display: flex; justify-content: flex-start; width: calc(100% + 16px); height: 28px; margin: 0 -8px 2px; padding: 0 8px; border-radius: 8px; font-size: 14px; color: var(--text-3); transition: background 0.15s var(--ox-ease-2), color 0.15s; }
   & .turn-bar:hover { background: var(--ox-row); color: var(--text-2); }
-  & .tb-mark, & .tb-mark.live, & .tb-stat, & .tb-stat.bad, & .steps-n, & .turn-bar.live .tb-title .dur { display: none; }
+  & .tb-mark.live, & .tb-stat, & .tb-stat.bad, & .steps-n, & .turn-bar.live .tb-title .dur { display: none; }
+  & .tb-mark { display: grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--text-3); }
+  & .tb-mark svg { width: 15px; height: 15px; stroke-width: 2; }
   & .tb-mark.live::after { background: conic-gradient(from 0deg, var(--text-2), transparent 72%); }
   & .tb-what { font-weight: 350; color: inherit; }
   & .turn-bar .tb-title .dur, & .turn-bar.live .tb-title .dur { font: inherit; font-weight: 350; color: inherit; }
@@ -261,11 +283,15 @@
   & .work .tool-head, & .work .tool.read .tool-head, & .work .tool.web .tool-head, & .work .tool.plan.upd .tool-head, & .work .tool.plan:not(.first):not(.upd) .tool-head, & .work .tool.plan.first .tool-head {
     min-height: 28px; width: 100%; margin-inline-start: 0; padding: 0 8px; gap: 6px; border-radius: 8px; font-size: 14px; color: var(--text-3); transition: background 0.15s var(--ox-ease-2); }
   & .work .tool-head:hover { background: var(--ox-row); }
-  & .work .tool-ico { display: none; order: 1; width: 16px; height: 16px; }
-  & .work .tool-ico.is-file { display: grid; }
+  & .work .tool-ico, & .work .tool.run .tool-ico, & .work .tool.plan.first .tool-ico { display: grid; place-items: center; order: -1; width: 16px; height: 16px; flex: none; color: var(--text-3); }
+  & .work .tool-ico > .ico, & .work .tool-ico > svg:not(.ring), & .work .tool.read .tool-ico > .ico, & .work .tool.read .tool-ico > svg:not(.ring), & .work .tool.web .tool-ico > .ico, & .work .tool.web .tool-ico > svg:not(.ring) { width: 15px; height: 15px; }
+  & .work .tool.failed .tool-ico { color: var(--bad); }
+  & .work .tool-ico .fi { width: 15px; height: 15px; }
+  & [data-title="live"] .lf-what > .ico { display: grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--text-3); }
+  & [data-title="live"] .lf-what > .ico svg { width: 15px; height: 15px; }
+  & .work .tool.running .tool-ico, & .work .tool.streaming .tool-ico { color: var(--text); }
   & .work .tool-ico.is-file .fi { width: 15px; height: 15px; }
-  & .work .tool.run .tool-ico, & .work .tool.run .tool-name { display: revert; }
-  & .work .tool.run .tool-ico { display: none; }
+  & .work .tool.run .tool-name { display: revert; }
   & .work .tool.run .tool-head::before { content: none; }
   & .work .tool-name, & .work .tool.read .tool-name, & .work .tool.web .tool-name, & .work .tool.edit .tool-name, & .work .tool.plan.upd .tool-name, & .work .tool.plan.first .tool-name { order: 0; flex: none; font-size: 14px; font-weight: 350; color: var(--text-3); }
   & .work .tool-target, & .work .tool.read .tool-target, & .work .tool.web .tool-target, & .work .tool.edit .tool-target, & .work .tool.plan.upd .tool-target, & .work .tool.plan.first .tool-target {
@@ -290,6 +316,9 @@
   & .sg-head { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: none; font: 350 14px var(--font); color: var(--text-3); text-align: start; cursor: pointer;
     transition: background 0.15s var(--ox-ease-2), color 0.15s; }
   & .sg-head:hover { background: var(--ox-row); color: var(--text-2); }
+  & .sg-icons { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--text-3); }
+  & .sg-icons .ico { display: grid; place-items: center; width: 16px; height: 16px; }
+  & .sg-icons svg { width: 15px; height: 15px; }
   & .sg-chev { display: grid; width: 14px; height: 14px; opacity: 0.8; transition: transform 0.3s var(--ox-ease); }
   & .sg-chev svg { width: 14px; height: 14px; }
   & .step-group.open > .sg-head .sg-chev { transform: rotate(90deg); }
@@ -313,7 +342,6 @@
   & .work .tool-live-pre { padding: 8px 12px; font: 500 12.5px/20px var(--mono); color: var(--text); }
   & .work .tool.edit .tool-section { padding: 6px 0; }
   /* the plan: its first call is the list itself, as a thin-edged card */
-  & .work .tool.plan.first .tool-ico { display: none; }
   & .work .tool.plan.first .tool-name { font-weight: 350; }
   & .work .tool.plan .plan-bar { margin-inline-start: 6px; order: 3; }
   & .work .tool.plan .plan-bar i.in_progress, & .plan-bar i.in_progress, & .ps-steps i.in_progress { background: var(--accent); }
@@ -323,7 +351,8 @@
   & .work .plan-item.in_progress .plan-mark { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); }
   & .work .think { padding: 0; }
   & .think-head .chev { order: 3; }
-  & .think-head .think-ico { display: none; }
+  & .think-head .think-ico { display: grid; place-items: center; order: -1; width: 16px; height: 16px; flex: none; color: var(--text-3); }
+  & .think-head .think-ico svg { width: 15px; height: 15px; }
   & .think-head { height: 28px; width: 100%; margin-inline-start: 0; padding: 0 8px; border-radius: 8px; font-size: 14px; font-weight: 350; }
   & .goal-card, & .q-recap, & .work .deleg, & .msg .deleg { border-color: var(--ox-edge); border-radius: 12px; background: var(--panel); box-shadow: none; }
 
@@ -344,7 +373,6 @@
   & .codeblock-head { height: 32px; padding: 0 4px 0 12px; border-bottom: 0; font-size: 12px; color: var(--text-3); }
   & .codeblock-head button { border-radius: 999px; }
   & .codeblock-head .cb-lang { font-weight: 350; color: var(--text-3); }
-  & .codeblock-head .cb-lang :is(svg, img, .ico) { filter: grayscale(1); opacity: 0.6; }
   & .codeblock pre { padding: 2px 14px 12px; font-size: 13px; line-height: 20px; }
   & .md table { border-color: var(--ox-edge); border-radius: 12px; font-size: 13.5px; }
   & .md th { background: var(--ox-muted); font-weight: 450; font-size: 13px; }
@@ -360,7 +388,11 @@
   & .reply-foot { flex-direction: row-reverse; justify-content: flex-start; gap: 4px 8px; min-height: 28px; font-size: 13px; }
   & .rf-actions { margin-inline: 0 -6px; gap: 0; }
   & .rf-actions .icon-btn { width: 28px; height: 28px; border-radius: 999px; }
-  & .notice { border-radius: 12px; background: var(--ox-muted); }
+  & .notice { font-size: 14px; }
+  & .notice > span { font-weight: 350; }
+  & .notice details { font-size: 13px; }
+  & .notice summary:hover { background: var(--ox-row); }
+  & .notice pre { border-color: var(--ox-edge); border-radius: 8px; font: 12.5px/20px var(--mono); }
   & .approval { border: 0; border-radius: 20px; background: var(--ox-glass); box-shadow: inset 0 1px 0 var(--ox-hi), 0 0 0 1px var(--ox-glass-edge), var(--ox-glass-sh); }
   & .approval .btn, & .btn { border-radius: 999px; }
   & .approval .btn.primary { background: var(--text); color: var(--bg); box-shadow: var(--ox-send-sh); }
@@ -452,15 +484,94 @@
   & :is(.wb-pane-plan, .plan-pop) .plan .todo-mark:hover { transform: none; }
   & :is(.wb-pane-plan, .plan-pop) .plan .todo-mark.in_progress { box-shadow: none; }
   & :is(.wb-pane-plan, .plan-pop) .plan .todo-addrow { border-radius: 999px; background: var(--ox-fill); }
+
+  /* ================= menus, dialogs, Settings: the same glass, pills and hairlines as the rest ================= */
+  & .pop { padding: 5px; border: 0; border-radius: 12px; background: var(--panel); box-shadow: inset 0 1px 0 var(--ox-hi), 0 0 0 1px var(--ox-glass-edge), var(--ox-glass-sh); animation: ox-pop 0.18s var(--ox-ease) both; }
+  & .pop-item { min-height: 32px; padding: 5px 8px; gap: 10px; border-radius: 7px; font-size: 13.5px; font-weight: 350; color: var(--text); transition: background 0.12s var(--ox-ease-2); }
+  & .pop-item:hover, & .pop-item.active, & .pop-item.on, & .pop-item[aria-selected="true"] { background: var(--ox-row-2); }
+  & .pop-item > .ico, & .pop-item > svg { color: var(--text-3); }
+  & .pop-item small, & .pop-item .pi-sub, & .pop-item .pi-count { font-size: 12px; color: var(--text-3); }
+  & .pop-item.danger { color: var(--bad); }
+  & .pop-sep { margin: 4px 2px; background: var(--ox-line); }
+  & .scrim, & .pal-scrim { background: rgb(10 10 12 / 0.28); backdrop-filter: none; }
+  &[data-theme="dark"] .scrim, &[data-theme="dark"] .pal-scrim { background: rgb(0 0 0 / 0.64); }
+  & .modal { border: 0; border-radius: 24px; background: var(--bg-side); box-shadow: inset 0 1px 0 var(--ox-hi), 0 0 0 1px var(--ox-card-edge), 0 40px 90px -24px rgb(0 0 0 / 0.5); }
+  & .pal { border: 0; border-radius: 16px; background: var(--panel); box-shadow: inset 0 1px 0 var(--ox-hi), 0 0 0 1px var(--ox-glass-edge), var(--ox-glass-sh), 0 0 0 4px color-mix(in srgb, var(--text) 3%, transparent); }
+  & .pal-input { font-size: 14px; font-weight: 350; }
+  & .pal-list > *, & .pal-group > button { border-radius: 8px; }
+  & .toast { padding: 9px 14px; border: 0; border-radius: 12px; background: var(--panel); box-shadow: inset 0 1px 0 var(--ox-hi), 0 0 0 1px var(--ox-glass-edge), var(--ox-chip-sh); font-size: 13.5px; color: var(--text); }
+  & .card { border-color: var(--ox-edge); border-radius: 16px; background: var(--panel); box-shadow: none; }
+  & .card h3 { font-size: 14px; font-weight: 550; letter-spacing: 0; }
+  & .card p, & .card .help, & .li-sub { color: var(--text-3); }
+  & .modal h2 { font-size: 20px; font-weight: 550; letter-spacing: 0; }
+  & .list-item { border-bottom-color: var(--ox-line); }
+  & .li-title { font-weight: 450; }
+  & .seg { padding: 2px; gap: 2px; border: 1px solid var(--ox-well-edge); border-radius: 999px; background: var(--ox-well); }
+  & .seg button { height: 24px; padding: 0 11px; border-radius: 999px; font-size: 12.5px; font-weight: 400; color: var(--text-3); transition: background 0.15s var(--ox-ease-2), color 0.15s; }
+  & .seg button:hover { color: var(--text); }
+  & .seg button.on, & .seg button.active, & .seg button[aria-pressed="true"], & .seg button[aria-selected="true"] { background: var(--ox-key); color: var(--text); font-weight: 450; box-shadow: var(--ox-key-sh); }
+  & .toggle { border: 0; background: color-mix(in srgb, var(--text) 16%, var(--panel)); transition: background 0.2s var(--ox-ease-2); }
+  & .toggle::after { background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 0 0 0.5px rgb(0 0 0 / 0.04); transition: transform 0.2s var(--ox-ease); }
+  & .toggle.on, & .toggle[aria-checked="true"], & .toggle:has(input:checked) { background: var(--accent); }
+  & .btn { height: 30px; padding: 0 13px; border: 0; border-radius: 999px; background: var(--ox-fill); font-size: 13px; font-weight: 450; color: var(--text); box-shadow: none; transition: background 0.15s var(--ox-ease-2), transform 0.1s; }
+  & .btn:hover { background: var(--ox-row-2); box-shadow: none; filter: none; }
+  & .btn:active, & .icon-btn:active, & .chip-btn:active { transform: scale(0.97); }
+  & .btn.sm { height: 26px; padding: 0 11px; font-size: 12.5px; }
+  & .btn.ghost { background: none; color: var(--text-2); }
+  & .btn.ghost:hover { background: var(--ox-row); color: var(--text); }
+  & .btn.primary { background: var(--text); color: var(--bg); box-shadow: var(--ox-send-sh); }
+  & .btn.primary::before { display: none; }
+  & .btn.primary:hover { background: var(--text); opacity: 0.9; }
+  & .btn.danger { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+  & :is(.modal, .pop, .pal, .wb-pane) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea):not(.pal-input):not(#thread-search) {
+    border: 1px solid var(--ox-edge); border-radius: 10px; background: var(--ox-muted); font-size: 13.5px; color: var(--text); box-shadow: none; transition: border-color 0.15s, box-shadow 0.15s; }
+  & :is(.modal, .pop, .pal, .wb-pane) :is(input, select, textarea):focus { border-color: var(--ox-edge-2); box-shadow: 0 0 0 3px var(--ox-ring); }
+  & :is(.modal, .pop, .pal) [class*="search"] input { border: 0; border-radius: 0; background: none; box-shadow: none; }
+  & .modal input.m-search-inp { border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; }
+  & .mpk-search { border-radius: 999px; }
+  & .mpk-name { font-weight: 450; }
+  & .mpk-sub, & .mpk-ctx { color: var(--text-3); }
+
+  /* ---- a question from the model, and a step waiting for your yes ---- */
+  & .approval-head { padding: 12px 14px 8px; font-size: 14px; font-weight: 550; }
+  & .approval .perms { gap: 6px; }
+  & .q-header { padding: 2px 8px; border-radius: 999px; background: var(--ox-fill); font-size: 11.5px; font-weight: 450; letter-spacing: 0; text-transform: none; color: var(--text-2); }
+  & .q-text { font-size: 14px; font-weight: 450; line-height: 22px; color: var(--text); }
+  & .q-hint { font-size: 12.5px; color: var(--text-3); }
+  & .q-opts { gap: 6px; }
+  & .q-opts > * { border: 1px solid var(--ox-edge); border-radius: 13px; background: var(--ox-muted); font-size: 13.5px; transition: background 0.15s var(--ox-ease-2), border-color 0.15s; }
+  & .q-opts > *:hover { background: var(--ox-row-2); border-color: var(--ox-edge-2); }
+  & .q-opts > *.on, & .q-opts > *.picked, & .q-opts > *[aria-pressed="true"], & .q-opts > *[aria-checked="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+  /* ---- a diff: the file's text stays its own colour; a soft tint and a coloured edge say what was added or removed ---- */
+  & .diff { font: 12.5px/20px var(--mono); }
+  & .diff-line.add { background: color-mix(in srgb, var(--ok, #3fb950) 13%, transparent); box-shadow: inset 2px 0 0 var(--ok, #3fb950); }
+  & .diff-line.del { background: color-mix(in srgb, var(--bad) 12%, transparent); box-shadow: inset 2px 0 0 var(--bad); }
+  & .diff-line.add .tx, & .diff-line.del .tx { color: var(--text); }
+  & .diff-line.del .tx { color: var(--text-2); }
+  & .diff-line .ln { color: var(--ox-placeholder); }
+  & .diff-line.hunk, & .work .diff-line.hunk { background: var(--ox-muted); }
+  & .diff-line.hunk .tx, & .diff-line.hunk .ln { color: var(--text-3); }
+
+  /* ---- motion: a sent message rises out of the box; the step in hand has a slow light passing over it ---- */
+  &[data-msg-anim="rise"] .msg.user { animation: ox-send 0.36s var(--ox-ease) both; }
+  &[data-msg-anim="rise"] .msg.assistant { animation: ox-fade 0.24s ease-in-out both; }
+  & .work .tool.running > .tool-head, & .work .tool.streaming > .tool-head, & .step-group.live > .sg-head, & .think.live .think-head { position: relative; overflow: hidden; }
+  & .work .tool.running > .tool-head::after, & .work .tool.streaming > .tool-head::after, & .step-group.live > .sg-head::after, & .think.live .think-head::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--text) 10%, transparent) 50%, transparent 65%); transform: translateX(-100%); animation: ox-sweep calc(1.9s / var(--anim-speed, 1)) linear infinite; }
+  & .jump { transition: transform 0.2s var(--ox-ease), opacity 0.2s, background 0.15s; }
+  & .th-item { transition: background 0.15s var(--ox-ease-2), box-shadow 0.2s var(--ox-ease-2); }
 }
 
 @keyframes ox-fade { from { opacity: 0; } }
 @keyframes ox-pop { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
 @keyframes ox-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes ox-send { from { opacity: 0; transform: translateY(18px) scale(0.985); } }
+@keyframes ox-sweep { to { transform: translateX(100%); } }
 
 @media (max-width: 640px) {
   :root[data-ui="onyx"] .main::before { inset: 44px 0 0; border-radius: 0; box-shadow: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  :root[data-ui="onyx"] .work .tool, :root[data-ui="onyx"] .wel-idea, :root[data-ui="onyx"] .th-item.running .st-ring, :root[data-ui="onyx"] .turn-bar.live .tb-what { animation: none; }
+  :root[data-ui="onyx"] .msg.user, :root[data-ui="onyx"] .msg.assistant, :root[data-ui="onyx"] .tool-head::after, :root[data-ui="onyx"] .sg-head::after, :root[data-ui="onyx"] .think-head::after, :root[data-ui="onyx"] .work .tool, :root[data-ui="onyx"] .wel-idea, :root[data-ui="onyx"] .th-item.running .st-ring, :root[data-ui="onyx"] .turn-bar.live .tb-what { animation: none; }
 }

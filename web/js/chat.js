@@ -5,7 +5,7 @@ import { api } from "./api.js";
 import { designCard, renderDesignTool } from "./design.js";
 import { el, ico, icon, markdown, markdownDone, diffView, patchFromStrings, copyText, fmtDur, fmtTokens, basename, toast, progressRing } from "./ui.js";
 import { fileIcon } from "./fileicons.js";
-import { tidyOutput, shortCommand } from "./tidy.js";
+import { tidyOutput, shortCommand, commandKind } from "./tidy.js";
 import { effortLabel } from "./model-picker.js";
 
 // ---- state ----------------------------------------------------------------------
@@ -380,6 +380,8 @@ const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name
  *  (reading, searching, the web) is a quiet line. Steps of one family that follow each other join into one block. */
 const isFlowUI = () => ["flow", "onyx"].includes(document.documentElement.dataset.ui);
 const isOnyxUI = () => document.documentElement.dataset.ui === "onyx";
+/** The icon of the program a command runs (Python, npm, Git…), or null to use the plain terminal. */
+const cmdIcon = (command) => { const k = commandKind(command); return !k ? null : k.startsWith("app:") ? ico(k.slice(4)) : fileIcon(k, { kind: true }); };
 const stepFamily = (p) => {
   const name = (p.name || "").toLowerCase(), kind = kindOf(name);
   return /todo/.test(name) ? "plan" : kind === "edit" ? "file" : kind === "run" ? "run" : kind === "read" || kind === "web" ? "look" : "other";
@@ -764,7 +766,8 @@ function renderTool(p, openSet, thread, t0) {
       live && !((kind === "edit" || kind === "read") && target) ? el("span.spinner")
         : status === "error" ? ico("alert")
           : (kind === "edit" || kind === "read") && target && name !== "glob" && name !== "grep" ? fileIcon(target)
-            : ico(name === "jobs" ? "activity" : info.icon)),
+            : kind === "run" && name !== "jobs" && cmdIcon(target) ? cmdIcon(target)
+              : ico(name === "jobs" ? "activity" : info.icon)),
     el("span.tool-name", live ? verbs[1] : verbs[0]),
     targetNode,
     el("span.tool-right", cmdShort?.via ? el("span.tool-via", { title: target }, cmdShort.via) : null,
@@ -1679,7 +1682,12 @@ export class ChatView {
         this.openTools.add(now ? "g:" + key : "gc:" + key);
         g.classList.toggle("open", now);
         head.setAttribute("aria-expanded", String(now));
-      } } }, el("span.sg-label", label.charAt(0).toUpperCase() + label.slice(1)), el("span.sg-chev", { html: icon("chev") }));
+      } } }, el("span.sg-icons", seen.slice(0, 3).map((k) => {
+          // commands: the program they run (Python, npm, Git…) when the first of them has one
+          const prog = k === "run" ? nodes.find((x) => x.classList?.contains("run"))?.querySelector(".tool-ico .fi")?.cloneNode(true) : null;
+          return prog ? el("span.ico", prog) : el("span.ico", { html: icon({ look: "search", run: "terminal", edit: "edit", other: "puzzle" }[k]) });
+        })),
+        el("span.sg-label", label.charAt(0).toUpperCase() + label.slice(1)), el("span.sg-chev", { html: icon("chev") }));
       const g = el(`div.step-group${open ? ".open" : ""}${busy ? ".live" : ""}`, { dataset: { group: key } }, head, el("div.sg-body", el("div.sg-in", nodes)));
       out.push(g);
     };
