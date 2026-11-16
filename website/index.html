@@ -1,11 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Agent Flow Harness (AFH) — the free AI coding agent app for Windows</title>
   <meta name="description" content="Agent Flow Harness (AFH) — a free desktop coding agent for Windows, running on your machine with your models. Also on Mac, and in your terminal. Goals, project memory, to-do lists, subagents, a built-in browser with DevTools, Red Team audits and a live view of every file it writes.">
-  <!-- seo -->
   <link rel="canonical" href="https://agentflowharness.com/">
   <meta property="og:url" content="https://agentflowharness.com/">
   <meta property="og:site_name" content="Agent Flow Harness">
@@ -14,340 +13,76 @@
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Agent Flow Harness", "alternateName": "AFH", "applicationCategory": "DeveloperApplication", "operatingSystem": "Windows 10, Windows 11, macOS, Linux, Android, iOS", "description": "A free desktop AI coding agent that runs on your own PC with the models you choose, plus a phone app to chat with any model and control your computer from anywhere.", "url": "https://agentflowharness.com/", "downloadUrl": "https://agentflowharness.com/download", "image": "https://agentflowharness.com/assets/social.png", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "sameAs": ["https://github.com/Lucifer-xD/agent-flow-harness"]}</script>
-  <!-- /seo -->
-  <meta name="theme-color" content="#f6f5f3">
   <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
   <meta property="og:title" content="Agent Flow Harness — build with any model, on your own PC">
   <meta property="og:description" content="A desktop coding agent for Windows that plans, delegates and writes code with the models you choose.">
   <meta property="og:type" content="website">
-  <script src="/js/theme.js"></script>
+  <meta name="theme-color" content="#0b0810">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
-  <link rel="stylesheet" href="/sections.css">
-  <link rel="stylesheet" href="/film.css">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/world.css">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" crossorigin>
   <script type="importmap">
-    { "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-    } }
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
   </script>
 </head>
-<body data-page="home">
-    <header data-nav></header>
+<body>
+  <!-- The page is one place. Scrolling moves you through it; the words ride along in the corners. -->
+  <canvas id="world" aria-hidden="true"></canvas>
+  <div class="veil" id="veil"><span class="veil-mark"></span><span class="veil-t">Agent Flow Harness</span></div>
 
-  <main id="top">
-    <!-- the film: one pinned 3D stage; your scroll is the playhead -->
-    <section class="film" id="film" aria-label="A short film about AFH that plays as you scroll">
-      <div class="film-pin">
-        <div class="film-poster" aria-hidden="true"><div class="film-poster-mark" data-mark-big></div></div>
-        <canvas class="film-canvas" aria-hidden="true"></canvas>
-        <div class="caps">
-          <div class="cap cap-hero" data-a="0" data-b="0.07">
-            <a class="eyebrow eyebrow-link" href="/changelog#v1.32.0"><span class="tag">1.32</span><span>A new chat · work folds away</span><span aria-hidden="true">→</span></a>
-            <h1 class="cap-title">Build with any model.<br><span class="grad-text">On your machine.</span></h1>
-            <p class="cap-lead">A free coding agent app for Windows. It plans, delegates and writes code with the models you choose, and shows you every line as it lands.</p>
-            <div class="cap-cta">
-              <a class="btn btn-primary btn-big" href="/download" data-os-cta>Download AFH</a>
-              <button class="btn btn-ghost btn-big play-film" type="button" data-play-film aria-pressed="false"><span class="pf-ico" aria-hidden="true"></span><span class="pf-play">Play the film</span><span class="pf-pause">Pause</span></button>
-            </div>
-            <p class="cap-hint"><span class="mouse" aria-hidden="true"></span>Scroll to play. Scroll back to rewind.</p>
-          </div>
-          <div class="cap" data-a="0.14" data-b="0.29">
-            <p class="cap-k"><b>01</b>Say it</p>
-            <h2 class="cap-h">Say what you want.</h2>
-            <p class="cap-p">Type it like you'd tell a teammate. AFH reads your project and gets moving. No setup, no special commands.</p>
-          </div>
-          <div class="cap" data-a="0.315" data-b="0.45">
-            <p class="cap-k"><b>02</b>Plan</p>
-            <h2 class="cap-h">It sets a goal and makes a plan.</h2>
-            <p class="cap-p">It writes down what “done” means, then breaks the work into a to-do list you can watch tick off and edit any time.</p>
-          </div>
-          <div class="cap" data-a="0.475" data-b="0.565">
-            <p class="cap-k"><b>03</b>Work</p>
-            <h2 class="cap-h">It reads, edits, runs and tests.</h2>
-            <p class="cap-p">You see the file as it's written and every command as it runs, in a real terminal.</p>
-          </div>
-          <div class="cap" data-a="0.59" data-b="0.635">
-            <p class="cap-k"><b>03</b>Work</p>
-            <h2 class="cap-h">Then it folds the work away.</h2>
-            <p class="cap-p">When it's done, the steps fold under one line, so the answer stays in front.</p>
-          </div>
-          <div class="cap" data-a="0.655" data-b="0.715">
-            <p class="cap-k"><b>04</b>Review</p>
-            <h2 class="cap-h">You review every line.</h2>
-            <p class="cap-p">Every changed file is listed with its diff. Don't like a turn? Rewind the thread <em>and</em> the files.</p>
-          </div>
-          <div class="cap" data-a="0.75" data-b="0.865">
-            <p class="cap-k"><b>05</b>Models</p>
-            <h2 class="cap-h">Bring any model. <span class="grad-text">Mix them in one thread.</span></h2>
-            <p class="cap-p"><b>230</b> providers: ChatGPT, Claude, Gemini, OpenRouter, or models on your own PC. A strong one leads, a fast one helps.</p>
-          </div>
-          <div class="cap cap-end" data-a="0.925" data-b="1">
-            <p class="cap-k"><b>06</b>Yours</p>
-            <h2 class="cap-title">Start your <span class="grad-text">flow.</span></h2>
-            <p class="cap-p">The free desktop app for Windows. Also on Mac. No account, no telemetry. v<span data-version>1.34.0</span></p>
-            <div class="cap-cta">
-              <a class="btn btn-primary btn-big" href="/download" data-os-cta>Download AFH</a>
-              <a class="btn btn-ghost btn-big" href="#app">Keep scrolling</a>
-            </div>
-          </div>
-        </div>
-        <div class="player" role="group" aria-label="Film controls">
-          <button class="pl-play" type="button" data-play aria-label="Play"><span class="pf-ico" aria-hidden="true"></span></button>
-          <div class="pl-main">
-            <div class="pl-meta"><span data-chap>Intro</span><span data-time>0:00 / 0:48</span></div>
-            <div class="pl-track" role="slider" tabindex="0" aria-label="Film position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
-          </div>
-          <button class="pl-skip" type="button" data-skip>Skip<span aria-hidden="true"> ↓</span></button>
-        </div>
-      </div>
+  <header class="hud hud-top">
+    <a class="brand" href="/" aria-label="Agent Flow Harness, home">
+      <svg viewBox="0 0 240 140" width="34" height="20" aria-hidden="true"><g fill="none" stroke-width="18" stroke-linecap="round">
+        <path d="M46 28C104 28 108 74 134 74S164 28 194 28" stroke="#ff9a2e" /><path d="M46 70C92 70 98 58 120 60S152 82 194 70" stroke="#ff5a58" /><path d="M46 112C108 112 116 66 146 66S170 112 194 112" stroke="#f02a92" /></g></svg>
+      <span>AFH</span>
+    </a>
+    <nav class="links" aria-label="Site">
+      <a href="/features">Features</a><a href="/docs">Guide</a><a href="/changelog">Changelog</a><a class="pill" href="/download">Download</a>
+    </nav>
+  </header>
+
+  <main class="track" id="track">
+    <section class="cap" data-a="0" data-b="0.15" data-first>
+      <p class="eyebrow">Agent Flow Harness</p>
+      <h1>It builds<br />with you.</h1>
+      <p class="lead">A desktop app where an AI plans the work, does it on your PC and shows you every step.</p>
     </section>
-
-    <!-- 2 · the product, full width -->
-    <section class="showcase wrap" id="app" aria-label="The app">
-      <div class="section-head center">
-        <p class="kicker">The real thing</p>
-        <h2 class="h2">That was one turn.<br><span class="grad-text">Here's the app it ran in.</span></h2>
-      </div>
-      <div class="window" data-reveal>
-        <div class="win-bar"><i></i><i></i><i></i><span>Agent Flow Harness</span></div>
-        <img src="/assets/app-light.webp" data-dark="/assets/app-dark.webp" width="1600" height="1000" alt="The AFH window: threads on the left; a reply from Claude Opus 5.5 with its work folded under Worked for 32s; the to-do list and the chat box below" decoding="async">
-      </div>
-      <div class="show-notes">
-        <p><b>Threads</b> on the left, each with its model, effort and to-do progress.</p>
-        <p><b>Each reply</b> under its model's logo: the work folded under one line, the answer up front.</p>
-        <p><b>The chat box</b> with the to-do list on top and the model and effort one click away.</p>
-      </div>
+    <section class="cap" data-a="0.2" data-b="0.36">
+      <p class="eyebrow">01 &nbsp;Say it</p>
+      <h2>Describe what you want.</h2>
+      <p class="lead">In plain words. AFH turns it into a goal and a plan you can read, then starts.</p>
     </section>
-
-    <!-- 4 · everything in one harness -->
-    <section id="features" class="bento-sec section wrap">
-      <div class="section-head center">
-        <p class="kicker">Inside the harness</p>
-        <h2 class="h2">Everything the agent touches,<br>one tab away.</h2>
-      </div>
-      <div class="bento">
-        <article class="tile t-live" data-reveal>
-          <header><b>Live file</b><span>the code as it's written</span></header>
-          <pre class="live-code"><code data-live></code></pre>
-        </article>
-        <article class="tile t-browser" data-reveal style="--d:.06s">
-          <header><b>Browser with DevTools</b><span>it opens your app and reads the errors</span></header>
-          <div class="br-mock">
-            <div class="br-bar"><i></i><span>localhost:3000/login</span></div>
-            <div class="nu-row"><i>200</i><b>GET</b><span>/api/session</span><em>13 ms</em></div>
-            <div class="nu-row"><i>200</i><b>GET</b><span>/app.js</span><em>29 ms</em></div>
-            <div class="nu-row bad"><i>500</i><b>POST</b><span>/api/login</span><em>212 ms</em></div>
-            <div class="nu-con">TypeError: user is undefined <span>login.tsx:42</span></div>
-          </div>
-        </article>
-        <article class="tile t-agents" data-reveal>
-          <header><b>Helpers</b><span>a lead hands out the pieces</span></header>
-          <ul class="ag-list">
-            <li><i class="lead"></i><b>Lead</b><span>claude-opus-5-5</span></li>
-            <li><i></i><b>Helper</b><span>writing tests</span><em class="run"></em></li>
-            <li><i></i><b>Helper</b><span>styling the form</span><em class="run"></em></li>
-            <li><i></i><b>Reviewer</b><span>checking diffs</span></li>
-          </ul>
-        </article>
-        <article class="tile t-memory" data-reveal style="--d:.06s">
-          <header><b>Goals &amp; memory</b><span>it knows when it's done, and remembers your project</span></header>
-          <div class="goal"><span class="goal-k">Goal</span><b>All tests pass and login keeps the session</b><em class="ok">achieved</em></div>
-          <ul class="mem"><li>Uses pnpm, not npm</li><li>API lives in <code>server/</code></li><li>Tests run with Vitest</li></ul>
-        </article>
-        <article class="tile t-rewind" data-reveal style="--d:.12s">
-          <header><b>Rewind</b><span>the thread and the files, together</span></header>
-          <div class="rw"><span>Turn 4</span><span>Turn 5</span><span class="on">Turn 6</span><button type="button" tabindex="-1">↶ Rewind to here</button></div>
-        </article>
-        <article class="tile t-look" data-reveal>
-          <header><b>Your look</b><span>4 interfaces · 67 themes · Arabic</span></header>
-          <div class="sw"><i style="--a:#ff6a2a;--b:#111014"></i><i style="--a:#7c5cff;--b:#f6f5f3"></i><i style="--a:#18a664;--b:#0e1512"></i><i style="--a:#e0169a;--b:#fff"></i><i style="--a:#1f55b8;--b:#0b1020"></i><i style="--a:#ffb11f;--b:#1b1716"></i></div>
-        </article>
-      </div>
+    <section class="cap" data-a="0.41" data-b="0.56">
+      <p class="eyebrow">02 &nbsp;Watch it work</p>
+      <h2>Every command.<br />Every file. Live.</h2>
+      <p class="lead">Nothing happens behind your back. You see what it runs and what it changes as it happens.</p>
     </section>
-
-    <!-- 5 · modes -->
-    <section id="modes" class="modes section wrap">
-      <div class="section-head center">
-        <p class="kicker">Four ways to work</p>
-        <h2 class="h2">Pick the mode. The harness does the rest.</h2>
-      </div>
-      <div class="mode-explorer" data-reveal>
-        <div class="mode-tabs" role="tablist">
-          <button type="button" class="on" data-mode="build" role="tab" aria-selected="true">Build</button>
-          <button type="button" data-mode="plan" role="tab">Plan</button>
-          <button type="button" data-mode="delegate" role="tab">Delegate</button>
-          <button type="button" data-mode="red" role="tab">Red Team</button>
-        </div>
-        <div class="mode-panes">
-          <div class="mode-pane on" data-mode="build">
-            <div class="mp-copy"><h3>Ship it.</h3><p>Reads, edits, runs and tests. Asks before anything risky — or runs on its own when you say so. Every change is a card you can open, and undo.</p></div>
-            <div class="mp-mock">
-              <div class="dv-tool"><b>edit</b> src/pages/login.tsx <span class="ok">+84 −3</span></div>
-              <div class="dv-tool"><b>shell</b> npm test <span class="ok">12 passed</span></div>
-              <div class="dv-tool"><b>browser</b> open localhost:3000/login</div>
-              <div class="dv-tool"><b>goal</b> achieved · login works</div>
-            </div>
-          </div>
-          <div class="mode-pane" data-mode="plan">
-            <div class="mp-copy"><h3>Think first.</h3><p>Reads everything, writes nothing. You get a plan with the files it will touch before a line changes — then switch to Build and let it go.</p></div>
-            <div class="mp-mock">
-              <div class="dv-tool"><b>read</b> src/auth/*.ts · 6 files</div>
-              <div class="dv-tool"><b>plan</b> 1. session cookie  2. form  3. tests</div>
-              <div class="dv-tool muted">no edits in Plan mode</div>
-            </div>
-          </div>
-          <div class="mode-pane" data-mode="delegate">
-            <div class="mp-copy"><h3>Fan out.</h3><p>A lead model briefs helpers that work at the same time, each in its own lane or git worktree, and checks what they bring back.</p></div>
-            <div class="mp-mock">
-              <div class="dv-tool"><b>delegate</b> Helper → "write the tests" <span class="run">running</span></div>
-              <div class="dv-tool"><b>delegate</b> Helper → "style the form" <span class="run">running</span></div>
-              <div class="dv-tool"><b>merge</b> branch afh/helper-tests <span class="ok">clean</span></div>
-            </div>
-          </div>
-          <div class="mode-pane" data-mode="red">
-            <div class="mp-copy"><h3>Break it before they do.</h3><p>Audits your own project for exploitable weaknesses — auth flaws, privilege escalation, injection, exposed secrets — and reports each with severity, exploit and fix. Never edits code.</p></div>
-            <div class="mp-mock">
-              <div class="dv-tool bad"><b>critical</b> OTP accepts any 6 digits after 3 tries</div>
-              <div class="dv-tool warn"><b>high</b> admin role set from request body</div>
-              <div class="dv-tool"><b>medium</b> API key in client bundle</div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <section class="cap right" data-a="0.61" data-b="0.76">
+      <p class="eyebrow">03 &nbsp;Stay in control</p>
+      <h2>Approve. Steer. Rewind.</h2>
+      <p class="lead">Decide what it may do alone, send it a note mid-task, and undo the chat, the files or both.</p>
     </section>
-
-    <!-- 6 · outside the app -->
-    <section id="reach" class="reach section wrap">
-      <div class="section-head center">
-        <p class="kicker">Beyond the window</p>
-        <h2 class="h2">The app goes further.</h2>
-        <p class="sub">Hand it an issue on GitHub, give one task to several models and keep the best result, or run it from a terminal if that's how you like to work.</p>
-      </div>
-      <div class="reach-grid">
-        <article class="reach-card rc-tui" data-reveal>
-          <h3><a href="/cli">In your terminal →</a></h3>
-          <p>All of AFH, full screen: threads, models, approvals and every setting. Or one task from a script with <code>afh run</code>.</p>
-          <a class="tui-thumb" href="/cli" aria-label="See AFH in the terminal"><img src="/assets/tui-chat-light.png" data-dark="/assets/tui-chat-dark.png" width="1560" height="950" alt="AFH running full screen in a terminal" loading="lazy"></a>
-        </article>
-        <article class="reach-card" data-reveal style="--d:.08s">
-          <h3>On GitHub</h3>
-          <p>Write <code>/afh</code> and a task on an issue. AFH does the work on your computer and opens a draft pull request.</p>
-          <div class="mp-mock" aria-hidden="true">
-            <div class="dv-tool"><b>you</b> /afh fix the login redirect</div>
-            <div class="dv-tool"><b>afh</b> on its own branch <span class="run">running</span></div>
-            <div class="dv-tool"><b>draft PR</b> ready to review <span class="ok">#42</span></div>
-          </div>
-        </article>
-        <article class="reach-card" data-reveal style="--d:.16s">
-          <h3>Model races</h3>
-          <p><code>afh race</code> gives one task to several models, each in its own worktree. Your tests score them; you merge the one you pick.</p>
-          <div class="mp-mock" aria-hidden="true">
-            <div class="dv-tool"><b>model 1</b> tests <span class="ok">12 passed</span></div>
-            <div class="dv-tool warn"><b>model 2</b> 2 tests failed</div>
-            <div class="dv-tool"><b>pick 1</b> merged into main</div>
-          </div>
-        </article>
-      </div>
+    <section class="cap" data-a="0.8" data-b="0.9">
+      <p class="eyebrow">04 &nbsp;Your models</p>
+      <h2>Bring the models<br />you already use.</h2>
+      <p class="lead">Sign in with ChatGPT, Gemini or Claude, or add any provider's key. Switch whenever you like.</p>
     </section>
-
-    <!-- 7 · models -->
-    <section id="models" class="models-sec section wrap">
-      <div class="section-head center">
-        <p class="kicker">Models</p>
-        <h2 class="h2">230 providers. <span class="grad-text">One picker.</span></h2>
-        <p class="sub">230 providers, plus any OpenAI-compatible endpoint. Use a strong model to lead and a fast one to help.</p>
-      </div>
-      <div class="logo-grid" data-logos aria-label="Some of the providers">
-        <span data-p="openai">OpenAI</span><span data-p="anthropic">Anthropic</span><span data-p="google">Google Gemini</span><span data-p="github-copilot">GitHub Copilot</span>
-        <span data-p="xai">xAI Grok</span><span data-p="openrouter">OpenRouter</span><span data-p="deepseek">DeepSeek</span><span data-p="moonshotai">Kimi</span>
-        <span data-p="mistral">Mistral</span><span data-p="groq">Groq</span><span data-p="zai">Z.AI · GLM</span><span data-p="alibaba">Qwen</span>
-        <span data-p="togetherai">Together AI</span><span data-p="fireworks-ai">Fireworks</span><span data-p="cerebras">Cerebras</span><span data-p="perplexity">Perplexity</span>
-        <span data-p="minimax">MiniMax</span><span data-p="ollama">Ollama</span><span data-p="lmstudio">LM Studio</span><span data-p="huggingface">Hugging Face</span>
-        <span data-p="azure">Azure OpenAI</span><span data-p="amazon-bedrock">Amazon Bedrock</span><span data-p="nvidia">NVIDIA</span><span class="more">+ 207 more</span>
-      </div>
-      <div class="stats">
-        <div class="stat"><b data-count="230">230</b><span>providers built in</span></div>
-        <div class="stat"><b data-count="4">4</b><span>ways to work: Build, Plan, Delegate, Red Team</span></div>
-        <div class="stat"><b data-count="67">67</b><span>themes, light &amp; dark</span></div>
-        <div class="stat"><b>0</b><span>threads kept on our servers</span></div>
-      </div>
-      <p class="fine center logo-credit">Provider logos from <a href="https://github.com/lobehub/lobe-icons" rel="noopener">Lobe Icons</a> (MIT). Names and logos belong to their owners.</p>
-    </section>
-
-    <!-- 8 · sign in your way -->
-    <section id="signin" class="signin section wrap">
-      <div class="section-head center">
-        <p class="kicker">Sign in your way</p>
-        <h2 class="h2">Your plan, your keys, or your own PC.</h2>
-        <p class="sub">Connect as many accounts as you have to one provider. <b>Settings → Models &amp; accounts</b> shows each one's usage, and AFH moves to the next before one runs out.</p>
-      </div>
-      <div class="si-grid">
-        <article class="si-card" data-reveal>
-          <span class="si-k">Chat plans</span>
-          <h3>ChatGPT</h3>
-          <p>The GPT-6 family from your ChatGPT plan, separate from Codex credits. Every reply carries a badge confirming which model really answered.</p>
-          <div class="si-badge">✓ real model · gpt-6.1-sol-wm</div>
-        </article>
-        <article class="si-card" data-reveal style="--d:.08s">
-          <span class="si-k">Subscriptions</span>
-          <h3>Codex, Copilot, Grok</h3>
-          <p>Sign in with ChatGPT for Codex, with GitHub for Copilot, with xAI for Grok, or with OpenRouter for everything — no keys to paste.</p>
-        </article>
-        <article class="si-card" data-reveal style="--d:.16s">
-          <span class="si-k">Yours</span>
-          <h3>API keys &amp; local models</h3>
-          <p>Paste a key for any of 230 providers, or point AFH at Ollama, LM Studio, vLLM or llama.cpp on your own machine. Nothing leaves it.</p>
-        </article>
-      </div>
-    </section>
-
-    <!-- 9 · the phone -->
-    <section id="account" class="acct section wrap">
-      <div class="acct-copy" data-reveal>
-        <p class="kicker">Phone &amp; web · free account</p>
-        <h2 class="h2">Take it with you.</h2>
-        <p class="sub">The AFH app for Android and iPhone — and the same chat in your browser. Chat with any model using your own keys, and take over AFH on your computer from anywhere: live threads, one-tap approvals, new tasks.</p>
-        <div class="cta-row" data-signed-out>
-          <a class="btn btn-dark" href="/account?signup">Create a free account</a>
-          <a class="btn btn-ghost" href="/account">Sign in</a>
-        </div>
-        <div class="cta-row" data-signed-in>
-          <a class="btn btn-dark" href="/chat">Open chat</a>
-        </div>
-        <p class="fine">Optional — AFH itself never needs an account. Chats and keys stay in your browser.</p>
-      </div>
-      <div class="acct-demo" aria-hidden="true" data-reveal style="--d:.1s">
-        <div class="phone">
-          <div class="ph-top"><span class="ph-mark" data-mark-svg></span><b>claude-opus-5-5</b><span class="ph-eff">High</span></div>
-          <div class="ph-msg me">Is the build on my PC done?</div>
-          <div class="ph-fold"><i></i><b>Worked for 4m 12s</b><span>Edited 6 files</span></div>
-          <div class="ph-msg ai">Yes — the login page is finished and all 18 tests pass. Want me to open a pull request?</div>
-          <div class="ph-card"><b>Your PC · online</b><span>1 approval waiting</span><em>Approve</em></div>
-          <div class="ph-input">Message AFH…</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 10 · download: the mark at work again -->
-    <section id="download" class="cta">
-      <div class="cta-mark" data-mark-big aria-hidden="true"></div>
-      <h2 class="display cta-title"><span class="line"><span>Start your</span></span><span class="line grad"><span>flow.</span></span></h2>
-      <p class="lead center">The desktop app for Windows, free. Install it, sign in or add a key, and give it something to build.</p>
-      <div class="cta-row center">
-        <a class="btn btn-primary btn-big" href="/download" data-os-cta>Download AFH</a>
-        <a class="btn btn-ghost btn-big" href="/docs">Read the guide</a>
-      </div>
-      <div data-install></div>
-      <p class="fine center">Free · no account needed · Also for <a href="/download#desktop">Mac</a> · Prefer a terminal? <a href="/cli">There's a version for that</a></p>
+    <section class="cap end" data-a="0.945" data-b="1.01">
+      <h2>Agent Flow Harness</h2>
+      <p class="lead">Free for Windows. Also on Mac. No account, no telemetry. <span class="ver">v<span data-version>1.34.0</span></span></p>
+      <p class="cta"><a class="btn" href="/download">Download for Windows</a><a class="btn ghost" href="/features">See everything it does</a></p>
     </section>
   </main>
 
-  <footer data-footer></footer>
+  <footer class="hud hud-bottom">
+    <div class="scroll-hint" id="hint"><i></i><span>Scroll</span></div>
+    <div class="rail" aria-hidden="true"><b id="rail"></b></div>
+    <div class="count" aria-hidden="true"><span id="count">01</span> / 06</div>
+  </footer>
 
-  <script src="/js/layout.js"></script>
-  <script type="module" src="/js/main.js"></script>
+  <noscript><style>#world, .veil, .hud-bottom { display: none; } .track { height: auto; padding: 120px 0 80px; display: grid; gap: 72px; pointer-events: auto; } .cap, .cap.right, .cap.end { position: static; opacity: 1; transform: none; margin: 0 auto; width: min(680px, calc(100vw - 36px)); text-align: left; }</style></noscript>
+  <script type="module" src="/js/world.js"></script>
 </body>
 </html>
