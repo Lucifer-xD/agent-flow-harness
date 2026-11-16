@@ -23,7 +23,7 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Without WebGL the page is still a page: the words lay themselves out one under another (html.no3d in world.css).
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: "high-performance" }); }
-catch (e) { document.documentElement.classList.add("no3d"); document.getElementById("veil").classList.add("gone"); throw e; }
+catch (e) { document.documentElement.classList.add("no3d"); document.getElementById("veil").classList.add("w-gone"); throw e; }
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, mobile ? 1.25 : 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -235,10 +235,11 @@ function param(p) {
 }
 
 // ---- the page: scroll, the words, the corners ----
-const caps = [...document.querySelectorAll(".cap")].map((el) => ({ el, a: +el.dataset.a, b: +el.dataset.b }));
-const rail = document.getElementById("rail"), count = document.getElementById("count"), hint = document.getElementById("hint"), track = document.getElementById("track");
+const caps = [...document.querySelectorAll(".w-cap")].map((el) => ({ el, a: +el.dataset.a, b: +el.dataset.b }));
+const rail = document.getElementById("rail"), count = document.getElementById("count"), hint = document.getElementById("hint"), sec = document.getElementById("world-sec");
 let target = 0, prog = 0, px = 0, py = 0, tx = 0, ty = 0;
-const readScroll = () => { const max = track.offsetHeight - innerHeight; target = max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0; };
+// The journey is as long as its section: progress is how far the section has scrolled past the top of the screen.
+const readScroll = () => { const max = sec.offsetHeight - innerHeight; target = max > 0 ? Math.min(1, Math.max(0, -sec.getBoundingClientRect().top / max)) : 0; };
 addEventListener("scroll", readScroll, { passive: true });
 addEventListener("pointermove", (e) => { tx = e.clientX / innerWidth - 0.5; ty = e.clientY / innerHeight - 0.5; }, { passive: true });
 function resize() {
@@ -254,6 +255,8 @@ const fpsEl = new URLSearchParams(location.search).has("fps") ? document.body.ap
 
 function frame() {
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+  // below the tour nothing is drawn: the rest of the page costs no GPU time
+  if (sec.getBoundingClientRect().bottom < -40) { requestAnimationFrame(frame); return; }
   prog += (target - prog) * (reduced ? 1 : 1 - Math.exp(-dt * 4.2));
   px += (tx - px) * 0.06; py += (ty - py) * 0.06;
   wake = Math.min(1, wake + dt * 0.42);                       // the mark lights up from its left dots when the page opens
@@ -289,12 +292,12 @@ function frame() {
     const fadeIn = c.el.hasAttribute("data-first") ? 1 : smooth(Math.min(1, Math.max(0, (prog - c.a) / 0.035)));
     const o = fadeIn * (1 - smooth(Math.min(1, Math.max(0, (prog - c.b) / 0.035))));
     c.el.style.opacity = o.toFixed(3); c.el.style.transform = `translateY(${((1 - o) * (prog < c.a + 0.02 ? 18 : -18)).toFixed(1)}px)`;
-    c.el.classList.toggle("on", o > 0.5);
+    c.el.classList.toggle("w-on", o > 0.5);
     if (prog >= c.a - 0.02) chapter = i;
   });
   if (chapter !== shown) { shown = chapter; count.textContent = String(chapter + 1).padStart(2, "0"); }
   rail.style.transform = `scaleX(${prog.toFixed(4)})`;
-  hint.classList.toggle("off", prog > 0.03);
+  hint.classList.toggle("w-off", prog > 0.03);
 
   if (fpsEl) { frames++; fpsT += dt; if (fpsT > 0.5) { fpsEl.textContent = `${Math.round(frames / fpsT)} fps`; frames = 0; fpsT = 0; } }
   requestAnimationFrame(frame);
@@ -313,9 +316,9 @@ function calibrate() {
   }
 }
 uniforms.uWake.value = 1; calibrate(); uniforms.uWake.value = 0;
-requestAnimationFrame(() => { document.getElementById("veil").classList.add("gone"); frame(); });
+requestAnimationFrame(() => { document.getElementById("veil").classList.add("w-gone"); frame(); });
 window.afhWorld = {
-  seek: (p) => { scrollTo(0, p * (track.offsetHeight - innerHeight)); target = prog = p; },
+  seek: (p) => { scrollTo(0, scrollY + sec.getBoundingClientRect().top + p * (sec.offsetHeight - innerHeight)); target = prog = p; },
   /** Milliseconds a frame really costs on this GPU (render + wait for the GPU), averaged over n frames. */
   bench: (n = 30) => { const gl = renderer.getContext(), t0 = performance.now(); for (let i = 0; i < n; i++) { renderer.render(scene, camera); gl.finish(); } return +((performance.now() - t0) / n).toFixed(2); },
   ratio: () => renderer.getPixelRatio(),
