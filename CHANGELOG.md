@@ -2,6 +2,13 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.34.3 (2026-11-17)
+
+**Studio, as it was**
+
+- **Studio looks like its pictures again:** the work of a reply is one bar ("Worked for 32s | Edited 3 files · Ran 1 command") with the file icons and the step count on it. Opened, the steps are rows with an icon tile on a rail, with pills for the lines changed and the checks, and each to-do update is a card. The strip of marks under a folded reply, the timeline dots and the "Answer" divider are gone from Studio.
+- **Only Studio changed:** Flow, Onyx, Focus, Compact, Canvas and Split look as they did.
+
 ## 1.34.2 (2026-11-17)
 
 **Qwen, by name**
