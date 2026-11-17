@@ -617,7 +617,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
   function connectView(host, { inline = false, start = "signin", close = null } = {}) {
     const byId = Object.fromEntries(data.configured.map((p) => [p.id, p]));
     const available = data.catalog.filter((c) => !c.configured);
-    const FEATURED = ["openai", "anthropic", "gemini", "openrouter", "kimi", "zai-coding", "deepseek", "xai", "mistral", "groq", "azure", "amazon-bedrock", "ollama", "lmstudio"];
+    const FEATURED = ["openai", "anthropic", "gemini", "openrouter", "kimi", "zai-coding", "deepseek", "qwen", "xai", "mistral", "groq", "azure", "amazon-bedrock", "ollama", "lmstudio"];
     const keyed = available.filter((c) => c.needsKey !== false && !LOCAL_IDS.has(c.id))
       .sort((a, b) => (FEATURED.indexOf(a.id) + 1 || 99) - (FEATURED.indexOf(b.id) + 1 || 99) || a.name.localeCompare(b.name));
     let cat = start;

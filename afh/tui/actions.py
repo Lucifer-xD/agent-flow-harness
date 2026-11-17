@@ -40,7 +40,7 @@ SIGN_INS = [
     {"method": "poe", "provider": "poe", "name": "Poe", "sub": "GPT, Claude, Gemini, Grok and more on your Poe points; creates a key for you"},
     {"method": "digitalocean", "provider": "digitalocean", "name": "DigitalOcean", "sub": "Serverless inference on your DigitalOcean account"},
 ]
-FEATURED = ["openai", "anthropic", "gemini", "openrouter", "deepseek", "xai", "mistral", "groq", "kimi", "zai-coding", "azure", "amazon-bedrock", "ollama", "lmstudio"]
+FEATURED = ["openai", "anthropic", "gemini", "openrouter", "deepseek", "qwen", "xai", "mistral", "groq", "kimi", "zai-coding", "azure", "amazon-bedrock", "ollama", "lmstudio"]
 TYPES = {"user": "You", "assistant": "Model", "system": "System notice", "idle": "Run ended", "compaction": "Compaction summary", "shell": "Shell", "synthetic": "Injected", "skill": "Skill"}
 HELP_KEYS = [
     ("Enter", "send"), ("Ctrl+J, Alt+Enter", "new line"), ("Up, Down", "earlier messages you sent"), ("Ctrl+R", "search what you've sent"), ("Ctrl+G", "write in your editor"),

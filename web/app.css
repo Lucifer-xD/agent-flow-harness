@@ -2605,7 +2605,8 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 
 /* The agent and access pills in the message box carry a colour, so the mode you are in is seen at a glance:
    Build blue, Plan violet, Delegate amber, Red Team red (your own agents keep the colour you gave them);
-   Ask first green, Full access orange, Read only teal. Same in every interface and theme. */
+   Ask first green, Full access orange, Read only teal. Same in every interface and theme; each interface keeps its own
+   pill shape and hover. */
 #pick-agent { --pill-c: #3b82f6; }
 #pick-agent[data-agent="plan"] { --pill-c: #a855f7; }
 #pick-agent[data-agent="delegate"] { --pill-c: #f59e0b; }
@@ -2614,7 +2615,8 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 #pick-mode.mode-ask { --pill-c: #22a06b; }
 #pick-mode.mode-full { --pill-c: #f97316; }
 #pick-mode.mode-readonly { --pill-c: #0ea5b7; }
-:root .composer #pick-agent, :root .composer #pick-mode { color: color-mix(in srgb, var(--pill-c) 78%, var(--text)); background: color-mix(in srgb, var(--pill-c) 13%, transparent); border-color: transparent; font-weight: 550; }
-:root .composer #pick-agent:hover, :root .composer #pick-mode:hover { color: color-mix(in srgb, var(--pill-c) 78%, var(--text)); background: color-mix(in srgb, var(--pill-c) 22%, transparent); }
+/* only the words and the icon take the colour: no tinted pill behind them */
+:root .composer #pick-agent, :root .composer #pick-mode { color: color-mix(in srgb, var(--pill-c) 82%, var(--text)); font-weight: 550; }
+:root .composer #pick-agent:hover, :root .composer #pick-mode:hover { color: color-mix(in srgb, var(--pill-c) 82%, var(--text)); }
 :root .composer #pick-agent > .ico, :root .composer #pick-mode > .ico, :root .composer #pick-agent > svg, :root .composer #pick-mode > svg { color: var(--pill-c); }
 :root .composer #pick-agent .chev, :root .composer #pick-mode .chev { color: color-mix(in srgb, var(--pill-c) 60%, var(--text-3)); }

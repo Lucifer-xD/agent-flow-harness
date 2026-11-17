@@ -56,6 +56,23 @@ KNOWN: dict[str, dict] = {
         "name": "DeepSeek", "kind": "openai", "base_url": "https://api.deepseek.com/v1",
         "env": ["DEEPSEEK_API_KEY"], "docs": "https://api-docs.deepseek.com", "extra": {},
     },
+    # Qwen is served by Alibaba Cloud Model Studio (DashScope). models.dev lists it as "Alibaba"; people look
+    # for "Qwen", so it is offered under that name (the Alibaba entries stay for anyone who already added one).
+    "qwen": {
+        "name": "Qwen", "kind": "openai", "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        "env": ["DASHSCOPE_API_KEY"], "docs": "https://www.alibabacloud.com/help/en/model-studio/models", "extra": {},
+        "hint": "Use an API key from Alibaba Cloud Model Studio, international region. A key made in the China region belongs to Qwen (China).",
+    },
+    "qwen-cn": {
+        "name": "Qwen (China)", "kind": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "env": ["DASHSCOPE_API_KEY"], "docs": "https://help.aliyun.com/zh/model-studio/models", "extra": {},
+        "hint": "Use an API key from Alibaba Cloud Model Studio (Bailian), China region.",
+    },
+    "qwen-coding": {
+        "name": "Qwen Coding Plan", "kind": "openai", "base_url": "https://coding-intl.dashscope.aliyuncs.com/v1",
+        "env": ["ALIBABA_CODING_PLAN_API_KEY"], "docs": "https://www.alibabacloud.com/help/en/model-studio/coding-plan", "extra": {},
+        "hint": "Use the key of your Alibaba Cloud Coding Plan subscription.",
+    },
     "groq": {
         "name": "Groq", "kind": "openai", "base_url": "https://api.groq.com/openai/v1",
         "env": ["GROQ_API_KEY"], "docs": "https://console.groq.com/docs/api-reference", "extra": {},
@@ -138,6 +155,10 @@ DEV_ALIASES: dict[str, str] = {
     "zai-coding-plan": "zai-coding", "kimi-code-plan-global": "kimi", "lmstudio": "lmstudio", "ollama": "ollama",
 }
 
+# models.dev entries that a KNOWN entry now presents under a better-known name. They stay in the catalog, so a
+# provider someone already added from them keeps working, but the list of providers to add leaves them out.
+DEV_SHADOWED: dict[str, str] = {"alibaba": "qwen", "alibaba-cn": "qwen-cn", "alibaba-coding-plan": "qwen-coding"}
+
 # Endpoints for providers models.dev lists by SDK package only (no "api" URL).
 DEV_URLS: dict[str, str] = {
     "cohere": "https://api.cohere.ai/compatibility/v1", "deepinfra": "https://api.deepinfra.com/v1/openai",
@@ -214,6 +235,10 @@ def entries() -> dict[str, dict]:
         e = _generated(dev_id, p) if isinstance(p, dict) else None
         if e:
             out[dev_id] = e
+    for dev_id, known_id in DEV_SHADOWED.items():
+        if dev_id in out and known_id in out:
+            out[dev_id]["shadow"] = known_id
+            out[known_id].setdefault("models_count", out[dev_id].get("models_count"))
     _entries_cache = (id(data), out)
     return out
 

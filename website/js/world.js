@@ -305,8 +305,8 @@ function frame() {
     if (prog >= c.a - 0.02) chapter = i;
   });
   if (!banner) {
-    if (chapter !== shown) { shown = chapter; count.textContent = String(chapter + 1).padStart(2, "0"); }
-    rail.style.transform = `scaleX(${prog.toFixed(4)})`;
+    if (chapter !== shown) { shown = chapter; if (count) count.textContent = String(chapter + 1).padStart(2, "0"); }
+    if (rail) rail.style.transform = `scaleX(${prog.toFixed(4)})`; // the home no longer shows a progress line
     hint.classList.toggle("w-off", prog > 0.03);
   }
 
