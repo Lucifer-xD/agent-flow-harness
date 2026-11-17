@@ -1056,7 +1056,7 @@ def providers():
     catalog = [{"id": pid, "name": k["name"], "kind": k["kind"], "base_url": k["base_url"], "docs": k.get("docs"), "needsKey": k.get("needs_key", True),
                 "env": k.get("env", []), "configured": pid in configured, "customUrl": bool(k.get("custom_url")), "params": k.get("params", []),
                 "hint": k.get("hint"), "login": k.get("login"), "source": k.get("source"), "models": k.get("models_count") or len(STATIC_MODELS.get(pid, []))}
-               for pid, k in catalog_entries().items()]
+               for pid, k in catalog_entries().items() if not k.get("shadow") or pid in configured]
     return {"catalog": catalog, "configured": sorted((_provider_view(pid, p) for pid, p in configured.items()), key=lambda p: p["name"].lower())}
 
 

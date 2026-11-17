@@ -2,6 +2,13 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.34.2 (2026-11-17)
+
+**Qwen, by name**
+
+- **Qwen is a provider you can find:** it was only listed as "Alibaba". It is now Qwen, Qwen (China) and Qwen Coding Plan, with Qwen among the featured providers. Add it with an API key from Alibaba Cloud Model Studio.
+- **Quieter mode colours:** in the message box only the words and icon of Build, Plan, Delegate, Ask first, Full access and the others carry their colour; the tinted pill behind them is gone.
+
 ## 1.34.1 (2026-11-17)
 
 **The mode you are in, in colour**

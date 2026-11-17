@@ -27,7 +27,7 @@ MAX_AGE = 24 * 3600
 PROVIDER_MAP: dict[str, list[str]] = {
     "kimi": ["kimi-code-plan-global", "moonshotai"], "moonshot": ["moonshotai"], "zai": ["zai", "zhipuai"],
     "zai-coding": ["zai-coding-plan", "zai"], "openai": ["openai"], "anthropic": ["anthropic"], "gemini": ["google"],
-    "deepseek": ["deepseek"], "groq": ["groq"], "openrouter": ["openrouter"], "mistral": ["mistral"], "xai": ["xai"],
+    "deepseek": ["deepseek"], "qwen": ["alibaba"], "qwen-cn": ["alibaba-cn"], "qwen-coding": ["alibaba-coding-plan"], "groq": ["groq"], "openrouter": ["openrouter"], "mistral": ["mistral"], "xai": ["xai"],
     "together": ["togetherai"], "fireworks": ["fireworks-ai"], "cerebras": ["cerebras"], "perplexity": ["perplexity"],
     # ids OpenCode used, for migrated providers
     "kimi-code-plan-global": ["kimi-code-plan-global"], "kimi-code-plan": ["kimi-code-plan-cn", "moonshotai-cn"], "zai-coding-plan": ["zai-coding-plan"],

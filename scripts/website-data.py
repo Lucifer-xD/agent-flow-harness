@@ -20,6 +20,8 @@ from afh.engine.providers import catalog  # noqa: E402
 LOCAL = ("localhost", "127.0.0.1")
 out = []
 for pid, e in catalog.entries().items():
+    if e.get("shadow"):  # shown under a better-known name (Alibaba is listed as Qwen)
+        continue
     models = modelsdev.provider_models(pid, pid)
     url = e.get("base_url") or ""
     out.append({

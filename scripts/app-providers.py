@@ -22,6 +22,8 @@ LOCAL = ("localhost", "127.0.0.1")
 WIRES = {"openai", "anthropic", "gemini", "responses"}
 out = []
 for pid, e in catalog.entries().items():
+    if e.get("shadow"):  # shown under a better-known name (Alibaba is listed as Qwen)
+        continue
     if e.get("kind") not in WIRES:
         continue
     static = catalog.STATIC_MODELS.get(pid) or []
