@@ -136,8 +136,11 @@ def _tool(monkeypatch, steps=None, fail_at=None):
 def test_batch_runs_steps_in_order_with_one_screenshot_and_stops_at_the_first_error(monkeypatch):
     import asyncio
 
+    from afh.engine.computer.control import Shot, controller
+
     tool, done = _tool(monkeypatch, fail_at=2)
     eng = FakeEngine()
+    controller(eng).last_shot["s1"] = Shot("data:,", 800, 600, 1.0, (0, 0))
     res = asyncio.run(tool.run(_ctx(eng), {"action": "batch", "actions": [
         {"action": "click", "x": 1, "y": 2}, {"action": "type", "text": "hi"}, {"action": "key", "key": "enter"}, {"action": "click", "x": 3, "y": 4}]}))
     assert done == ["click", "type"]
@@ -230,15 +233,20 @@ def test_full_access_never_asks_and_lifts_tiers_but_ask_mode_still_asks(monkeypa
         assert len(gate.asked) == 1
 
 
-def test_pointer_actions_and_zoom_need_a_screenshot_first(monkeypatch):
+def test_aiming_without_a_screenshot_takes_one_and_does_nothing_else(monkeypatch):
+    """A click with no screenshot to read x,y off used to fail (5 times in real threads); now AFH looks first."""
     import asyncio
 
-    from afh.engine.tools import computer as comp
-
+    tool, done = _tool(monkeypatch)
     eng = FakeEngine()
-    for inp in ({"action": "click", "x": 1, "y": 1}, {"action": "zoom", "x": 0, "y": 0, "x2": 50, "y2": 50}):
-        res = asyncio.run(comp.ComputerTool().run(_ctx(eng), inp))
-        assert res.is_error and "screenshot first" in res.text.lower()
+    for inp in ({"action": "click", "x": 1, "y": 1}, {"action": "zoom", "x": 0, "y": 0, "x2": 50, "y2": 50},
+                {"action": "batch", "actions": [{"action": "key", "key": "ctrl+n"}, {"action": "click", "x": 3, "y": 4}]}):
+        res = asyncio.run(tool.run(_ctx(eng), inp))
+        assert not res.is_error and "Nothing was done yet" in res.text and f"`{inp['action']}` again" in res.text
+    assert done == []
+    # keys and typing don't aim, so they don't need one
+    asyncio.run(tool.run(_ctx(eng), {"action": "key", "key": "ctrl+s"}))
+    assert done == ["key"]
 
 
 def test_esc_watch_ignores_afh_own_esc_and_reacts_to_the_user(monkeypatch):
@@ -307,3 +315,59 @@ def test_long_text_is_pasted_and_short_text_typed(monkeypatch):
     short, long, lines = asyncio.run(go())
     assert calls == [("type", "hello"), ("paste", "x" * 60), ("paste", "a\nb")]
     assert short.startswith("Typed") and long.startswith("Pasted")
+
+
+def test_controls_are_found_by_number_or_name():
+    from afh.engine.computer import uia
+
+    items = [uia.Element("button", "Save", (10, 10, 50, 30)), uia.Element("field", "File name", (60, 10, 200, 30), value="notes.txt"),
+             uia.Element("button", "Save as type", (10, 40, 90, 60), enabled=False), uia.Element("text", "Save", (300, 300, 340, 320))]
+    assert uia.find(items, "@2").name == "File name" and uia.find(items, "@9") is None
+    assert uia.find(items, "save") is items[0]  # exact name, and a control before plain text
+    assert uia.find(items, "file").name == "File name"  # starts with
+    assert uia.find(items, "type").name == "Save as type"  # contains
+    assert items[1].center == (130, 20)
+
+
+def test_click_by_name_needs_no_screenshot_and_lists_controls(monkeypatch):
+    import asyncio
+
+    from afh.engine.computer import uia, win
+    from afh.engine.computer.control import controller
+    from afh.engine.tools import computer as comp
+    from afh.engine.types import ToolResult
+
+    eng = FakeEngine()
+    fake_win = win.Window(hwnd=42, pid=1, exe=r"C:\Windows\System32\calc.exe", title="Calculator", cls="", rect=(0, 0, 400, 600))
+    items = [uia.Element("button", "Seven", (10, 100, 50, 140)), uia.Element("button", "Plus", (60, 100, 100, 140)),
+             uia.Element("field", "Display is 0", (10, 10, 390, 60), value="0")]
+    clicks = []
+
+    async def fake_uia(self, hwnd):
+        assert hwnd == 42
+        return items
+
+    async def shot(self, ctrl, ctx, summary, app=None):
+        return ToolResult(text=summary)
+
+    monkeypatch.setattr(comp.ComputerTool, "_uia", fake_uia)
+    monkeypatch.setattr(comp.ComputerTool, "_shot", shot)
+    monkeypatch.setattr(comp, "SETTLE", 0)
+    monkeypatch.setattr(comp, "GLIDE", 0)
+    monkeypatch.setattr(win, "foreground", lambda: fake_win)
+    monkeypatch.setattr(win, "window_at", lambda x, y: fake_win)
+    monkeypatch.setattr(win, "glide_to", lambda x, y, d=0: None)
+    monkeypatch.setattr(win, "click", lambda name, count, mods: clicks.append((name, count)))
+    monkeypatch.setattr(win, "cursor_pos", lambda: (0, 0))
+    app = appsmod.App("calc.exe", "Calculator", ["calc.exe"], "", "")
+    from afh.engine.computer.control import Controller
+
+    monkeypatch.setattr(Controller, "app_of_window", lambda self, w: app)
+    res = asyncio.run(comp.ComputerTool().run(_ctx(eng), {"action": "click", "target": "seven"}))
+    assert not res.is_error and "Nothing was done yet" not in res.text, res.text
+    assert "Clicked button “Seven” in Calculator" in res.text and clicks == [("left", 1)]
+    res = asyncio.run(comp.ComputerTool().run(_ctx(eng), {"action": "click", "target": "@2"}))
+    assert "“Plus”" in res.text and len(clicks) == 2
+    res = asyncio.run(comp.ComputerTool().run(_ctx(eng), {"action": "click", "target": "Delete everything"}))
+    assert res.is_error and "`elements`" in res.text and len(clicks) == 2
+    assert controller(eng).listed["s1"][0] == 42

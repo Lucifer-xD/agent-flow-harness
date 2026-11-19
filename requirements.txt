@@ -8,3 +8,4 @@ qrcode>=8.0
 mcp>=2.3.0
 pillow>=10.0
 textual>=8.2,<9
+comtypes>=1.4; sys_platform == "win32"

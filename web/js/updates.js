@@ -1,7 +1,8 @@
 // App updates (desktop app only; see desktop/main.js): a "Restart to update" pill once a new
 // version has downloaded, and the Updates card in Settings → About.
 
-import { el, ico, icon, toast, toggle } from "./ui.js";
+import { api } from "./api.js";
+import { el, ico, icon, modal, toast, toggle } from "./ui.js";
 
 const U = window.afh?.updates;
 const listeners = new Set();
@@ -33,8 +34,52 @@ function renderPill() {
   document.body.append(pill);
 }
 
+let waiting = null; // a restart held until the running threads finish
+
+/** Threads with a run going right now (restarting would cut them off). */
+async function runningThreads() {
+  try {
+    return (await api.get("/api/sessions?limit=500")).filter((s) => s.running).length;
+  } catch {
+    return 0;
+  }
+}
+
 async function install() {
+  const n = await runningThreads();
+  if (n && !(await askWhenToRestart(n))) return;
   if (!(await U.install())) toast("The update isn't ready yet", "info");
+}
+
+function askWhenToRestart(n) {
+  // true = restart now; "later" holds the restart until every run has ended; false = not now
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; m.close(); if (v === "later") holdRestart(); resolve(v === true); } };
+    const words = n === 1 ? "A thread is still working" : `${n} threads are still working`;
+    const m = modal(
+      el("div.m-body", { style: { padding: "22px 24px" } },
+        el("h2", words),
+        el("p.lead", { style: { marginBottom: "18px" } }, "Restarting now stops their work halfway. AFH can wait and restart by itself the moment they finish."),
+        el("div.actions",
+          el("button.btn.ghost", { on: { click: () => finish(false) } }, "Cancel"),
+          el("button.btn", { on: { click: () => finish(true) } }, "Restart now"),
+          el("button.btn.primary", { on: { click: () => finish("later") } }, "Restart when they finish"))),
+      { small: true, onClose: () => { if (!done) { done = true; resolve(false); } } });
+  });
+}
+
+function holdRestart() {
+  if (waiting) return;
+  const label = pill?.querySelector("span");
+  if (label) label.textContent = `AFH ${current?.version || ""} installs when the running threads finish`;
+  toast("AFH will restart to update when the running threads finish", "info");
+  waiting = setInterval(async () => {
+    if (await runningThreads()) return;
+    clearInterval(waiting);
+    waiting = null;
+    if (!(await U.install())) toast("The update isn't ready yet", "info");
+  }, 5000);
 }
 
 function describe(s) {

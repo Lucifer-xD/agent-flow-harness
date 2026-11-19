@@ -2,6 +2,16 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.34.4 (2026-11-19)
+
+**Your browser and your apps, properly**
+
+- **The AFH browser extension:** the agent can work in your own Chrome, Edge or Brave through AFH's own extension, with no remote-debugging switch and no Allow click each time. Add it once from Settings → Your Chrome; the card turns green when it connects. AFH still asks you about each new site, and the extension's button pauses it.
+- **Computer use by name:** the agent lists a window's buttons, fields, menus and tabs by name and clicks or types into them (“Save”, “@3”) instead of guessing from a screenshot. Its instructions gained a guide to computer use: which tool fits which app, working step by step, and what to ask you before doing.
+- **Sharper on web pages:** the browser tools number a page's controls (@1, @2…) and can zoom into part of the page; text is found inside frames and embedded components; a tab that closed reopens its page.
+- **The right tool for the job:** the instructions now say to keep going until the task is done, never to resend a failing call unchanged, and which AFH tool fits which job; a loop guard stops a model that keeps sending the same call.
+- **Fixes:** slow commands move to a background job instead of timing out; clearer hints when a web page can't be fetched; Antigravity recovers when its project goes missing; an update waits for running threads before it restarts AFH.
+
 ## 1.34.3 (2026-11-17)
 
 **Studio, as it was**

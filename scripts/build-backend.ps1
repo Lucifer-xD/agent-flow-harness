@@ -41,6 +41,13 @@ if ($LASTEXITCODE -ne 0) {
 & $Python -m PyInstaller --version
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller is not runnable" }
 
+# The computer tool's UI Automation goes through comtypes, whose wrappers for UIAutomationCore are
+# generated on first use; generate them now so the frozen app ships them.
+& $Python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('comtypes') else 1)"
+if ($LASTEXITCODE -ne 0) { & $Python -m pip install "comtypes>=1.4"; if ($LASTEXITCODE -ne 0) { throw "pip install comtypes failed" } }
+& $Python -c "import comtypes.client as c; c.GetModule('UIAutomationCore.dll')"
+if ($LASTEXITCODE -ne 0) { throw "Couldn't generate the UI Automation wrappers" }
+
 if (Test-Path (Join-Path $DistPath $Name)) {
     Write-Host "==> Removing previous build at $DistPath\$Name"
     Remove-Item -Recurse -Force (Join-Path $DistPath $Name)
@@ -71,6 +78,7 @@ $PyArgs = @(
     '--collect-submodules', 'httpx2',
     '--collect-submodules', 'httpx',
     '--collect-submodules', 'websockets',  # the browser tool imports it lazily
+    '--collect-submodules', 'comtypes',  # Windows UI Automation for the computer tool (wrappers generated below)
     '--copy-metadata', 'mcp',
     # uvicorn picks its implementation modules by string at runtime
     '--hidden-import', 'uvicorn.logging',

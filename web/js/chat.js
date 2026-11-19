@@ -1151,7 +1151,7 @@ export class ChatView {
       case "synthetic": {
         const n = m.metadata?.notice;
         if (!n) return null;
-        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert", resume: "refresh", chrome: "globe", account: "user" };
+        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert", resume: "refresh", chrome: "globe", account: "user", loop: "alert" };
         const label = m.metadata?.label || (n === "goal" ? "Goal not achieved yet — continuing" : n === "hook" ? "A stop hook failed — continuing" : n === "todo" ? "To-do items still open — checking" : "Notice");
         return el(`div.notice.${n}`, anim, ico(icons[n] || "info"), el("span", label), m.text ? el("details", el("summary", "what the agent was told"), el("pre", m.text)) : null);
       }

@@ -147,10 +147,19 @@ class AntigravityProvider(GeminiProvider):
         url = f"{base.rstrip('/')}/v1internal:streamGenerateContent?alt=sse"
         body = self.wrap(req)
         async with make_client(self.headers() | signed, self._transport) as client:
-            for attempt in (0, 1):
+            rechecked = False
+            for attempt in (0, 1, 2):
                 try:
                     async with client.stream("POST", url, json=body) as resp:
                         usage.observe(usage.key(self.config), resp.headers)
+                        if resp.status_code == 404:
+                            text = decode_body(await resp.aread())
+                            if not rechecked and await self._recheck_project(client):
+                                rechecked = True  # Google moved the account's quota to another project: try there once
+                                body["project"] = (self.config.auth or {}).get("project", "")
+                                continue
+                            yield self._not_found(req, text, resp.headers)
+                            return
                         if resp.status_code == 401 and attempt == 0:
                             await resp.aread()
                             try:
@@ -169,6 +178,30 @@ class AntigravityProvider(GeminiProvider):
                 except NETWORK_ERRORS as exc:
                     yield network_error(exc, url)
                     return
+
+    async def _recheck_project(self, client: httpx.AsyncClient) -> bool:
+        """Ask Google again which project holds this account's quota. True when it changed (and is saved)."""
+        cfg = self.config
+        auth_ = dict(cfg.auth or {})
+        try:
+            project = await auth._antigravity_project(client, auth_.get("access", ""))
+        except Exception:  # refused or unreachable: the 404 stands
+            return False
+        if not project or project == auth_.get("project"):
+            return False
+        cfg.auth = auth_ | {"project": project}
+        provcfg.save_creds(cfg.id, cfg.account_id, {"auth": cfg.auth})
+        return True
+
+    def _not_found(self, req: ChatRequest, body: str, headers) -> dict:
+        """Google's bare "Requested entity was not found": say what it means. engine/limits.py reads `missing` to move a
+        run to another account, since this one can't use the model."""
+        ev = http_error(404, body, headers)
+        who = f" ({self.config.account_label})" if self.config.account_label else ""
+        ev["message"] = (f"Google says this account{who} can't use {self.model_id(req)}: the model has left its plan, or the "
+                         "account was never set up for it. Pick another model, or another account in Settings → Models & accounts.")
+        ev["missing"] = True
+        return ev
 
     @staticmethod
     async def _unwrap(resp: httpx.Response) -> AsyncIterator[dict]:

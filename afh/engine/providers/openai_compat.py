@@ -10,7 +10,8 @@ Knobs read from ``config.extra``:
   thinking          ``"zai"`` sends GLM's ``{"thinking": {"type": "enabled"|"disabled"}}`` instead of an effort
   no_temperature    never send ``temperature`` (some reasoning models reject it)
   max_tokens_param  ``max_tokens`` (default) or ``max_completion_tokens`` (new OpenAI models)
-  echo_reasoning    replay assistant reasoning in history under ``reasoning_field`` (Kimi needs it)
+  echo_reasoning    replay assistant reasoning in history under ``reasoning_field`` (Kimi needs it; on by default
+                    for Kimi and Moonshot endpoints, ``false`` turns it off)
   reasoning_field   the delta/history field for reasoning text (default ``reasoning_content``)
   body              extra top-level fields merged into every request
 """
@@ -30,6 +31,19 @@ from afh.engine.providers.sse import (
     make_client, network_error, new_call_id, parse_tool_input, stream_error, usage_event,
 )
 from afh.engine.types import ChatRequest, ModelInfo, ProviderConfig, ProviderEvent, ToolSpec
+
+# Kimi's thinking models lose the thread when their earlier reasoning is not sent back with each tool-call
+# turn: they forget what they already tried and start repeating themselves. Every Kimi and Moonshot endpoint
+# gets it, also ones added from models.dev (such as the China coding plan), which never had the setting.
+_ECHO_HOSTS = ("kimi.com", "kimi.ai", "moonshot.ai", "moonshot.cn")
+
+
+def echoes_reasoning(config: ProviderConfig) -> bool:
+    flag = (config.extra or {}).get("echo_reasoning")
+    if flag is not None:
+        return bool(flag)
+    host = httpx.URL(config.base_url or "http://x").host.lower() if "://" in (config.base_url or "") else ""
+    return any(host == h or host.endswith("." + h) for h in _ECHO_HOSTS)
 
 
 @dataclass
@@ -90,6 +104,7 @@ class OpenAICompatProvider:
     def translate_messages(self, req: ChatRequest) -> list[dict]:
         extra = self.config.extra
         reasoning_field = extra.get("reasoning_field", "reasoning_content")
+        echo = echoes_reasoning(self.config)
         out: list[dict] = []
         if req.system:
             out.append({"role": "system", "content": req.system})
@@ -108,7 +123,7 @@ class OpenAICompatProvider:
                 out.append({"role": "user", "content": parts if len(parts) > 1 or (parts and parts[0]["type"] != "text") else m.text})
             elif m.role == "assistant":
                 msg: dict = {"role": "assistant", "content": m.text or None}
-                if extra.get("echo_reasoning") and m.reasoning:
+                if echo and m.reasoning:
                     msg[reasoning_field] = m.reasoning
                 if m.tool_calls:
                     msg["tool_calls"] = [

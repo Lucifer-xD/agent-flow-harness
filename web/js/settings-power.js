@@ -82,9 +82,9 @@ async function chromeCard(pane, ctx, save) {
     try { show(await api.post("/api/chrome/sites", { blocked: blocked.value.split(",").map((x) => x.trim()).filter(Boolean) })); toast("Saved", "ok", 1400); } catch (e) { toast(e.message, "err"); }
   });
   pane.append(card("Your Chrome",
-    "Lets the agent use your own browser (Chrome, Edge or Brave) with your sign-ins and your open tabs, for things only your browser can do. Your browser asks you to click Allow each time AFH connects, and AFH asks you about each new site.",
+    "Lets the agent use your own browser (Chrome, Edge or Brave) with your sign-ins and your open tabs, for things only your browser can do. It connects through the AFH extension, and AFH asks you about each new site.",
     null,
-    row("Let the agent use your browser", "Adds the chrome tool. Nothing connects until you turn on remote debugging in your browser and click Allow", toggle(c.enabled !== false, (v) => save({ chrome: { enabled: v } }))),
+    row("Let the agent use your browser", "Adds the chrome tool. Nothing connects until you add the AFH extension to your browser (or turn on its remote debugging)", toggle(c.enabled !== false, (v) => save({ chrome: { enabled: v } }))),
     row("Which browser", "The one AFH connects to", select([["auto", "The first one that is ready"], ["chrome", "Chrome"], ["edge", "Edge"], ["brave", "Brave"]], c.browser || "auto", (v) => save({ chrome: { browser: v } }, "Saved"), "260px")),
     row("Open its tabs in the background", "AFH's own tabs open behind the tab you are on, not in front of it", toggle(!!c.background, (v) => save({ chrome: { background: v } }))),
     state,
@@ -100,20 +100,49 @@ async function chromeCard(pane, ctx, save) {
     btn.disabled = false;
   } } }, label);
 
+  const copyText = (text) => el("button.btn.ghost.sm", { on: { click: async () => { try { await navigator.clipboard.writeText(text); toast("Copied", "ok", 1200); } catch { toast(text, "ok", 8000); } } } }, "Copy");
+
+  function extensionRows(d, name) {
+    const x = d.extension || {};
+    if (x.connected) {
+      return [el("div.chrome-line.ok", ico("check"), el("span", `Connected through the AFH extension in ${x.browser || name}`), el("span.comp-tier", `extension ${x.version || ""}`.trim()),
+        el("span.spacer"), el("span.comp-sub", "Pause it from the extension's button in the toolbar"))];
+    }
+    const add = el("button.btn.sm.primary", { on: { click: async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        const r = await api.post("/api/chrome/extension", {});
+        toast(r.browser ? `Opened ${r.browser}'s extensions page and the extension folder` : `Open ${r.page} in your browser`, "ok", 6000);
+      } catch (err) { toast(err.message, "err", 8000); }
+      e.currentTarget.disabled = false;
+    } } }, "Add the AFH extension");
+    return [el("div.chrome-steps",
+      el("b", `Add the AFH extension to ${name} (once — recommended)`),
+      el("ol",
+        el("li", add, " opens your browser's extensions page and the folder the extension is in."),
+        el("li", "Turn on ", el("b", "Developer mode"), " (top right of that page)."),
+        el("li", "Click ", el("b", "Load unpacked"), " and choose this folder: ", el("code", x.folder || "~/.afh/browser-extension"), " ", copyText(x.folder || "")),
+        el("li", "That's all: it connects by itself whenever AFH is open, with nothing to allow each time. This card turns green.")),
+      el("span.comp-sub", "Your browser shows a bar saying AFH is debugging it while the agent works in a tab; that is how it can click and read pages. Closing the bar stops it."))];
+  }
+
   function show(d) {
     const ready = (d.browsers || []).find((b) => b.ready);
     const here = (d.browsers || []).filter((b) => b.installed);
     const name = d.connectedTo || ready?.name || here[0]?.name || "Chrome";
+    const viaExtension = (d.extension || {}).connected;
     let rows;
-    if (d.connected) {
+    if (viaExtension) {
+      rows = [];
+    } else if (d.connected) {
       rows = [el("div.chrome-line.ok", ico("check"), el("span", `Connected to ${d.connectedTo}`), el("span.comp-tier", (d.version || "").replace("/", " ")), el("span.spacer"), act("Disconnect", "/api/chrome/disconnect"))];
     } else if (ready) {
-      rows = [el("div.chrome-line", ico("globe"), el("span", `${ready.name} is ready. Connect now, or give the agent a task and click Allow when ${ready.name} asks.`), el("span.spacer"),
-        act("Connect", "/api/chrome/connect", `Switch to ${ready.name} and click Allow`, ".primary"))];
+      rows = [el("div.chrome-line", ico("globe"), el("span", `Or skip it: remote debugging is on in ${ready.name}. Connect, then click Allow there.`), el("span.spacer"),
+        act("Connect", "/api/chrome/connect", `Switch to ${ready.name} and click Allow`))];
     } else if (here.length) {
       const copy = el("button.btn.ghost.sm", { on: { click: async () => { try { await navigator.clipboard.writeText(d.setupPage); toast("Copied", "ok", 1200); } catch { toast(d.setupPage, "ok", 6000); } } } }, "Copy the address");
       rows = [el("div.chrome-steps",
-        el("b", `Turn it on in ${name} (once)`),
+        el("b", `Or without the extension: turn on remote debugging in ${name}`),
         el("ol",
           el("li", "Open ", el("code", d.setupPage), ` in ${name}. `, act("Open it for me", "/api/chrome/setup"), " ", copy),
           el("li", "Tick “Allow remote debugging for this browser instance”."),
@@ -122,7 +151,7 @@ async function chromeCard(pane, ctx, save) {
     } else {
       rows = [el("div.comp-empty", "No Chrome, Edge or Brave was found on this computer.")];
     }
-    state.replaceChildren(...rows);
+    state.replaceChildren(...(here.length || viaExtension ? extensionRows(d, name) : []), ...rows);
     const allowed = d.allowed || [];
     sites.replaceChildren(...(allowed.length
       ? allowed.map((site) => el("div.comp-row", el("span.comp-name", site), el("span.spacer"),
@@ -137,6 +166,11 @@ async function chromeCard(pane, ctx, save) {
 
   ctx.onChromeSitesChanged = refresh;
   await refresh();
+  // until the extension connects, look again now and then, so the card turns green by itself
+  const watch = setInterval(() => {
+    if (!state.isConnected) return clearInterval(watch);
+    if (!state.querySelector(".chrome-line.ok") && document.visibilityState === "visible") refresh();
+  }, 4000);
 }
 
 // ---- Agent ----------------------------------------------------------------------------------

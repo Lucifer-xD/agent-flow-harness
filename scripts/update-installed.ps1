@@ -3,7 +3,7 @@
 #
 #   1. scripts\build-backend.ps1       (PyInstaller -> desktop\backend-dist\afh-backend)
 #   2. npm run dist (in desktop\)      (electron-builder -> desktop\dist\AFH-Setup-<version>.exe)
-#   3. Close the running app: "Agent Flow Harness" (Electron), afh-backend.exe and any
+#   3. Wait until no thread is working (asks the running app; -Force skips this), then close the running app: "Agent Flow Harness" (Electron), afh-backend.exe and any
 #      opencode.exe that was spawned by afh-backend. An unrelated `opencode serve --service`
 #      process is left alone.
 #   4. Run the installer silently (/S). electron-builder's NSIS installer keeps the previous
@@ -25,7 +25,11 @@ param(
     # Start the freshly installed app when done.
     [switch]$Launch,
     # Skip steps 1-2 and install whatever desktop\dist\AFH-Setup-<version>.exe already exists.
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    # Close the app even while threads are working (by default it waits for them to finish).
+    [switch]$Force,
+    # How long to wait for working threads before giving up without closing anything.
+    [int]$WaitMinutes = 60
 )
 
 $ErrorActionPreference = 'Stop'
@@ -129,6 +133,35 @@ function Stop-ProcessRows($rows, $force) {
             # (no 2>&1: under -ErrorAction Stop, PS 5.1 turns redirected native stderr into a terminating error)
             & taskkill.exe /PID $procId | Out-Null
         }
+    }
+}
+
+function Get-RunningThreads {
+    # Threads with a run going, from the running app's own API (~/.afh/api.json says where it listens).
+    # -1 when the app is not running or does not answer.
+    $home_ = if ($env:AFH_HOME) { $env:AFH_HOME } else { Join-Path $env:USERPROFILE ".afh" }
+    $file = Join-Path $home_ "api.json"
+    if (-not (Test-Path $file)) { return -1 }
+    try {
+        $info = Get-Content $file -Raw | ConvertFrom-Json
+        $url = ([string]$info.url).TrimEnd('/')
+        $rows = Invoke-RestMethod -Uri "$url/api/sessions?limit=500" -Headers @{ "x-afh-token" = [string]$info.key } -TimeoutSec 5
+        return @($rows | Where-Object { $_.running }).Count
+    } catch { return -1 }
+}
+
+if (-not $Force) {
+    Step "Waiting for running threads (if any)"
+    $deadline = (Get-Date).AddMinutes($WaitMinutes)
+    $n = Get-RunningThreads
+    if ($n -le 0) { Write-Host "    none running" }
+    while ($n -gt 0) {
+        if ((Get-Date) -gt $deadline) {
+            Fail "$n thread(s) still working after $WaitMinutes min; nothing was closed. Rerun with -Force to close them anyway."
+        }
+        Write-Host "    $n thread(s) still working; installing when they finish (-Force closes them now)"
+        Start-Sleep -Seconds 15
+        $n = Get-RunningThreads
     }
 }
 
