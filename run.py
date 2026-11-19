@@ -14,6 +14,12 @@ from pathlib import Path
 # The standalone download is one program called afh: it is the command, and its own backend with --headless.
 STANDALONE = getattr(sys, "frozen", False) and Path(sys.executable).stem.lower() == "afh" and "--headless" not in sys.argv
 
+if __name__ == "__main__" and any(a.startswith("chrome-extension://") for a in sys.argv[1:3]):
+    # Chrome started us for the AFH browser extension: only relay to the running app (afh/nativehost.py)
+    from afh import nativehost
+
+    sys.exit(nativehost.main())
+
 if __name__ == "__main__" and (sys.argv[1:2] == ["cli"] or STANDALONE):  # before the imports below: they start the engine
     from afh import cli
 
@@ -90,6 +96,14 @@ def watch_parent() -> None:
 def resume_connections() -> None:
     """Remote control and the AFH account, if they were left on, in the backend that does the background work."""
     engine.owner.wait()
+    try:  # lets the AFH browser extension reach this app (Chrome's native messaging host); a run from source
+        # leaves the installed app's link alone unless asked (AFH_DEV_EXTENSION=1)
+        from afh.engine.tools import extension
+
+        if getattr(sys, "frozen", False) or os.environ.get("AFH_DEV_EXTENSION") == "1":
+            extension.register()
+    except Exception as exc:
+        logging.getLogger("afh").warning("browser extension link not set up: %s", exc)
     try:
         from afh import remote
 

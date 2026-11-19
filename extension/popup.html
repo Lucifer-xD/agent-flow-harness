@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Agent Flow Harness</title>
+<style>
+  :root { --bg: #fbf9f6; --fg: #1f1b17; --muted: #6b6257; --line: #e6e0d8; --ok: #2e7d4f; --warn: #b4532a; --accent: #1f1b17; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #181512; --fg: #f1ece5; --muted: #a39a8f; --line: #2c2723; --ok: #5cc28a; --warn: #e58a5c; --accent: #f1ece5; color-scheme: dark; } }
+  body { margin: 0; width: 300px; background: var(--bg); color: var(--fg); font: 13px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+  header img { width: 24px; height: 24px; }
+  header b { font-size: 14px; }
+  main { padding: 12px 16px 16px; display: grid; gap: 10px; }
+  .state { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .ok .dot { background: var(--ok); } .bad .dot { background: var(--warn); }
+  p { margin: 0; color: var(--muted); }
+  button { font: inherit; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; }
+  button.main { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  code { font-size: 11px; word-break: break-all; }
+</style>
+</head>
+<body>
+<header><img src="icons/icon48.png" alt=""><b>Agent Flow Harness</b></header>
+<main>
+  <div id="state" class="state"><span class="dot"></span><span id="label">Checking…</span></div>
+  <p id="detail"></p>
+  <div><button id="pause"></button></div>
+</main>
+<script src="popup.js"></script>
+</body>
+</html>

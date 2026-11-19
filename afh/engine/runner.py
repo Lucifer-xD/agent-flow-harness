@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from . import diagnostics as diagmod
 from . import hooks as hookmod
+from .loopguard import LoopGuard
 from .types import BudgetExceeded, ChatMessage, ChatRequest, PermissionDenied, ToolCall, ToolContext, ToolResult, event, new_id, now_ms
 
 if TYPE_CHECKING:
@@ -196,6 +197,7 @@ class Run:
         self.goal_nudge_at: int | None = None  # work_steps when autopilot last sent the agent back
         self.step_files: list[tuple[str, str]] = []  # (tool call id, absolute path) changed in this step
         self.msg: dict | None = None  # the step being answered, as streamed so far
+        self.loops = LoopGuard()  # the model repeating the same step over and over
 
     def take_notes(self) -> None:
         """The step about to start is the first one whose history holds the notes sent meanwhile: mark them read."""
@@ -222,6 +224,25 @@ class Run:
 
     def emit(self, type_: str, **data: Any) -> None:
         self.engine.publish(event(type_, self.sid, **data))
+
+    def _notice(self, kind: str, label: str, text: str = "") -> None:
+        """A line in the chat. With `text` the model is told it too (as a user turn); without, only the user sees it."""
+        note = {"id": new_id("msg"), "type": "synthetic", "text": text, "time": {"created": now_ms()}, "metadata": {"notice": kind, "label": label}}
+        self.engine.store.add_message(self.sid, note)
+        self.emit("session.notice", kind=kind, label=label, message=note)
+
+    def _check_loop(self, msg: dict, calls: list[ToolCall]) -> bool:
+        """After a step: tell a model that keeps repeating itself to change course, and stop it if it still does.
+        True = stop the run."""
+        text = "\n\n".join(p.get("text", "") for p in msg.get("content", []) if p.get("type") == "text")
+        verdict = self.loops.step(text, [(c.name, c.input) for c in calls])
+        if not verdict:
+            return False
+        if verdict[0] == "note":
+            self._notice("loop", "The model was repeating the same step. AFH told it to try something else.", verdict[1])
+            return False
+        self._notice("loop", "Stopped: the model kept repeating the same step. Send a message to continue.")
+        return True
 
     # ---- main loop ---------------------------------------------------------------------
 
@@ -287,6 +308,8 @@ class Run:
                 await self._run_tools(tool_calls, msg, tools, gate, agent)
                 await self._diagnose(msg)
                 store.save_message(self.sid, msg)
+                if self._check_loop(msg, tool_calls):
+                    break
             else:
                 self.emit("session.notice", kind="limit", label=f"Stopped after {max_steps} steps (the per-run limit) — send a message to continue")
             self.emit("session.execution.succeeded")

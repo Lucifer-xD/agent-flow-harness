@@ -35,8 +35,10 @@ log = logging.getLogger("afh.browser")
 VIEWPORT = (1280, 800)
 MAX_TEXT = 30_000
 NAV_TIMEOUT = 30.0
-ACTIONS = ("open", "screenshot", "text", "click", "double_click", "hover", "drag", "type", "press", "scroll", "back", "forward",
-           "reload", "evaluate", "console", "network", "sources", "close")
+ACTIONS = ("open", "screenshot", "text", "elements", "zoom", "click", "double_click", "hover", "drag", "type", "press", "scroll",
+           "back", "forward", "reload", "evaluate", "console", "network", "sources", "close")
+LAST_URL: dict[str, str] = {}  # session id -> where its tab last was (to reopen it if the tab is lost)
+FALLBACK: set[str] = set()  # threads whose panel tab stopped answering: they use Chrome/Edge instead
 MODIFIERS = {"alt": 1, "ctrl": 2, "control": 2, "meta": 4, "cmd": 4, "command": 4, "win": 4, "shift": 8}
 
 
@@ -179,11 +181,21 @@ class CDP(Tab):
                 if not fut.done():
                     fut.set_exception(ToolError("The browser tab closed"))
 
+    @property
+    def closed(self) -> bool:
+        return self.reader.done()
+
     async def send(self, method: str, params: dict | None = None, timeout: float = 30) -> dict:
+        if self.closed:
+            raise ToolError("The browser tab closed")
         i = next(self.ids)
         fut = asyncio.get_running_loop().create_future()
         self.waiting[i] = fut
-        await self.ws.send(json.dumps({"id": i, "method": method, "params": params or {}}))
+        try:
+            await self.ws.send(json.dumps({"id": i, "method": method, "params": params or {}}))
+        except Exception:  # the connection dropped between calls
+            self.waiting.pop(i, None)
+            raise ToolError("The browser tab closed") from None
         return await asyncio.wait_for(fut, timeout)
 
     async def close(self) -> None:
@@ -289,7 +301,10 @@ class BrowserManager:
         async with self.lock:
             await self._ensure(settings)
             if sid in self.tabs:
-                return self.tabs[sid][1]
+                if not self.tabs[sid][1].closed:
+                    return self.tabs[sid][1]
+                self.tabs.pop(sid)  # its tab was closed: the tool reopens the page in a new one
+                raise ToolError("The browser tab closed")
             async with httpx.AsyncClient(timeout=10) as client:
                 r = await client.put(f"http://127.0.0.1:{self.port}/json/new?about:blank")
                 info = r.json()
@@ -391,6 +406,7 @@ class PanelHost:
                 await old.close()
             except Exception:
                 pass
+        FALLBACK.clear()  # a fresh panel: threads that had moved to Chrome/Edge may use it again
         log.info("browser panel connected")
         try:
             while True:
@@ -485,24 +501,132 @@ class PanelHost:
 PANEL = PanelHost()
 
 
+def _lost(err: Exception) -> bool:
+    """The tab is gone (the user closed it, the browser closed) or the panel stopped answering."""
+    text = str(err)
+    return "didn't answer" in text or "tab was closed" in text or "tab closed" in text or "panel closed" in text
+
+
 def use_panel(settings: dict) -> bool:
     """The panel when the AFH window is open, unless Settings → Agent → Browser says Chrome/Edge."""
     return PANEL.connected and ((settings or {}).get("browser") or {}).get("where") != "external"
 
-# Finds an element by CSS selector or by its visible text (buttons, links, labels).
-_FIND_JS = """(q) => {
+# Shared by _FIND_JS and _ELEMENTS_JS: every element of the page, open shadow roots and same-origin
+# frames included; what a person would call an element ("Sign in", a field's label or placeholder);
+# whether it is something you click or type into; whether it is visible.
+_DOM_JS = """
+const afhAll = () => {
+  const out = [];
+  const walk = (root) => {
+    for (const el of root.querySelectorAll('*')) {
+      out.push(el);
+      if (el.shadowRoot) walk(el.shadowRoot);
+      if (el.tagName === 'IFRAME' || el.tagName === 'FRAME') { try { if (el.contentDocument) walk(el.contentDocument); } catch (e) {} }
+    }
+  };
+  walk(document);
+  return out;
+};
+const afhNorm = (s) => String(s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+const afhLabel = (el) => {
+  const bits = [el.getAttribute('aria-label')];
+  const by = el.getAttribute('aria-labelledby');
+  if (by) for (const id of by.split(/\\s+/)) { const l = el.ownerDocument.getElementById(id); if (l) bits.push(l.innerText); }
+  if (el.labels) for (const l of el.labels) bits.push(l.innerText);
+  const tag = el.tagName;
+  if (tag === 'INPUT' && ['button', 'submit', 'reset'].includes((el.type || '').toLowerCase())) bits.push(el.value);
+  if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') bits.push(el.innerText);
+  bits.push(el.placeholder, el.getAttribute('title'), el.getAttribute('alt'), el.getAttribute('name'));
+  return bits.map(b => String(b || '').replace(/\\s+/g, ' ').trim()).filter(Boolean);
+};
+const AFH_ACTIVE = 'a[href],button,input,textarea,select,summary,label,[role=button],[role=link],[role=tab],[role=menuitem],[role=checkbox],[role=radio],[role=option],[role=switch],[role=textbox],[role=combobox],[role=searchbox],[onclick],[contenteditable=""],[contenteditable=true],[tabindex]:not([tabindex="-1"])';
+const afhActive = (el) => { try { return el.matches(AFH_ACTIVE) || getComputedStyle(el).cursor === 'pointer'; } catch (e) { return false; } };
+const afhShown = (el) => {
+  try {
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const s = getComputedStyle(el);
+    return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.05;
+  } catch (e) { return false; }
+};
+const afhRect = (el) => {
+  const r = el.getBoundingClientRect();
+  let x = r.left + r.width / 2, y = r.top + r.height / 2, w = el.ownerDocument.defaultView;
+  while (w && w.frameElement) { const f = w.frameElement.getBoundingClientRect(); x += f.left; y += f.top; w = w.parent; }
+  return {x, y, w: r.width, h: r.height};
+};
+"""
+
+# Finds an element by `@N` (from the `elements` action), CSS selector, or what it says / is labelled
+# (exact, then starts-with, then contains; buttons and fields before plain text). null when nothing matches.
+_FIND_JS = "(q) => {" + _DOM_JS + """
+  const all = afhAll();
   let el = null;
-  try { el = document.querySelector(q); } catch (e) {}
-  if (!el) {
-    const want = q.trim().toLowerCase();
-    const all = [...document.querySelectorAll('a,button,input,textarea,select,label,[role=button],[role=link],summary,[onclick],[tabindex]')];
-    el = all.find(e => (e.innerText || e.value || e.getAttribute('aria-label') || e.placeholder || '').trim().toLowerCase() === want)
-      || all.find(e => (e.innerText || e.value || e.getAttribute('aria-label') || e.placeholder || '').trim().toLowerCase().includes(want));
+  const ref = /^@(\\d+)$/.exec(q.trim());
+  if (ref) el = all.find(e => e.getAttribute && e.getAttribute('data-afh-ref') === ref[1]) || null;
+  if (!el && !ref) { try { el = document.querySelector(q); } catch (e) {} }
+  if (!el && !ref) {
+    const want = afhNorm(q);
+    const shown = all.filter(e => e.nodeType === 1 && afhShown(e));
+    const score = (e) => {
+      const labels = afhLabel(e).map(afhNorm);
+      const active = afhActive(e);
+      let best = 0;
+      for (const l of labels) {
+        if (!l || l.length > want.length * 4 + 60) continue;  // a whole section that merely contains the words
+        best = Math.max(best, l === want ? 4 : l.startsWith(want) ? 3 : l.includes(want) ? 2 : 0);
+      }
+      return best ? best * 2 + (active ? 1 : 0) : 0;
+    };
+    let top = 0, area = Infinity;
+    for (const e of shown) {
+      const s = score(e);
+      if (!s) continue;
+      const r = e.getBoundingClientRect(), a = r.width * r.height;
+      if (s > top || (s === top && a < area)) { top = s; area = a; el = e; }
+    }
+    if (el && !afhActive(el)) el = el.closest(AFH_ACTIVE) || el;
+    if (el && el.tagName === 'LABEL' && el.control) el = el.control;
   }
   if (!el) return null;
   el.scrollIntoView({block: 'center', inline: 'center'});
-  const r = el.getBoundingClientRect();
-  return {x: r.left + r.width / 2, y: r.top + r.height / 2, tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || '').slice(0, 80)};
+  const p = afhRect(el);
+  const label = (afhLabel(el)[0] || '').slice(0, 80);
+  return {x: p.x, y: p.y, tag: el.tagName.toLowerCase(), text: el.type === 'password' ? '' : label};
+}"""
+
+# Numbers what you can click or type into on the page (visible ones only) and tags each with
+# data-afh-ref, so `target: "@N"` finds it again. Password fields never show their value.
+_ELEMENTS_JS = "(limit) => {" + _DOM_JS + """
+  for (const e of afhAll()) if (e.removeAttribute) e.removeAttribute('data-afh-ref');
+  const vw = innerWidth, vh = innerHeight, lines = [];
+  let n = 0, more = 0;
+  for (const e of afhAll()) {
+    if (e.nodeType !== 1 || !afhActive(e) || !afhShown(e)) continue;
+    // the parts of a clickable thing (they inherit its pointer cursor) are not things of their own
+    if (!e.matches(AFH_ACTIVE) && e.parentElement && afhActive(e.parentElement)) continue;
+    if (n >= limit) { more++; continue; }
+    n++;
+    e.setAttribute('data-afh-ref', String(n));
+    const tag = e.tagName.toLowerCase(), role = e.getAttribute('role');
+    let kind = role || (tag === 'a' ? 'link' : tag === 'input' ? 'input:' + (e.type || 'text') : tag);
+    let label = (afhLabel(e)[0] || '').slice(0, 70);
+    let extra = '';
+    if (tag === 'input' || tag === 'textarea') {
+      if (e.type === 'password') extra = ' (password field)';
+      else if (['checkbox', 'radio'].includes(e.type)) extra = e.checked ? ' [checked]' : ' [not checked]';
+      else if (e.value) extra = ' = “' + String(e.value).slice(0, 40) + '”';
+    } else if (tag === 'select') {
+      const o = e.options[e.selectedIndex]; extra = o ? ' = “' + o.text.slice(0, 40) + '”' : '';
+    } else if (tag === 'a') {
+      try { const u = new URL(e.href); extra = ' → ' + (u.host === location.host ? '' : u.host) + u.pathname.slice(0, 50); } catch (x) {}
+    }
+    const p = afhRect(e);
+    const off = p.y < 0 || p.y > vh || p.x < 0 || p.x > vw ? ' (off screen, scrolls into view when used)' : '';
+    if (e.disabled) extra += ' [disabled]';
+    lines.push('@' + n + ' ' + kind + (label ? ' “' + label + '”' : '') + extra + off);
+  }
+  return {lines, more};
 }"""
 
 
@@ -514,27 +638,32 @@ class BrowserTool(BaseTool):
             "server or any page, see a screenshot, read the page text, click, type, press keys, scroll, run JavaScript in the "
             "page, read console errors, inspect network requests, and read the source files the page loaded. "
             "One tab per thread that keeps its state (and sign-ins) between calls; in the AFH app it is a side panel the user "
-            "watches live and can take over. Actions: `open` (url), `screenshot`, `text`, `click` / `double_click` / `hover` "
-            "(target: CSS selector or visible text, or x,y read off the latest screenshot), `drag` (x,y to to_x,to_y), `type` "
+            "watches live and can take over. Actions: `open` (url), `screenshot`, `text` (the page's words: the cheapest way to "
+            "read it), `elements` (numbers every button, link and field you can see: @1, @2… — then click/type with target \"@N\"; "
+            "the surest way to hit the right thing), `zoom` (x,y to to_x,to_y: a close-up of part of the screenshot), `click` / "
+            "`double_click` / `hover` (target: \"@N\", a CSS selector, or what the element says or is labelled — or x,y read off "
+            "the latest screenshot), `drag` (x,y to to_x,to_y), `type` "
             "(text; into target or x,y if given, else the focused field; submit:true presses Enter), `press` (key, e.g. Enter, Tab, "
             "Escape, Ctrl+A), `scroll` (direction up/down/left/right, optional amount in pixels and x,y), `back`, `forward`, "
             "`reload`, `evaluate` (script: a JS expression, run in the page console — its value is returned), `console` (log "
             "messages and errors since the last call), `network` (the requests the page made — method, status, type, size, "
             "timing; pass url=<part of a URL> to get one request's headers and response body), `sources` (the files the page "
             "loaded — the HTML document, scripts, stylesheets; pass url=<part of a URL> to read one file's contents), `close`. "
-            "Every action except text/evaluate/console/network/sources/close returns a fresh screenshot whose pixels are the "
-            "page's coordinates. Start a dev server with the shell tool (background: true) first when you need one."
+            "Every action except text/elements/evaluate/console/network/sources/close returns a fresh screenshot whose pixels are the "
+            "page's coordinates. Start a dev server with the shell tool (background: true) first when you need one. "
+            "For plain reading of a public page or API, `webfetch` is faster; use the browser when the page needs JavaScript, "
+            "a sign-in, or interaction, or when webfetch was turned away."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "action": {"type": "string", "enum": list(ACTIONS), "description": "What to do in this thread's tab."},
                 "url": {"type": "string", "description": "For open: the page (http(s):// or file://). For network/sources: part of a request or file URL to drill into (omit to list)."},
-                "target": {"type": "string", "description": "For click/double_click/hover/type: a CSS selector or the element's visible text."},
-                "x": {"type": "number", "description": "For click/double_click/hover/drag/type/scroll: x on the latest screenshot (instead of target)."},
+                "target": {"type": "string", "description": "For click/double_click/hover/type: \"@N\" from `elements`, a CSS selector, or what the element says or is labelled."},
+                "x": {"type": "number", "description": "For click/double_click/hover/drag/type/scroll/zoom: x on the latest screenshot (instead of target)."},
                 "y": {"type": "number", "description": "y on the latest screenshot."},
-                "to_x": {"type": "number", "description": "For drag: where to drop, x."},
-                "to_y": {"type": "number", "description": "For drag: where to drop, y."},
+                "to_x": {"type": "number", "description": "For drag: where to drop, x. For zoom: the far corner, x."},
+                "to_y": {"type": "number", "description": "For drag: where to drop, y. For zoom: the far corner, y."},
                 "text": {"type": "string", "description": "For type: the text to enter."},
                 "submit": {"type": "boolean", "description": "For type: press Enter afterwards."},
                 "key": {"type": "string", "description": "For press: a key such as Enter, Tab, Escape, ArrowDown, or a combination like Ctrl+A."},
@@ -547,16 +676,54 @@ class BrowserTool(BaseTool):
     )
 
     async def _run(self, ctx: ToolContext, input: dict) -> ToolResult:
+        """One action, with the tab put right when it is gone: the user closed it, or the panel stopped answering."""
+        try:
+            return await self._run_once(ctx, input)
+        except ToolError as err:
+            act = str(input.get("action") or "").strip().lower()
+            # a script that runs long is not a lost tab
+            if not _lost(err) or act == "close" or (act == "evaluate" and "didn't answer" in str(err)):
+                raise
+            lost = str(err)
+        sid = ctx.session_id
+        if "didn't answer" in lost and use_panel(ctx.settings):
+            FALLBACK.add(sid)  # this thread carries on in Chrome/Edge instead of the panel
+        PANEL.tabs.pop(sid, None)
+        await MANAGER.close_tab(sid)
+        action = str(input.get("action") or "").strip().lower()
+        where = ("the browser panel stopped answering, so this thread now uses its own Chrome/Edge window" if sid in FALLBACK
+                 else "the tab had been closed")
+        if action == "open":
+            res = await self._run_once(ctx, input)
+            res.text = f"({where.capitalize()}; AFH opened a fresh tab.)\n" + res.text
+            return res
+        last = LAST_URL.get(sid)
+        if not last:
+            raise ToolError(f"This thread's browser tab is gone ({where}). Use `open` to load the page again.")
+        res = await self._run_once(ctx, {"action": "open", "url": last})
+        if action in ("screenshot", "reload"):
+            res.text = f"({where.capitalize()}; AFH opened {last} again in a fresh tab.)\n" + res.text
+            return res
+        if action in ("text", "elements"):
+            again = await self._run_once(ctx, input)
+            again.text = f"({where.capitalize()}; AFH opened {last} again in a fresh tab.)\n" + again.text
+            return again
+        res.text = (f"{where.capitalize()}, so AFH opened {last} again in a fresh tab. Your `{action}` did NOT happen: look at "
+                    f"this screenshot and do it again.\n\n" + res.text)
+        return res
+
+    async def _run_once(self, ctx: ToolContext, input: dict) -> ToolResult:
         action = str_arg(input, "action").strip().lower()
         if action not in ACTIONS:
             raise ToolError(f"Unknown action {action!r}. Use one of: {', '.join(ACTIONS)}.")
-        panel = use_panel(ctx.settings)
         sid = ctx.session_id
+        panel = use_panel(ctx.settings) and sid not in FALLBACK
         if panel and sid in PANEL.paused:
             return ToolResult(text="The user has taken over this thread's browser tab and is using it themselves. Don't use the browser "
                                    "until they hand it back or ask you to; tell them what you wanted to do there.", is_error=True)
         if action == "close":
             await (PANEL.close_tab(sid) if panel else MANAGER.close_tab(sid))
+            LAST_URL.pop(sid, None)
             return ToolResult(text="Closed this thread's browser tab.")
         url = ""
         if action == "open":
@@ -570,7 +737,14 @@ class BrowserTool(BaseTool):
             if panel:
                 await PANEL.activity(sid, what, x, y)
 
-        return await self._act(page, action, input, url, show)
+        result = await self._act(page, action, input, url, show)
+        try:  # remembered so a lost tab can be put back where it was
+            here = await self._eval(page, "location.href")
+            if isinstance(here, str) and urlsplit(here).scheme in ("http", "https", "file"):
+                LAST_URL[sid] = here
+        except (ToolError, asyncio.TimeoutError):
+            pass
+        return result
 
     @staticmethod
     def _open_url(input: dict) -> str:
@@ -604,6 +778,14 @@ class BrowserTool(BaseTool):
             text = str(text or "")
             cut = len(text) > MAX_TEXT
             return ToolResult(text=f"{await self._where(page)}\n\n{text[:MAX_TEXT]}" + ("\n\n[…cut]" if cut else ""), truncated=cut)
+        if action == "elements":
+            await show("Finding what can be clicked")
+            listing = await self._elements(page)
+            return ToolResult(text=f"{await self._where(page)}\n\n" + (
+                "What you can click or type into (use target \"@N\"; the numbers last until the page changes):\n" + listing if listing
+                else "Nothing clickable is visible. Take a screenshot, scroll, or read the page with `text`."))
+        if action == "zoom":
+            return await self._zoom(page, input)
         if action in ("back", "forward", "reload"):
             await show({"back": "Going back", "forward": "Going forward", "reload": "Reloading"}[action])
             loaded = page.wait_for("Page.loadEventFired")
@@ -708,8 +890,48 @@ class BrowserTool(BaseTool):
             raise ToolError("Give a target (CSS selector or visible text) or x and y from the screenshot.")
         spot = await self._eval(page, f"({_FIND_JS})({json.dumps(target)})")
         if not spot:
-            return ToolResult(text=f"No element matches {target!r} on {await self._where(page)}. Try `text`, or a screenshot and x,y.", is_error=True)
+            # Say what IS there (and number it), so the next try can use @N instead of guessing again.
+            where = await self._where(page)
+            try:
+                listing = await self._elements(page, 60)
+            except ToolError:
+                listing = ""
+            hint = (f"\n\nWhat you can click or type into on this page now — use target \"@N\":\n{listing}" if listing
+                    else " Try `elements`, `text`, or a screenshot and x,y.")
+            what = "is no longer on the page (the page changed: call `elements` again)" if target.startswith("@") else "matches nothing on the page"
+            return ToolResult(text=f"{target!r} {what} — {where}.{hint}", is_error=True)
         return spot["x"], spot["y"], f"{spot['tag']}{' “' + spot['text'] + '”' if spot.get('text') else ''}"
+
+    async def _zoom(self, page: Tab, input: dict) -> ToolResult:
+        """A close-up of part of the page (x,y to to_x,to_y on the latest screenshot), for small text and icons."""
+        if any(input.get(k) is None for k in ("x", "y", "to_x", "to_y")):
+            raise ToolError("zoom needs x,y and to_x,to_y: two opposite corners of the area, read off the latest screenshot.")
+        (x1, x2), (y1, y2) = sorted((float(input["x"]), float(input["to_x"]))), sorted((float(input["y"]), float(input["to_y"])))
+        w, h = x2 - x1, y2 - y1
+        if w < 4 or h < 4:
+            raise ToolError("The zoom area is too small: give two opposite corners (x,y and to_x,to_y).")
+        sx, sy = 0.0, 0.0
+        try:
+            got = await self._eval(page, "[scrollX, scrollY]")
+            sx, sy = float(got[0]), float(got[1])
+        except (ToolError, TypeError, ValueError, IndexError):
+            pass
+        scale = max(1.0, min(3.0, 900 / max(w, h)))
+        try:
+            shot = await page.send("Page.captureScreenshot", {"format": "jpeg", "quality": 85,
+                                                              "clip": {"x": x1 + sx, "y": y1 + sy, "width": w, "height": h, "scale": scale}})
+        except ToolError as err:
+            raise ToolError(f"Couldn't take a close-up here ({err}). Use `screenshot`, or `text` / `elements` to read small print.")
+        return ToolResult(text=f"A close-up of ({x1:g},{y1:g})–({x2:g},{y2:g}), {scale:.1f}× larger. Keep using the full "
+                               "screenshot's x,y for clicks.", images=["data:image/jpeg;base64," + shot["data"]],
+                          metadata={"screenshot": True, "zoom": True})
+
+    async def _elements(self, page: Tab, limit: int = 150) -> str:
+        got = await self._eval(page, f"({_ELEMENTS_JS})({int(limit)})") or {}
+        lines = list(got.get("lines") or [])
+        if got.get("more"):
+            lines.append(f"(+{got['more']} more — scroll, or use `text` / a CSS selector)")
+        return "\n".join(lines)
 
     @staticmethod
     async def _mouse(page: Tab, kind: str, x: float, y: float, clicks: int = 0, buttons: int = 0) -> None:

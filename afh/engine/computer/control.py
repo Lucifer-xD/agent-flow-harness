@@ -37,6 +37,7 @@ class Controller:
         self.asked_once: dict[str, set] = {}  # session id -> app ids approved once this run
         self.display: dict[str, int] = {}  # session id -> the display it is looking at
         self.lessons: dict[str, asyncio.Future] = {}  # teach step id -> waits for Next / Exit
+        self.listed: dict[str, tuple[int, list]] = {}  # session id -> (window, its UI Automation elements as last listed: @1, @2…)
         self._tick = 0
         self._loop: asyncio.AbstractEventLoop | None = None
         self._esc = win.EscWatch(self._on_escape) if win.is_supported() else None
@@ -132,6 +133,7 @@ class Controller:
         if self.active.pop(sid, None) is not None:
             self.engine.publish({"type": "computer.active", "data": {"sessionID": sid, "active": False, "status": ""}})
         self.last_shot.pop(sid, None)
+        self.listed.pop(sid, None)
         self.asked_once.pop(sid, None)
         self.display.pop(sid, None)
         for key in [k for k in self.lessons if k.startswith(sid + ":")]:

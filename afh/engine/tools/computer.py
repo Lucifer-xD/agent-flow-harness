@@ -11,16 +11,19 @@ by pressing Esc (or the Stop button on the overlay).
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 
 from afh.engine.computer import apps as appsmod
-from afh.engine.computer import win
+from afh.engine.computer import uia, win
 from afh.engine.computer.control import Controller, Shot, controller
 from afh.engine.tools.files import BaseTool, ToolError, str_arg
 from afh.engine.types import PermissionDenied, ToolContext, ToolResult, ToolSpec
 
 POINTER = ("move", "click", "double_click", "triple_click", "right_click", "middle_click", "mouse_down", "mouse_up", "drag", "scroll")
-ACTIONS = ("screenshot", "zoom", "apps", "request_access", "launch", "focus", "switch_display", "cursor_position", *POINTER,
+ACTIONS = ("screenshot", "elements", "zoom", "apps", "request_access", "launch", "focus", "switch_display", "cursor_position", *POINTER,
            "type", "key", "hold_key", "wait", "read_clipboard", "set_clipboard", "batch", "teach")
+_UIA = concurrent.futures.ThreadPoolExecutor(1, thread_name_prefix="afh-uia")  # COM objects stay on one thread
+UIA_TIMEOUT = 12.0
 # What a batch may contain: the input actions (each one's own screenshot is skipped; one comes at the end).
 BATCHABLE = (*POINTER, "type", "key", "hold_key", "wait", "launch", "focus", "screenshot")
 SETTLE = 0.45  # how long to let the screen settle before the screenshot that follows an action
@@ -60,15 +63,20 @@ class ComputerTool(BaseTool):
         description=(
             "See the screen and use the mouse and keyboard in desktop apps, for things with no file, shell or web path "
             "(native apps, settings, GUI-only tools) — or teach the user to do something themselves. Windows only. The user "
-            "approves each app (ask for several up front with `request_access`); web browsers are view-only (use `browser`), "
-            "terminals and code editors click-only (use `shell`/`edit`). Coordinates are pixels on the LATEST screenshot "
-            "(its size is stated with it); screenshot first, act, look at the result, repeat.\n"
-            "Actions: `screenshot` (app:\"Notepad\" for one window), `zoom` (x,y,x2,y2: a region at full detail, for small "
+            "approves each app (ask for several up front with `request_access`); web browsers are view-only (use `chrome` or "
+            "`browser`), terminals and code editors click-only (use `shell`/`edit`).\n"
+            "Two ways to aim: (1) `elements` reads the window in front (or app:\"Name\") through Windows UI Automation and lists "
+            "its buttons, fields, menus, tabs and list items as @1, @2… with their names, values and states; then click/type with "
+            "target:\"@N\" or target:\"Save\" — exact, and no pixels needed. (2) x,y = pixels on the LATEST screenshot (its size is "
+            "stated with it), for canvases, games, images and apps that show no controls. Every action returns a fresh "
+            "screenshot: check it before the next move. Keyboard shortcuts (`key`) are faster and surer than hunting for menus; "
+            "`zoom` before clicking anything small.\n"
+            "Actions: `screenshot` (app:\"Notepad\" for one window), `elements` (app optional), `zoom` (x,y,x2,y2: a region at full detail, for small "
             "text — coordinates still refer to the last screenshot), `apps` (open + approved apps), `request_access` "
             "(apps: [names], reason), `launch`/`focus` (app), `switch_display` (display: 0,1… when there are several "
             "monitors), `cursor_position`, `move`, `click`, `double_click`, `triple_click`, `right_click`, `middle_click` "
-            "(x,y; modifiers like \"shift\" or \"ctrl+shift\"), `mouse_down`/`mouse_up` (x,y optional), `drag` (x,y → x2,y2), "
-            "`scroll` (x,y, direction, amount notches), `type` (text into the focused field), `key` (\"ctrl+s\", \"alt+Tab\", "
+            "(target, or x,y; modifiers like \"shift\" or \"ctrl+shift\"), `mouse_down`/`mouse_up` (x,y optional), `drag` (x,y → x2,y2), "
+            "`scroll` (target or x,y, direction, amount notches), `type` (text into the focused field, or into target), `key` (\"ctrl+s\", \"alt+Tab\", "
             "\"Enter\"), `hold_key` (key, amount seconds), `wait` (amount seconds), `read_clipboard`, `set_clipboard` (text), "
             "`batch` (actions: a list of these steps as objects, run in order, stopping at the first error, ONE screenshot "
             "at the end — use it whenever you can predict 2+ steps), `teach` (text: what to explain, optional x,y to point "
@@ -83,6 +91,7 @@ class ComputerTool(BaseTool):
                 "app": {"type": "string", "description": "For launch/focus/screenshot: an app name (\"Notepad\", \"Spotify\") or a full .exe path."},
                 "apps": {"type": "array", "items": {"type": "string"}, "description": "For request_access: the app names to ask for."},
                 "reason": {"type": "string", "description": "For request_access: one line on why (shown to the user)."},
+                "target": {"type": "string", "description": "For clicks/scroll/type/teach: a control from `elements` — \"@N\", or its name (\"Save\", \"File name\")."},
                 "x": {"type": "number", "description": "X pixel on the latest screenshot."},
                 "y": {"type": "number", "description": "Y pixel on the latest screenshot."},
                 "x2": {"type": "number", "description": "For drag/zoom: the second X pixel."},
@@ -137,12 +146,18 @@ class ComputerTool(BaseTool):
 
         token = ctrl.begin_step(ctx.session_id, intent or self._status(action, input))
         try:
+            if not ctrl.last_shot.get(ctx.session_id) and self._aims(action, input):
+                # x,y mean nothing without a screenshot to read them off: look first, act on the next call
+                return await self._shot(ctrl, ctx, f"Nothing was done yet: there was no screenshot for x,y to refer to, so AFH took one. "
+                                                   f"Find the spot on it and send the `{action}` again")
             if action == "teach":
                 return await self._teach(ctrl, ctx, input)
             if action == "batch":
                 return await self._batch(ctrl, ctx, input)
             if action == "zoom":
                 return await self._zoom(ctrl, ctx, input)
+            if action == "elements":
+                return await self._elements(ctrl, ctx, input)
             if action == "screenshot":
                 return await self._shot(ctrl, ctx, "Screenshot", app=input.get("app"))
             summary = await self._act(ctrl, ctx, action, input, intent)
@@ -152,12 +167,24 @@ class ComputerTool(BaseTool):
             ctrl.end_step(ctx.session_id, token, asyncio.get_running_loop())
 
     @staticmethod
+    def _aims(action: str, input: dict) -> bool:
+        """Whether this action points at x,y on a screenshot (a batch: any of its steps; teach: when it points)."""
+        if action == "batch":
+            steps = input.get("actions") if isinstance(input.get("actions"), list) else []
+            return any(isinstance(s, dict) and ComputerTool._aims(str(s.get("action") or "").strip().lower(), s) for s in steps)
+        if action in ("mouse_down", "mouse_up", "teach", "zoom"):
+            return input.get("x") is not None
+        if action in POINTER and input.get("target") and input.get("x") is None:
+            return False  # a control by name needs no screenshot
+        return action in POINTER
+
+    @staticmethod
     def _status(action: str, input: dict) -> str:
         if action == "batch":
             return f"Doing {len(input.get('actions') or [])} steps"
         if action == "teach":
             return "Showing you how"
-        return {"screenshot": "Looking at the screen", "zoom": "Looking closer", "type": "Typing", "key": "Pressing keys",
+        return {"screenshot": "Looking at the screen", "elements": "Reading the window", "zoom": "Looking closer", "type": "Typing", "key": "Pressing keys",
                 "launch": "Opening an app", "wait": "Waiting"}.get(action, action.replace("_", " ").capitalize())
 
     # ---- one input action (no screenshot): returns what happened ----------------------------
@@ -178,14 +205,28 @@ class ComputerTool(BaseTool):
 
         if action in POINTER:
             shot = ctrl.last_shot.get(sid)
-            if not shot:
+            named = ""
+            if input.get("target") and input.get("x") is None:
+                px, py, named = await self._target(ctrl, ctx, str(input["target"]))
+            elif not shot:
                 raise ToolError("Take a screenshot first — coordinates are pixels on the latest screenshot.")
-            if action in ("mouse_down", "mouse_up") and input.get("x") is None:
+            elif action in ("mouse_down", "mouse_up") and input.get("x") is None:
                 px, py = win.cursor_pos()
             else:
                 px, py = ctrl.to_physical(shot, *_xy(input))
+            if action == "drag" and not shot:
+                raise ToolError("drag needs x2,y2 on a screenshot: take one first.")
             app = await self._require(ctrl, ctx, win.window_at(px, py))
-            return await self._pointer(ctrl, ctx, action, input, px, py, shot, app, intent)
+            done = await self._pointer(ctrl, ctx, action, input, px, py, shot, app, intent or (f"{action.replace('_', ' ').capitalize()} {named}" if named else ""))
+            return done.replace(f" in {app.name}", f" {named} in {app.name}", 1) if named else done
+
+        if action == "type" and input.get("target"):  # into a field by name: click it first, then type
+            px, py, named = await self._target(ctrl, ctx, str(input["target"]))
+            app = await self._require(ctrl, ctx, win.window_at(px, py), typing=True)
+            ctrl.fx(sid, "click", x=px, y=py, button="left", count=1, label=intent or f"Click {named}")
+            await _io(win.glide_to, px, py, GLIDE)
+            await _io(win.click, "left", 1, [])
+            await asyncio.sleep(0.15)
 
         if action in ("type", "key", "hold_key"):
             app = await self._require(ctrl, ctx, win.foreground(), typing=True)
@@ -270,6 +311,90 @@ class ComputerTool(BaseTool):
         ctrl.fx(sid, "click", x=px, y=py, button=name, count=count, label=label, mods=str(input.get("modifiers") or ""))
         await _io(win.click, name, count, mods)
         return f"{VERBS[action]} in {app.name}"
+
+    # ---- UI Automation: the controls of a window, by name ------------------------------------
+
+    async def _uia(self, hwnd: int) -> list:
+        loop = asyncio.get_running_loop()
+        try:
+            return await asyncio.wait_for(loop.run_in_executor(_UIA, uia.elements, hwnd), UIA_TIMEOUT)
+        except uia.Unavailable as err:
+            raise ToolError(f"Reading the window's controls isn't available here ({err}); use the screenshot and x,y.") from None
+        except asyncio.TimeoutError:
+            raise ToolError("That app took too long to describe its controls; use the screenshot and x,y.") from None
+        except OSError as err:
+            raise ToolError(f"That app didn't describe its controls ({err}); use the screenshot and x,y.") from None
+
+    def _window_for(self, ctrl: Controller, input: dict) -> win.Window:
+        if input.get("app"):
+            app = ctrl.resolve_app(str(input["app"]))
+            w = ctrl.window_of(app) if app else None
+            if not w:
+                raise ToolError(f"{input['app']!r} doesn't seem to be open. Launch it first, or check `apps`.")
+            return w
+        w = win.foreground()
+        if not w:
+            raise ToolError("No window is in front. Pass app:\"Name\", or `focus` an app first.")
+        return w
+
+    async def _target(self, ctrl: Controller, ctx: ToolContext, target: str) -> tuple[int, int, str]:
+        """A control named by "@N" (from `elements`) or by its name → its centre (physical pixels) and a label."""
+        sid = ctx.session_id
+        listed = ctrl.listed.get(sid)
+        el = uia.find(listed[1], target) if listed else None
+        if el is None and not target.strip().startswith("@"):
+            w = win.foreground()
+            if w:
+                self._guard_window(ctrl, w)
+                items = await self._uia(w.hwnd)
+                ctrl.listed[sid] = (w.hwnd, items)
+                el = uia.find(items, target)
+        if el is None:
+            raise ToolError(f"No control matches {target!r} in the window in front. Call `elements` to see what is there (and their "
+                            f"@numbers), or use the screenshot and x,y." if not target.strip().startswith("@") else
+                            f"{target} isn't in the last `elements` listing (or the window changed). Call `elements` again.")
+        if not el.enabled:
+            raise ToolError(f"{el.kind} “{el.name}” is disabled (greyed out) right now; something else has to happen first.")
+        x, y = el.center
+        return x, y, f"{el.kind} “{el.name}”" if el.name else el.kind
+
+    def _guard_window(self, ctrl: Controller, w: win.Window) -> None:
+        app = ctrl.app_of_window(w)
+        if app:
+            self._guard(app)
+
+    async def _elements(self, ctrl: Controller, ctx: ToolContext, input: dict) -> ToolResult:
+        sid = ctx.session_id
+        w = self._window_for(ctrl, input)
+        self._guard_window(ctrl, w)
+        items = await self._uia(w.hwnd)
+        ctrl.listed[sid] = (w.hwnd, items)
+        ctrl.follow(sid, w)
+        shot = await _io(ctrl.screenshot, ctrl.display_rect(sid))  # the list's x,y are on this screenshot
+        ctrl.fx(sid, "shot", rect=list(ctrl.display_rect(sid)))
+        ctrl.last_shot[sid] = shot
+        lines = []
+        for n, el in enumerate(items, 1):
+            x, y = ctrl.to_shot(shot, *el.center)
+            on = 0 <= x <= shot.width and 0 <= y <= shot.height
+            bits = [f"@{n} {el.kind}", f"“{el.name}”" if el.name else ""]
+            if el.password:
+                bits.append("(password field)")
+            elif el.value and el.value != el.name:
+                bits.append(f"= “{el.value}”")
+            if el.state:
+                bits.append(f"[{el.state}]")
+            if not el.enabled:
+                bits.append("[disabled]")
+            if el.focused:
+                bits.append("(has focus)")
+            bits.append(f"at {x},{y}" if on else "(on another display)")
+            lines.append(" ".join(b for b in bits if b))
+        title = w.title or (ctrl.app_of_window(w).name if ctrl.app_of_window(w) else "the window")
+        text = (f"Controls in “{title}” ({len(items)}; buttons and fields first, then labels). Click or type with target \"@N\" or the "
+                f"control's name — no screenshot pixels needed. x,y are on the attached screenshot ({shot.width}×{shot.height}).\n"
+                + ("\n".join(lines) if lines else "(this app shows no controls to UI Automation — use the screenshot and x,y)"))
+        return ToolResult(text=text, images=[shot.data_uri], metadata={"screenshot": True, "shot": {"w": shot.width, "h": shot.height}})
 
     async def _launch(self, ctrl, ctx, input) -> str:
         name = str_arg(input, "app")
@@ -362,7 +487,9 @@ class ComputerTool(BaseTool):
                 except (TypeError, ValueError):
                     pass
         shot = ctrl.last_shot.get(ctx.session_id)
-        if input.get("x") is not None and input.get("y") is not None:
+        if input.get("target") and input.get("x") is None:
+            step["x"], step["y"], _ = await self._target(ctrl, ctx, str(input["target"]))
+        elif input.get("x") is not None and input.get("y") is not None:
             if not shot:
                 raise ToolError("Take a screenshot first, so x,y can point at something on it.")
             step["x"], step["y"] = ctrl.to_physical(shot, *_xy(input))

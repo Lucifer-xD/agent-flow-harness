@@ -96,6 +96,22 @@ class JobManager:
         self._notify(sid)
         return job
 
+    def adopt(self, sid: str, command: str, cwd: str, proc: asyncio.subprocess.Process, output: bytes, description: str = "") -> Job | None:
+        """Take over a command that is still running (a shell call that ran past its time): it carries on as a
+        background job with the output it already printed. None when the thread has no room for another job."""
+        if len([j for j in self.for_session(sid) if j.running]) >= MAX_JOBS_PER_THREAD:
+            return None
+        self._n += 1
+        job = Job(f"job{self._n}", sid, command, description, cwd)
+        job.proc = proc
+        job.buf.extend(output[-BUFFER_LIMIT:])
+        job.dropped = max(0, len(output) - BUFFER_LIMIT)
+        job.read_pos = len(output)  # the shell call already returned what came before
+        self.jobs[job.id] = job
+        job.pump = asyncio.create_task(self._pump(job))
+        self._notify(sid)
+        return job
+
     async def _pump(self, job: Job) -> None:
         assert job.proc and job.proc.stdout
         try:

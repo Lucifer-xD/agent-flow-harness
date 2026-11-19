@@ -2,7 +2,11 @@
 their sign-ins and their open tabs. The `browser` tool is the agent's own clean browser for checking
 its work; this one is for things only the user's browser can do.
 
-How it connects: Chrome 144 and later have a switch at chrome://inspect/#remote-debugging ("Allow
+How it connects, best first:
+- The AFH browser extension (extension/): Chrome starts AFH's native messaging host, which relays to
+  /api/extension/host; the extension runs DevTools commands in tabs with chrome.debugger. Nothing to
+  switch on and no prompt per connection (ExtensionHost below; setup in afh/engine/tools/extension.py).
+- The remote-debugging switch. Chrome 144 and later have a switch at chrome://inspect/#remote-debugging ("Allow
 remote debugging for this browser instance"). With it on, Chrome listens on 127.0.0.1 and writes the
 port to `DevToolsActivePort` in its profile folder. AFH opens ONE DevTools websocket to that port for
 as long as the backend runs; Chrome shows its own "Allow remote debugging?" prompt for that
@@ -32,6 +36,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from afh.engine.tools import extension
 from afh.engine.tools.browser import ACTIONS, BrowserTool, Tab, find_browsers
 from afh.engine.tools.files import ToolError, str_arg
 from afh.engine.types import PermissionDenied, ToolContext, ToolResult, ToolSpec
@@ -109,10 +114,11 @@ def setup_help(found: list[dict]) -> str:
         return ("No Chrome, Edge or Brave profile was found on this computer, so there is no browser of the user's to connect to. "
                 "Use the `browser` tool instead.")
     b = have[0]
-    return (f"{b['name']} isn't accepting connections yet. Ask the user to do this once: in {b['name']}, open "
-            f"{b['scheme']}{SETUP_PAGE} and tick “Allow remote debugging for this browser instance” (needs {b['name']} 144 or newer, "
-            f"and {b['name']} must be open). Then try again; {b['name']} will ask them to click Allow. "
-            "AFH can open that page for them from Settings → Agent → Your Chrome. Don't work around this with the `computer` tool.")
+    return (f"AFH isn't connected to the user's {b['name']}. The easy way: ask the user to add the AFH extension to {b['name']} "
+            "once (Settings → Agent → Your Chrome → “Add the AFH extension” walks them through it; after that it connects by itself, "
+            f"with nothing to allow each time). Or, without the extension: in {b['name']} open {b['scheme']}{SETUP_PAGE}, tick "
+            f"“Allow remote debugging for this browser instance” and click Allow when {b['name']} asks. Make sure {b['name']} is open, "
+            "then try again. Don't work around this with the `computer` tool.")
 
 
 def open_setup_page(settings: dict | None = None) -> str:
@@ -168,6 +174,7 @@ class Link:
         self.targets: dict[str, dict] = {}  # targetId -> its latest info (title, url, type, openerId)
         self.popups: dict[str, list[str]] = {}  # a tab's targetId -> tabs it opened
         self.closed = False
+        self.via = "debugging"  # or "extension": the AFH browser extension (ExtensionHost)
         self.reader = asyncio.create_task(self._read())
 
     @classmethod
@@ -280,6 +287,78 @@ class Link:
             await self.ws.close()
         except Exception:
             pass
+
+
+class _Socket:
+    """Starlette's WebSocket in the shape Link reads and writes (the websockets library's)."""
+
+    def __init__(self, ws):
+        self.ws = ws
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self) -> str:
+        try:
+            return await self.ws.receive_text()
+        except Exception:
+            raise StopAsyncIteration from None
+
+    async def send(self, text: str) -> None:
+        await self.ws.send_text(text)
+
+    async def close(self) -> None:
+        try:
+            await self.ws.close()
+        except Exception:
+            pass
+
+
+class ExtensionHost:
+    """The AFH browser extension, connected through its native host (afh/nativehost.py) to
+    /api/extension/host. It speaks the same DevTools messages as a remote-debugging connection, so the
+    chrome tool drives it through an ordinary Link; no remote-debugging switch, no "Allow" prompt."""
+
+    def __init__(self):
+        self.link: Link | None = None
+        self.hello: dict = {}
+
+    @property
+    def connected(self) -> bool:
+        return self.link is not None and not self.link.closed
+
+    async def serve(self, ws) -> None:
+        await ws.accept()
+        try:
+            first = json.loads(await asyncio.wait_for(ws.receive_text(), 15))
+        except Exception:
+            await _Socket(ws).close()
+            return
+        hello = first.get("hello") if isinstance(first, dict) else None
+        if not isinstance(hello, dict):
+            await _Socket(ws).close()
+            return
+        name = str(hello.get("browser") or "Chrome")[:20]
+        link = Link(_Socket(ws), name, name.lower())
+        link.via = "extension"
+        old, self.link, self.hello = self.link, link, hello
+        if old is not None and not old.closed:
+            await old.close()
+        try:
+            await link.send("Target.setDiscoverTargets", {"discover": True})
+            link.version = str((await link.send("Browser.getVersion")).get("product") or "")
+            log.info("the AFH extension connected from %s (%s)", name, link.version)
+            await asyncio.shield(link.reader)
+        except (ToolError, asyncio.CancelledError):
+            pass
+        finally:
+            if self.link is link:
+                self.link = None
+            await link.close()
+            log.info("the AFH extension disconnected")
+
+
+EXTENSION = ExtensionHost()
 
 
 class ChromeTab(Tab):
@@ -422,6 +501,12 @@ class ChromeManager:
 
     async def connect(self, settings: dict | None, waiting=None) -> Link:
         async with self.lock:
+            # The AFH extension comes first when it is there: no switch to turn on, nothing to click
+            if EXTENSION.connected:
+                if self.link is not EXTENSION.link:
+                    await self._drop()
+                    self.link = EXTENSION.link
+                return self.link
             if self.connected:
                 return self.link
             await self._drop()
@@ -440,7 +525,11 @@ class ChromeManager:
 
     async def _drop(self) -> None:
         if self.link is not None:
-            await self.link.close()
+            if self.link.via == "extension":  # the extension stays connected: only let go of the tabs
+                for tab in list(self.tabs.values()):
+                    await self._release(tab)
+            else:
+                await self.link.close()
         self.link = None
         self.tabs.clear()
         self.listed.clear()
@@ -622,7 +711,7 @@ def status(settings: dict | None) -> dict:
     """For Settings: which browsers are here, which is ready, and whether AFH is connected now."""
     cfg = (settings or {}).get("chrome") or {}
     found = candidates({"chrome": {"browser": "auto"}})
-    link = CHROME.link if CHROME.connected else None
+    link = CHROME.link if CHROME.connected else EXTENSION.link if EXTENSION.connected else None
     return {
         "enabled": cfg.get("enabled", True) is not False,
         "browser": str(cfg.get("browser") or "auto"),
@@ -633,6 +722,10 @@ def status(settings: dict | None) -> dict:
         "version": link.version if link else "",
         "waiting": CHROME.waiting,
         "setupPage": next((f"{c['scheme']}{SETUP_PAGE}" for c in found if c["installed"]), f"chrome{SETUP_PAGE}"),
+        "via": link.via if link else "",
+        "extension": {"connected": EXTENSION.connected, "browser": str(EXTENSION.hello.get("browser") or "") if EXTENSION.connected else "",
+                      "version": str(EXTENSION.hello.get("extension") or "") if EXTENSION.connected else "",
+                      "folder": str(extension.folder()), "id": extension.EXTENSION_ID},
         "allowed": [_rule(r) for r in cfg.get("allowed") or [] if _rule(r)],
         "blocked": [_rule(r) for r in cfg.get("blocked") or [] if _rule(r)],
     }
@@ -651,11 +744,14 @@ class ChromeTool(BrowserTool):
         description=(
             "The user's OWN browser (their running Chrome, Edge or Brave), with their sign-ins, cookies and open tabs. Use it only when "
             "the task needs that: something behind their login (their mail, dashboards, accounts), a tab they already have open, or when "
-            "they ask for their browser. For checking your own work or public pages, use `browser` instead. The first use each time AFH "
-            "runs makes the browser ask the user to click Allow, and each new site asks the user once; wait for them. "
+            "they ask for their browser. For checking your own work or public pages, use `browser` instead. It connects through the AFH "
+            "extension in their browser (or, without it, the browser's remote-debugging switch, which asks the user to click Allow); each "
+            "new site asks the user once; wait for them. "
             "Actions: `tabs` (list the user's open tabs), `switch_tab` (tab: its number from `tabs`, or part of its title/address — work in "
-            "that tab instead of your own), `open` (url; in a tab AFH opened for this thread), `screenshot`, `text`, `click` / "
-            "`double_click` / `hover` (target: CSS selector or visible text, or x,y read off the latest screenshot), `drag`, `type` (text; "
+            "that tab instead of your own), `open` (url; in a tab AFH opened for this thread), `screenshot`, `text`, `elements` (numbers "
+            "every button, link and field you can see: @1, @2… — then click/type with target \"@N\", the surest way to hit the right "
+            "thing), `zoom` (x,y to to_x,to_y: a close-up of part of the screenshot), `click` / `double_click` / `hover` (target: \"@N\", "
+            "a CSS selector, or what the element says or is labelled — or x,y read off the latest screenshot), `drag`, `type` (text; "
             "submit:true presses Enter), `press` (key), `scroll`, `back`, `forward`, `reload`, `evaluate` (script), `console`, `network`, "
             "`sources`, `close` (closes the tab AFH opened; a tab of the user's is only let go). Actions that change the page return a "
             "fresh screenshot whose pixels are the x,y to use. You act as the user here: before anything that buys, sends, posts, "
@@ -668,11 +764,11 @@ class ChromeTool(BrowserTool):
                 "action": {"type": "string", "enum": list(CHROME_ACTIONS), "description": "What to do in the user's browser."},
                 "tab": {"type": "string", "description": "For switch_tab: the tab's number from `tabs`, or part of its title or address."},
                 "url": {"type": "string", "description": "For open: the page (http(s):// or file://). For network/sources: part of a request or file URL to drill into (omit to list)."},
-                "target": {"type": "string", "description": "For click/double_click/hover/type: a CSS selector or the element's visible text."},
-                "x": {"type": "number", "description": "For click/double_click/hover/drag/type/scroll: x on the latest screenshot (instead of target)."},
+                "target": {"type": "string", "description": "For click/double_click/hover/type: \"@N\" from `elements`, a CSS selector, or what the element says or is labelled."},
+                "x": {"type": "number", "description": "For click/double_click/hover/drag/type/scroll/zoom: x on the latest screenshot (instead of target)."},
                 "y": {"type": "number", "description": "y on the latest screenshot."},
-                "to_x": {"type": "number", "description": "For drag: where to drop, x."},
-                "to_y": {"type": "number", "description": "For drag: where to drop, y."},
+                "to_x": {"type": "number", "description": "For drag: where to drop, x. For zoom: the far corner, x."},
+                "to_y": {"type": "number", "description": "For drag: where to drop, y. For zoom: the far corner, y."},
                 "text": {"type": "string", "description": "For type: the text to enter."},
                 "submit": {"type": "boolean", "description": "For type: press Enter afterwards."},
                 "key": {"type": "string", "description": "For press: a key such as Enter, Tab, Escape, ArrowDown, or a combination like Ctrl+A."},

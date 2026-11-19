@@ -29,6 +29,7 @@ _RATE = ("rate limit", "rate_limit", "ratelimit", "too many requests", "requests
 
 PLAN_REST = 3600  # a used-up plan with no reset time given: check again in an hour
 RATE_REST = 60  # a per-minute rate limit with no reset time given
+MISSING_REST = 6 * 3600  # an account that can't use the model at all
 
 
 def classify(ev: dict) -> tuple[str, float]:
@@ -37,6 +38,8 @@ def classify(ev: dict) -> tuple[str, float]:
     text = f"{ev.get('message', '')} {ev.get('response', '')}".lower()
     if ev.get("kind") == "network":
         return "other", 0.0
+    if ev.get("missing"):  # this account can't use the model (Antigravity's 404): another account may
+        return "used_up", time.time() + MISSING_REST
     if status in (529, 503) or (any(w in text for w in _OVERLOAD) and not _plan_words(text)):
         return "overloaded", 0.0
     plan = _plan_words(text)
@@ -117,6 +120,8 @@ def _num(v: Any) -> float:
 
 def short_reason(ev: dict) -> str:
     """A few words on why, for the note in the chat."""
+    if ev.get("missing"):
+        return "this account can't use the model"
     msg = str(ev.get("message") or "")
     try:
         data = json.loads(ev.get("response") or "{}")

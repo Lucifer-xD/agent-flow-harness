@@ -772,7 +772,7 @@ class Transcript(VerticalScroll):
                 return None
             label = meta.get("label") or {"goal": "Goal not achieved yet, continuing", "hook": "A stop hook failed, continuing", "todo": "To-do items still open, checking"}.get(notice, "Notice")
             row = Note(label)
-            row.set_class(notice == "limit", "-warn")
+            row.set_class(notice in ("limit", "loop"), "-warn")
             return row
         if kind == "compaction":
             return Compaction(m)

@@ -50,8 +50,19 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.34.3" data-reveal>
-          <div class="rel-head"><h2>1.34.3</h2><time datetime="2026-11-17">Nov 17, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.34.4" data-reveal>
+          <div class="rel-head"><h2>1.34.4</h2><time datetime="2026-11-19">Nov 19, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">Your browser and your apps, properly</p>
+          <ul>
+            <li><b>The AFH browser extension:</b> the agent can work in your own Chrome, Edge or Brave through AFH's own extension, with no remote-debugging switch and no Allow click each time. Add it once from Settings &rarr; Your Chrome; the card turns green when it connects. AFH still asks you about each new site, and the extension's button pauses it.</li>
+            <li><b>Computer use by name:</b> the agent lists a window's buttons, fields, menus and tabs by name and clicks or types into them (&ldquo;Save&rdquo;, &ldquo;@3&rdquo;) instead of guessing from a screenshot. Its instructions gained a guide to computer use: which tool fits which app, working step by step, and what to ask you before doing.</li>
+            <li><b>Sharper on web pages:</b> the browser tools number a page's controls (@1, @2&hellip;) and can zoom into part of the page; text is found inside frames and embedded components; a tab that closed reopens its page.</li>
+            <li><b>The right tool for the job:</b> the instructions now say to keep going until the task is done, never to resend a failing call unchanged, and which AFH tool fits which job; a loop guard stops a model that keeps sending the same call.</li>
+            <li><b>Fixes:</b> slow commands move to a background job instead of timing out; clearer hints when a web page can't be fetched; Antigravity recovers when its project goes missing; an update waits for running threads before it restarts AFH.</li>
+          </ul>
+        </article>
+        <article class="panel rel" id="v1.34.3" data-reveal>
+          <div class="rel-head"><h2>1.34.3</h2><time datetime="2026-11-17">Nov 17, 2026</time></div>
           <p class="title">Studio, as it was</p>
           <ul>
             <li><b>Studio looks like its pictures again:</b> the work of a reply is one bar (&ldquo;Worked for 32s | Edited 3 files &middot; Ran 1 command&rdquo;) with the file icons and the step count on it. Opened, the steps are rows with an icon tile on a rail, with pills for the lines changed and the checks, and each to-do update is a card. The strip of marks under a folded reply, the timeline dots and the &ldquo;Answer&rdquo; divider are gone from Studio.</li>

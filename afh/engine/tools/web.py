@@ -16,7 +16,9 @@ import httpx
 from afh.engine.types import ToolContext, ToolResult, ToolSpec
 from afh.engine.tools.files import BaseTool, ToolError, int_arg, str_arg
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 AFH/1.0"
+# A plain browser identity: a tool name at the end made some sites refuse the request.
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+BLOCKED = {401, 403, 405, 406, 429, 451, 503}  # usually a site turning scripts away, not a missing page
 MAX_TEXT = 100_000  # characters of page text handed to the model
 DEFAULT_TIMEOUT = 30.0
 SEARCH_DEFAULT_LIMIT = 5
@@ -30,7 +32,8 @@ def make_client(timeout: float = DEFAULT_TIMEOUT) -> httpx.AsyncClient:
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Upgrade-Insecure-Requests": "1",
     }
     return httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=timeout)
 
@@ -179,6 +182,29 @@ def _looks_like_html(content_type: str, body: str) -> bool:
 # ---- webfetch -------------------------------------------------------------------------------
 
 
+def _other_branch(url: str) -> str | None:
+    """raw.githubusercontent.com/<owner>/<repo>/main/… ↔ …/master/…: the usual wrong guess."""
+    parts = urlsplit(url)
+    if parts.netloc.lower() != "raw.githubusercontent.com":
+        return None
+    seg = parts.path.split("/")  # ["", owner, repo, branch, ...]
+    if len(seg) < 5 or seg[3] not in ("main", "master"):
+        return None
+    seg[3] = "master" if seg[3] == "main" else "main"
+    return parts._replace(path="/".join(seg)).geturl()
+
+
+def _hint(status: int) -> str:
+    """One line telling the model what to do next instead of fetching the same address again."""
+    if status in (404, 410):
+        return (" (this page does not exist. Don't guess addresses: find the right one with websearch, or open the site's "
+                "own index or repository page and follow its links)")
+    if status in BLOCKED:
+        return (" (the site turned this request away; it often does that to scripts. Open the page with the browser tool "
+                "instead: action \"open\" with the url, then action \"text\")")
+    return ""
+
+
 class WebFetchTool(BaseTool):
     spec = ToolSpec(
         name="webfetch",
@@ -215,8 +241,14 @@ class WebFetchTool(BaseTool):
         try:
             async with make_client(timeout) as client:
                 response = await client.get(url)
+                other = _other_branch(url) if response.status_code == 404 else None
+                if other:  # a raw GitHub file guessed on the wrong default branch
+                    retry = await client.get(other)
+                    if retry.status_code < 400:
+                        response = retry
         except httpx.HTTPError as e:
-            raise ToolError(f"Request to {url} failed: {type(e).__name__}: {e}") from None
+            raise ToolError(f"Request to {url} failed: {type(e).__name__}: {e}. If the address is right, the site may be down "
+                            "or unreachable from here; don't retry the same address more than once.") from None
 
         content_type = response.headers.get("content-type", "").lower()
         body = response.text
@@ -224,7 +256,8 @@ class WebFetchTool(BaseTool):
         title = ""
         if response.status_code >= 400:
             preview = body[:2000]
-            return ToolResult(text=f"HTTP {response.status_code} for {final_url}\n\n{preview}".rstrip(), is_error=True,
+            hint = _hint(response.status_code)
+            return ToolResult(text=f"HTTP {response.status_code} for {final_url}{hint}\n\n{preview}".rstrip(), is_error=True,
                               metadata={"url": final_url, "status": response.status_code, "contentType": content_type})
 
         if fmt != "html" and _looks_like_html(content_type, body):

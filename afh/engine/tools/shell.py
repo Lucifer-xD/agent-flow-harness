@@ -160,6 +160,43 @@ async def stream_output(ctx: ToolContext, output: Callable[[], tuple[int, bytes]
             return
 
 
+SILENT_TIP = ("It printed nothing. If it is waiting for input (a password, a yes/no question, a host key), it can never get any "
+              "here: stop it and run it non-interactively (for ssh and scp add -o BatchMode=yes -o ConnectTimeout=10).")
+
+
+# Models often reach for the shell where AFH has a better tool of its own. The result then carries a
+# one-line pointer to it (once per thread for each kind), never a refusal: the command still ran.
+_CODE_EXT = r"(py|pyw|js|mjs|cjs|ts|tsx|jsx|json|md|css|scss|html|vue|svelte|ya?ml|toml|ini|cfg|ps1|psm1|sh|go|rs|java|kt|cs|c|cc|cpp|h|hpp|rb|php|sql|xml|env)"
+_TIPS = (
+    ("edit", re.compile(r"\b(set-content|add-content|out-file)\b|\[io\.file\]::write|writealltext|\bsed\s+(-\w+\s+)*-i\b|\bperl\s+-p?i\b|"
+                        r"(?<![\d&])>{1,2}\s*['\"]?[\w.:/\\-]+\." + _CODE_EXT + r"\b", re.I),
+     "[AFH tip: change files with the `edit`, `write` or `patch` tools rather than shell commands — AFH then shows the diff in "
+     "the Changes pane, checks the file for errors, and the user can undo it.]"),
+    ("read", re.compile(r"^\s*(cat|type|get-content|gc|head|tail|more)\s", re.I),
+     "[AFH tip: the `read` tool shows a file with line numbers and pages through big files (offset/limit) — use it to look at files.]"),
+    ("search", re.compile(r"^\s*(grep|rg|findstr|select-string|sls|get-childitem|gci|dir|ls|find|tree)\b|\|\s*(select-string|sls|findstr|grep)\b", re.I),
+     "[AFH tip: `grep` (regex over file contents) and `glob` (files by name pattern) search the project faster and skip "
+     "node_modules, .git and other noise — use them for finding things.]"),
+)
+_REMOTE = re.compile(r"^\s*(ssh|scp|docker|kubectl|wsl|podman|vagrant)\b", re.I)
+_TIPPED: dict[str, set[str]] = {}
+
+
+def tool_tip(session_id: str, command: str) -> str:
+    """A pointer to AFH's own tool when a shell command stands in for one ("" when none, or already said)."""
+    if _REMOTE.match(command):  # files on another machine: the shell is the right tool there
+        return ""
+    said = _TIPPED.setdefault(session_id, set())
+    if len(_TIPPED) > 500:
+        _TIPPED.clear()
+        _TIPPED[session_id] = said
+    for kind, rx, tip in _TIPS:
+        if kind not in said and rx.search(command):
+            said.add(kind)
+            return tip
+    return ""
+
+
 class ShellTool(BaseTool):
     spec = ToolSpec(
         name="shell",
@@ -167,17 +204,20 @@ class ShellTool(BaseTool):
             "Runs a command in the project folder and returns its combined stdout/stderr and exit code. On Windows "
             "the command runs in PowerShell (use PowerShell syntax: `;` to chain, `Get-ChildItem`, `$env:VAR`); on "
             "other systems in bash. Use it for builds, tests, git and package managers. Quote paths with spaces, "
-            "pass non-interactive flags, and never start commands that wait for input. A normal command is killed when "
-            "`timeout` seconds (default 120, max 600) elapse. For servers, watchers and anything that runs until stopped, "
+            "pass non-interactive flags, and never start commands that wait for input. A command still running after "
+            "`timeout` seconds (default 120, max 600) is not killed: it carries on as a background job and you get its job id. "
+            "For servers, watchers and anything that runs until stopped, "
             "set `background: true`: it starts a background job, returns its first output and a job id, and you check "
-            "on it with the `jobs` tool. Output over 30000 characters is truncated in the middle. Prefer `read`, `glob` "
-            "and `grep` for looking at files."
+            "on it with the `jobs` tool. Output over 30000 characters is truncated in the middle. Not for files in the "
+            "project: `read`, `glob` and `grep` look at them, and `edit`/`write`/`patch` change them (the user sees the "
+            "diff and can undo it) — never Set-Content, Out-File, here-strings, sed -i or `>` redirects into source files. "
+            "For ssh/scp always add -o BatchMode=yes -o ConnectTimeout=10 so a prompt can't hang the command."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "command": {"type": "string", "description": "The command line to run."},
-                "timeout": {"type": "integer", "description": f"Seconds before the command is killed (default {DEFAULT_TIMEOUT}, max {MAX_TIMEOUT})."},
+                "timeout": {"type": "integer", "description": f"Seconds to wait before the command moves to the background (default {DEFAULT_TIMEOUT}, max {MAX_TIMEOUT})."},
                 "description": {"type": "string", "description": "One short sentence saying what the command does, shown to the user (e.g. 'Run the unit tests')."},
                 "background": {"type": "boolean", "description": "Run as a background job (servers, watchers, long builds): returns right away with a job id. Default false."},
             },
@@ -222,6 +262,17 @@ class ShellTool(BaseTool):
         try:
             await asyncio.wait_for(proc.wait(), timeout)
         except asyncio.TimeoutError:
+            # Still running: keep it going as a background job rather than throwing away what it was doing.
+            live_task.cancel()
+            pump_task.cancel()
+            try:
+                await pump_task
+            except asyncio.CancelledError:
+                pass
+            job = ctx.jobs.adopt(ctx.session_id, command, ctx.directory, proc, bytes(buf), description) if ctx.jobs is not None else None
+            if job is not None:
+                return self._moved(command, description, bytes(buf), timeout, job.id, time.monotonic() - started)
+            pump_task = asyncio.create_task(pump())
             timed_out = True
             await kill_tree(proc)
             await proc.wait()
@@ -244,7 +295,26 @@ class ShellTool(BaseTool):
         text = output or "(no output)"
         if timed_out:
             text += f"\n[timed out after {timeout}s - the process tree was killed]"
+            if not output:
+                text += "\n" + SILENT_TIP
         elif code != 0:
             text += f"\n[exit code: {code}]"
+        tip = tool_tip(ctx.session_id, command)
+        if tip:
+            text += "\n" + tip
         return ToolResult(text=text, is_error=timed_out, truncated=truncated,
                           metadata={"command": command, "description": description, "exit_code": code, "timed_out": timed_out, "duration_ms": int(elapsed * 1000)})
+
+    @staticmethod
+    def _moved(command: str, description: str, raw: bytes, timeout: int, job_id: str, elapsed: float) -> ToolResult:
+        output = clean_clixml(raw.decode("utf-8", errors="replace")).replace("\r\n", "\n").strip()
+        output, truncated = truncate_output(output, 8000)
+        text = (output or "(no output yet)") + (
+            f"\n[still running after {timeout}s, so AFH did not kill it: it carries on as background job {job_id}. "
+            f"Wait for it with jobs(action=\"output\", id=\"{job_id}\", wait=60), or stop it with jobs(action=\"stop\", id=\"{job_id}\") "
+            "if it should have finished by now.]")
+        if not output:
+            text += "\n" + SILENT_TIP
+        return ToolResult(text=text, truncated=truncated,
+                          metadata={"command": command, "description": description, "exit_code": None, "timed_out": True,
+                                    "background": True, "job": {"id": job_id}, "duration_ms": int(elapsed * 1000)})

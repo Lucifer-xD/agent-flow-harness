@@ -1017,6 +1017,38 @@ def chrome_setup():
         raise ValueError(str(err)) from None
 
 
+@app.post("/api/chrome/extension")
+def chrome_extension():
+    """Set up the AFH extension's link, then show the user where it is: the extension folder in Explorer and
+    the browser's extensions page (where they turn on Developer mode and choose Load unpacked)."""
+    import subprocess
+    import sys
+
+    from .engine.tools import chrome, extension
+
+    info = extension.register()
+    if not info["folder"]:
+        raise ValueError("The extension isn't part of this AFH build.")
+    opened = ""
+    pick = next((c for c in chrome.candidates(engine.settings()) if c["installed"]), None)
+    if pick:
+        exe = chrome._exe(pick["id"], engine.settings())
+        if exe:
+            try:
+                subprocess.Popen([exe, f"{pick['scheme']}://extensions"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                opened = pick["name"]
+            except OSError:
+                pass
+    try:
+        if sys.platform == "win32":
+            os.startfile(info["folder"])  # noqa: S606 - the user's own folder
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", info["folder"]])
+    except OSError:
+        pass
+    return {"ok": True, "folder": info["folder"], "browser": opened, "page": f"{pick['scheme'] if pick else 'chrome'}://extensions"}
+
+
 @app.post("/api/chrome/sites")
 def chrome_sites(body: dict = Body(...)):
     """{allow: site} / {forget: site} for the always-allowed list; {blocked: [sites]} replaces the blocked list."""
@@ -1930,6 +1962,22 @@ async def browser_host(ws: WebSocket):
         await ws.close(code=4401)
         return
     await PANEL.serve(ws)
+
+
+@app.websocket("/api/extension/host")
+async def extension_host(ws: WebSocket):
+    """The AFH browser extension, through the native host Chrome starts (afh/nativehost.py). It proves itself
+    with the key from ~/.afh/api.json, which only this user can read; never over the remote listener."""
+    from afh.engine.tools.chrome import EXTENSION
+
+    server = ws.scope.get("server") or ("", 0)
+    via_remote = remote.state["port"] and server[1] == remote.state["port"]
+    bad_host = ACCESS["hosts"] and ws.headers.get("host") not in ACCESS["hosts"]
+    token = ws.headers.get("x-afh-token") or ""
+    if via_remote or bad_host or not (devapi.check(token) or (ACCESS["token"] and token == ACCESS["token"])):
+        await ws.close(code=4401)
+        return
+    await EXTENSION.serve(ws)
 
 
 @app.get("/api/events")
