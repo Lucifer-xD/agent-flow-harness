@@ -124,7 +124,7 @@ Then type `afh` in a project folder. It's the same AFH, full screen: threads, mo
 
 **Splits the work**
 - **Four modes:** *Build* does the work, *Plan* investigates without changing anything, *Delegate* leads and hands out tasks, and *Red Team* audits your own project. Or create your own agents.
-- **Helpers in parallel:** the built-in Helper and your own subagents run side by side, and you can watch any of them live.
+- **Helpers in parallel:** subagents with a job (Explorer, Researcher, Coder, Tester, Reviewer, Writer) and your own run side by side, and you can watch any of them live.
 - **Mix models:** lead with your strongest model, hand tests to a fast one and styles to another, across providers.
 - **Git worktrees:** give a thread or a delegate its own branch and folder, then merge it back with one click.
 - **Model races:** give one task to several models at once, each in its own worktree. Your tests score them, and you merge the winner.

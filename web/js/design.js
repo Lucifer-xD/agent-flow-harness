@@ -6,7 +6,7 @@
 import { api } from "./api.js";
 import { el, ico, toast } from "./ui.js";
 
-const DEVICE_NAMES = { phone: "Phone", tablet: "Tablet", desktop: "Desktop", laptop: "Laptop", window: "App window", watch: "Watch", tv: "TV" };
+const DEVICE_NAMES = { phone: "Phone", tablet: "Tablet", desktop: "Desktop", laptop: "Laptop", window: "App window", watch: "Smart watch", tv: "TV" };
 const PLATFORM_NAMES = { web: "Web", android: "Android", ios: "iOS", windows: "Windows", macos: "macOS", linux: "Linux", "cross-platform": "Cross-platform", other: "" };
 const cache = new Map(); // path -> Promise<html>
 

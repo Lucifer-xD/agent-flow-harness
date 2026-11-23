@@ -301,7 +301,7 @@ class DelegateRow(ToolRow):
         given = S.tool_input(p)
         status = self.status()
         live = status in ("streaming", "running")
-        who = self.agent_name(given.get("agent") or "helper")
+        who = self.agent_name((state.get("metadata") or {}).get("agent") or given.get("role") or given.get("agent") or "coder")
         self.node = "fork"
         mark = ("● ", "$primary") if live else ("× ", "$error") if status == "error" else ("✓ ", "$success")
         self.head.update(Content.assemble(("─", "$primary"), mark, (who, "bold"), "  ", (S.one_line(given.get("description") or "", 300), "$afh-text2")))

@@ -178,6 +178,10 @@ export function themesFor(iface) {
   return { own, classic: Object.keys(PRESETS).filter((id) => !OWN.has(id)) };
 }
 const LOOK_KEYS = ["theme", "preset", "darkPreset", "lightPreset", "accent", "accentOverride", "bg", "text"];
+/** Text size and shape, also kept per interface. Studio was drawn for these values (they are the app's defaults),
+ *  so it opens with them the first time; another interface keeps the sizes in use until it has its own. */
+const SIZE_KEYS = ["font", "fontSize", "radius", "density", "bubbles", "chatWidth"];
+const STUDIO_SIZES = { font: "inter", fontSize: 14, radius: 12, density: "comfortable", bubbles: "bubbles", chatWidth: 820 };
 /** The look an interface starts with the first time you pick it. */
 export function defaultLook(iface) {
   const l = INTERFACE_LOOKS[iface] || INTERFACE_LOOKS.studio;
@@ -189,10 +193,11 @@ export function defaultLook(iface) {
 export function interfacePatch(ui, iface) {
   const from = ui.interface || "studio";
   const looks = { ...(ui.looks || {}) };
-  looks[from] = Object.fromEntries(LOOK_KEYS.map((k) => [k, ui[k]]));
+  looks[from] = Object.fromEntries([...LOOK_KEYS, ...SIZE_KEYS].map((k) => [k, ui[k]]));
   const saved = looks[iface];
   const next = saved && (saved.preset === "custom" || PRESETS[saved.preset]) ? saved : defaultLook(iface);
-  return { interface: iface, looks, ...next };
+  const sizes = Object.fromEntries(SIZE_KEYS.map((k) => [k, saved?.[k] ?? (iface === "studio" ? STUDIO_SIZES[k] : ui[k])]).filter(([, v]) => v !== undefined));
+  return { interface: iface, looks, ...next, ...sizes };
 }
 
 export function applyAppearance(ui) {
@@ -215,6 +220,11 @@ export function applyAppearance(ui) {
   // The accent gradient runs accent0 → accent → accent2. A theme's own ends hold while its own accent is in use;
   // any other accent gets a lighter start and an end turned a little toward violet.
   const own = !t.custom && !(ui.accentOverride && ui.accent);
+  // Studio is the 1.32 look, whose two own themes ended in a softer red than they do elsewhere.
+  if ((ui.interface || "studio") === "studio" && own && (t.accent === "#ff6a2a" || t.accent === "#e85a1a")) {
+    t.accent0 = "#ffa21f";
+    t.accent2 = `color-mix(in srgb, ${t.accent} 70%, #ff3d71)`;
+  }
   set("--accent-0", own && t.accent0 ? t.accent0 : `color-mix(in oklch, ${t.accent} 80%, #fff)`);
   set("--accent-2", t.accent === "#ffffff" ? "#c9c9d2" : own && t.accent2 ? t.accent2 : `color-mix(in oklch, ${t.accent} 76%, #7a5cff)`);
   set("--fs", `${ui.fontSize || 14}px`);

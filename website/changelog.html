@@ -50,8 +50,21 @@
 
     <div class="wrap section" style="padding-top:0">
       <div class="tl">
-        <article class="panel rel latest" id="v1.34.4" data-reveal>
-          <div class="rel-head"><h2>1.34.4</h2><time datetime="2026-11-19">Nov 19, 2026</time><span class="badge green">Latest</span></div>
+        <article class="panel rel latest" id="v1.35.0" data-reveal>
+          <div class="rel-head"><h2>1.35.0</h2><time datetime="2026-11-23">Nov 23, 2026</time><span class="badge green">Latest</span></div>
+          <p class="title">Subagents with a job</p>
+          <ul>
+            <li><b>Subagents with a job:</b> in Build, Plan and your own modes the agent starts subagents named by what they do: <b>Explorer</b> and <b>Researcher</b> (read-only), <b>Coder</b>, <b>Tester</b>, <b>Reviewer</b> (never edits) and <b>Writer</b>, on the thread's own model. They replace the old Helper. Each card shows its job, model, effort, time and result, with the brief and the full report one click away.</li>
+            <li><b>Delegate mode leads:</b> there, your strong model plans, hands the work to the cheaper models on the Delegation tab, and reviews what comes back. The two are now separate.</li>
+            <li><b>Onyx, redrawn:</b> the reply, the step groups, approvals and questions, the team of subagents, the home page (&ldquo;Pick up where you left off&rdquo;), the phone layout and right-to-left text. Commands are called by what they are for.</li>
+            <li><b>Studio, as it was drawn:</b> Studio is back to its original look. Each interface now keeps its own text size, corners, density and width, so changing one no longer changes another.</li>
+            <li><b>Threads that need you:</b> the thread list shows &ldquo;Needs your answer&rdquo;, and AFH tells you when a thread you are not looking at has a question or wants an approval. A step you refused says &ldquo;you said no&rdquo; and no longer counts as a failure.</li>
+            <li><b>Copy an API key:</b> Settings &rarr; Models &amp; accounts (and the terminal app) can copy a provider's key to the clipboard. It works only on your own computer, never through remote control.</li>
+            <li><b>Fixes:</b> a dropped connection is retried for about two and a half minutes before a reply stops; a subagent that stops on an error can be continued; a running subagent's card no longer breaks; a thread no longer opens empty after going back and forth between pages; the Reviewer and Red Team can run commands again without being able to edit.</li>
+          </ul>
+        </article>
+        <article class="panel rel" id="v1.34.4" data-reveal>
+          <div class="rel-head"><h2>1.34.4</h2><time datetime="2026-11-19">Nov 19, 2026</time></div>
           <p class="title">Your browser and your apps, properly</p>
           <ul>
             <li><b>The AFH browser extension:</b> the agent can work in your own Chrome, Edge or Brave through AFH's own extension, with no remote-debugging switch and no Allow click each time. Add it once from Settings &rarr; Your Chrome; the card turns green when it connects. AFH still asks you about each new site, and the extension's button pauses it.</li>

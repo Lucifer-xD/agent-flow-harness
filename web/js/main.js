@@ -293,6 +293,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => S.se
 export async function saveSettings(patch) {
   S.settings = await api.put("/api/settings", patch);
   applyAppearance();
+  if (patch.ui) applyChatWidth(S.settings.ui.chatWidth);
   renderComposerState();
   return S.settings;
 }
@@ -622,6 +623,7 @@ async function openThread(id) {
     syncChildren(t.id).then(() => { if (S.current === t) view.update({ all: true }); });
   }
   if (S.current !== t) return;
+  renderThreads(); // now it is known whether the thread waits for you
   view.mount(t);
   loadJobs(t).then(() => { if (S.current === t) renderWork(); });
   renderComposerState();
@@ -688,14 +690,29 @@ function showHome() {
 // in the composer's own column (not the scrolling thread) so they always line up; other interfaces hide them.
 function clearWelcome() {
   document.querySelector(".main")?.classList.remove("welcome");
-  for (const n of document.querySelectorAll(".wel-top, .wel-ideas")) n.remove();
+  for (const n of document.querySelectorAll(".wel-top, .wel-ideas, .wel-recent")) n.remove();
 }
 function mountWelcome(title, ideas) {
   clearWelcome();
   $("composer-wrap").prepend(el("div.wel-top", el("span.wel-mark", logoNode({ size: 44, working: S.busy.size > 0 })), el("h2.wel-title", title),
     el("p.wel-sub", el("span", "Working in"), el("span.wel-proj", ico("folder"), basename(project())))));
   $("composer").after(el("div.wel-ideas", ideas.map(([name, title, text]) => el("button.wel-idea", { type: "button", title: text, on: { click: () => { setInput(text); $("input").focus(); } } }, ico(name), el("span", title)))));
+  if (document.documentElement.dataset.ui === "onyx") onyxRecent();
   document.querySelector(".main").classList.add("welcome");
+}
+
+/** Onyx's home also says where you left off: your last threads, with what each one is doing or last did. */
+function onyxRecent() {
+  const list = S.sessions.slice(0, 3);
+  if (!list.length) return;
+  document.querySelector(".wel-ideas").after(el("div.wel-recent", el("div.wr-h", "Pick up where you left off"),
+    list.map((s) => {
+      const st = threadState(s);
+      return el(`button.wr-row.${st}`, { type: "button", title: s.title || "New thread", on: { click: () => openThread(s.id) } },
+        el("i.wr-dot"), el("span.wr-title", s.title || "New thread"),
+        el("span.wr-sub", st === "waiting" ? "Needs your answer" : st === "running" ? "Working" : modelName(s.model) || ""),
+        el("span.wr-time", ago(s.time?.updated || s.time?.created)));
+    })));
 }
 
 /** "running" while the engine works on it, "done" once it has produced a reply, "idle" for a fresh thread. */
@@ -708,7 +725,8 @@ function threadStatus(s) {
 /** threadStatus, plus "waiting" while a working thread needs your answer (an approval or a question). */
 function threadState(s) {
   const st = threadStatus(s);
-  return st === "running" && S.threads.get(s.id)?.permissions?.size ? "waiting" : st;
+  const t = S.threads.get(s.id);
+  return st === "running" && (t?.loaded ? t.permissions?.size : s.waiting) ? "waiting" : st;
 }
 
 /** The status ring drawn in the thread list and on the welcome cards: a hollow ring, a pulsing one, or a check. */
@@ -1548,7 +1566,7 @@ async function refreshDrawer(reason = "changes") {
       const card = el(`div.file-diff${diffs.length <= 3 ? ".open" : ""}`, { style: { animationDelay: `${i * 30}ms` } });
       card.append(el("button.file-diff-head", { type: "button", on: { click: () => card.classList.toggle("open") } },
         el(`span.st.${d.status || "modified"}`, (d.status || "modified").slice(0, 1).toUpperCase()),
-        fileIcon(d.file || ""), el("span.fn", { title: d.file }, d.file),
+        fileIcon(d.file || ""), el("span.fn", { title: d.file }, inProject(d.file, t.session?.directory || project())),
         el("span.tool-stat", el("span.plus", `+${d.additions ?? 0}`), el("span.minus", `−${d.deletions ?? 0}`))),
         diffView(d.patch));
       body.append(card);
@@ -1563,6 +1581,13 @@ async function refreshDrawer(reason = "changes") {
       body.replaceChildren(el("div.drawer-empty", e.message));
     }
   }
+}
+
+/** A file's path as the project sees it ("web/ui.ts"), when it lies inside the thread's folder. */
+function inProject(file, dir) {
+  const norm = (x) => String(x || "").replace(/\\/g, "/");
+  const f = norm(file), base = norm(dir).replace(/\/+$/, "");
+  return base && f.toLowerCase().startsWith(base.toLowerCase() + "/") ? f.slice(base.length + 1) : f;
 }
 
 function renderHarness(h) {
@@ -1644,6 +1669,7 @@ function renderComposerState() {
   const t = S.current;
   const busy = !!t && (t.busy || S.busy.has(t.id));
   $("tb-logo").hidden = !busy; // the mark flows beside the title while a model works
+  document.querySelector(".main").classList.toggle("working", busy && !t.permissions?.size); // (Onyx: a thin light runs along the card's top edge; not while it waits for you)
   const send = $("btn-send");
   // While the model works: an empty box stops it; with text in it, the button sends that text as a
   // note the model reads at its next step, without being stopped (Esc still stops).
@@ -2134,6 +2160,7 @@ function onEvent(ev) {
       toast("Goal achieved", "ok", 4000);
     }
   }
+  if (type === "permission.asked" || type === "permission.replied") threadAsks(type, ev, sid);
   if (!t || !t.loaded) return;
   const result = applyEvent(t, ev);
   if (result?.reload && S.current === t) {
@@ -2157,15 +2184,21 @@ function onEvent(ev) {
     onChildEvent(sid, result, view);
     if (D.watch === sid && result.status) refreshDrawerSoon();
   }
-  if (type === "permission.asked" || type === "permission.replied") renderThreads(); // the thread shows it is waiting for you
-  if (type === "permission.asked") {
-    const asking = ev.data?.action === "question";
-    if (S.current !== t) toast(`"${t.session.title || "A thread"}" is ${asking ? "asking you a question" : "waiting for your approval"}`, "info", 5000);
-    notify("ask", ev.data?.metadata?.title || (asking ? "A question for you" : "Approval needed"), `${t.session.title || "A thread"} ${asking ? "has a question" : `wants to ${ev.data?.action || "run a tool"}`}`);
-  }
   if (type === "session.execution.succeeded" && !D.children.has(sid)) notify("done", "Done", t.session.title || "The thread finished");
   if ((type === "session.execution.succeeded" || type === "session.execution.failed") && sid === S.current?.id) refreshUsage();
   if (type === "session.execution.failed" && !D.children.has(sid)) notify("error", "Run failed", ev.data?.error?.message || t.session.title || "");
+}
+
+/** A thread began or stopped waiting for your answer: the list says so, and a new question reaches you wherever you are
+ *  (also when that thread has not been opened in this window yet). */
+function threadAsks(type, ev, sid) {
+  const t = S.threads.get(sid), s = S.sessions.find((x) => x.id === sid);
+  if (s) s.waiting = type === "permission.asked";
+  queueMicrotask(() => { renderThreads(); if (t && S.current === t) renderComposerState(); }); // after the event itself has been applied
+  if (type !== "permission.asked" || !(t?.loaded || s)) return;
+  const asking = ev.data?.action === "question", title = t?.session.title || s?.title || "A thread";
+  if (!t || S.current !== t) toast(`"${title}" is ${asking ? "asking you a question" : "waiting for your approval"}`, "info", 5000);
+  notify("ask", ev.data?.metadata?.title || (asking ? "A question for you" : "Approval needed"), `${title} ${asking ? "has a question" : `wants to ${ev.data?.action || "run a tool"}`}`);
 }
 
 let catalogTimer = 0;

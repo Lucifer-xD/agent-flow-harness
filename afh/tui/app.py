@@ -406,7 +406,7 @@ class AFH(Actions, App):
     def agent_name(self, aid: str) -> str:
         delegates = (self.settings.get("delegation") or {}).get("delegates") or []
         found = next((d for d in delegates if d.get("id") == aid), None) or next((a for a in self.agents if a.get("id") == aid), None)
-        return (found or {}).get("name") or aid
+        return (found or {}).get("name") or ("Coder" if aid == "general" else aid.title())
 
     def mode_id(self) -> str:
         t = self.thread

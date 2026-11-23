@@ -371,7 +371,7 @@
   & .q-recap-row { display: flex; flex-direction: column; gap: 2px; padding: 7px 0; border: 0; font-size: 13.2px; }
   & .q-recap-row + .q-recap-row { border-top: 1px solid var(--fl-line); }
   & .q-recap-q { color: var(--text-3); }
-  & .q-recap-a { font-weight: 550; color: var(--text); }
+  & .q-recap-a { max-width: 100%; text-align: start; font-weight: 550; color: var(--text); }
   & .q-recap.skipped .q-recap-a { font-weight: 400; color: var(--text-3); }
 
   /* a helper's card */

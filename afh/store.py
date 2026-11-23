@@ -211,8 +211,21 @@ A lead agent sends you tasks and reviews your work; you cannot see the user's co
 {system}"""
 
 
-def _model_string(m: dict | None) -> str | None:
-    if not m or not m.get("providerID") or not m.get("id"):
+ROLE_PROMPT = """You are the **{name}**, a subagent in Agent Flow Harness. Your job: {job}
+
+The agent the user is talking to started you for one self-contained piece of work. You cannot see that conversation and you cannot ask the user anything: everything you know is in the brief below. Do exactly that brief, in the project folder you are running in. If something is ambiguous, choose the most reasonable reading, say so in your report, and keep going.
+
+How to work as the {name}: {how}
+
+Be efficient: run independent searches and reads in one step, and stop when the brief is answered; do not wander into work you were not asked for.
+
+Finish with a report the other agent can act on without re-doing your work: the answer or result first, then what you changed (files) or checked (commands and their outcome), then anything it must know (open questions, risks, what you could not verify). Be honest about failures: if you could not finish, say what is left and why."""
+
+
+def _model_string(m: dict | str | None) -> str | None:
+    if isinstance(m, str):  # already "provider/model#variant"
+        return m or None
+    if not isinstance(m, dict) or not m.get("providerID") or not m.get("id"):
         return None
     s = f"{m['providerID']}/{m['id']}"
     if m.get("variant") and m["variant"] != "default":

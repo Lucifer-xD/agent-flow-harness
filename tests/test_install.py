@@ -156,10 +156,11 @@ def test_commands_hooks_and_agents(home, tmp_path):
     assert appstore.load_settings()["hooks"] == []
 
     assert not run(tool, c, action="add_agent", id="reviewer", name="Reviewer", system="Review code.", readonly=True).is_error
-    assert any(a.id == "reviewer" for a in all_agents())
+    assert [a.kind for a in all_agents() if a.id == "reviewer"] == ["custom"]  # the user's own replaces the built-in Reviewer role
     assert run(tool, c, action="add_agent", id="build").is_error
     assert not run(tool, c, action="remove_agent", id="reviewer").is_error
-    assert not any(a.id == "reviewer" for a in all_agents())  # really gone (settings merges used to keep it)
+    # really gone (settings merges used to keep it); the built-in Reviewer subagent role is back
+    assert [a.kind for a in all_agents() if a.id == "reviewer"] == ["role"]
 
 
 def test_redteam_is_a_builtin_audit_mode(home, tmp_path):

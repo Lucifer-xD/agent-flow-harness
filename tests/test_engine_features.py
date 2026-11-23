@@ -45,6 +45,9 @@ class FakeProvider:
     async def stream(self, req):
         self.requests.append(req)
         reply = self.replies.pop(0) if self.replies else "All done."
+        if isinstance(reply, dict):  # a raw provider event, e.g. an error
+            yield reply
+            return
         if isinstance(reply, str):
             yield {"type": "text.delta", "text": reply}
         else:
@@ -585,22 +588,133 @@ def test_goal_set_refuses_to_replace_an_active_goal(home, tmp_path):
     assert e.goal(sid)["text"] == "the user's goal"
 
 
-def test_builtin_helper_subagent_in_build_mode_uses_the_thread_model(home, tmp_path):
+def test_build_mode_starts_subagents_by_role_on_the_thread_model(home, tmp_path):
     p = FakeProvider([
-        [("subagent", {"agent": "general", "description": "Count files", "prompt": "Say how many files there are."}),
-         ("subagent", {"agent": "general", "description": "Second task", "prompt": "Say hello."})],
-        "child one reports", "child two reports",  # the two helpers answer (in either order)
-        "Both helpers reported.",
+        [("subagent", {"role": "explorer", "description": "Find the config loader", "prompt": "Where is the config loaded?"}),
+         ("subagent", {"role": "coder", "description": "Second task", "prompt": "Say hello."})],
+        "child one reports", "child two reports",  # the two subagents answer (in either order)
+        "Both reported.",
     ])
     e = make_engine(p)
-    s = asyncio.run(run_prompt(e, tmp_path, "use helpers", agent={"todoNudge": False}))
-    assert "subagent" in [t.name for t in p.requests[0].tools] and "`general` (Helper)" in p.requests[0].system
+    s = asyncio.run(run_prompt(e, tmp_path, "use subagents", agent={"todoNudge": False}))
+    sub = next(t for t in p.requests[0].tools if t.name == "subagent")
+    assert sub.parameters["properties"]["role"]["enum"][:6] == ["explorer", "researcher", "coder", "tester", "reviewer", "writer"]
+    assert "agent" not in sub.parameters["properties"]  # Build mode never sees the Delegate-mode delegates
+    assert "**Explorer**" in p.requests[0].system and "Helper" not in p.requests[0].system
     kids = e.store.list_sessions(parent_id=s["id"])
-    assert len(kids) == 2 and all(k["agent"] == "general" and k["model"] == {"providerID": "fake", "id": "m"} for k in kids)
-    assert all("child" in text_of(x) for x in tool_results(e, s["id"]))
-    # helpers get the harness prompt plus delegate rules, and no subagent/goal tools of their own
-    child_req = p.requests[1]
-    assert "# You are a delegate" in child_req.system and "subagent" not in [t.name for t in child_req.tools] and "goal" not in [t.name for t in child_req.tools]
+    assert sorted(k["agent"] for k in kids) == ["coder", "explorer"] and all(k["model"] == {"providerID": "fake", "id": "m"} for k in kids)
+    parts = tool_results(e, s["id"])
+    assert all("child" in text_of(x) for x in parts)
+    assert {x["state"]["metadata"]["name"] for x in parts} == {"Explorer", "Coder"}
+    assert all(x["state"]["metadata"]["kind"] == "subagent" and x["state"]["status"] == "completed" for x in parts)
+    # subagents get the harness prompt plus their role, and no subagent/goal tools of their own
+    child_reqs = [r for r in p.requests[1:3]]
+    assert any("You are the **Explorer**" in r.system for r in child_reqs) and any("You are the **Coder**" in r.system for r in child_reqs)
+    assert all("subagent" not in [t.name for t in r.tools] and "goal" not in [t.name for t in r.tools] for r in child_reqs)
+
+
+def test_explorer_subagent_is_read_only(home, tmp_path):
+    p = FakeProvider([
+        [("subagent", {"role": "explorer", "description": "Look", "prompt": "Write a file."})],
+        [("write", {"path": "x.txt", "content": "no"})],
+        "could not write",
+        "ok",
+    ])
+    e = make_engine(p)
+    asyncio.run(run_prompt(e, tmp_path, "go", agent={"todoNudge": False}))
+    assert not (tmp_path / "x.txt").exists()
+
+
+def test_reviewer_subagent_runs_commands_but_never_edits(home, tmp_path):
+    p = FakeProvider([
+        [("subagent", {"role": "reviewer", "description": "Review", "prompt": "Run the tests, then try to edit."})],
+        [("shell", {"command": "echo reviewed > ran.txt", "description": "Run a check"})],
+        [("write", {"path": "x.txt", "content": "no"})],
+        "reviewed",
+        "ok",
+    ])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "go", agent={"todoNudge": False}))
+    kid = e.store.list_sessions(parent_id=s["id"])[0]
+    shell, write = tool_results(e, kid["id"])
+    assert shell["state"]["status"] == "completed" and (tmp_path / "ran.txt").exists()  # a Reviewer runs the tests
+    assert write["state"]["status"] == "error" and not (tmp_path / "x.txt").exists()  # but never edits
+
+
+def test_red_team_subagents_never_edit(home, tmp_path):
+    p = FakeProvider([
+        [("subagent", {"role": "coder", "description": "Patch it", "prompt": "Write a file."})],
+        [("write", {"path": "x.txt", "content": "no"})],
+        "could not",
+        "ok",
+    ])
+    e = make_engine(p)
+
+    async def go():
+        appstore.save_settings({"agent": {"todoNudge": False}})
+        e.loop = asyncio.get_running_loop()
+        sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full", agent="redteam")["id"]
+        await e.prompt(sid, "audit")
+        await e.runs[sid].task
+
+    asyncio.run(go())
+    assert not (tmp_path / "x.txt").exists()
+
+
+def test_old_threads_that_used_the_helper_continue_as_a_coder(home, tmp_path):
+    p = FakeProvider([[("subagent", {"agent": "general", "description": "Old style", "prompt": "Say hi."})], "hi", "done"])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "go", agent={"todoNudge": False}))
+    assert [k["agent"] for k in e.store.list_sessions(parent_id=s["id"])] == ["coder"]
+
+
+def test_delegate_mode_hands_work_only_to_the_delegation_tab_models(home, tmp_path):
+    appstore.save_settings({"defaultMode": "full", "agent": {"todoNudge": False}, "delegation": {"delegates": [
+        {"id": "cheap", "name": "Cheap coder", "model": "fake/small", "job": "Implements well-specified changes", "enabled": True}]}})
+    p = FakeProvider([[("subagent", {"agent": "cheap", "description": "Implement it", "prompt": "Do it."})], "implemented", "Reviewed: fine."])
+    e = make_engine(p)
+
+    async def go():
+        e.loop = asyncio.get_running_loop()
+        sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full", agent="delegate")["id"]
+        await e.prompt(sid, "build it")
+        await e.runs[sid].task
+        return sid
+
+    sid = asyncio.run(go())
+    sub = next(t for t in p.requests[0].tools if t.name == "subagent")
+    assert sub.parameters["properties"]["agent"]["enum"] == ["cheap"] and "role" not in sub.parameters["properties"]
+    kid = e.store.list_sessions(parent_id=sid)[0]
+    assert kid["agent"] == "cheap" and kid["model"]["id"] == "small"
+    assert tool_results(e, sid)[0]["state"]["metadata"]["kind"] == "delegate"
+
+
+def test_delegate_mode_without_delegates_does_the_work_itself(home, tmp_path):
+    appstore.save_settings({"defaultMode": "full", "delegation": {"delegates": []}})
+    p = FakeProvider(["did it myself"])
+    e = make_engine(p)
+
+    async def go():
+        e.loop = asyncio.get_running_loop()
+        sid = e.create_session(str(tmp_path), model={"providerID": "fake", "id": "m"}, mode="full", agent="delegate")["id"]
+        await e.prompt(sid, "build it")
+        await e.runs[sid].task
+
+    asyncio.run(go())
+    assert "subagent" not in [t.name for t in p.requests[0].tools]  # never a copy of itself
+
+
+def test_a_subagent_that_stops_on_an_error_is_reported_as_failed(home, tmp_path):
+    p = FakeProvider([
+        [("subagent", {"role": "researcher", "description": "Check facts", "prompt": "Check."})],
+        {"type": "error", "message": "Invalid API key", "status": 401, "kind": "auth"},
+        "I'll do it myself.",
+    ])
+    e = make_engine(p)
+    s = asyncio.run(run_prompt(e, tmp_path, "go", agent={"todoNudge": False}))
+    part = tool_results(e, s["id"])[0]
+    assert part["state"]["status"] == "error" and part["state"]["metadata"]["status"] == "failed"
+    assert "Stopped on an error: Invalid API key" in text_of(part) and "Continue it with sessionID" in text_of(part)
 
 
 def test_helper_can_be_turned_off(home, tmp_path):
@@ -1074,3 +1188,15 @@ def test_models_listed_per_effort_are_regrouped_at_start(home, tmp_path):
     assert [m["id"] for m in stored["fetched"]] == ["gemini-4-hydrogen"] and stored["fetched"][0]["variants"] == ["low", "high", "xhigh"]
     e.regroup_models()  # a second start changes nothing
     assert e.store.get_session(sid)["model"] == new
+
+def test_session_list_says_who_waits(monkeypatch):
+    """A running thread with an open approval or question is listed as waiting, without opening it."""
+    from types import SimpleNamespace
+
+    from afh import api
+
+    fake = SimpleNamespace(is_running=lambda sid: sid != "c", pending={"r": SimpleNamespace(session_id="a"), "q": SimpleNamespace(session_id="c")})
+    monkeypatch.setattr(api, "engine", fake)
+    got = {sid: api.with_running({"id": sid}) for sid in "abc"}
+    assert [got[x]["waiting"] for x in "abc"] == [True, False, False]
+    assert [got[x]["running"] for x in "abc"] == [True, True, False]

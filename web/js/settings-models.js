@@ -324,6 +324,8 @@ export async function modelsPane(pane, ctx, opts = {}) {
       b.disabled = false; b.replaceChildren(ico("check"), "Test");
       if (out) out.ok ? toast(`${p.name} works (${out.model})`, "ok") : toast(`${p.name}: ${out.error || "failed"}`, "err", 8000);
     } } }, ico("check"), "Test");
+    const copyBtn = p.hasKey ? el("button.btn.sm", { type: "button", title: p.keyFromEnv ? "Copy the API key AFH reads from your environment" : "Copy the API key AFH is using now",
+      on: { click: () => copyKey(p) } }, ico("copy"), "Copy key") : null;
     const more = el("button.icon-btn", { type: "button", title: "More", html: icon("more") });
     more.addEventListener("click", () => popover(more, [
       { title: "Refresh models", sub: "Ask the provider for its list again", icon: "refresh", onSelect: async () => { if (await guard(() => api.post(`/api/providers/${p.id}/refresh`), "Models refreshed")) reload(); } },
@@ -352,7 +354,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
     page.append(back,
       el("div.pv-hero", mono(p.name, p.id, "lg", p.base_url, familyLogo(shownModels(p))),
         el("div.pv-hero-text", el("h2", p.name), el("div.pv-hero-sub", el(`span.pv-state.${st}`, el("i"), stText), el("span", howConnected(p)), el("code", p.base_url || ""))),
-        el("div.pv-hero-actions", testBtn, more)),
+        el("div.pv-hero-actions", copyBtn, testBtn, more)),
       tabs, body);
     drawTab();
     return page;
@@ -401,6 +403,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
         const patch = (body, msg) => guard(() => api.patch(`/api/providers/${p.id}/accounts/${a.id}`, body), msg).then((ok) => ok && load());
         const menu = el("button.icon-btn.sm", { type: "button", title: "More", html: icon("more") });
         menu.addEventListener("click", () => popover(menu, [
+          a.kind === "key" && a.keyHint ? { title: "Copy key", sub: `The full key ending ${a.keyHint.replace(/•/g, "")}`, icon: "copy", onSelect: () => copyKey(p, a) } : null,
           { title: "Rename", icon: "edit", onSelect: () => renameAccount(p, a, load) },
           i > 0 ? { title: "Move up", icon: "arrow-up", onSelect: () => patch({ move: -1 }) } : null,
           i < items.length - 1 ? { title: "Move down", icon: "arrow-down", onSelect: () => patch({ move: 1 }) } : null,
@@ -438,6 +441,16 @@ export async function modelsPane(pane, ctx, opts = {}) {
       field("API key", keyIn), field("Name (optional)", nameIn),
       el("div.actions", el("button.btn.ghost", { on: { click: () => dlg.close() } }, "Cancel"), el("button.btn.primary", { on: { click: go2 } }, ico("plus"), "Add key"))), { small: true });
     setTimeout(() => keyIn.focus(), 30);
+  }
+
+  /** Put a provider's API key on the clipboard: the one in use now, or one account's. The key is
+   *  fetched only when asked for, and never shown on screen. */
+  async function copyKey(p, a = null) {
+    const out = await guard(() => api.post(`/api/providers/${p.id}/key`, a ? { account: a.id } : {}));
+    if (!out?.key) return;
+    await copyText(out.key);
+    const which = a ? a.label : (p.accounts?.length || 0) > 1 ? out.label : "";
+    toast(out.source === "environment" ? `Copied the ${p.name} API key from your environment` : `Copied the ${p.name} API key${which ? ` (${which})` : ""}`, "ok", 1800);
   }
 
   function renameAccount(p, a, done) {

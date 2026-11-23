@@ -1141,18 +1141,64 @@ body.resizing .thread-inner, body.resizing .composer, body.resizing .work-dock {
 .deleg-stat { padding: 2px 8px; border-radius: 6px; background: var(--card-2); font-size: 12px; }
 .deleg-stat.now { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .deleg-last { border-left-color: var(--line-2); margin-top: 4px; }
-.deleg-sec { border-top: 1px solid var(--line); }
-.deleg-sec-head { width: 100%; display: flex; align-items: center; gap: 7px; padding: 8px 14px 8px 15px; font-size: 12.6px; color: var(--text-2); text-align: left; transition: background 0.15s, color 0.15s; }
+/* footer: the Brief and Full report toggles side by side; each opens its panel below */
+.deleg-foot { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px 6px 11px; border-top: 1px solid var(--line); }
+.deleg-sec-head { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 7px; border-radius: 8px; font-size: 12.3px; font-weight: 500; color: var(--text-2); transition: background 0.15s, color 0.15s; }
+.deleg-sec-head > .ico { width: 13px; height: 13px; color: var(--text-3); transition: color 0.15s; }
 .deleg-sec-head:hover { background: var(--card-2); color: var(--text); }
-.deleg-sec-head .chev { width: 13px; height: 13px; transition: transform 0.25s var(--ease); color: var(--text-3); }
-.deleg-sec.open .deleg-sec-head .chev { transform: rotate(90deg); }
+.deleg-sec-head.on { background: color-mix(in srgb, var(--role, var(--accent)) 11%, transparent); color: var(--text); }
+.deleg-sec-head.on > .ico { color: var(--role, var(--accent)); }
+.deleg-sec-head .chev { display: inline-grid; width: 12px; height: 12px; color: var(--text-3); transition: transform 0.25s var(--ease); }
+.deleg-sec-head .chev svg { width: 12px; height: 12px; }
+.deleg-sec-head.on .chev { transform: rotate(180deg); }
+.deleg-sec.open .deleg-sec-body > div { padding-top: 2px; }
 .deleg-sec-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s var(--ease); }
 .deleg-sec.open .deleg-sec-body { grid-template-rows: 1fr; }
-.deleg-sec-body > div { overflow: hidden; }
-.deleg-sec-body > div > * { margin: 0 14px 12px 15px; }
+.deleg-sec-body > div { overflow: hidden; padding-inline: 15px 14px; min-width: 0; }
+/* beats the interfaces' own `.work .md` margins, which pushed the report against the card's edge */
+.deleg .deleg-sec .deleg-sec-body > div > * { margin: 0 0 12px; }
 .deleg-brief-text { white-space: pre-wrap; font-size: 12.8px; line-height: 1.55; color: var(--text-2); max-height: 320px; overflow: auto; padding: 10px 12px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line); }
-.deleg-sec .md { font-size: 13.4px; max-height: 420px; overflow: auto; }
+.deleg .deleg-sec .md { font-size: 13.4px; line-height: 1.6; max-height: 360px; overflow: auto; padding: 4px 14px 6px; border-radius: 10px; background: color-mix(in srgb, var(--card-2) 60%, transparent); border: 1px solid var(--line); }
+.deleg .deleg-sec .md > :first-child { margin-top: 8px; }
 .deleg-perms { padding: 0 12px 10px 15px; }
+/* Subagents by job: each role has its own mark and colour (--role), so a reply with several reads at a glance. */
+.deleg-avatar.role { position: relative; color: var(--role, var(--accent)); background: color-mix(in srgb, var(--role, var(--accent)) 13%, var(--card)); border-color: color-mix(in srgb, var(--role, var(--accent)) 32%, var(--line)); }
+.deleg-avatar.role .ico { width: 17px; height: 17px; }
+.deleg-avatar.role.sm { width: 26px; height: 26px; border-radius: 8px; }
+.deleg-avatar.role.sm .ico { width: 14px; height: 14px; }
+.deleg-avatar.role.live::after { content: ""; position: absolute; inset: -3px; border-radius: 13px; padding: 1.5px; background: conic-gradient(from 0deg, transparent 0 62%, var(--role, var(--accent)) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: role-spin 1.4s linear infinite; }
+@keyframes role-spin { to { transform: rotate(360deg); } }
+.deleg[style*="--role"]:is(.running, .streaming)::before { background: var(--role); animation: none; }
+.deleg[style*="--role"]:is(.running, .streaming) { border-color: color-mix(in srgb, var(--role) 30%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--role) 8%, transparent), var(--card-shadow); }
+.deleg[style*="--role"] .deleg-progress::after { background: linear-gradient(90deg, transparent, var(--role), transparent); }
+.deleg-name { font-weight: 650; letter-spacing: -0.005em; }
+.deleg-model { display: inline-flex; align-items: center; gap: 5px; }
+.deleg-variant { font: 600 9.5px var(--font, inherit); text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.deleg { container-type: inline-size; }
+.deleg-model { white-space: nowrap; }
+/* A narrow card (phone, Watch pane, side panels): the time, state and Watch go to their own row under the name. */
+@container (max-width: 520px) {
+  .deleg-head { flex-wrap: wrap; row-gap: 8px; }
+  .deleg-main { flex: 1 1 calc(100% - 48px); }
+  .deleg-head > .deleg-main + * { margin-left: 47px; }
+  .deleg-head > .deleg-watch { margin-left: auto; }
+  .deleg-gist { margin-left: 15px !important; margin-right: 14px !important; }
+  [dir="rtl"] .deleg-head > .deleg-main + * { margin-left: 0; margin-right: 47px; }
+  [dir="rtl"] .deleg-head > .deleg-watch { margin-left: 0; margin-right: auto; }
+}
+.deleg-gist { margin: -2px 14px 11px 62px; font-size: 12.8px; line-height: 1.5; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+[dir="rtl"] .deleg-gist { margin: -2px 62px 11px 14px; }
+@media (max-width: 640px) { .deleg-gist { margin-left: 15px; } [dir="rtl"] .deleg-gist { margin-right: 15px; } }
+.deleg-time { flex: none; font: 500 11.5px var(--mono); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.deleg-stat.now { max-width: 100%; min-width: 0; }
+.deleg-stat.now b { font-weight: 600; }
+.deleg-now-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); max-width: 46ch; }
+.deleg-fail { display: flex; gap: 10px; align-items: flex-start; margin: 0 14px 12px 15px; padding: 9px 12px; border-radius: 10px; font-size: 12.8px; line-height: 1.45;
+  color: var(--text); background: color-mix(in srgb, var(--bad) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--bad) 26%, transparent); }
+.deleg-fail .ico { width: 15px; height: 15px; color: var(--bad); flex: none; margin-top: 1px; }
+.deleg-fail div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.deleg-fail span { color: var(--text-2); overflow-wrap: anywhere; }
 @keyframes rail-flow { from { background-position: 0 0; } to { background-position: 0 300%; } }
 @keyframes indeterminate { from { left: -40%; } to { left: 100%; } }
 @keyframes pulse-dot { 50% { transform: scale(0.6); opacity: 0.5; } }
@@ -1271,12 +1317,13 @@ pre, .codeblock pre, .diff, .live-code, .tool-pre, .h-pre { text-align: left; }
 [dir="rtl"] .think-text, [dir="rtl"] .compact-text { margin-left: 0; margin-right: 10px; padding-left: 14px; padding-right: 14px; border-left: 0; border-right: 2px solid var(--border-2); }
 [dir="rtl"] .compact-text { border-right-color: var(--accent-line); border-radius: 10px 0 0 10px; }
 [dir="rtl"] .deleg::before { left: auto; right: 0; }
-[dir="rtl"] .deleg-head, [dir="rtl"] .deleg-live, [dir="rtl"] .deleg-sec-head { padding-left: 12px; padding-right: 15px; }
+[dir="rtl"] .deleg-head, [dir="rtl"] .deleg-live { padding-left: 12px; padding-right: 15px; }
+[dir="rtl"] .deleg-foot { padding: 6px 11px 6px 10px; }
 [dir="rtl"] .deleg-last { border-left: 0; border-right: 2px solid var(--line-2); padding-left: 0; padding-right: 10px; }
 [dir="rtl"] .msg-rail { left: auto; right: 10px; align-items: flex-end; }
 [dir="rtl"] .chat-resize { left: auto; right: min(calc(50% + var(--chat-w) / 2 - 4px), calc(100% - 22px)); }
-[dir="rtl"] .chev svg, [dir="rtl"] .think-head .chev, [dir="rtl"] .todo-head .chev, [dir="rtl"] .deleg-sec-head .chev { transform: scaleX(-1); }
-[dir="rtl"] .think.open .think-head .chev, [dir="rtl"] .dock-todos.open .todo-head .chev, [dir="rtl"] .deleg-sec.open .deleg-sec-head .chev { transform: rotate(90deg) scaleX(-1); }
+[dir="rtl"] .chev svg, [dir="rtl"] .think-head .chev, [dir="rtl"] .todo-head .chev { transform: scaleX(-1); }
+[dir="rtl"] .think.open .think-head .chev, [dir="rtl"] .dock-todos.open .todo-head .chev { transform: rotate(90deg) scaleX(-1); }
 [dir="rtl"] .tool-head, [dir="rtl"] .pop-item, [dir="rtl"] .slash-item, [dir="rtl"] .todo-head, [dir="rtl"] .deleg-sec-head { text-align: right; }
 [dir="rtl"] .rail-float { transform: translate(-100%, -50%); }
 [dir="rtl"] .slash-keys { margin-left: 0; margin-right: auto; }
@@ -1293,7 +1340,14 @@ pre, .codeblock pre, .diff, .live-code, .tool-pre, .h-pre { text-align: left; }
   .tb-path { display: none; }
 }
 @container main (max-width: 620px) {
-  .sub-chip span:not(.sub-dots) { display: none; }
+  /* a step's head on a phone: the name gives way ("Updated the to-d…") so the count on the right stays whole */
+  .tool-head .tool-target:empty { min-width: 0; }
+  .tool-head .tool-name { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tool-head .tool-stat { flex-shrink: 0; }
+  .sub-chip .sub-txt { display: none; }
+  .sub-chip { gap: 5px; padding: 0 8px; margin-left: 0; }
+  .sub-chip:not(.live) { display: none; } /* no room: only "working now" earns a place; the reply names the finished ones */
+  .sub-chip::after { content: attr(data-n); font-variant-numeric: tabular-nums; }
   .tb-title h1 { font-size: 13.5px; }
   .thread-inner { padding-left: 14px; padding-right: 14px; }
   .composer-wrap { padding-left: 10px; padding-right: 10px; }
@@ -1804,7 +1858,7 @@ body.electron .titlebar .tb-name { font-weight: 600; color: var(--text-2); lette
 .deleg { border-color: var(--line); background: var(--card); box-shadow: var(--sh-1); border-radius: var(--card-radius); }
 .deleg-avatar { border-radius: 10px; background: var(--hover); border-color: var(--line); }
 .deleg-model, .deleg-stat { background: var(--hover); border-color: var(--line); }
-.deleg-sec { border-top-color: var(--line); }
+.deleg-foot { border-top-color: var(--line); }
 .deleg-sec-head:hover { background: var(--hover); }
 .compact-text { background: var(--card); }
 
@@ -2609,8 +2663,8 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 
 /* The agent and access pills in the message box carry a colour, so the mode you are in is seen at a glance:
    Build blue, Plan violet, Delegate amber, Red Team red (your own agents keep the colour you gave them);
-   Ask first green, Full access orange, Read only teal. Same in every interface and theme; each interface keeps its own
-   pill shape and hover. */
+   Ask first green, Full access orange, Read only teal. Same in every interface and theme except Studio, whose
+   message box keeps its original plain words; each interface keeps its own pill shape and hover. */
 #pick-agent { --pill-c: #3b82f6; }
 #pick-agent[data-agent="plan"] { --pill-c: #a855f7; }
 #pick-agent[data-agent="delegate"] { --pill-c: #f59e0b; }
@@ -2620,7 +2674,7 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 #pick-mode.mode-full { --pill-c: #f97316; }
 #pick-mode.mode-readonly { --pill-c: #0ea5b7; }
 /* only the words and the icon take the colour: no tinted pill behind them */
-:root .composer #pick-agent, :root .composer #pick-mode { color: color-mix(in srgb, var(--pill-c) 82%, var(--text)); font-weight: 550; }
-:root .composer #pick-agent:hover, :root .composer #pick-mode:hover { color: color-mix(in srgb, var(--pill-c) 82%, var(--text)); }
-:root .composer #pick-agent > .ico, :root .composer #pick-mode > .ico, :root .composer #pick-agent > svg, :root .composer #pick-mode > svg { color: var(--pill-c); }
-:root .composer #pick-agent .chev, :root .composer #pick-mode .chev { color: color-mix(in srgb, var(--pill-c) 60%, var(--text-3)); }
+:root:not([data-ui="studio"]) .composer #pick-agent, :root:not([data-ui="studio"]) .composer #pick-mode { color: color-mix(in srgb, var(--pill-c) 82%, var(--text)); font-weight: 550; }
+:root:not([data-ui="studio"]) .composer #pick-agent:hover, :root:not([data-ui="studio"]) .composer #pick-mode:hover { color: color-mix(in srgb, var(--pill-c) 82%, var(--text)); }
+:root:not([data-ui="studio"]) .composer :is(#pick-agent, #pick-mode) > :is(.ico, svg) { color: var(--pill-c); }
+:root:not([data-ui="studio"]) .composer :is(#pick-agent, #pick-mode) .chev { color: color-mix(in srgb, var(--pill-c) 60%, var(--text-3)); }

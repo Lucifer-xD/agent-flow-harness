@@ -507,7 +507,7 @@ class Panes:
             return run
 
         rows = [note("Delegate mode makes the thread's model the leader: it plans and reviews, and hands tasks to these delegates."),
-                R("toggle", "Built-in Helper", data.get("builtinHelper") is not False, "A subagent on the thread's own model, ready in every mode", helper), head(f"Delegates ({len(delegates)})")]
+                R("toggle", "Subagents", data.get("builtinHelper") is not False, "Explorer, Researcher, Coder, Tester, Reviewer, Writer on the thread's own model (Build, Plan, your modes)", helper), head(f"Delegates ({len(delegates)})")]
         rows += [R("item", d.get("name") or d.get("id"), self.ui.model_name(d.get("model")) or "thread's model", S.one_line(d.get("job"), 90), edit(i)) for i, d in enumerate(delegates)]
         rows += [R("button", "Add a delegate", "", "", edit(None)), head("Leader"), R("area", "Leader instructions", data.get("leaderInstructions") or "", "Extra rules for the leader", leader)]
         return rows
@@ -590,9 +590,13 @@ class Panes:
                         Item("Turn off" if a.get("enabled") else "Turn on", "toggle"), Item("Remove", "remove", style="$error")]
                 if a.get("state") == "active":
                     acts = acts[1:]
+                if a.get("kind") == "key" and a.get("keyHint"):
+                    acts.insert(0, Item("Copy key", "copy", f"ending {a['keyHint'].replace('•', '')}"))
                 act = await self.wait(Picker(a.get("label") or "Account", acts, search=False))
                 path = f"/api/providers/{pid}/accounts/{a['id']}"
-                if act == "use":
+                if act == "copy":
+                    await self.copy_key(p, a)
+                elif act == "use":
                     await ui.api("PATCH", path, {"active": True})
                     ui.say(f"Now using {a.get('label')}", 2)
                 elif act in ("up", "down"):
@@ -607,6 +611,18 @@ class Panes:
                     if await self.wait(Confirm(f"Remove {a.get('label')}?", "AFH forgets this key or sign-in. The other accounts stay.", "Remove", danger=True)):
                         await ui.api("DELETE", path)
             await ui.load_catalog()
+
+    async def copy_key(self, p: dict, a: dict | None = None) -> None:
+        """Put the provider's API key (the one in use, or one account's) on the clipboard, never on screen."""
+        ui = self.ui
+        try:
+            out = await ui.api("POST", f"/api/providers/{p['id']}/key", {"account": a["id"]} if a else {})
+        except Exception as err:
+            ui.fail(err)
+            return
+        if out and out.get("key"):
+            ui.copy_to_clipboard(out["key"])
+            ui.say(f"Copied the API key for {a.get('label') if a else p.get('name') or p['id']}", 2)
 
     def default_ref(self) -> str:
         ref = self.s.get("defaultModel") or {}
@@ -650,6 +666,8 @@ class Panes:
             on_ = p.get("enabled") is not False
             n = len(p.get("accounts") or [])
             items = [Item(f"Accounts ({n})…" if n else "Accounts…", "accounts"), Item("Test the connection", "test"), Item("Turn off" if on_ else "Turn on", "enabled"), Item("Refresh its models", "refresh"), Item("Edit model limits…", "limits"), Item("Prices…", "prices")]
+            if p.get("hasKey"):
+                items.insert(1, Item("Copy API key", "copykey", "from your environment" if p.get("keyFromEnv") else "the one in use now"))
             if p.get("login") and p.get("signedIn"):
                 items.append(Item("Sign out", "logout"))
             elif p.get("login"):
@@ -661,6 +679,8 @@ class Panes:
             pid = p["id"]
             if picked == "accounts":
                 await self.accounts(p, data)
+            elif picked == "copykey":
+                await self.copy_key(p)
             elif picked == "test":
                 ui.say("Testing…", 1.5)
                 r = await ui.api("POST", f"/api/providers/{pid}/test", {}, timeout=60)

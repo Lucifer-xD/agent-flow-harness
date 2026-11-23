@@ -1049,11 +1049,11 @@ class Actions:
                     given = S.tool_input(p)
                     status = (p.get("state") or {}).get("status") or "streaming"
                     word = "working" if status in ("streaming", "running") else "failed" if status == "error" else "done"
-                    rows.append(Item(S.one_line(given.get("description"), 60), p, f"{self.agent_name(given.get('agent') or 'helper')} · {word}"))
+                    rows.append(Item(S.one_line(given.get("description"), 60), p, f"{self.agent_name(((p.get('state') or {}).get('metadata') or {}).get('agent') or given.get('role') or given.get('agent') or 'coder')} · {word}"))
         if not rows:
-            self.say("No helpers in this thread yet", 2)
+            self.say("No subagents in this thread yet", 2)
             return
-        picked = await self.push_screen_wait(Picker("Helpers", list(reversed(rows)), search=len(rows) > 8, hint="Enter watch   Esc close"))
+        picked = await self.push_screen_wait(Picker("Subagents", list(reversed(rows)), search=len(rows) > 8, hint="Enter watch   Esc close"))
         if picked:
             child = self.child_of(t, picked)
             if not child:

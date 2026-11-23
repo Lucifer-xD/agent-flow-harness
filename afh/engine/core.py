@@ -498,7 +498,7 @@ class Engine:
 
         tools = list(builtin_tools(self.settings()))
         tools += [JobsTool(), statemod.TodoTool(self), HarnessTool(self), memmod.MemoryTool(self)]
-        if agent.kind != "delegate":  # goals belong to the thread the user talks to
+        if agent.kind not in ("delegate", "role"):  # goals belong to the thread the user talks to
             # Reading other threads is for threads the user writes in: a delegate's "user" is another
             # model, and a GitHub thread's is whoever wrote the issue.
             if (session.get("metadata") or {}).get("afh", {}).get("origin") != "github":
@@ -513,13 +513,21 @@ class Engine:
             tools.append(SkillTool(skills))
         if self.mcp:
             tools.extend(self.mcp.tools())
-        if agent.kind in ("leader", "builtin", "custom") and agentmod.delegate_ids(self.settings()):
-            tools.append(SubagentTool(self))
+        # Delegate mode: the leader hands work to the models on the Delegation tab. Every other mode the user
+        # talks to: subagents on the thread's own model (Explorer, Coder, Reviewer...). Subagents and delegates
+        # never start more of their own.
+        if agent.kind == "leader":
+            if agentmod.delegate_ids(self.settings()):
+                tools.append(SubagentTool(self, leader=True))
+        elif agent.kind in ("builtin", "custom") and agentmod.subagent_ids(self.settings()):
+            tools.append(SubagentTool(self, leader=False))
         return tools
 
     def is_read_only(self, session: dict, agent: agentmod.AgentConfig) -> bool:
+        # Read-only = no edits AND no commands (Plan, Read only, Explorer). An agent that only may not edit
+        # (Reviewer, Red Team) still runs tests and probes; its edits are refused by the gate's edit rule.
         rules = [*session.get("permissions", []), *agent.permissions]
-        return perm.decide(rules, "edit", ["*"]) == "deny"
+        return perm.decide(rules, "edit", ["*"]) == "deny" and perm.decide(rules, "shell", ["*"]) == "deny"
 
     def gate_for(self, session: dict, agent: agentmod.AgentConfig) -> perm.Gate:
         rules = [*session.get("permissions", []), *agent.permissions]
@@ -1229,46 +1237,78 @@ class Engine:
         return self.store.list_messages(sid)
 
 
-# ---- delegation: the leader hands work to a delegate in a child session -----------------------
+# ---- subagents and delegation ------------------------------------------------------------------
+# Outside Delegate mode the model starts subagents by job (role) on its own model; in Delegate mode the leader
+# hands work to the delegate models from the Delegation tab. Both run in a child session the user can watch.
+
+_SHARED_PARAMS = {
+    "description": {"type": "string", "description": "A short title for the task (3-8 words), shown on its card"},
+    "prompt": {"type": "string", "description": "The full brief: goal, exact files, constraints, how to check the result, what to report"},
+    "sessionID": {"type": "string", "description": "Continue this earlier child session instead of starting a new one"},
+    "background": {"type": "boolean", "description": "Return immediately; the result arrives later as a message"},
+    "worktree": {"type": "boolean", "description": "Work in its own git worktree (a separate copy on a new branch) so parallel ones never clash"},
+}
 
 
 class SubagentTool:
-    spec = ToolSpec(
-        name="subagent",
-        description=("Delegate a task to one of the configured delegate agents. It runs in its own session with its own model and reports back. "
-                     "Give a complete, self-contained prompt (goal, exact file paths, constraints, acceptance criteria, what to report). "
-                     "Pass sessionID to continue a previous delegation with the same delegate; omit it for a fresh one. Set background=true to return "
-                     "immediately and be told when it finishes. Several subagent calls in the same reply run AT THE SAME TIME - use that to fan out "
-                     "independent tasks. When parallel delegates would edit files, give each `worktree: true` so it works in its own git worktree "
-                     "(own branch and folder); its report names the branch to merge (git merge <branch>)."),
-        parameters={"type": "object", "properties": {
-            "agent": {"type": "string", "description": "The delegate's id"},
-            "description": {"type": "string", "description": "A short title for the task (3-8 words)"},
-            "prompt": {"type": "string", "description": "The full brief for the delegate"},
-            "sessionID": {"type": "string", "description": "Continue this earlier child session instead of starting a new one"},
-            "background": {"type": "boolean", "description": "Return immediately; the result arrives later as a message"},
-            "worktree": {"type": "boolean", "description": "Run the delegate in its own git worktree (a separate copy on a new branch) so parallel delegates never clash"},
-        }, "required": ["agent", "description", "prompt"]},
-    )
-
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: Engine, leader: bool = False):
         self.engine = engine
+        self.leader = leader
+        settings = engine.settings()
+        if leader:
+            ids = agentmod.delegate_ids(settings)
+            self.spec = ToolSpec(
+                name="subagent",
+                description=("Delegate a task to one of your delegate models (Delegate mode). It runs in its own session on its own model and reports back. "
+                             "Give a complete, self-contained brief (goal, exact file paths, constraints, acceptance criteria, what to report). "
+                             "Pass sessionID to continue an earlier delegation with the same delegate. Several subagent calls in the same reply run AT THE "
+                             "SAME TIME; when parallel delegates would edit files, give each `worktree: true` and merge their branches afterwards."),
+                parameters={"type": "object", "properties": {"agent": {"type": "string", "enum": ids, "description": "The delegate's id"}, **_SHARED_PARAMS},
+                            "required": ["agent", "description", "prompt"]})
+        else:
+            agents = {a.id: a for a in agentmod.all_agents(settings)}
+            ids = agentmod.subagent_ids(settings)
+            jobs = "; ".join(f"{i} ({agents[i].name}): {agents[i].description}" for i in ids)
+            self.spec = ToolSpec(
+                name="subagent",
+                description=("Start a subagent: a fresh copy of your model with a specific job, working in its own thread (the user can watch it) and "
+                             "reporting back to you. Pick the role whose job fits: " + jobs + ". It cannot see this conversation, so give it a complete brief. "
+                             "Use subagents for self-contained work that would flood your context or that can run in parallel; several subagent calls in "
+                             "one reply run AT THE SAME TIME. Parallel subagents that edit files need `worktree: true` (merge their branches afterwards). "
+                             "Pass sessionID to continue an earlier subagent. Check what they report before you rely on it."),
+                parameters={"type": "object", "properties": {"role": {"type": "string", "enum": ids, "description": "The subagent's job"}, **_SHARED_PARAMS},
+                            "required": ["role", "description", "prompt"]})
+
+    def _pick(self, input: dict) -> agentmod.AgentConfig | None:
+        settings = self.engine.settings()
+        aid = str(input.get("role") or input.get("agent") or "").strip().lower()
+        allowed = agentmod.delegate_ids(settings) if self.leader else agentmod.subagent_ids(settings)
+        if not self.leader and aid == agentmod.HELPER_ID:  # the old built-in "Helper"
+            aid = "coder"
+        return next((a for a in agentmod.all_agents(settings) if a.id == aid and a.id in allowed), None)
 
     async def run(self, ctx: ToolContext, input: dict) -> ToolResult:
         e = self.engine
-        aid = str(input.get("agent", ""))
-        agent = next((a for a in agentmod.all_agents(e.settings()) if a.id == aid and a.kind == "delegate"), None)
+        agent = self._pick(input)
+        word = "delegate" if self.leader else "subagent"
         if agent is None:
-            return ToolResult(text=f"No delegate named '{aid}'. Delegates: {', '.join(agentmod.delegate_ids(e.settings())) or 'none configured'}", is_error=True)
+            ids = agentmod.delegate_ids(e.settings()) if self.leader else agentmod.subagent_ids(e.settings())
+            given = input.get("role") or input.get("agent") or ""
+            return ToolResult(text=f"No {word} called '{given}'. Choose one of: {', '.join(ids) or 'none configured'}", is_error=True)
+        aid = agent.id
         await ctx.permissions.require("subagent", [aid], {"agent": aid, "description": input.get("description")})
         parent = e.store.get_session(ctx.session_id) or {}
         child = e.store.get_session(str(input.get("sessionID") or "")) if input.get("sessionID") else None
         wt_note = ""
         if child is None:
-            title = str(input.get("description") or f"Delegated to {agent.name}")[:80]
+            title = str(input.get("description") or agent.name)[:80]
             perms = list(parent.get("permissions") or [])
             if ctx.read_only:  # a read-only thread (Plan mode, Read only) never gets write access through a subagent
                 perms += agentmod.READONLY_RULES
+            else:  # nor does one that may not edit (Red Team, a Reviewer): its subagents may run, never edit
+                lead = agentmod.get_agent(parent.get("agent"), e.settings())
+                if perm.decide([*perms, *lead.permissions], "edit", ["*"]) == "deny":
+                    perms += agentmod.NOEDIT_RULES
             kw = dict(title=title, agent=aid, model=agent.model or parent.get("model"), parent_id=ctx.session_id, permissions=perms)
             if input.get("worktree"):
                 try:
@@ -1276,7 +1316,7 @@ class SubagentTool:
                     wt = e._afh(child["id"]).get("worktree") or {}
                     wt_note = f"\nWorktree: {wt.get('path')} on branch {wt.get('branch')} (merge it with: git merge {wt.get('branch')})"
                 except wtmod.GitError as err:
-                    return ToolResult(text=f"Could not create a worktree for the delegate: {err}", is_error=True)
+                    return ToolResult(text=f"Could not create a worktree for the {word}: {err}", is_error=True)
             else:
                 child = e.create_session(ctx.directory, **kw)
         msg = {"id": new_id("msg"), "type": "user", "text": str(input.get("prompt", "")), "time": {"created": now_ms()}}
@@ -1284,35 +1324,45 @@ class SubagentTool:
         e.publish(event("session.inbox.enqueued", child["id"], inboxID=msg["id"], item={"type": "user", "payload": {"text": msg["text"]}, "delivery": "steer"}))
         e.publish(event("session.inbox.delivered", child["id"], inboxID=msg["id"]))
         run = e.start_run(child)
+        meta = {"sessionID": child["id"], "agent": aid, "name": agent.name, "kind": "delegate" if self.leader else "subagent"}
         if input.get("background"):
             async def notify() -> None:
-                await run.task
-                report = self._report(child["id"])
-                e.store.add_message(ctx.session_id, {"id": new_id("msg"), "type": "synthetic", "text": f"Delegate {agent.name} finished (sessionID: {child['id']}):\n\n{report}", "time": {"created": now_ms()}})
+                try:
+                    await run.task
+                except BaseException:  # noqa: BLE001 - the report below says what happened
+                    pass
+                report, failed = self._report(child["id"])
+                verb = "failed" if failed else "finished"
+                e.store.add_message(ctx.session_id, {"id": new_id("msg"), "type": "synthetic",
+                                                     "text": f"The {agent.name} {word} {verb} (sessionID: {child['id']}):\n\n{report}", "time": {"created": now_ms()}})
                 if not e.is_running(ctx.session_id):
                     e.start_run(e.store.get_session(ctx.session_id))
             asyncio.create_task(notify())
             return ToolResult(text=f"<subagent sessionID=\"{child['id']}\" state=\"running\">Started in the background. You'll get its report as a new message.{wt_note}</subagent>",
-                              metadata={"sessionID": child["id"], "status": "running"})
+                              metadata={**meta, "status": "running"})
         try:
             await run.task
         except asyncio.CancelledError:
             e.interrupt(child["id"])
             raise
-        report = self._report(child["id"])
-        state = "completed" if "failed" not in report[:40].lower() else "failed"
-        return ToolResult(text=f"<subagent sessionID=\"{child['id']}\" state=\"{state}\">\n{report}{wt_note}\n</subagent>", metadata={"sessionID": child["id"], "status": state})
+        report, failed = self._report(child["id"])
+        state = "failed" if failed else "completed"
+        text = f"<subagent sessionID=\"{child['id']}\" state=\"{state}\">\n{report}{wt_note}\n</subagent>"
+        if failed:
+            text += (f"\nThe {word} stopped before finishing. Continue it with sessionID {child['id']} (it keeps its work so far), "
+                     "start a new one, or do the rest yourself.")
+        return ToolResult(text=text, is_error=failed, metadata={**meta, "status": state})
 
-    def _report(self, sid: str) -> str:
-        msgs = self.engine.store.list_messages(sid)
-        for m in reversed(msgs):
+    def _report(self, sid: str) -> tuple[str, bool]:
+        """Its final words, and whether it stopped on an error."""
+        for m in reversed(self.engine.store.list_messages(sid)):
             if m.get("type") == "assistant":
                 text = "\n\n".join(p.get("text", "") for p in m.get("content", []) if p.get("type") == "text" and p.get("text"))
                 if m.get("error"):
-                    return f"Delegate failed: {m['error'].get('message', '')}\n{text}".strip()
+                    return f"Stopped on an error: {m['error'].get('message', '')}\n\n{text}".strip(), True
                 if text:
-                    return text
-        return "(the delegate produced no report)"
+                    return text, False
+        return "(it finished without writing a report)", False
 
 
 engine = Engine()

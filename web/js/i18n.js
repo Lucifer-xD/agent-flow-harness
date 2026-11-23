@@ -118,7 +118,7 @@ const AR = {
   "Earlier context was compacted — summary": "تم ضغط السياق السابق — الملخص", "No summary was kept for this compaction.": "لم يُحفظ ملخص لهذا الضغط.",
   "Summarising older messages to free up context…": "جارٍ تلخيص الرسائل القديمة لتوفير مساحة في السياق…",
   // delegation / subagents
-  "Subagents": "الوكلاء الفرعيون", "Subagent": "وكيل فرعي", "Subagent task": "مهمة وكيل فرعي", "Watch": "شاهد", "Done": "تم", "Failed": "فشل", "Preparing": "يحضّر",
+  "Subagents": "الوكلاء الفرعيون", "Subagent": "وكيل فرعي", "Subagent task": "مهمة وكيل فرعي", "Watch": "شاهد", "Brief": "المهمة", "Full report": "التقرير الكامل", "Starting": "يبدأ", "Done": "تم", "Failed": "فشل", "Preparing": "يحضّر",
   "Needs approval": "يحتاج موافقة", "What the lead asked": "ما طلبه القائد", "What it reported": "ما أبلغ به", "What it replied": "ما ردّ به", "Working on it…": "يعمل عليه…",
   "No subagents in this thread yet.": "لا يوجد وكلاء فرعيون في هذه المحادثة بعد.", "Open the subagent's thread beside this one": "افتح محادثة الوكيل الفرعي بجانب هذه",
   "Open as its own thread": "افتحها كمحادثة مستقلة", "Nothing to watch.": "لا شيء للمشاهدة.", "Delegation failed": "فشل التفويض", "continued": "متابعة", "background": "في الخلفية", "worktree": "نسخة عمل",
@@ -265,7 +265,7 @@ const AR = {
   "Choose a design": "اختر تصميمًا", "Compare": "قارن", "Skip": "تخطَّ", "New options": "خيارات جديدة", "Full size": "الحجم الكامل", "View all": "عرض الكل",
   "Open in browser": "افتح في المتصفح", "Open full size": "افتح بالحجم الكامل", "Design": "التصميم", "Design options — skipped": "خيارات التصميم — تم التخطي",
   "Asked for new design options": "طُلبت خيارات تصميم جديدة", "Showed design options": "عرض خيارات التصميم", "Preparing design options": "جارٍ تجهيز خيارات التصميم",
-  "Phone": "هاتف", "Tablet": "جهاز لوحي", "Desktop": "سطح المكتب", "Laptop": "حاسوب محمول", "App window": "نافذة تطبيق", "Watch": "ساعة", "TV": "تلفاز",
+  "Phone": "هاتف", "Tablet": "جهاز لوحي", "Desktop": "سطح المكتب", "Laptop": "حاسوب محمول", "App window": "نافذة تطبيق", "Smart watch": "ساعة ذكية", "TV": "تلفاز",
   "This mockup file is gone": "ملف هذا النموذج لم يعد موجودًا", "Close (Esc)": "إغلاق (Esc)",
   "Close without choosing; the agent goes with the option it thinks fits best": "أغلق دون اختيار؛ يختار الوكيل الخيار الأنسب برأيه",
   "None of these: the agent makes new options (say what to change in the notes)": "لا شيء منها: يصنع الوكيل خيارات جديدة (اكتب ما تريد تغييره في الملاحظات)",
@@ -366,7 +366,7 @@ const AR = {
   "Most thorough, slowest": "الأدق، الأبطأ",
   "Add provider": "إضافة مزوّد",
   "Try a shorter name.": "جرّب اسمًا أقصر.",
-  "Worked": "انتهى العمل",
+  "Worked": "انتهى العمل", "Pick up where you left off": "تابع من حيث توقفت", "waiting for you": "بانتظارك", "Asks to run": "يطلب تشغيل", "Asked to run": "طلب تشغيل", "you said no": "رفضتَ", "Asks to change": "يطلب تعديل",
   "Review": "مراجعة",
   "Terminal": "الطرفية",
   "No output": "لا مخرجات",
@@ -489,7 +489,7 @@ const AR = {
 
 // Text with numbers or names in it.
 const AR_PATTERNS = [
-  [/^Worked for (.+)$/, "عمل لمدة $1"], [/^Edited (\d+) files?$/, "عدّل $1 ملف"], [/^Ran (\d+) commands?$/, "شغّل $1 أمر"],
+  [/^Worked for (.+)$/, "عمل لمدة $1"], [/^for (\d[\dhms. ]*)$/, "لمدة $1"], [/^(\d+) subagents?: (.+)$/, "$1 وكيل فرعي: $2"], [/^(\d+) failed$/, "$1 فشل"], [/^Edited (\d+) files?$/, "عدّل $1 ملف"], [/^Ran (\d+) commands?$/, "شغّل $1 أمر"],
   [/^Read (\d+) files?$/, "قرأ $1 ملف"], [/^Searched (\d+) times?$/, "بحث $1 مرة"], [/^Browsed (\d+) pages?$/, "تصفّح $1 صفحة"],
   [/^(\d+) other steps?$/, "$1 خطوة أخرى"], [/^(\d+) steps?$/, "$1 خطوة"], [/^(\d+) files? changed$/, "تغيّر $1 ملف"], [/^exit (\d+)$/, "خرج بالرمز $1"],
   [/^Nothing matches “(.+)”$/, "لا شيء يطابق «$1»"], [/^Search every provider \((\d+)\)$/, "ابحث في كل المزوّدين ($1)"],

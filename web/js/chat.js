@@ -40,7 +40,24 @@ export async function loadThread(t) {
   // The server knows whether a run is going; an unfinished last message alone may be a run cut off by a restart.
   t.busy = typeof t.session?.running === "boolean" ? t.session.running : !!(last && last.type === "assistant" && !last.time?.completed && !last.finish);
   if (!t.busy) { t.runStart = null; t.phase = null; }
+  // History calls a step that is still going "pending"; in a thread that is working it is simply running. (Read as
+  // it was, a command in hand looked finished and a question still waiting for you looked skipped.)
+  if (t.busy) {
+    for (let i = t.messages.length - 1; i >= 0 && t.messages[i].type !== "user"; i--) {
+      for (const p of t.messages[i].content || []) if (p.type === "tool" && p.state?.status === "pending") p.state.status = "running";
+    }
+  }
   t.loaded = true;
+}
+
+/** True while a step waits for you: an approval is open for this very command (or this file change), or its question is. */
+function awaitsYou(p, kind, thread) {
+  if (!thread?.permissions?.size) return false;
+  const cmd = p.state?.input?.command, asks = (p.name || "").toLowerCase() === "question";
+  for (const x of thread.permissions.values()) {
+    if (asks ? x.action === "question" : kind === "run" ? x.action === "shell" && (!x.metadata?.command || x.metadata.command === cmd) : kind === "edit" && x.action === "edit") return true;
+  }
+  return false;
 }
 
 function addMessage(t, m) {
@@ -356,7 +373,8 @@ const countPatch = (patch) => {
 };
 
 export function toolText(content) {
-  return (content || []).map((c) => (c.type === "text" ? c.text : c.type === "file" ? `[file] ${c.name || c.uri || ""}` : "")).join("\n").trim();
+  if (!Array.isArray(content)) return typeof content === "string" ? content.trim() : "";
+  return content.map((c) => (c.type === "text" ? c.text : c.type === "file" ? `[file] ${c.name || c.uri || ""}` : "")).join("\n").trim();
 }
 
 /** Renderers other modules plug in: hooks.delegation(part, {thread, open}) draws `subagent` calls. */
@@ -388,17 +406,26 @@ const stepFamily = (p) => {
 };
 
 /** A step that did not work: the tool failed, or the command it ran ended with an error or timed out. */
-const stepFailed = (p) => p.state?.status === "error" || (p.state?.metadata?.exit_code ?? 0) !== 0 || !!p.state?.metadata?.timed_out;
+const stepFailed = (p) => !p.state?.metadata?.rejected && (p.state?.status === "error" || (p.state?.metadata?.exit_code ?? 0) !== 0 || !!p.state?.metadata?.timed_out); // a step you said no to is not a failure
 
 /** What a group of steps did, in short phrases, and a few icons for the files and kinds of work. */
 function stepSummary(tools) {
   const edits = new Set(), reads = new Set();
   let runs = 0, searches = 0, web = 0, other = 0;
+  const team = []; // subagents by name: "Explorer, Tester, Coder" says more than "3 other steps"
   const icons = [];
   const add = (k, node) => { if (icons.length < 4 && !icons.some((x) => x.k === k)) icons.push({ k, node }); };
   for (const p of tools) {
     const name = (p.name || "").toLowerCase();
-    if (/^(todo|todowrite|goal|question)$/.test(name)) continue; // planning and asking, not work on files
+    if (/^(todo|todowrite|goal|question)$/.test(name) || p.state?.metadata?.rejected) continue; // planning and asking, or something you said no to: not work
+    if (name === "subagent") {
+      const inp = typeof p.state?.input === "object" ? p.state.input : {};
+      const id = String(p.state?.metadata?.agent || inp.role || inp.agent || "");
+      const who = p.state?.metadata?.name || (id === "general" ? "Coder" : id ? id[0].toUpperCase() + id.slice(1) : "Subagent");
+      if (!inp.sessionID) team.push(who);
+      add("team", ico("bot"));
+      continue;
+    }
     const kind = kindOf(name);
     const t = describeTool(p).target || "";
     if (kind === "edit") {
@@ -414,7 +441,9 @@ function stepSummary(tools) {
     else { other++; add("o:" + name, ico(describeTool(p).icon || "zap")); }
   }
   const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const names = [...new Set(team)];
   const bits = [
+    team.length ? n(team.length, "subagent", "subagents") : null,
     edits.size ? `Edited ${n(edits.size, "file", "files")}` : null,
     runs ? `Ran ${n(runs, "command", "commands")}` : null,
     reads.size ? `Read ${n(reads.size, "file", "files")}` : null,
@@ -423,6 +452,7 @@ function stepSummary(tools) {
     other ? `${n(other, "other step", "other steps")}` : null,
   ].filter(Boolean).slice(0, 3);
   const stats = [
+    team.length ? ["bot", `${n(team.length, "subagent", "subagents")}: ${names.join(", ")}`] : null,
     edits.size ? ["edit", `Edited ${n(edits.size, "file", "files")}`] : null,
     runs ? ["terminal", `Ran ${n(runs, "command", "commands")}`] : null,
     reads.size ? ["file", `Read ${n(reads.size, "file", "files")}`] : null,
@@ -430,7 +460,7 @@ function stepSummary(tools) {
     web ? ["globe", `Browsed ${n(web, "page", "pages")}`] : null,
     other ? ["zap", n(other, "other step", "other steps")] : null,
   ].filter(Boolean);
-  return { bits, stats, counts: { edits: edits.size, runs, reads: reads.size, searches, web, other }, icons: icons.map((x) => el("span.si", x.node)) };
+  return { bits, stats, counts: { team: team.length, edits: edits.size, runs, reads: reads.size, searches, web, other }, icons: icons.map((x) => el("span.si", x.node)) };
 }
 
 function pathNode(target) {
@@ -740,6 +770,7 @@ function renderTool(p, openSet, thread, t0) {
     const [a, r] = patches.reduce((acc, x) => { const [aa, rr] = x.additions != null ? [x.additions, x.deletions] : countPatch(x.patch); return [acc[0] + aa, acc[1] + rr]; }, [0, 0]);
     stat = el("span.tool-stat", el("span.plus", `+${a}`), el("span.minus", `−${r}`));
   } else if (meta.blockedBy) stat = el("span.tool-stat", { style: { color: "var(--warn)" } }, "blocked by hook");
+  else if (meta.rejected) stat = el("span.tool-stat", "you said no");
   else if (status === "error") stat = el("span.tool-stat", { style: { color: "var(--bad)" } }, "failed");
   else if (kind === "run" && (meta.timed_out || (meta.exit_code ?? 0) !== 0)) stat = el("span.tool-stat.bad", meta.timed_out ? "timed out" : `exit ${meta.exit_code}`);
   else if (status === "streaming") stat = el("span.tool-stat", "preparing");
@@ -751,14 +782,20 @@ function renderTool(p, openSet, thread, t0) {
   const diagChip = diag ? el(`span.diag-chip.${diag.ok ? "ok" : "bad"}`, { title: `Checked with ${diag.ran.join(", ")}` }, ico(diag.ok ? "shield-check" : "alert"), diag.ok ? "checked" : `${diag.problems} problem${diag.problems === 1 ? "" : "s"}`) : null;
   const hookRuns = meta.hooks || [];
   const hookChip = hookRuns.length && !meta.blockedBy ? el(`span.diag-chip.hook${hookRuns.some((h) => h.code !== 0) ? ".bad" : ""}`, { title: hookRuns.map((h) => `${h.event} · ${h.name}: exit ${h.code}`).join("\n") }, ico("hook"), `${hookRuns.length} hook${hookRuns.length > 1 ? "s" : ""}`) : null;
+  const waits = live && awaitsYou(p, kind, thread);
+  if (waits) stat = el("span.tool-stat.wait", "waiting for you");
   const target = name === "jobs" ? input0.id || "" : info.target || "";
   // Flow: a command reads as what it runs; the wrapper it goes through (ssh, a shell) is a small tag at the end of the line
   const cmdShort = kind === "run" && name !== "jobs" && isFlowUI() ? shortCommand(target) : null;
-  const targetNode = kind === "edit" || kind === "read" ? pathNode(target) : el("span.tool-target", { title: target }, cmdShort ? cmdShort.text : target);
+  // Onyx: a command is called by what it is for ("Run the test suite"); the command itself follows, quieter
+  const forWhat = cmdShort && isOnyxUI() ? String(meta.description || input0.description || "").trim() : "";
+  const targetNode = kind === "edit" || kind === "read" ? pathNode(target)
+    : forWhat ? el("span.tool-target.titled", { title: target }, el("span.tt-what", forWhat), el("code.tt-cmd", cmdShort.text))
+      : el("span.tool-target", { title: target }, cmdShort ? cmdShort.text : target);
 
   // The card style: icon tile, verb, target, outcome — expandable.
   // (a command short enough to read whole on its line is not repeated inside the opened box)
-  const card = el(`div.tool.${kind}.${status}${stepFailed(p) ? ".failed" : ""}${openSet.has(p.id) ? ".open" : ""}${cmdShort && !cmdShort.via && cmdShort.text.length <= 72 ? ".cmd-fits" : ""}`, { dataset: { tool: p.id } });
+  const card = el(`div.tool.${kind}.${status}${stepFailed(p) ? ".failed" : ""}${openSet.has(p.id) ? ".open" : ""}${cmdShort && !cmdShort.via && cmdShort.text.length <= 72 && !forWhat ? ".cmd-fits" : ""}${waits ? ".waits" : ""}`, { dataset: { tool: p.id } });
   // Header: icon tile · verb · target chip · (status, checks, hooks) at the right · chevron.
   const head = el("button.tool-head", { type: "button", on: { click: () => { card.fill?.(); card.classList.toggle("open"); openSet[card.classList.contains("open") ? "add" : "delete"](p.id); } } },
     t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
@@ -768,7 +805,7 @@ function renderTool(p, openSet, thread, t0) {
           : (kind === "edit" || kind === "read") && target && name !== "glob" && name !== "grep" ? fileIcon(target)
             : kind === "run" && name !== "jobs" && cmdIcon(target) ? cmdIcon(target)
               : ico(name === "jobs" ? "activity" : info.icon)),
-    el("span.tool-name", live ? verbs[1] : verbs[0]),
+    el("span.tool-name", waits && name !== "question" ? (kind === "run" ? "Asks to run" : "Asks to change") : meta.rejected && kind === "run" ? "Asked to run" : live ? verbs[1] : verbs[0]),
     targetNode,
     el("span.tool-right", cmdShort?.via ? el("span.tool-via", { title: target }, cmdShort.via) : null,
       cmdShort && !live && meta.duration_ms >= 100 ? el("span.tool-dur", fmtDur(meta.duration_ms)) : null, stat, diagChip, hookChip, el("span.tool-chev", { html: icon("chev-down") })));
@@ -800,7 +837,7 @@ function renderTool(p, openSet, thread, t0) {
         el("span.term-copy", { role: "button", tabIndex: 0, title: "Copy the command", html: icon("copy"), on: { click: async (e) => { e.stopPropagation(); await copyText(cmd); toast("Copied", "ok", 1200); } } })),
       el("pre.tool-pre.term-cmd", cmd),
       out ? el("pre.term-out", out.length > 20000 ? out.slice(0, 20000) + "\n…" : out) : !live && !errText ? el("div.term-empty", "No output") : null,
-      errText ? el("pre.tool-pre.tool-error.term-err", errText) : null));
+      errText && errText !== out ? el("pre.tool-pre.tool-error.term-err", errText) : null));
   } else {
     if (patches.length) for (const x of patches) sections.push(el("div.tool-section", patches.length > 1 ? el("div.tool-section-label", fileIcon(x.file || ""), basename(x.file)) : null, diffView(x.patch)));
     else {
@@ -1659,20 +1696,30 @@ export class ChatView {
   groupSteps(m, work, kinds) {
     const out = [];
     let run = [], n = 0;
+    const part = (node) => m.content.find((p) => p.type === "tool" && p.id === node.dataset?.tool);
     const flush = (tail) => {
       if (!run.length) return;
       const nodes = run;
       run = [];
-      if (!nodes.some((x) => x.classList?.contains("tool"))) return out.push(...nodes); // thinking alone stays a line of its own
+      const steps = nodes.filter((x) => x.classList?.contains("tool"));
+      if (steps.length < 2) return out.push(...nodes); // one step (or thinking alone) says it all on its own line
       const key = `${m.id}:${n++}`;
-      const seen = [], count = {};
-      for (const x of nodes) {
-        const c = x.classList, k = !c?.contains("tool") ? null : c.contains("run") ? "run" : c.contains("edit") ? "edit" : c.contains("read") || c.contains("web") ? "look" : "other";
-        if (!k) continue;
+      const seen = [], count = {}, files = new Set();
+      let add = 0, del = 0, failed = 0;
+      for (const x of steps) {
+        const c = x.classList, p = part(x), name = (p?.name || "").toLowerCase();
+        const k = c.contains("run") ? "run" : c.contains("edit") ? "edit" : c.contains("web") ? "web" : c.contains("read") ? (/^(glob|grep|list|ls)$/.test(name) ? "find" : "look") : "other";
         count[k] = (count[k] || 0) + 1;
         if (!seen.includes(k)) seen.push(k);
+        if (p && stepFailed(p)) failed++;
+        if (k === "edit" && p) for (const pt of toolPatches(p)) {
+          const [a, r] = pt.additions != null ? [pt.additions, pt.deletions || 0] : countPatch(pt.patch);
+          add += a; del += r;
+          if (pt.file) files.add(pt.file);
+        }
       }
-      const say = { look: (c) => (c > 1 ? "explored files" : "explored"), run: (c) => (c > 1 ? "ran commands" : "ran command"), edit: (c) => (c > 1 ? "edited files" : "edited file"), other: (c) => (c > 1 ? "used tools" : "used a tool") };
+      const say = { look: (c) => `read ${c} ${c > 1 ? "files" : "file"}`, find: (c) => (c > 1 ? `searched ${c} times` : "searched"), web: (c) => `browsed ${c} ${c > 1 ? "pages" : "page"}`,
+        run: (c) => `ran ${c} ${c > 1 ? "commands" : "command"}`, edit: (c) => { const f = files.size || c; return `changed ${f} ${f > 1 ? "files" : "file"}`; }, other: (c) => `used ${c} ${c > 1 ? "tools" : "tool"}` };
       const label = seen.map((k) => say[k](count[k])).join(", ");
       const busy = nodes.some((x) => x.classList?.contains("running") || x.classList?.contains("streaming"));
       const open = this.openTools.has("g:" + key) || ((busy || (tail && m.live)) && !this.openTools.has("gc:" + key));
@@ -1685,17 +1732,25 @@ export class ChatView {
       } } }, el("span.sg-icons", seen.slice(0, 3).map((k) => {
           // commands: the program they run (Python, npm, Git…) when the first of them has one
           const prog = k === "run" ? nodes.find((x) => x.classList?.contains("run"))?.querySelector(".tool-ico .fi")?.cloneNode(true) : null;
-          return prog ? el("span.ico", prog) : el("span.ico", { html: icon({ look: "search", run: "terminal", edit: "edit", other: "puzzle" }[k]) });
+          return prog ? el("span.ico", prog) : el("span.ico", { html: icon({ look: "file", find: "search", web: "globe", run: "terminal", edit: "edit", other: "puzzle" }[k]) });
         })),
-        el("span.sg-label", label.charAt(0).toUpperCase() + label.slice(1)), el("span.sg-chev", { html: icon("chev") }));
+        el("span.sg-label", label.charAt(0).toUpperCase() + label.slice(1)),
+        add || del ? el("span.tool-stat", el("span.plus", `+${add}`), el("span.minus", `−${del}`)) : null,
+        failed ? el("span.sg-bad", `${failed} failed`) : null, el("span.sg-chev", { html: icon("chev") }));
       const g = el(`div.step-group${open ? ".open" : ""}${busy ? ".live" : ""}`, { dataset: { group: key } }, head, el("div.sg-body", el("div.sg-in", nodes)));
       out.push(g);
     };
     work.forEach((node, i) => {
       if (!node) return;
       const step = (kinds[i] === "tool" || kinds[i] === "think") && !node.classList?.contains("plan"); // the plan and its updates stay lines of their own
-      if (step) return run.push(node);
+      if (step && !node.classList?.contains("deleg")) return run.push(node);
       flush(false);
+      // subagents started together stand together, as the rows of one card
+      if (node.classList?.contains("deleg")) {
+        const prev = out.at(-1);
+        if (prev?.classList?.contains("team")) return prev.append(node);
+        node = el("div.team", node);
+      }
       out.push(node);
     });
     flush(true);
@@ -1706,6 +1761,8 @@ export class ChatView {
     if (!this.permBox || !this.thread) return;
     this.permBox.replaceChildren();
     for (const p of this.thread.permissions.values()) this.permBox.append(this.renderPermission(p));
+    const last = this.thread.messages.findLast((m) => m.type === "assistant" && m.content?.some((x) => x.type === "tool"));
+    if (last && this.nodes.has(last.id)) this.rerender(last.id); // its step says whether it waits for you
     if (this.thread.permissions.size) this.scrollToEnd();
   }
 
@@ -1720,9 +1777,14 @@ export class ChatView {
     // Sent but no reply yet: show the mark at work with a running timer right away. Once the
     // model's reply exists (even before its first word) it shows its own "Working" row, so this one goes.
     const streaming = t.messages.some((m) => m.type === "assistant" && m.live);
-    if ((t.busy || t.runStart) && !streaming && !t.error) {
+    // After a reload the reply in progress comes back as history (not `live`): a tool still running in it
+    // (a subagent, a long command) already shows its own progress, and the run is past "sending".
+    const lastUser = t.messages.findLastIndex((m) => m.type === "user");
+    const replied = t.messages.slice(lastUser + 1).filter((m) => m.type === "assistant");
+    const toolBusy = replied.some((m) => (m.content || []).some((x) => x.type === "tool" && ["running", "pending", "streaming"].includes(x.state?.status)));
+    if ((t.busy || t.runStart) && !streaming && !toolBusy && !t.error) {
       const model = this.opts.modelName(t.session.model) || "the model";
-      const label = t.phase === "working" ? `${model} is working` : t.phase === "delivered" ? `Delivered · waiting for ${model}` : "Sending your message";
+      const label = t.phase === "working" || replied.length ? `${model} is working` : t.phase === "delivered" ? `Delivered · waiting for ${model}` : "Sending your message";
       this.statusBox.append(el("div.msg.assistant.pending", { style: { animation: "none" } }, el("div.avatar", this.opts.avatar ? this.opts.avatar(true) : null),
         el("div.msg-body", el("div.pending-row", el("span.lbl", label), el("span.timer", { dataset: { start: String(t.runStart || Date.now()) } }, fmtDur(Date.now() - (t.runStart || Date.now())))))));
     }
@@ -1823,11 +1885,11 @@ export function permissionCard(p, sid, onDone) {
   };
   const feedback = el("input.inp", { placeholder: "Tell the agent what to do instead (optional)", style: { flex: "1 1 220px", height: "28px", fontSize: "12.5px" } });
   return el("div.approval",
-    el("div.approval-head", ico(action === "shell" ? "terminal" : "shield"), el("div", title, p.message ? el("div.approval-sub", p.message) : null)),
-    cmd ? el("pre.tool-pre", { style: { borderTop: "1px solid var(--border)", paddingTop: "10px" } }, cmd) : null,
-    !files.length && (p.resources || []).length ? el("div.approval-res", p.resources.join("\n")) : null,
+    el("div.approval-head", ico(action === "shell" ? "terminal" : "shield"), el("div", title, p.message || p.metadata?.description ? el("div.approval-sub", p.message || p.metadata.description) : null)),
+    cmd ? el("pre.tool-pre.approval-cmd", { style: { borderTop: "1px solid var(--border)", paddingTop: "10px" } }, cmd) : null,
+    !files.length && (p.resources || []).length && p.resources.join("\n") !== cmd ? el("div.approval-res", p.resources.join("\n")) : null,
     files.map((f) => el("div", el("div.tool-section-label", { style: { paddingBottom: "6px" } }, `${f.status || "change"} · ${f.file}`), diffView(f.patch))),
-    el("div.approval-actions",
+    el("div.approval-actions.ap-ask",
       el("button.btn.primary.sm", { on: { click: (e) => reply("once", e.currentTarget) } }, ico("check"), "Approve"),
       el("button.btn.sm", { title: "Don't ask again for this in this thread", on: { click: (e) => reply("always", e.currentTarget) } }, "Always allow"),
       el("span.spacer"),
@@ -1966,7 +2028,7 @@ export function questionCard(p, sid, onDone) {
     const hasAns = a.selected.length || a.other.trim();
     card.replaceChildren(
       el("div.approval-head", ico("info"),
-        el("div", el("div", "The agent has a question"), questions.length > 1 ? el("div.approval-sub", `Question ${at + 1} of ${questions.length}`) : null),
+        el("div.q-title", el("div", "The agent has a question"), questions.length > 1 ? el("div.approval-sub", `Question ${at + 1} of ${questions.length}`) : null),
         questions.length > 1 ? el("span.q-dots", questions.map((_, i) => el(`span.q-dot${i === at ? ".on" : ""}${(answers[i].selected.length || answers[i].other.trim()) ? ".done" : ""}`))) : null),
       el("div.q-body",
         q.header ? el("div.q-header", q.header) : null,

@@ -67,7 +67,8 @@ def tool_choice(have: set[str]) -> list[str]:
     row({"chrome"}, "**Something behind the user's own login, or a tab they have open** → `chrome` (their real browser; ask before acting for them).")
     row({"computer"}, "**A desktop app with no file, shell or web path** → `computer` (`elements` lists its controls to click by name; "
                       "x,y from the latest screenshot for everything else).")
-    row({"subagent"}, "**A big independent piece of work, or research that would flood this conversation** → `subagent` (several in one reply run in parallel).")
+    row({"subagent"}, "**A big independent piece of work, or research that would flood this conversation** → `subagent` with the role that fits "
+                       "(several in one reply run in parallel).")
     row({"skill"}, "**A skill matches the task** (see Skills below) → load it with `skill` first and follow it.")
     if not rows:
         return []
@@ -107,13 +108,24 @@ def harness_guide(tools: list[str], agents: list | None = None, agent=None) -> s
                      "after they choose, following the chosen design and `.afh/design.md`. Skip it for small changes, when a design system "
                      "already exists for this, or when the user says to just build.")
     if "subagent" in have:
-        delegates = [a for a in agents or [] if getattr(a, "kind", "") == "delegate"]
-        who = "; ".join(f"`{a.id}` ({a.name}): {a.description}" for a in delegates) or "none"
-        lines.append("- **Subagents** (`subagent` tool): hand a self-contained task to another agent; it works in its own thread (the user can watch it) and "
-                     f"reports back. Available: {who}. Use them for independent pieces of work - several `subagent` calls in ONE reply run at the same "
-                     "time - for wide research that would flood your context, or when a delegate's job fits. The subagent cannot see this conversation: "
-                     "give it a complete brief (goal, files, constraints, what to report). With `worktree: true` it works on its own git branch, so "
-                     "parallel subagents never edit the same files; merge their branches with git afterwards. Check their work before you rely on it.")
+        if getattr(agent, "kind", "") == "leader":
+            delegates = [a for a in agents or [] if getattr(a, "kind", "") == "delegate"]
+            who = "; ".join(f"`{a.id}` ({a.name}): {a.description}" for a in delegates) or "none"
+            lines.append("- **Delegates** (`subagent` tool): hand a task to one of your delegate models; it works in its own thread (the user can "
+                         f"watch it) and reports back. Available: {who}. The delegate cannot see this conversation: give it a complete brief (goal, "
+                         "files, constraints, what to report). With `worktree: true` it works on its own git branch; merge the branches afterwards. "
+                         "Review their work before you rely on it.")
+        else:
+            roles = [a for a in agents or [] if getattr(a, "kind", "") == "role" or (getattr(a, "kind", "") == "custom" and getattr(a, "mode", "") in ("subagent", "all"))]
+            who = "\n".join(f"  - `{a.id}` - **{a.name}**: {a.description}" for a in roles) or "  - none"
+            lines.append("- **Subagents** (`subagent` tool): start a copy of your own model with one job; it works in its own thread (the user "
+                         "watches it as a card named after its job) and reports back to you. Roles:\n" + who + "\n"
+                         "  Use them when a piece of work is self-contained and would flood your context (wide code search, fact checking, a long "
+                         "test run), or when independent pieces can run in parallel (several `subagent` calls in ONE reply). Do small or tightly "
+                         "connected work yourself: a subagent costs a full context of its own. A subagent cannot see this conversation, so give it a "
+                         "complete brief (goal, exact files, constraints, how to check, what to report). Parallel subagents that edit files need "
+                         "`worktree: true`. If one stops on an error, continue it with its sessionID or do the rest yourself. Check what they report "
+                         "before you build on it, and tell the user in one line what you handed to whom.")
     if "memory" in have:
         lines.append("- **Project memory** (`memory` tool): what you know about this project from earlier threads (see \"Project memory\" "
                      "below); every thread here starts with it, and the user sees and edits it from the Memory button. Read it before you start "

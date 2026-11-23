@@ -91,6 +91,10 @@ export function connectEvents(onEvent, onState) {
     };
   };
   open();
+  // A page the browser keeps for "back" would hold its event stream open; a few of those use up every connection the
+  // browser allows to one address, and the next page waits forever. So the stream closes with the page.
+  addEventListener("pagehide", () => es?.close());
+  addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
   return () => es?.close();
 }
 

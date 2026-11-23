@@ -2,6 +2,18 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.35.0 (2026-11-23)
+
+**Subagents with a job**
+
+- **Subagents with a job:** in Build, Plan and your own modes the agent starts subagents named by what they do: **Explorer** and **Researcher** (read-only), **Coder**, **Tester**, **Reviewer** (never edits) and **Writer**, on the thread's own model. They replace the old Helper. Each card shows its job, model, effort, time and result, with the brief and the full report one click away.
+- **Delegate mode leads:** there, your strong model plans, hands the work to the cheaper models on the Delegation tab, and reviews what comes back. The two are now separate.
+- **Onyx, redrawn:** the reply, the step groups, approvals and questions, the team of subagents, the home page (“Pick up where you left off”), the phone layout and right-to-left text. Commands are called by what they are for.
+- **Studio, as it was drawn:** Studio is back to its original look. Each interface now keeps its own text size, corners, density and width, so changing one no longer changes another.
+- **Threads that need you:** the thread list shows “Needs your answer”, and AFH tells you when a thread you are not looking at has a question or wants an approval. A step you refused says “you said no” and no longer counts as a failure.
+- **Copy an API key:** Settings → Models & accounts (and the terminal app) can copy a provider's key to the clipboard. It works only on your own computer, never through remote control.
+- **Fixes:** a dropped connection is retried for about two and a half minutes before a reply stops; a subagent that stops on an error can be continued; a running subagent's card no longer breaks; a thread no longer opens empty after going back and forth between pages; the Reviewer and Red Team can run commands again without being able to edit.
+
 ## 1.34.4 (2026-11-19)
 
 **Your browser and your apps, properly**

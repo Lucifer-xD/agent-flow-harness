@@ -41,7 +41,7 @@ const FIND = {
   usage: [["Last 30 days", "tokens cost spending"], "By model", ["Spending limits", "budget per thread per day"]],
   agent: [["Work loop", "steps"], "Steps per run", ["Compact the conversation at", "context"], ["Check the to-do list before finishing", "todo"], ["Computer control", "computer use mouse keyboard screen"],
     ["Your Chrome", "browser edge brave real chrome"], ["Browser", "playwright headless"], ["Voice", "speech mic transcribe"], ["Goals", "autopilot"], ["Error checks after edits", "typescript ruff lint"]],
-  delegation: [["Built-in Helper", "subagent"], ["Delegates", "leader models"], "Leader instructions"],
+  delegation: [["Subagents", "explorer researcher coder tester reviewer writer helper"], ["Delegates", "leader models"], "Leader instructions"],
   prompts: [["Harness system prompt", "system prompt"], ["Per-mode replacement", "agent prompt"], ["Global instructions", "agents.md"], ["Project instructions", "agents.md"]],
   skills: [["Installed", "skills"], ["Skill store", "install skills"]],
   mcp: [["Servers", "mcp tools"], ["Popular servers", "playwright context7 github filesystem chrome devtools"]],
@@ -418,7 +418,7 @@ const PANES = {
     };
     drawInterfaces();
     pane.append(...header("Appearance", "Make it yours: interface, theme, colors, type, shape and motion. Changes apply instantly."),
-      card("Interface", "How the whole app is laid out. Each interface has its own themes and remembers its own look; the classic themes work with all of them.", null, el("div.card-body", ifaceGrid)),
+      card("Interface", "How the whole app is laid out. Each interface has its own themes and remembers its own look, text size and shape; the classic themes work with all of them.", null, el("div.card-body", ifaceGrid)),
       card("Theme", null, seg([["system", "Follow system"], ["dark", "Dark"], ["light", "Light"]], u.theme, (v) => save({ theme: v }).then(drawPresets)), el("div.card-body", presetGrid), customBox),
       card("Type", null, null,
         row("Font", null, seg([["inter", "Inter"], ["system", "System"], ["rounded", "Rounded"], ["serif", "Serif"], ["mono", "Mono"]], u.font || "inter", (v) => save({ font: v }))),

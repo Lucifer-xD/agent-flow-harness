@@ -252,7 +252,9 @@ def file_read(path: str):
 
 
 def with_running(s: dict) -> dict:
-    return {**s, "running": engine.is_running(s["id"])}
+    running = engine.is_running(s["id"])
+    # "waiting": it is open on your answer (an approval or a question), so a list can say so without opening it
+    return {**s, "running": running, "waiting": running and any(r.session_id == s["id"] for r in engine.pending.values())}
 
 
 @app.get("/api/sessions")
@@ -1321,6 +1323,32 @@ def provider_remove_account(pid: str, aid: str):
     accountsmod.clear_rest(pid, aid)
     _accounts_changed(pid)
     return {"ok": True}
+
+
+@app.post("/api/providers/{pid}/key")
+def provider_copy_key(pid: str, request: Request, body: dict = Body(default={})):
+    """The API key itself, for the Copy key button: the one in use now, or one account's ({account}).
+    Only on this computer: never through remote control (the phone app or the website)."""
+    from .engine.providers.catalog import env_key
+
+    server = request.scope.get("server") or ("", 0)
+    if remote.state["port"] and server[1] == remote.state["port"]:
+        return JSONResponse({"error": "API keys can only be copied on the computer AFH runs on"}, status_code=403)
+    p = provcfg.entry(pid)
+    if not p:
+        raise KeyError(pid)
+    aid = str((body or {}).get("account") or p.get("active") or "")
+    acc = next((a for a in p.get("accounts") or [] if a.get("id") == aid), None)
+    if (body or {}).get("account") and acc is None:
+        raise KeyError(aid)
+    key = ((acc or p).get("api_key") or "").strip()
+    source = "account"
+    if not key and not (body or {}).get("account"):
+        key, source = (env_key(p.get("catalog")) or "").strip(), "environment"
+    if not key:
+        name = p.get("name") or pid
+        raise ValueError(f"This {name} account is a sign-in, so it has no API key to copy" if (acc or p).get("auth") else f"{name} has no API key to copy")
+    return JSONResponse({"key": key, "source": source, "label": provcfg.account_label(acc) if acc else ""}, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/providers/{pid}/rotation")

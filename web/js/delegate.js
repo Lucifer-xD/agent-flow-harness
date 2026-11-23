@@ -1,4 +1,4 @@
-// Delegate mode: delegation cards in the thread, the Watch pane, and the Delegation settings tab.
+// Subagents and Delegate mode: their cards in the thread, the Watch pane, and the Delegation settings tab.
 // A delegation is the engine's `subagent` tool call; its child session is tracked here so the
 // card can show live progress and the Watch pane can mount the child's thread.
 
@@ -114,20 +114,66 @@ function childFor(p, thread) {
 
 const stripWrapper = (s) => (s || "").replace(/^\s*<subagent[^>]*>\s*/i, "").replace(/\s*<\/subagent>\s*$/i, "").trim();
 
-/** The card drawn in place of a raw `subagent` tool call. */
-export function delegationCard(p, { thread, onWatch, open }) {
+// Each built-in role has its own mark, so a glance tells who is doing what.
+const ROLE_GLYPH = { explorer: "search", researcher: "globe", coder: "code", tester: "checklist", reviewer: "shield", writer: "edit", general: "code" };
+
+/** Who a `subagent` call went to: its name (the role, or the delegate's name), colour, mark and model. */
+export function whoIs(p, thread) {
   const S = ctx.S;
   const input = typeof p.state?.input === "object" ? p.state.input : {};
-  const agent = S.agents.find((a) => a.id === input.agent);
-  const deleg = S.settings.delegation?.delegates.find((d) => d.id === input.agent);
-  const name = deleg?.name || agent?.name || input.agent || "delegate";
-  const modelRef = deleg?.model || agent?.model || thread?.session?.model;
-  const model = modelRef ? ctx.modelName(modelRef) || modelRef.id : "thread model";
-  const status = p.state?.status || "streaming";
-  const live = status === "running" || status === "streaming";
+  const meta = p.state?.metadata || {};
+  const id = String(meta.agent || input.role || input.agent || "").toLowerCase();
+  const agent = S.agents.find((a) => a.id === id);
+  const deleg = S.settings.delegation?.delegates?.find((d) => d.id === id);
+  const kind = meta.kind || (deleg || agent?.delegate ? "delegate" : "subagent");
+  const name = meta.name || deleg?.name || agent?.name || (id === "general" ? "Coder" : id ? id[0].toUpperCase() + id.slice(1) : "Subagent");
   const childId = childFor(p, thread);
   const child = childId && S.threads.get(childId);
+  const modelRef = child?.session?.model || deleg?.model || agent?.model || thread?.session?.model;
+  return { id, name, kind, color: deleg?.color || agent?.color || null, glyph: ROLE_GLYPH[id] || (kind === "delegate" ? null : "bot"), modelRef, childId, child };
+}
+
+/** "Researcher 2": when one reply starts several subagents with the same job, number them so the cards differ. */
+function numbered(p, thread, who) {
+  const same = [];
+  for (const m of thread?.messages || []) {
+    if (m.type !== "assistant") continue;
+    for (const x of m.content || []) {
+      if (x.type !== "tool" || (x.name || "").toLowerCase() !== "subagent") continue;
+      const inp = typeof x.state?.input === "object" ? x.state.input : {};
+      if (inp.sessionID) continue; // a continuation is the same subagent, not a new one
+      const id = String(x.state?.metadata?.agent || inp.role || inp.agent || "").toLowerCase();
+      if (id === who.id) same.push(x.id);
+    }
+  }
+  const i = same.indexOf(p.id);
+  return same.length > 1 && i > 0 ? `${who.name} ${i + 1}` : who.name;
+}
+
+const clock = (ms) => {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+};
+
+function avatar(who, live) {
+  if (!who.glyph) return el("span.deleg-avatar", logoNode({ size: 30, working: live }));
+  return el(`span.deleg-avatar.role${live ? ".live" : ""}`, { style: who.color ? { "--role": who.color } : {} }, ico(who.glyph));
+}
+
+/** The card drawn in place of a raw `subagent` tool call. */
+export function delegationCard(p, { thread, onWatch, open }) {
+  const input = typeof p.state?.input === "object" ? p.state.input : {};
+  const who = whoIs(p, thread);
+  const { childId, child } = who;
+  const name = numbered(p, thread, who);
+  // the name without " · high": the effort has its own badge next to it
+  const model = who.modelRef ? ctx.modelName({ ...who.modelRef, variant: undefined }) || who.modelRef.id : "thread model";
+  const variant = who.modelRef?.variant && who.modelRef.variant !== "default" ? who.modelRef.variant : "";
+  const status = p.state?.status || "streaming";
+  const live = status === "running" || status === "streaming" || status === "pending";
+  const failed = status === "error" || p.state?.metadata?.status === "failed";
   const continued = !!input.sessionID;
+  const lead = who.kind === "delegate" ? "What the lead asked" : "Brief";
 
   let stats = null;
   if (child && child.messages.length) { // only real numbers: an unloaded child would read "0 tool calls"
@@ -135,39 +181,71 @@ export function delegationCard(p, { thread, onWatch, open }) {
     const files = collectEdits(child).length;
     const lastText = [...child.messages].reverse().flatMap((m) => (m.type === "assistant" ? [...m.content].reverse() : [])).find((x) => x.type === "text" && x.text)?.text;
     const running = tools.find((x) => x.state?.status === "running" || x.state?.status === "streaming");
+    const at = running?.state?.input || {}; // (still a string while it streams)
+    const now = String(at.description || at.command || at.path || at.file_path || at.query || "").split("\n")[0];
     stats = el("div.deleg-live",
-      el("span.deleg-stat", ico("zap"), `${tools.length} tool call${tools.length === 1 ? "" : "s"}`),
-      el("span.deleg-stat", ico("edit"), `${files} file${files === 1 ? "" : "s"}`),
-      running ? el("span.deleg-stat.now", el("span.spinner"), running.name) : null,
-      lastText ? el("div.deleg-last", lastText.length > 180 ? lastText.slice(0, 180) + "…" : lastText) : null);
+      el("span.deleg-stat", ico("zap"), `${tools.length} step${tools.length === 1 ? "" : "s"}`),
+      files ? el("span.deleg-stat", ico("edit"), `${files} file${files === 1 ? "" : "s"} changed`) : null,
+      running && live ? el("span.deleg-stat.now", el("span.spinner"), el("b", running.name), now ? el("span.deleg-now-what", String(now).slice(0, 80)) : null) : null,
+      lastText && live ? el("div.deleg-last", lastText.length > 220 ? lastText.slice(0, 220) + "…" : lastText) : null);
   }
-  const result = !live ? stripWrapper(toolText(p.state?.content)) : "";
+  const report = !live ? stripWrapper(toolText(p.state?.content)).replace(/\n*The (subagent|delegate) stopped before finishing\.[\s\S]*$/, "").trim() : "";
+  const reason = failed ? (report.match(/^Stopped on an error: ([^\n]+)/)?.[1] || p.state?.error?.message || "It stopped on an error.") : "";
+  const body = failed ? report.replace(/^Stopped on an error: [^\n]+\n*/, "").trim() : report;
   const waiting = live && child ? [...child.permissions.values()] : [];
-  const state = waiting.length ? "waiting" : status;
-  const label = waiting.length ? "Needs approval" : status === "completed" ? "Done" : status === "error" ? "Failed" : status === "running" ? "Working" : "Preparing";
-  const section = (key, title, body, byDefault = false) => {
+  const state = waiting.length ? "waiting" : failed ? "error" : live ? "running" : "completed";
+  const label = waiting.length ? "Needs approval" : failed ? "Failed" : live ? (status === "running" ? "Working" : "Starting") : "Done";
+  const started = p.state?.time?.start || p.time?.created || child?.session?.time?.created;
+  const took = p.state?.metadata?.duration_ms;
+  const timer = live && started ? el("span.deleg-time", { dataset: { since: String(started) } }, clock(Date.now() - started)) : took ? el("span.deleg-time", clock(took)) : null;
+  // Brief and report: two toggles side by side in one footer row; each opens its own panel below it.
+  const heads = [], bodies = [];
+  const section = (key, title, glyph, content) => {
     const k = `${p.id}:${key}`;
-    const isOpen = open.has(k) || (byDefault && !open.has(`${k}:closed`));
-    const box = el(`div.deleg-sec${isOpen ? ".open" : ""}`);
-    box.append(el("button.deleg-sec-head", { type: "button", on: { click: () => { const o = box.classList.toggle("open"); open[o ? "add" : "delete"](k); open[o ? "delete" : "add"](`${k}:closed`); } } }, el("span.chev", { html: icon("chev") }), title),
-      el("div.deleg-sec-body", el("div", body)));
-    return box;
+    const box = el(`div.deleg-sec${open.has(k) ? ".open" : ""}`, el("div.deleg-sec-body", el("div", content)));
+    const head = el(`button.deleg-sec-head${open.has(k) ? ".on" : ""}`, { type: "button", "aria-expanded": String(open.has(k)),
+      on: { click: () => { const o = box.classList.toggle("open"); head.classList.toggle("on", o); head.setAttribute("aria-expanded", String(o)); open[o ? "add" : "delete"](k); } } },
+    ico(glyph), title, el("span.chev", { html: icon("chev-down") }));
+    heads.push(head); bodies.push(box);
   };
-  return el(`div.deleg.${state}`, { dataset: { tool: p.id } },
+  if (input.prompt) section("brief", lead, "file", el("div.deleg-brief-text", input.prompt));
+  if (body) section("report", failed ? "What it did before it stopped" : "Full report", "list", el("div.md", { html: markdown(body) }));
+  return el(`div.deleg.${state}.kind-${who.kind}`, { dataset: { tool: p.id }, style: who.color ? { "--role": who.color } : {} },
     live ? el("div.deleg-progress") : null,
     el("div.deleg-head",
-      el("span.deleg-avatar", logoNode({ size: 30, working: live })),
+      avatar(who, live),
       el("div.deleg-main",
-        el("div.deleg-title", el("span.deleg-name", name), el("span.deleg-model", model), continued ? el("span.deleg-tag", "continued") : null, input.background ? el("span.deleg-tag", "background") : null, input.worktree ? el("span.deleg-tag", ico("branch"), "worktree") : null),
-        el("div.deleg-sub", input.description || "Subagent task")),
+        el("div.deleg-title", el("span.deleg-name", name),
+          el("span.deleg-model", model, variant ? el("span.deleg-variant", variant) : null),
+          who.kind === "delegate" ? el("span.deleg-tag", "delegate") : null,
+          continued ? el("span.deleg-tag", "continued") : null, input.background ? el("span.deleg-tag", "background") : null,
+          input.worktree ? el("span.deleg-tag", ico("branch"), "worktree") : null),
+        el("div.deleg-sub", { title: input.description || "" }, input.description || "Subagent task")),
+      timer,
       el(`span.deleg-status.${state}`, el("i"), label),
-      childId ? el("button.btn.ghost.sm.deleg-watch", { type: "button", title: "Open the subagent's thread beside this one", on: { click: () => onWatch(childId) } }, ico("eye"), "Watch") : null),
+      childId ? el("button.btn.ghost.sm.deleg-watch", { type: "button", title: "Open its thread beside this one", on: { click: () => onWatch(childId) } }, ico("eye"), "Watch") : null),
     stats,
+    failed ? el("div.deleg-fail", ico("alert"), el("div", el("b", "Stopped before finishing"), el("span", reason))) : null,
     waiting.length ? el("div.deleg-perms", waiting.map((perm) => permissionCard(perm, childId, (id) => child.permissions.delete(id)))) : null,
-    input.prompt ? section("brief", "What the lead asked", el("div.deleg-brief-text", input.prompt)) : null,
-    result ? section("report", "What it reported", el("div.md", { html: markdown(result) }), true) : null,
-    p.state?.error ? el("div.error-card", ico("alert"), el("div", p.state.error.message || "Delegation failed")) : null);
+    body && !failed ? el("div.deleg-gist", gist(body)) : null,
+    heads.length ? el("div.deleg-foot", heads) : null,
+    bodies);
 }
+
+/** The report's opening in plain text: a team of four reads at a glance, the full reports stay one click away. */
+function gist(md) {
+  const lines = md.replace(/```[\s\S]*?```/g, " ").split("\n").map((l) => l.trim())
+    .filter((l) => l && !/^#{1,6}\s/.test(l) && !/^[-*_]{3,}$/.test(l) && !/^\|/.test(l))
+    .map((l) => l.replace(/^(>\s*)+/, "").replace(/^([-*+•]|\d+[.)])\s+/, ""));
+  // code spans stay as written (`amount * rate`); markup is removed only outside them
+  const plain = lines.join(" ").split("`").map((s, i) => (i % 2 ? s : s.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\*\*|__/g, "").replace(/(^|\W)[*_](\S[^*_]*?)[*_](?=\W|$)/g, "$1$2"))).join("").replace(/\s+/g, " ").trim();
+  return plain.length > 260 ? plain.slice(0, 260).replace(/\s\S*$/, "") + "…" : plain;
+}
+
+// Running cards show their time ticking without redrawing the thread.
+setInterval(() => {
+  for (const t of document.querySelectorAll(".deleg-time[data-since]")) t.textContent = clock(Date.now() - Number(t.dataset.since));
+}, 1000);
 
 // ---- Watch pane ------------------------------------------------------------------------
 
@@ -188,7 +266,9 @@ export async function renderWatch(body, titleBox, { onOpenAsThread }) {
   const agentId = info.agent || t.session.agent;
   const deleg = S.settings.delegation?.delegates.find((d) => d.id === agentId);
   const live = t.busy || S.busy.has(id);
-  titleBox.replaceChildren(logoNode({ size: 26, working: live }), el("span", deleg?.name || S.agents.find((a) => a.id === agentId)?.name || agentId || "Subagent"),
+  const roleAgent = S.agents.find((a) => a.id === agentId);
+  titleBox.replaceChildren(ROLE_GLYPH[agentId] ? el("span.deleg-avatar.role.sm", { style: roleAgent?.color ? { "--role": roleAgent.color } : {} }, ico(ROLE_GLYPH[agentId])) : logoNode({ size: 26, working: live }),
+    el("span", deleg?.name || roleAgent?.name || (agentId === "general" ? "Coder" : agentId) || "Subagent"),
     el("span.pill-tag", ctx.modelName(deleg?.model || t.session.model) || "model"),
     el("button.btn.ghost.sm", { style: { marginLeft: "6px" }, title: "Open as its own thread", on: { click: () => onOpenAsThread(id) } }, ico("chev")));
   const root = el("div.thread-inner.watch-inner");
@@ -271,7 +351,7 @@ export async function delegationPane(pane, c) {
   draw();
 
   const addBtn = el("button.btn.sm", { on: { click: () => { state.delegates.push({ id: "", name: "", model: null, job: "", system: "", enabled: true, readonly: false, color: COLORS[state.delegates.length % COLORS.length] }); markDirty(); draw(); list.lastElementChild?.querySelector("input")?.focus(); } } }, ico("plus"), "Add delegate");
-  pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Built-in Helper"), el("p", "A subagent that uses the thread's own model. Every mode can hand it side tasks or run several at once — no setup needed.")),
+  pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Subagents"), el("p", "In Build, Plan and your own modes the model can start subagents on its own model, each with one job: Explorer, Researcher, Coder, Tester, Reviewer and Writer. Delegate mode uses only the delegates below.")),
     toggle(state.builtinHelper, (v) => { state.builtinHelper = v; markDirty(); }))));
   pane.append(el("div.card", el("div.card-head", el("div", el("h3", "Delegates"), el("p", `${state.delegates.length} configured`)), addBtn), list));
 
@@ -318,7 +398,8 @@ export function renderSubagentsChip(btn, thread) {
   btn.hidden = false;
   btn.className = `sub-chip${live ? " live" : ""}`;
   btn.title = live ? `${live} subagent${live > 1 ? "s" : ""} working — click to see what they were asked and what they said` : `${all.length} subagent${all.length > 1 ? "s" : ""} in this thread`;
-  btn.replaceChildren(live ? el("span.sub-dots", el("i"), el("i"), el("i")) : ico("bot"), el("span", live ? `${live} working` : `${all.length} subagent${all.length > 1 ? "s" : ""}`));
+  btn.dataset.n = String(live || all.length); // a narrow top bar shows only the mark and this number
+  btn.replaceChildren(live ? el("span.sub-dots", el("i"), el("i"), el("i")) : ico("bot"), el("span.sub-txt", live ? `${live} working` : `${all.length} subagent${all.length > 1 ? "s" : ""}`));
 }
 
 export function subagentsPopover(anchor, thread, onWatch) {
@@ -331,19 +412,19 @@ export function subagentsPopover(anchor, thread, onWatch) {
     if (!all.length) box.append(el("div.empty-row", "No subagents in this thread yet."));
     for (const p of all) {
       const input = typeof p.state?.input === "object" ? p.state.input : {};
-      const agent = S.agents.find((a) => a.id === input.agent);
-      const deleg = S.settings.delegation?.delegates.find((d) => d.id === input.agent);
-      const name = deleg?.name || agent?.name || input.agent || "subagent";
-      const childId = childFor(p, thread);
-      const st = isLive(p) ? (p.state?.status === "running" ? "running" : "streaming") : p.state?.status;
+      const who = whoIs(p, thread);
+      const name = numbered(p, thread, who);
+      const childId = who.childId;
+      const failed = p.state?.status === "error" || p.state?.metadata?.status === "failed";
+      const st = isLive(p) ? (p.state?.status === "running" ? "running" : "streaming") : failed ? "error" : "completed";
       const reply = !isLive(p) ? stripWrapper(toolText(p.state?.content)) : "";
       box.append(el(`div.sub-item.${st}`,
         el("div.sub-item-head",
-          el(`span.deleg-status.${st}`, el("i"), st === "completed" ? "Done" : st === "error" ? "Failed" : st === "running" ? "Working" : "Preparing"),
+          el(`span.deleg-status.${st}`, el("i"), st === "completed" ? "Done" : st === "error" ? "Failed" : st === "running" ? "Working" : "Starting"),
           el("b", name), el("span.sub-desc", { title: input.description || "" }, input.description || ""),
           childId ? el("button.btn.ghost.sm", { on: { click: () => { closeSubPop(); onWatch(childId); } } }, ico("eye"), "Watch") : null),
-        input.prompt ? el("details", el("summary", "What the lead asked"), el("div.sub-text", input.prompt)) : null,
-        reply ? el("details", el("summary", "What it replied"), el("div.sub-text.md", { html: markdown(reply) })) : isLive(p) ? el("div.sub-wait", el("span.spinner"), "Working on it…") : null));
+        input.prompt ? el("details", el("summary", who.kind === "delegate" ? "What the lead asked" : "Brief"), el("div.sub-text", input.prompt)) : null,
+        reply ? el("details", el("summary", "Report"), el("div.sub-text.md", { html: markdown(reply) })) : isLive(p) ? el("div.sub-wait", el("span.spinner"), "Working on it…") : null));
     }
   };
   draw();

@@ -21,6 +21,8 @@ log = logging.getLogger("afh.runner")
 
 MAX_STEPS = 200
 RETRYABLE = {429, 500, 502, 503, 504}
+NETWORK_ATTEMPTS = 9  # waits 2+4+8+16+30+30+30+30 s between tries
+HTTP_ATTEMPTS = 5
 # Tools that only read (or wait on other agents) run at the same time when one reply calls several.
 PARALLEL_SAFE = {"read", "glob", "grep", "list", "webfetch", "websearch", "subagent", "skill", "jobs"}
 PRUNE_AT = 0.55  # share of the context window: above it, old tool outputs are shortened
@@ -439,9 +441,13 @@ class Run:
                     store.save_message(self.sid, msg)
                     self.emit("session.step.ended", assistantMessageID=msg["id"], finish="switched", tokens=None, cost=None)
                     raise AccountSwitch() from err
-                retryable = err.ev.get("kind") == "network" or status in RETRYABLE
-                if retryable and attempt < 4 and not self.abort.is_set():
-                    delay = min(8, 2 ** attempt)
+                network = err.ev.get("kind") == "network"
+                retryable = network or status in RETRYABLE
+                # A dropped connection (Wi-Fi, DNS, a VPN reconnecting) usually comes back within a minute or two: keep
+                # trying for about 2.5 minutes instead of letting a long task die. Server errors get a shorter window.
+                limit = NETWORK_ATTEMPTS if network else HTTP_ATTEMPTS
+                if retryable and attempt < limit and not self.abort.is_set():
+                    delay = min(30 if network else 8, 2 ** attempt)
                     # Kept on the message, so the note stays where it happened (above the retried reply).
                     msg.setdefault("retries", []).append({"attempt": attempt, "error": err.to_dict(), "time": now_ms()})
                     msg["content"] = []
