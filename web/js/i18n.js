@@ -366,7 +366,7 @@ const AR = {
   "Most thorough, slowest": "الأدق، الأبطأ",
   "Add provider": "إضافة مزوّد",
   "Try a shorter name.": "جرّب اسمًا أقصر.",
-  "Worked": "انتهى العمل", "Pick up where you left off": "تابع من حيث توقفت", "waiting for you": "بانتظارك", "Asks to run": "يطلب تشغيل", "Asked to run": "طلب تشغيل", "you said no": "رفضتَ", "Asks to change": "يطلب تعديل",
+  "Worked": "انتهى العمل", "Pick up where you left off": "تابع من حيث توقفت", "waiting for you": "بانتظارك", "Asks to run": "يطلب تشغيل", "Your phone is viewing this screen": "هاتفك يعرض هذه الشاشة", "Asked to run": "طلب تشغيل", "you said no": "رفضتَ", "Asks to change": "يطلب تعديل",
   "Review": "مراجعة",
   "Terminal": "الطرفية",
   "No output": "لا مخرجات",

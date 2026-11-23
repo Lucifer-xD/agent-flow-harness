@@ -80,6 +80,15 @@
 	<string>Dictate messages to AFH with your voice.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Turn what you say into the text of your message.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Open AFH with Face ID when you lock the app.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save pictures from your chats.</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ar</string>
+	</array>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Add events to your calendar when you ask AFH to.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>

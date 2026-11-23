@@ -1,34 +1,31 @@
+// AFH for the phone: chats with any model, and your own computers.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:local_auth/local_auth.dart';
 
-import 'ai.dart';
-import 'screens/onboarding.dart';
-import 'screens/home.dart';
-import 'store.dart';
-import 'theme.dart';
-
-const appVersion = '1.11.0';
+import 'core/ai.dart';
+import 'core/hub.dart';
+import 'core/l10n.dart';
+import 'core/native.dart';
+import 'core/store.dart';
+import 'screens/shell.dart';
+import 'screens/welcome.dart';
+import 'ui/badge.dart';
+import 'ui/kit.dart';
+import 'ui/look.dart';
+import 'ui/mark.dart';
+import 'ui/motion.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   await Settings.i.load();
-  await loadProviders();
-  await Chats.i.load();
-  pickPalette();
+  pickLanguage();
+  await Future.wait([loadProviders(), loadLogos(), Chats.i.load()]);
   runApp(const AfhApp());
-}
-
-/// Sets Afh.p from the appearance settings and the phone's light/dark setting.
-void pickPalette() {
-  final s = Settings.i;
-  final dark = switch (s.themeMode) {
-    'dark' => true,
-    'light' => false,
-    _ => WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark,
-  };
-  Afh.p = Palette.byId(dark ? s.darkTheme : s.lightTheme, dark: dark);
-  SystemChrome.setSystemUIOverlayStyle(Afh.overlay);
 }
 
 class AfhApp extends StatefulWidget {
@@ -38,58 +35,148 @@ class AfhApp extends StatefulWidget {
 }
 
 class _AfhAppState extends State<AfhApp> with WidgetsBindingObserver {
-  String _shown = Afh.p.id;
+  Pal _pal = Pal.pick();
+  late String _lang = _language();
+  late bool _onboarded = Settings.i.onboarded;
+  late double _scale = Settings.i.textScale;
+  late bool _locked = Settings.i.flag('lock');
+  DateTime? _left;
+
+  String _language() => arabic ? 'ar' : 'en';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Settings.i.addListener(_restyle);
+    Settings.i.addListener(_changed);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    Settings.i.removeListener(_restyle);
+    Settings.i.removeListener(_changed);
     super.dispose();
   }
 
   @override
-  void didChangePlatformBrightness() => _restyle();
+  void didChangePlatformBrightness() => _changed();
 
-  // The colours are read from Afh.p while building, so a new theme redraws every widget in place
-  // (keeping the pages that are open) instead of rebuilding the app.
-  void _restyle() {
-    pickPalette();
-    if (Afh.p.id == _shown) return;
-    _shown = Afh.p.id;
-    setState(() {});
-    void dirty(Element e) {
-      e.markNeedsBuild();
-      e.visitChildren(dirty);
-    }
+  @override
+  void didChangeLocales(List<Locale>? locales) => _changed();
 
-    (context as Element).visitChildren(dirty);
+  void _changed() {
+    pickLanguage();
+    final pal = Pal.pick();
+    if (pal == _pal && _lang == _language() && _onboarded == Settings.i.onboarded && _scale == Settings.i.textScale) return;
+    setState(() {
+      _pal = pal;
+      _lang = _language();
+      _onboarded = Settings.i.onboarded;
+      _scale = Settings.i.textScale;
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // write any chat still waiting for its debounced save before the system may stop the app
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) Chats.i.flush();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        Notify.inFront = true;
+        unawaited(Notify.clear());
+        unawaited(Hubs.i.resume());
+        if (Settings.i.flag('lock') && _left != null && DateTime.now().difference(_left!).inSeconds > 20) setState(() => _locked = true);
+        _left = null;
+      case AppLifecycleState.paused:
+        Notify.inFront = false;
+        _left = DateTime.now();
+        Chats.i.flush();
+        Hubs.i.pause();
+      case AppLifecycleState.detached:
+        Chats.i.flush();
+      default:
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = Afh.theme();
+    final p = _pal;
     return MaterialApp(
+      key: ValueKey(_lang),
       title: 'AFH',
       debugShowCheckedModeBanner: false,
-      theme: t,
-      darkTheme: t,
-      themeMode: Afh.p.dark ? ThemeMode.dark : ThemeMode.light,
-      themeAnimationDuration: Afh.med,
-      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(value: Afh.overlay, child: child!),
-      home: Settings.i.onboarded ? const Home() : const Onboarding(),
+      theme: themeData(p),
+      themeAnimationDuration: const Duration(milliseconds: 320),
+      locale: locale,
+      supportedLocales: const [Locale('en'), Locale('ar')],
+      localizationsDelegates: const [GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        final system = mq.textScaler.scale(16) / 16;
+        return MediaQuery(
+          data: mq.copyWith(textScaler: TextScaler.linear((system * _scale).clamp(.8, 1.6)), disableAnimations: mq.disableAnimations || Settings.i.calm),
+          child: Look(
+            pal: p,
+            child: Stack(
+              children: [
+                child!,
+                if (_locked) Positioned.fill(child: _Lock(onOpen: () => setState(() => _locked = false))),
+              ],
+            ),
+          ),
+        );
+      },
+      home: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 500),
+        switchInCurve: Curves.easeOutQuint,
+        child: _onboarded ? const Shell() : const Welcome(),
+      ),
+    );
+  }
+}
+
+class _Lock extends StatefulWidget {
+  const _Lock({required this.onOpen});
+  final VoidCallback onOpen;
+  @override
+  State<_Lock> createState() => _LockState();
+}
+
+class _LockState extends State<_Lock> {
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ask());
+  }
+
+  Future<void> _ask() async {
+    if (_busy) return;
+    _busy = true;
+    try {
+      if (await LocalAuthentication().authenticate(localizedReason: t('Unlock AFH'))) widget.onOpen();
+    } on LocalAuthException catch (e) {
+      // the phone's own lock was removed since: there is nothing left to check against
+      if (e.code == LocalAuthExceptionCode.noCredentialsSet) widget.onOpen();
+    } catch (_) {}
+    _busy = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.p;
+    return Material(
+      color: p.bg,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(gutter),
+          child: Column(
+            children: [
+              const Expanded(child: Center(child: AfhLogo(width: 110, intro: false))),
+              Rise(0, child: Btn(t('Unlock'), icon: LucideIcons.lockKeyholeOpen, onTap: _ask)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

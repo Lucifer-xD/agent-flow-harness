@@ -2094,6 +2094,7 @@ async function retryLast() {
 // ---- events -----------------------------------------------------------------------
 
 let restartPill = null;
+let screenSeen = 0; // when the phone last looked at this screen
 function onEvent(ev) {
   const type = ev.type || "";
   if (type === "computer.active" || type === "computer.fx" || type === "computer.teach") return; // drawn by the desktop overlay
@@ -2109,6 +2110,11 @@ function onEvent(ev) {
   }
   if (type === "schedule.failed") { toast(`Scheduled job "${ev.data?.job?.name}" couldn't start: ${ev.data?.error}`, "err", 8000); return; }
   if (type === "session.revert.committed" && ev.data?.sessionID === S.current?.id) document.querySelector(".revert-bar")?.remove();
+  if (type === "screen.viewed") { // the phone app is looking at this screen: say so, once in a while
+    if (Date.now() - screenSeen > 120000) toast("Your phone is viewing this screen");
+    screenSeen = Date.now();
+    return;
+  }
   if (type === "afh.restarting") {
     restartPill?.remove();
     restartPill = el("div.restarting", el("span.spinner"), "Applying changes…");

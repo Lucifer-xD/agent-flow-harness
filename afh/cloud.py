@@ -26,7 +26,7 @@ CHUNK = 192 * 1024
 ONE_FRAME = 512 * 1024  # answers smaller than this go back in a single frame
 # what a phone may not change from afar: who can reach this computer
 LOCAL_ONLY = ("/api/cloud", "/api/remote")
-PASS_HEADERS = {"content-type", "accept", "last-event-id", "accept-language", "range"}
+PASS_HEADERS = {"content-type", "accept", "last-event-id", "accept-language", "range", "x-filename"}
 
 state: dict = {"task": None, "status": "off", "error": None, "since": None}
 # a sign-in waiting for the user in their browser: {code, url, expires, error}

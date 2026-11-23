@@ -274,7 +274,7 @@ html.has-3d .stage .afh-mark { display: none; }
 [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity 0.8s var(--ease-out), transform 0.8s var(--ease-out); transition-delay: var(--d, 0s); }
 [data-reveal].in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { [data-reveal] { opacity: 1; transform: none; transition: none; } }
-.shot [data-reveal] { opacity: 1; transform: none; transition: none; }
+.scr [data-reveal] { opacity: 1; transform: none; transition: none; }
 
 /* ---- footer ---- */
 .footer { --ink: #f4f3f6; --ink-2: rgba(244, 243, 246, 0.66); --ink-3: rgba(244, 243, 246, 0.4); --line: rgba(255, 255, 255, 0.1); --surface: rgba(255, 255, 255, 0.05); --on-ink: #111014; --sh-1: none;
@@ -322,3 +322,15 @@ html.has-3d .stage .afh-mark { display: none; }
 .install-copy:hover { border-color: var(--line-3); }
 .install.left { margin-left: 0; }
 .install-note { margin: 8px 0 0; color: var(--ink-3); font-size: 13px; }
+
+/* the phone app's screens */
+.scr { margin: 0; flex: none; width: 236px; scroll-snap-align: center; }
+.scr img { display: block; width: 100%; height: auto; border-radius: 30px; border: 1px solid var(--line-2); box-shadow: var(--sh-3); }
+.scr figcaption { margin-top: 14px; font-size: 14px; line-height: 1.45; color: var(--ink-2); text-align: center; }
+.screens { display: flex; gap: 22px; margin: 0 calc(50% - 50vw) 40px; padding: 10px max(24px, calc(50vw - 560px)) 26px; overflow-x: auto; scroll-snap-type: x proximity; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.screens:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
+.duo { position: relative; display: flex; justify-content: center; width: 100%; padding: 10px 0 34px; }
+.duo .scr { width: min(250px, 46%); }
+.duo .scr:first-child { transform: translate(14%, 42px) rotate(-3deg); }
+.duo .scr:last-child { position: relative; transform: translateX(-6%) rotate(2deg); }
+@media (max-width: 640px) { .scr { width: 200px; } .scr img { border-radius: 26px; } .screens { gap: 16px; padding-inline: 20px; } }

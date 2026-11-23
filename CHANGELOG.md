@@ -2,6 +2,21 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.36.0 and phone app 2.0.0 (2026-11-23)
+
+**The phone app, built again**
+
+- **AFH 2.0.0 for Android and iPhone:** written from scratch: a new structure, a new design, new motion and every screen redrawn, in light, dark and pure black, seven colors, English and Arabic. Chats, keys and sign-ins from the earlier app carry over.
+- **Home:** a box to ask or start work, everything that needs you as a card you answer in place, what is running with its plan, and what you did last.
+- **Photos and files everywhere:** from the gallery, the camera, the file picker or another app's Share button, in chats and in threads on your computer.
+- **Threads, properly:** the conversation with its steps and thinking, the Work tab (plan, subagents, goal, context and cost) and the Changes tab with real diffs. Answer questions, pick designs as live screens, add a note while it works, set a goal, fork, change the model, the agent and what it may do.
+- **Your computer:** projects, a file browser with a code viewer, its screen as a picture every second or two (its window says so), automations you can make and change, and usage.
+- **Notifications:** Allow or Deny from the notification, a message when work is done, and a quiet line that stays connected while a thread works.
+- **Chats:** voice typing, hands-free talking, reading aloud, effort levels, your own assistants, memory, instructions, temporary chats, search, pins, archive, branches, and saving or sharing a chat. The phone's tools ask before anything leaves the chat.
+- **More:** app lock with your face, fingerprint or passcode, home screen shortcuts, haptics, text size, and fewer animations if you want calm.
+- **On the computer:** files sent from the phone, the screen view and its notice need this version. A thread is named as soon as it needs you, not only when its first run ends.
+- **Fixes:** editing a file with Windows line endings no longer swallows the next line's indentation; Changes no longer shows every line of such a file as changed.
+
 ## 1.35.0 (2026-11-23)
 
 **Subagents with a job**

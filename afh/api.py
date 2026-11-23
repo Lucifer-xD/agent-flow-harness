@@ -235,17 +235,90 @@ def delete_agent(agent_id: str):
 # ---- files (for the live view) ---------------------------------------------------------
 
 
-@app.get("/api/files/read")
-def file_read(path: str):
-    """Read a file inside one of the user's project folders (for the Live pane)."""
+def _project_path(path: str) -> Path:
+    """A path inside one of the user's project folders (or AFH's worktrees), or an error."""
     target = Path(path).expanduser().resolve()
     roots = [Path(p).resolve() for p in store.load_settings().get("projects", [])] + [(store.AFH_DIR / "worktrees").resolve()]
     if not any(target == r or r in target.parents for r in roots):
         raise ValueError("That file is outside your project folders")
+    return target
+
+
+@app.get("/api/files/read")
+def file_read(path: str):
+    """Read a file inside one of the user's project folders (for the Live pane)."""
+    target = _project_path(path)
     if not target.is_file():
         return {"content": None, "exists": False}
-    data = target.read_bytes()[:2_000_000]
-    return {"content": data.decode("utf-8", "replace"), "exists": True, "size": target.stat().st_size}
+    with target.open("rb") as f:
+        data = f.read(2_000_000)
+    return {"content": data.decode("utf-8", "replace"), "exists": True, "size": target.stat().st_size, "binary": b"\0" in data[:8000]}
+
+
+@app.get("/api/files/list")
+def file_list(path: str):
+    """What is in a folder of a project, folders first (the phone app's file browser)."""
+    target = _project_path(path)
+    if not target.is_dir():
+        raise KeyError(path)
+    entries = []
+    with os.scandir(target) as it:
+        for e in it:
+            try:
+                folder = e.is_dir()
+                st = e.stat()
+            except OSError:
+                continue
+            entries.append({"name": e.name, "path": str(target / e.name), "dir": folder, "size": 0 if folder else st.st_size, "modified": int(st.st_mtime * 1000)})
+    entries.sort(key=lambda e: (not e["dir"], e["name"].lower()))
+    return {"path": str(target), "entries": entries[:2000]}
+
+
+@app.get("/api/files/search")
+def file_search(directory: str, q: str = "", limit: int = 40):
+    """Files in a project whose name or path holds the words typed, best first (the phone app's @)."""
+    from .engine.tools.files import SKIP_DIRS
+
+    root = _project_path(directory)
+    needle = q.strip().lower().replace("\\", "/")
+    found: list[tuple[int, int, str]] = []
+    seen = 0
+    for base, dirs, names in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not d.startswith("."))
+        for n in names:
+            seen += 1
+            rel = os.path.relpath(os.path.join(base, n), root).replace("\\", "/")
+            low = rel.lower()
+            at = low.find(needle)
+            if at >= 0:
+                name = n.lower()
+                found.append((0 if name.startswith(needle) else 1 if needle in name else 2, rel.count("/"), rel))
+        if seen > 30_000 or (not needle and len(found) > 400):
+            break
+    found.sort()
+    return {"files": [f[2] for f in found[: max(1, min(limit, 200))]]}
+
+
+@app.get("/api/screen")
+def screen(display: int = 0, edge: int = 1600):
+    """A picture of this computer's screen, for the phone app's remote view. AFH's window says when it is being viewed."""
+    import io
+
+    if os.name != "nt":
+        raise ValueError("Viewing the screen works on Windows only")
+    from .engine.computer import win
+
+    ds = win.displays()
+    rects = [d.rect for d in ds] or [(lambda x, y, w, h: (x, y, x + w, y + h))(*win.virtual_screen())]
+    display = display if 0 <= display < len(rects) else 0
+    img = win.capture(rects[display])
+    k = max(img.size) / max(400, min(edge, 2560))
+    if k > 1:
+        img = img.resize((max(1, round(img.size[0] / k)), max(1, round(img.size[1] / k))))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=70)
+    engine.publish({"type": "screen.viewed", "data": {}})
+    return FastResponse(buf.getvalue(), media_type="image/jpeg", headers={"Cache-Control": "no-store", "X-AFH-Displays": str(len(rects))})
 
 
 # ---- sessions ------------------------------------------------------------------
@@ -354,7 +427,7 @@ async def upload(request: Request):
         raise ValueError("That file is over 25 MB")
     from urllib.parse import unquote
 
-    name = re.sub(r"[^\w.\- ]+", "_", unquote(request.headers.get("x-filename") or "pasted.png")).strip(" .")[:80] or "pasted.png"
+    name = re.sub(r"[^\w.\- ]+", "_", unquote(request.headers.get("x-filename") or request.query_params.get("name") or "pasted.png")).strip(" .")[:80] or "pasted.png"
     folder = _uploads_dir()
     cutoff = time.time() - 30 * 86400  # uploads only matter while you're writing the message: keep a month
     for old in folder.iterdir():

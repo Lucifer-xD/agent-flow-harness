@@ -513,3 +513,15 @@ def test_glob_literal_prefix_and_absolute_pattern(project):
     assert set(res.text.splitlines()) == {"src/app.py", "src/util.py"}
     res = run(GlobTool().run(ctx, {"pattern": "../*.txt"}))
     assert res.is_error and "escapes" in res.text
+
+
+def test_edit_that_ends_in_a_newline_keeps_the_next_indent(project):
+    """On a CRLF file the model's LF text once matched loosely and swallowed the next line's indentation."""
+    f = project / "src" / "win.py"
+    f.write_bytes(b"def a():\r\n    return 1\r\n\r\n\r\ndef b():\r\n    return 2\r\n")
+    run(EditTool().run(make_ctx(project), {"path": "src/win.py", "oldString": "    return 1\n\n\ndef b():\n",
+                                           "newString": "    return 3\n\n\ndef b():\n    \"\"\"Two.\"\"\"\n"}))
+    assert f.read_bytes() == b"def a():\r\n    return 3\r\n\r\n\r\ndef b():\r\n    \"\"\"Two.\"\"\"\r\n    return 2\r\n"
+    # the loose match (different inner spacing) must not swallow it either
+    run(EditTool().run(make_ctx(project), {"path": "src/win.py", "oldString": "def  b():\n", "newString": "def c():\n"}))
+    assert f.read_bytes().endswith(b"def c():\r\n    \"\"\"Two.\"\"\"\r\n    return 2\r\n")

@@ -307,9 +307,12 @@ _WS_RUN = re.compile(r"[ \t]+")
 def _loose_pattern(old: str) -> re.Pattern:
     """Regex that matches `old` ignoring indentation width, inner whitespace runs and trailing spaces."""
     parts = []
-    for line in old.replace("\r\n", "\n").split("\n"):
+    lines = old.replace("\r\n", "\n").split("\n")
+    for i, line in enumerate(lines):
         words = [re.escape(w) for w in _WS_RUN.split(line.strip()) if w]
-        parts.append(r"[ \t]*" + r"[ \t]+".join(words) + r"[ \t]*")
+        # a text that ends in a newline ends there: the next line's indentation is not part of it
+        ends = i and i == len(lines) - 1 and not line
+        parts.append("" if ends else r"[ \t]*" + r"[ \t]+".join(words) + r"[ \t]*")
     return re.compile(r"\r?\n".join(parts))
 
 
@@ -378,7 +381,8 @@ class EditTool(BaseTool):
 
         content = await asyncio.to_thread(read_text_exact, path)
         new = match_line_endings(content, new)
-        matches, loose = find_matches(content, old)
+        # the model sees plain newlines; on a CRLF file the exact text has CRLF
+        matches, loose = find_matches(content, match_line_endings(content, old))
         if not matches:
             raise ToolError(f"oldString not found in {display} — read the file again and copy the exact text.")
         if len(matches) > 1 and not replace_all:

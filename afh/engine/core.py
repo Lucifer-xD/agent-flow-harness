@@ -118,6 +118,7 @@ class Engine:
         self.store = Store(appstore.AFH_DIR / "afh.db")
         self.loop: asyncio.AbstractEventLoop | None = None
         self._subscribers: list[tuple[asyncio.AbstractEventLoop, asyncio.Queue]] = []
+        self._titling: set[str] = set()
         self.pending: dict[str, perm.Request] = {}
         self.runs: dict[str, Run] = {}
         self.providers: dict[str, Provider] = {}
@@ -283,6 +284,8 @@ class Engine:
             running = asyncio.get_running_loop()
         except RuntimeError:
             running = None
+        if running and ev.get("type") == "permission.asked":  # the phone and the sidebar name the thread that is waiting
+            self._title_soon((ev.get("data") or {}).get("sessionID") or "")
 
         def put(q: asyncio.Queue) -> None:
             try:
@@ -956,9 +959,7 @@ class Engine:
         return None
 
     async def after_run(self, session: dict) -> None:
-        s = self.store.get_session(session["id"])
-        if s and not s.get("title") and not s.get("parentID"):
-            asyncio.create_task(self.make_title(s))
+        self._title_soon(session["id"])
 
     # ---- titles & compaction ----------------------------------------------------------------------
 
@@ -984,6 +985,21 @@ class Engine:
                 return "\n".join(x for x in (rest, tail) if x).strip()
         return text_out
 
+    def _title_soon(self, sid: str) -> None:
+        """Names a thread that has no name yet, once, in the background."""
+        s = self.store.get_session(sid)
+        if not s or s.get("title") or s.get("parentID") or sid in self._titling:
+            return
+        self._titling.add(sid)
+
+        async def go() -> None:
+            try:
+                await self.make_title(s)
+            finally:
+                self._titling.discard(sid)
+
+        asyncio.create_task(go())
+
     async def make_title(self, session: dict) -> None:
         msgs = self.store.list_messages(session["id"])
         first = next((m for m in msgs if m.get("type") == "user"), None)
@@ -999,7 +1015,8 @@ class Engine:
             title = ""
         if not title:
             title = " ".join(first.get("text", "").split()[:6]) or "New thread"
-        self.update_session(session["id"], title=title)
+        if not (self.store.get_session(session["id"]) or {"title": "gone"}).get("title"):  # not renamed meanwhile
+            self.update_session(session["id"], title=title)
 
     async def maybe_compact(self, session: dict, agent: agentmod.AgentConfig, force: bool = False) -> bool:
         """Summarise older messages when the conversation no longer fits comfortably (or on /compact).
@@ -1181,7 +1198,8 @@ class Engine:
         out = []
         for f in self.store.touched_files(sid):
             p = Path(f["path"])
-            before = (f["content"] or b"").decode("utf-8", "replace") if f["existed"] else ""
+            # both sides with plain newlines: read_text turns CRLF into LF, so a raw before would differ on every line
+            before = (f["content"] or b"").decode("utf-8", "replace").replace("\r\n", "\n") if f["existed"] else ""
             after = p.read_text(encoding="utf-8", errors="replace") if p.is_file() else ""
             if before == after:
                 continue

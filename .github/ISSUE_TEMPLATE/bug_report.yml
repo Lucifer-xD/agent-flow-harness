@@ -24,7 +24,7 @@ body:
     attributes:
       label: Version
       description: Settings → About shows it.
-      placeholder: "1.35.0"
+      placeholder: "1.36.0"
     validations:
       required: true
   - type: textarea

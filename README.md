@@ -14,7 +14,7 @@
   <a href="https://github.com/Lucifer-xD/agent-flow-harness/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Lucifer-xD/agent-flow-harness?label=desktop&color=ff6a2a" /></a>
   <a href="https://agentflowharness.com/download"><img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" /></a>
   <a href="https://agentflowharness.com/download"><img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-555555" /></a>
-  <a href="https://agentflowharness.com/download"><img alt="Android and iPhone 1.11.0" src="https://img.shields.io/badge/Android%20%7C%20iPhone-1.11.0-ff3d71" /></a>
+  <a href="https://agentflowharness.com/download"><img alt="Android and iPhone 2.0.0" src="https://img.shields.io/badge/Android%20%7C%20iPhone-2.0.0-ff3d71" /></a>
   <a href="https://github.com/Lucifer-xD/agent-flow-harness/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/Lucifer-xD/agent-flow-harness/tests.yml?branch=main&label=tests" /></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Lucifer-xD/agent-flow-harness?color=2ea44f" /></a>
 </p>
@@ -172,14 +172,16 @@ Then type `afh` in a project folder. It's the same AFH, full screen: threads, mo
 ## On your phone and on the web
 
 <p align="center">
-  <img src="docs/screenshots/phone.png" width="900" alt="The AFH app for Android and iPhone: the home screen, web search at work, a code answer and the providers list" />
+  <img src="docs/screenshots/phone.png" width="900" alt="The AFH app for Android and iPhone: Home with what needs you, a live thread, a chat about a photo, and picking a design" />
 </p>
 
 The **AFH app for Android and iPhone** does three things:
 
-- **Chat with any model, straight from your phone.** Keys stay in the phone's secure storage and chats go straight to the provider. It works with your computer off and without an account.
+- **Chat with any model, straight from your phone.** Photos, files, voice, the web and your own assistants. Keys stay in the phone's secure storage and chats go straight to the provider. It works with your computer off and without an account.
 - **An assistant that can use your phone.** It searches the web, checks the weather, sets reminders, adds calendar events, finds contacts, and drafts calls, texts and emails for you to send. Each step shows in the reply.
-- **Your computers, from anywhere.** Sign in to see which computers are online, follow their threads live, approve actions with a tap, send the next task or stop a run. Nothing to open on your router.
+- **Your computers, from anywhere.** Home shows what needs you. Follow threads live, allow or answer with a tap or from the notification, pick designs, read every change, browse the project, see the screen, and start new work with photos and files. Nothing to open on your router.
+
+In English and Arabic, light and dark. The app's code is in [`app/`](app).
 
 **[AFH Chat](https://agentflowharness.com/chat)** is the same chat in your browser, with your chats kept in your browser.
 

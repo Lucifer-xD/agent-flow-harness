@@ -64,3 +64,19 @@ dest = ROOT / "app" / "assets" / "providers.json"
 dest.parent.mkdir(exist_ok=True)
 dest.write_text(json.dumps({"providers": out}, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
 print(f"{len(out)} providers ({sum(1 for p in out if p['featured'])} featured) -> {dest.relative_to(ROOT)} ({dest.stat().st_size // 1024} KB)")
+
+# the providers' logos, the same set the desktop shows (MIT, see web/vendor/lobehub-icons-LICENSE.txt)
+import re
+
+js = (ROOT / "web" / "js" / "provider-logos.js").read_text(encoding="utf-8")
+
+
+def const(name):
+    body = re.search(rf"const {name} = (.+?);\n", js, re.S).group(1)
+    return json.loads(re.sub(r",\s*([}\]])", r"\1", body))
+
+
+logos = {"svg": const("SVG"), "exact": const("EXACT"), "words": const("WORDS"), "families": const("FAMILIES")}
+dest = ROOT / "app" / "assets" / "logos.json"
+dest.write_text(json.dumps(logos, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+print(f"{len(logos['svg'])} logos -> {dest.relative_to(ROOT)} ({dest.stat().st_size // 1024} KB)")
