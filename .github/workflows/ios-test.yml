@@ -43,7 +43,8 @@ jobs:
           xcrun simctl install "$UDID" build/ios/iphonesimulator/Runner.app
           curl -fsSL "https://get.maestro.mobile.dev" | bash
           mkdir -p "$RUNNER_TEMP/shots" && cd "$RUNNER_TEMP/shots"
-          "$HOME/.maestro/bin/maestro" --device "$UDID" test "$GITHUB_WORKSPACE/app/integration_test/picker.yaml" || { xcrun simctl io "$UDID" screenshot failed.png; "$HOME/.maestro/bin/maestro" --device "$UDID" hierarchy > hierarchy.json || true; exit 1; }
+          trap 'cp -R "$HOME/.maestro/tests" "$RUNNER_TEMP/shots/" || true' EXIT
+          "$HOME/.maestro/bin/maestro" --device "$UDID" test "$GITHUB_WORKSPACE/app/integration_test/picker.yaml" || { xcrun simctl io "$UDID" screenshot failed.png; exit 1; }
 
       - uses: actions/upload-artifact@v4
         if: always()

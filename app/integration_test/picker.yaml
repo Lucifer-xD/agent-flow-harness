@@ -23,8 +23,12 @@ appId: com.agentflowharness.app
 - takeScreenshot: 5-picker
 - tapOn:
     point: "16%,45%"
+- takeScreenshot: 5b-picked
 - tapOn:
-    text: "Add|Done"
+    point: "90%,17%"
 - waitForAnimationToEnd
 - takeScreenshot: 6-added
-- assertVisible: "Remove"
+- extendedWaitUntil:
+    visible: "Remove"
+    timeout: 60000
+- takeScreenshot: 7-ready

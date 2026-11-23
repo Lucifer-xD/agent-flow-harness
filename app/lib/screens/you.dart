@@ -26,7 +26,7 @@ import 'assistants.dart';
 import 'chat.dart' show phoneStepIcon;
 import 'providers.dart';
 
-const appVersion = '2.0.0';
+const appVersion = '2.0.1';
 
 void openWeb(String url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
 
