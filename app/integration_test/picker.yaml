@@ -1,0 +1,30 @@
+appId: com.agentflowharness.app
+---
+- launchApp
+- waitForAnimationToEnd
+- takeScreenshot: 1-welcome
+- tapOn: "Continue"
+- waitForAnimationToEnd
+- tapOn: "Continue"
+- waitForAnimationToEnd
+- tapOn: "Look around first"
+- waitForAnimationToEnd
+- takeScreenshot: 2-home
+- tapOn:
+    text: "Ask, or start some work"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: 3-compose
+- tapOn: "Add photos and files"
+- waitForAnimationToEnd
+- takeScreenshot: 4-add
+- tapOn: "Photos"
+- waitForAnimationToEnd
+- takeScreenshot: 5-picker
+- tapOn:
+    point: "16%,45%"
+- tapOn:
+    text: "Add|Done"
+- waitForAnimationToEnd
+- takeScreenshot: 6-added
+- assertVisible: "Remove"

@@ -1717,13 +1717,35 @@ function renderAttachments() {
   }));
 }
 
+/** A phone's photo, made into one every model reads: HEIC becomes JPEG, and a huge picture a smaller one. */
+async function webPhoto(f) {
+  const heic = /^image\/hei[cf]/.test(f.type) || /\.hei[cf]$/i.test(f.name);
+  if (!heic && !(/^image\/(jpeg|png|webp)$/.test(f.type) && f.size > 3_000_000)) return f;
+  const src = URL.createObjectURL(f);
+  try {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const k = Math.min(1, 2400 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = el("canvas", { width: Math.round(img.naturalWidth * k), height: Math.round(img.naturalHeight * k) });
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.88));
+    return blob ? new File([blob], f.name.replace(/\.[^.]*$/, "") + ".jpg", { type: "image/jpeg" }) : f;
+  } catch {
+    return f; // this browser can't read it: send it as it is
+  } finally {
+    URL.revokeObjectURL(src);
+  }
+}
+
 /** Attach dropped or pasted files. Ones with no path on disk (a screenshot in the clipboard) are saved first. */
 async function addFiles(list) {
-  for (const f of list) {
+  for (let f of list) {
+    if (!native.available()) f = await webPhoto(f);
     let path = window.afh?.pathForFile?.(f) || f.pywebviewFullPath || f.path || "";
     if (!path) {
       try {
-        path = (await api.raw("/api/uploads", f, { "x-filename": encodeURIComponent(f.name || "pasted.png") })).path;
+        path = (await api.raw(api.q("/api/uploads", { name: f.name || null }), f, { "x-filename": encodeURIComponent(f.name || "pasted.png") })).path;
       } catch (err) {
         toast(err.message, "err");
         continue;
@@ -1878,8 +1900,17 @@ function modeMenu() {
   })), { width: 300 });
 }
 
+/** In a browser (a phone, another computer) the files are picked there and sent over. */
+function pickHere() {
+  const input = el("input", { type: "file", multiple: true, hidden: true });
+  input.addEventListener("change", () => { addFiles([...input.files]); input.remove(); });
+  input.addEventListener("cancel", () => input.remove());
+  document.body.append(input); // iPhone Safari only answers inputs that are in the page
+  input.click();
+}
+
 async function attach() {
-  if (!native.available()) return toast("File picking needs the desktop window — paste a path in your message instead.", "info", 4000);
+  if (!native.available()) return pickHere();
   const files = (await native.pickFiles()) || [];
   for (const f of files) if (!S.draft.files.includes(f)) S.draft.files.push(f);
   renderAttachments();

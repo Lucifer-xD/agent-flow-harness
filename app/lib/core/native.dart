@@ -40,6 +40,15 @@ class Native {
     _take();
   }
 
+  static const _clip = MethodChannel('afh/clipboard');
+
+  /// iPhone: is there a picture on the clipboard (asking this shows no prompt), and the picture itself.
+  static Future<bool> hasPicture() async => Platform.isIOS && (await _clip.invokeMethod<bool>('has').catchError((_) => false) ?? false);
+  static Future<Att?> picture() async {
+    final b = await _clip.invokeMethod<Uint8List>('get');
+    return b == null ? null : Media.keepBytes(b, 'pasted.jpg');
+  }
+
   /// Back on the first screen: the app steps aside but keeps running, so work that is on keeps reporting.
   static void background() => _channel.invokeMethod('background').catchError((_) => null);
 

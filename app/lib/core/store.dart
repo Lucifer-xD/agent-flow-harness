@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -229,6 +230,7 @@ const _mimes = {
   'webp': 'image/webp',
   'gif': 'image/gif',
   'heic': 'image/heic',
+  'heif': 'image/heic',
   'pdf': 'application/pdf',
   'zip': 'application/zip',
   'mp4': 'video/mp4',
@@ -256,6 +258,8 @@ class Media {
   static Future<Att> keep(String path, {String? label}) async {
     final from = File(path);
     final shown = label ?? path.split(RegExp(r'[\\/]')).last;
+    final pic = await _picture(from, shown);
+    if (pic != null) return pic;
     final e = ext(shown).isEmpty ? ext(path) : ext(shown);
     final name = '${newId()}.${e.isEmpty || e.length > 5 ? 'bin' : e}';
     await from.copy('${dir.path}/$name');
@@ -267,6 +271,55 @@ class Media {
       } catch (_) {}
     }
     return Att(name: name, label: shown, mime: mimeOf(ext(shown).isEmpty ? path : shown), size: size, text: text);
+  }
+
+  /// A photo as every model reads it: what the bytes are decides its type (not its name), and HEIC or a very
+  /// large picture is made into a smaller PNG. Null: not a photo, or one this phone can't read.
+  static Future<Att?> _picture(File from, String shown) async {
+    final f = await from.open();
+    final Uint8List h;
+    try {
+      h = await f.read(12);
+    } finally {
+      await f.close();
+    }
+    final type = kindOf(h);
+    if (type == null) return null;
+    final base = shown.contains('.') ? shown.substring(0, shown.lastIndexOf('.')) : shown;
+    final size = await from.length();
+    if (type != 'heic' && (size < 4500000 || type == 'gif')) {
+      final name = '${newId()}.$type';
+      await from.copy('${dir.path}/$name');
+      return Att(name: name, label: '$base.$type', mime: _mimes[type]!, size: size);
+    }
+    try {
+      final buf = await ui.ImmutableBuffer.fromUint8List(await from.readAsBytes());
+      final codec = await ui.instantiateImageCodecWithSize(
+        buf,
+        getTargetSize: (w, h) {
+          final k = min(1.0, 1600 / max(w, h));
+          return ui.TargetImageSize(width: (w * k).round(), height: (h * k).round());
+        },
+      );
+      final frame = await codec.getNextFrame();
+      final png = await frame.image.toByteData(format: ui.ImageByteFormat.png);
+      frame.image.dispose();
+      codec.dispose();
+      return await keepBytes(png!.buffer.asUint8List(), '$base.png');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// What a picture is, from its first bytes.
+  static String? kindOf(List<int> h) {
+    bool at(int i, String s) => h.length >= i + s.length && String.fromCharCodes(h.sublist(i, i + s.length)) == s;
+    if (h.length > 2 && h[0] == 0xFF && h[1] == 0xD8 && h[2] == 0xFF) return 'jpg';
+    if (h.isNotEmpty && h[0] == 0x89 && at(1, 'PNG')) return 'png';
+    if (at(0, 'GIF8')) return 'gif';
+    if (at(0, 'RIFF') && at(8, 'WEBP')) return 'webp';
+    if (at(4, 'ftyp') && const ['heic', 'heix', 'hevc', 'heif', 'mif1', 'msf1', 'avif'].any((x) => at(8, x))) return 'heic';
+    return null;
   }
 
   static Future<Att> keepBytes(List<int> bytes, String label) async {

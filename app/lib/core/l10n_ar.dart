@@ -620,6 +620,7 @@ const Map<String, String> ar = {
   'Note': 'ملاحظة',
   'Checked what is left on its list': 'راجع ما تبقّى في قائمته',
   'A check failed, so it went on': 'فشل أحد الفحوص فأكمل العمل',
+  'Paste the copied picture': 'الصق الصورة المنسوخة',
   'Kept going toward the goal': 'تابع العمل نحو الهدف',
   'Edited 1 file': 'عدّل ملفًا',
   'Edited {} files': 'عدّل {} ملفات',

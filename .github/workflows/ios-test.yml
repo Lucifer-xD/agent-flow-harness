@@ -1,0 +1,53 @@
+# Runs the phone app on an iPhone simulator: a HEIC photo sent in an old chat, then the real photo picker.
+name: iOS test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["ios-test/**"]
+
+jobs:
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+          cache: true
+
+      - name: Start an iPhone
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print([x['udid'] for k in sorted(d) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone')][-1])")
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID"
+
+      - name: A HEIC photo in an old chat
+        run: |
+          flutter pub get
+          flutter test integration_test/photos_test.dart -d "$UDID"
+
+      - name: The photo picker
+        env:
+          MAESTRO_CLI_NO_ANALYTICS: "1"
+        run: |
+          flutter build ios --simulator --debug
+          xcrun simctl uninstall "$UDID" com.agentflowharness.app || true
+          xcrun simctl install "$UDID" build/ios/iphonesimulator/Runner.app
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          mkdir -p "$RUNNER_TEMP/shots" && cd "$RUNNER_TEMP/shots"
+          "$HOME/.maestro/bin/maestro" --device "$UDID" test "$GITHUB_WORKSPACE/app/integration_test/picker.yaml" || { xcrun simctl io "$UDID" screenshot failed.png; "$HOME/.maestro/bin/maestro" --device "$UDID" hierarchy > hierarchy.json || true; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore

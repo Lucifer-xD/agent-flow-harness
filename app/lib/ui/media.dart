@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../core/l10n.dart';
+import '../core/native.dart';
 import '../core/relay.dart';
 import '../core/store.dart';
 import 'kit.dart';
@@ -20,8 +21,8 @@ import 'motion.dart';
 Future<List<Att>> pickPhotos({bool camera = false}) async {
   final picker = ImagePicker();
   final got = camera
-      ? [await picker.pickImage(source: ImageSource.camera, maxWidth: 2048, maxHeight: 2048, imageQuality: 88)]
-      : await picker.pickMultiImage(maxWidth: 2048, maxHeight: 2048, imageQuality: 88, limit: 10);
+      ? [await picker.pickImage(source: ImageSource.camera, maxWidth: 2048, maxHeight: 2048, imageQuality: 88, requestFullMetadata: false)]
+      : await picker.pickMultiImage(maxWidth: 2048, maxHeight: 2048, imageQuality: 88, limit: 10, requestFullMetadata: false);
   final out = <Att>[];
   for (final x in got.whereType<XFile>()) {
     final name = x.name.contains('.') ? x.name : '${x.name}.jpg';
@@ -389,6 +390,8 @@ class _ZoomBoxState extends State<ZoomBox> with SingleTickerProviderStateMixin {
 
 /// Photo, camera, file: the choices behind the paperclip.
 Future<List<Att>> addSheet(BuildContext context, {List<Widget> extra = const []}) async {
+  final clip = await Native.hasPicture();
+  if (!context.mounted) return const [];
   final what = await sheet<String>(
     context,
     title: t('Add'),
@@ -420,6 +423,7 @@ Future<List<Att>> addSheet(BuildContext context, {List<Widget> extra = const []}
               ],
             ],
           ),
+          if (clip) ...[const SizedBox(height: 10), Tile(t('Paste the copied picture'), icon: LucideIcons.clipboardPaste, onTap: () => Navigator.pop(c, 'clip'))],
           if (extra.isNotEmpty) ...[const SizedBox(height: 10), ...extra],
         ],
       ),
@@ -430,6 +434,7 @@ Future<List<Att>> addSheet(BuildContext context, {List<Widget> extra = const []}
       'photos' => await pickPhotos(),
       'camera' => await pickPhotos(camera: true),
       'files' => await pickFiles(),
+      'clip' => [?await Native.picture()],
       _ => const [],
     };
   } catch (e) {
