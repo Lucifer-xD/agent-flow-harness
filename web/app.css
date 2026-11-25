@@ -975,7 +975,7 @@ kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(
 /* engine notices: autopilot continued, a stop hook failed, open to-dos */
 .notice { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; padding: 7px 12px; border-radius: 10px; font-size: 12.5px; color: var(--text-2); background: var(--panel); border: 1px dashed var(--border-2); animation: rise 0.3s var(--ease) both; }
 .notice > .ico { width: 14px; height: 14px; color: var(--accent); }
-.notice.hook > .ico, .notice.limit > .ico { color: var(--warn); }
+.notice.hook > .ico, .notice.limit > .ico, .notice.stalled > .ico { color: var(--warn); }
 .notice details { width: 100%; margin-left: 22px; }
 .notice summary { cursor: pointer; color: var(--text-3); font-size: 11.5px; }
 .notice pre { margin: 6px 0 0; white-space: pre-wrap; font: 11.8px/1.5 var(--mono); color: var(--text-3); max-height: 220px; overflow: auto; }

@@ -848,13 +848,13 @@ function renderTool(p, openSet, thread, t0) {
         if (typeof input === "string" ? input : kind === "run") sections.push(el("div.tool-section", el("div.tool-section-label", kind === "run" ? "Command" : "Input"), el("pre.tool-pre", typeof input === "string" ? input : pick(input || {}, "command", "cmd") || "")));
         else if (input && Object.keys(input).length) sections.push(el("div.tool-section", el("div.tool-section-label", "Input"), argRows(input)));
         if (out) sections.push(el("div.tool-section", el("div.tool-section-label", "Output", el("span.dt-grow"), copyDetail(out)),
-          el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + `\n… (the model received all ${out.length.toLocaleString()} characters; the first 20,000 are drawn here)` : out)));
+          el(`pre.tool-pre${errText && out.startsWith(errText) ? ".tool-error" : ""}`, out.length > 20000 ? out.slice(0, 20000) + `\n… (the model received all ${out.length.toLocaleString()} characters; the first 20,000 are drawn here)` : out)));
       }
     }
     // An edit shows its diff; what the tool said back is only worth a look when the checks found problems.
     if (patches.length && out && meta.diagnostics && !meta.diagnostics.ok) sections.push(el("div.tool-section", el("div.tool-section-label", "Checks"),
       el("pre.tool-pre", out.length > 20000 ? out.slice(0, 20000) + `\n… (the model received all ${out.length.toLocaleString()} characters; the first 20,000 are drawn here)` : out)));
-    if (errText) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", errText)));
+    if (errText && !out.startsWith(errText)) sections.push(el("div.tool-section", el("pre.tool-pre.tool-error", errText)));
   }
   return sections;
   };
@@ -1188,10 +1188,11 @@ export class ChatView {
       case "synthetic": {
         const n = m.metadata?.notice;
         if (!n) return null;
-        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert", resume: "refresh", chrome: "globe", "chrome-setup": "globe", account: "user", loop: "alert" };
+        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert", resume: "refresh", chrome: "globe", "chrome-setup": "globe", account: "user", loop: "alert", stalled: "alert" };
         const label = m.metadata?.label || (n === "goal" ? "Goal not achieved yet — continuing" : n === "hook" ? "A stop hook failed — continuing" : n === "todo" ? "To-do items still open — checking" : "Notice");
         return el(`div.notice.${n}`, anim, ico(icons[n] || "info"), el("span", label),
-          n === "chrome-setup" ? el("button.btn.sm", { type: "button", on: { click: () => document.dispatchEvent(new CustomEvent("afh:settings", { detail: "agent" })) } }, "Add the AFH extension") : null, m.text ? el("details", el("summary", "what the agent was told"), el("pre", m.text)) : null);
+          n === "chrome-setup" ? el("button.btn.sm", { type: "button", on: { click: () => document.dispatchEvent(new CustomEvent("afh:settings", { detail: "agent" })) } }, "Add the AFH extension") : null,
+          n === "stalled" && !m.text ? el("button.btn.sm", { type: "button", on: { click: () => document.dispatchEvent(new CustomEvent("afh:continue")) } }, "Continue") : null, m.text ? el("details", el("summary", "what the agent was told"), el("pre", m.text)) : null);
       }
       case "assistant":
         return this.renderAssistant(m, settings, anim);

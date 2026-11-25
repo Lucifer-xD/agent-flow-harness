@@ -523,8 +523,14 @@ class OtherMsg extends StatelessWidget {
       'hook' => (LucideIcons.webhook, t('A check failed, so it went on')),
       _ => (LucideIcons.info, '${meta['label'] ?? text.split('\n').first}'),
     };
+    final label = '${meta['label'] ?? ''}'.trim();
     return text.isEmpty
-        ? const SizedBox()
+        ? (label.isEmpty
+              ? const SizedBox()
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
+                  child: Text(label, style: T.small.copyWith(color: p.text3)),
+                ))
         : Padding(
             padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 4),
             child: text.length < 140 && !text.contains('\n')

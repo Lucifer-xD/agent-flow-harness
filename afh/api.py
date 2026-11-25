@@ -1102,7 +1102,7 @@ def chrome_extension():
 
     from .engine.tools import chrome, extension
 
-    info = extension.register()
+    info = extension.register(sure=True)
     if not info["folder"]:
         raise ValueError("The extension isn't part of this AFH build.")
     folder = Path(info["folder"])

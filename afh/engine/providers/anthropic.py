@@ -32,7 +32,8 @@ from afh.engine.types import ChatMessage, ChatRequest, ModelInfo, ProviderConfig
 
 DEFAULT_MAX_TOKENS = 16_384
 BUDGETS = {"low": 2048, "medium": 4096, "high": 8192, "xhigh": 16384, "max": 32000}
-STOP_REASONS = {"end_turn": "stop", "stop_sequence": "stop", "tool_use": "tool_calls", "max_tokens": "length", "refusal": "stop"}
+STOP_REASONS = {"end_turn": "stop", "stop_sequence": "stop", "tool_use": "tool_calls", "max_tokens": "length", "refusal": "refusal",
+                "pause_turn": "cut", "model_context_window_exceeded": "length"}
 _CACHE_LIMIT = 256
 
 
@@ -252,7 +253,8 @@ class AnthropicProvider:
         if thinking and tool_ids:
             self._remember(tool_ids, thinking)
         yield usage_event(input=input_tokens, output=output_tokens, cache_read=cache_read, cache_write=cache_write)
-        reason = STOP_REASONS.get(stop_reason or "", "tool_calls" if tool_ids else "stop")
+        # No stop_reason at all: the stream closed before the reply was complete.
+        reason = STOP_REASONS.get(stop_reason or "", "tool_calls" if tool_ids else "stop" if stop_reason else "cut")
         yield {"type": "finish", "reason": reason}
 
     def _remember(self, tool_ids: list[str], thinking: list[dict]) -> None:

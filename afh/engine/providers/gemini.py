@@ -40,7 +40,7 @@ def wants_signature(model: str) -> bool:
     m = _GENERATION.search(model.lower())
     return bool(m) and int(m.group(1)) >= 3
 # Finish reasons that mean the model was cut off rather than done.
-BLOCKED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "MALFORMED_FUNCTION_CALL", "IMAGE_SAFETY"}
+BLOCKED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY"}
 # The JSON-schema keys Gemini's OpenAPI subset accepts; anything else (exclusiveMinimum, const,
 # $ref, additionalProperties...) is a 400 "Unknown name", so it is rewritten or dropped.
 _SCHEMA_KEEP = {"type", "format", "description", "nullable", "enum", "items", "properties", "required", "anyOf",
@@ -223,6 +223,10 @@ class GeminiProvider:
             yield {"type": "finish", "reason": "error"}
         elif finish == "MAX_TOKENS":
             yield {"type": "finish", "reason": "length"}
+        elif finish in ("MALFORMED_FUNCTION_CALL", "UNEXPECTED_TOOL_CALL") and not calls:
+            yield {"type": "finish", "reason": "malformed"}  # the model got a tool call wrong: it can try again
+        elif finish is None and not calls:
+            yield {"type": "finish", "reason": "cut"}  # the stream closed before the reply was complete
         else:
             yield {"type": "finish", "reason": "tool_calls" if calls else "stop"}
 

@@ -196,7 +196,7 @@ class ChatGPTWebProvider:
                 if unsent:
                     yield {"type": "text.delta", "text": unsent}
                 yield usage_event(output=_estimate(full))
-                yield {"type": "finish", "reason": "length" if stream_err else "stop"}
+                yield {"type": "finish", "reason": "cut" if stream_err else "stop"}
                 return
 
     async def _reprepare(self, req: ChatRequest) -> tuple[str, dict]:

@@ -534,6 +534,7 @@ class ChromeManager:
         self.listed: dict[str, list[str]] = {}  # session id -> target ids, in the order `tabs` last listed them
         self.parked: dict[str, tuple[str, bool]] = {}  # session id -> (target id, AFH opened it): its tab between runs
         self.once: dict[str, set[str]] = {}  # session id -> sites allowed for this run of the app
+        self.repaired = False  # looked after the browsers' link to AFH once
         self.waiting = ""  # the browser whose "Allow remote debugging?" prompt is up
         self.lock = asyncio.Lock()
 
@@ -558,6 +559,9 @@ class ChromeManager:
                 if EXTENSION.connected:
                     self.link = EXTENSION.link
                     return self.link
+            if await self._repair():
+                self.link = EXTENSION.link
+                return self.link
             if not cfg.get("remoteDebugging"):
                 raise ToolError(setup_help(await asyncio.to_thread(candidates, settings)))
             found = await asyncio.to_thread(candidates, settings)
@@ -572,6 +576,20 @@ class ChromeManager:
             finally:
                 self.waiting = ""
             return self.link
+
+    async def _repair(self) -> bool:
+        """The extension never reached us: make sure the browsers' link to AFH is right (once), and if it wasn't,
+        give the extension the half minute it waits between tries."""
+        if self.repaired or not getattr(sys, "frozen", False) or extension.is_test_home():
+            return False
+        self.repaired = True
+        if not (await asyncio.to_thread(extension.register, True)).get("repaired"):
+            return False
+        for _ in range(170):
+            if EXTENSION.connected and EXTENSION.link.version:
+                return True
+            await asyncio.sleep(0.2)
+        return False
 
     @staticmethod
     async def _wake(name: str, settings: dict | None) -> None:

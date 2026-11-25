@@ -93,8 +93,15 @@ def _mac_linux_dirs() -> list[Path]:
     return [base / p / "NativeMessagingHosts" for p in ("google-chrome", "microsoft-edge", "BraveSoftware/Brave-Browser", "chromium")]
 
 
-def register() -> dict:
-    """Make sure every browser can start AFH's host, and the extension folder is current. Safe to repeat."""
+def is_test_home() -> bool:
+    """AFH runs with another home (a test, a second copy): the browsers' link belongs to the real one."""
+    return store.AFH_DIR.resolve() != (Path.home() / ".afh").resolve()
+
+
+def register(sure: bool = False) -> dict:
+    """Make sure every browser can start AFH's host, and the extension folder is current. Safe to repeat.
+    `sure` also checks that the browsers see it (see _outside); it takes a second, so only when the user asks."""
+    repaired = False
     manifest = host_manifest()
     text = json.dumps(manifest, indent=2)
     done = []
@@ -113,6 +120,8 @@ def register() -> dict:
                 done.append(key.split("\\")[1])
             except OSError as err:
                 log.warning("couldn't register the extension host under %s: %s", key, err)
+        if sure:
+            repaired = _outside(path)
     else:
         for d in _mac_linux_dirs():
             if not d.parent.is_dir():
@@ -125,7 +134,35 @@ def register() -> dict:
         ext = copy_extension()
     except OSError as err:
         log.warning("couldn't copy the browser extension: %s", err)
-    return {"host": manifest["path"], "browsers": done, "folder": str(ext) if ext else ""}
+    return {"host": manifest["path"], "browsers": done, "folder": str(ext) if ext else "", "repaired": repaired}
+
+
+def _outside(path: Path) -> bool:
+    """Write the link again through Windows' own registry service. True when a browser had a wrong one.
+
+    An app that a Store app (a packaged terminal, an AI assistant) started can see a private copy of the
+    registry: what it writes there no browser reads. The service writes to the real one."""
+    import subprocess
+
+    script = ("$s=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
+              "$r=Get-CimClass -Namespace root\\default -ClassName StdRegProv;$n=0;"
+              "foreach($k in $env:AFH_KEYS -split ';'){"
+              "$a=@{hDefKey=[uint32]2147483651;sSubKeyName=\"$s\\$k\"};"
+              "$v=(Invoke-CimMethod -CimClass $r -MethodName GetStringValue -Arguments ($a+@{sValueName=''})).sValue;"
+              "if($v -eq $env:AFH_LINK){continue};$n++;"
+              "$null=Invoke-CimMethod -CimClass $r -MethodName CreateKey -Arguments $a;"
+              "$null=Invoke-CimMethod -CimClass $r -MethodName SetStringValue -Arguments ($a+@{sValueName='';sValue=$env:AFH_LINK})};$n")
+    try:
+        out = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], timeout=20, capture_output=True, check=True,
+                       env={**os.environ, "AFH_KEYS": ";".join(f"{k}\\{HOST}" for k in REG_KEYS), "AFH_LINK": str(path)},
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        fixed = int(out.stdout.strip() or 0)
+    except (OSError, ValueError, subprocess.SubprocessError) as err:
+        log.info("the registry service: %s", err)
+        return False
+    if fixed:
+        log.info("repaired the browsers' link to AFH (%d)", fixed)
+    return bool(fixed)
 
 
 def _reg_default(winreg, key) -> str:

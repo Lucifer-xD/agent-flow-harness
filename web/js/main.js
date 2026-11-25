@@ -211,6 +211,7 @@ async function boot() {
   if (last && S.sessions.some((s) => s.id === last)) await openThread(last);
   else showHome();
   $("input").focus();
+  document.addEventListener("afh:continue", () => retryLast("Continue. Pick up where you left off."));
   document.addEventListener("afh:settings", (e) => openSettings(e.detail, ctx));
   if (!S.providersConfigured) setTimeout(() => openSettings("models", ctx, { onboarding: true }), 400);
 }
@@ -2108,7 +2109,7 @@ async function interrupt() {
   }
 }
 
-async function retryLast() {
+async function retryLast(text = "Continue — the previous attempt failed. Pick up where you left off.") {
   const t = S.current;
   const lastUser = t && [...t.messages].reverse().find((m) => m.type === "user");
   if (!lastUser) return;
@@ -2117,7 +2118,7 @@ async function retryLast() {
   S.busy.add(t.id);
   renderComposerState();
   try {
-    await api.post(`/api/sessions/${t.id}/prompt`, { text: "Continue — the previous attempt failed. Pick up where you left off." });
+    await api.post(`/api/sessions/${t.id}/prompt`, { text });
   } catch (e) {
     toast(e.message, "err");
   }

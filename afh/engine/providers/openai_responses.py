@@ -116,10 +116,10 @@ class OpenAIResponsesProvider:
     async def _parse(self, resp: httpx.Response) -> AsyncIterator[ProviderEvent]:
         calls: dict[str, dict] = {}  # item id -> {call_id, name, raw, ended}
         summary_parts = 0
-        finish = "stop"
+        finish = "cut"  # until the server says the reply is complete
         async for ev in iter_json(resp):
             t = ev.get("type") or ""
-            if t == "response.output_text.delta":
+            if t in ("response.refusal.delta", "response.output_text.delta"):
                 if ev.get("delta"):
                     yield {"type": "text.delta", "text": ev["delta"]}
             elif t in ("response.reasoning_summary_text.delta", "response.reasoning_text.delta"):
@@ -156,8 +156,8 @@ class OpenAIResponsesProvider:
                     cached = (u.get("input_tokens_details") or {}).get("cached_tokens") or 0
                     yield usage_event(input=(u.get("input_tokens") or 0) - cached, output=u.get("output_tokens") or 0,
                                       reasoning=(u.get("output_tokens_details") or {}).get("reasoning_tokens") or 0, cache_read=cached)
-                if t == "response.incomplete" and (r.get("incomplete_details") or {}).get("reason") == "max_output_tokens":
-                    finish = "length"
+                why = (r.get("incomplete_details") or {}).get("reason") if t == "response.incomplete" else ""
+                finish = {"max_output_tokens": "length", "content_filter": "refusal"}.get(why or "", "stop")
                 break
             elif t == "response.failed":
                 yield stream_error((ev.get("response") or {}).get("error") or ev)

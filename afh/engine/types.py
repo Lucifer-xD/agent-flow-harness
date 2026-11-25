@@ -121,7 +121,8 @@ class ChatRequest:
 #   {"type": "tool.end", "id": str, "name": str, "input": dict | None, "raw": str}
 #   {"type": "usage", "input": int, "output": int, "reasoning": int, "cache_read": int, "cache_write": int}
 #       ``input`` counts only uncached prompt tokens; cache reads/writes are reported separately.
-#   {"type": "finish", "reason": "stop" | "tool_calls" | "length" | "error"}
+#   {"type": "finish", "reason": "stop" | "tool_calls" | "length" | "error"
+#       | "cut" (the stream closed early) | "malformed" (a tool call the server couldn't read) | "refusal"}
 #   {"type": "error", "message": str, "status": int | None, "kind": str, "response": str}
 ProviderEvent = dict[str, Any]
 

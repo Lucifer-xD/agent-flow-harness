@@ -6,12 +6,14 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from typing import TYPE_CHECKING, Any
 
 from . import diagnostics as diagmod
 from . import hooks as hookmod
 from .loopguard import LoopGuard
+from .stall import Stalls
 from .types import BudgetExceeded, ChatMessage, ChatRequest, PermissionDenied, ToolCall, ToolContext, ToolResult, event, new_id, now_ms
 
 if TYPE_CHECKING:
@@ -21,6 +23,8 @@ log = logging.getLogger("afh.runner")
 
 MAX_STEPS = 200
 RETRYABLE = {429, 500, 502, 503, 504}
+# Errors a server sends in the middle of a reply that go away by themselves.
+TEMPORARY = re.compile(r"overload|temporar|try again|timed? ?out|unavailable|internal (server )?error|server[_ ]error|bad gateway|capacity", re.I)
 NETWORK_ATTEMPTS = 9  # waits 2+4+8+16+30+30+30+30 s between tries
 HTTP_ATTEMPTS = 5
 # Tools that only read (or wait on other agents) run at the same time when one reply calls several.
@@ -29,6 +33,7 @@ PRUNE_AT = 0.55  # share of the context window: above it, old tool outputs are s
 PRUNE_TO = 0.40
 PRUNE_KEEP = 8  # the newest tool results are never shortened
 PRUNE_HEAD = 600
+CUT_CALL = "Your reply was cut off in the middle of this call, so it was not run. Call it again; split very long content into smaller calls."
 
 
 def estimate_tokens(messages: list[ChatMessage], system: str = "") -> int:
@@ -176,7 +181,8 @@ def to_chat(messages: list[dict], vision: bool = False) -> list[ChatMessage]:
                 st = p.get("state", {})
                 body = "\n".join(c.get("text", "") for c in st.get("content", []) if c.get("type") == "text")
                 if st.get("status") == "error" and st.get("error"):
-                    body = f"Error: {st['error'].get('message', '')}\n{body}".strip()
+                    said = st["error"].get("message", "")  # the start of the result, which usually follows in full
+                    body = f"Error: {body}" if said and body.startswith(said) else f"Error: {said}\n{body}".strip()
                 out.append(ChatMessage("tool", body or "(no output)", tool_call_id=p["id"], tool_name=p["name"]))
             shots = [c["uri"] for p in m.get("content", []) if p.get("type") == "tool" and p["id"] in recent_shots
                      for c in p.get("state", {}).get("content", []) if c.get("type") == "image" and c.get("uri")]
@@ -200,6 +206,7 @@ class Run:
         self.step_files: list[tuple[str, str]] = []  # (tool call id, absolute path) changed in this step
         self.msg: dict | None = None  # the step being answered, as streamed so far
         self.loops = LoopGuard()  # the model repeating the same step over and over
+        self.stalls = Stalls()  # the model ending its turn without an answer
 
     def take_notes(self) -> None:
         """The step about to start is the first one whose history holds the notes sent meanwhile: mark them read."""
@@ -285,7 +292,7 @@ class Run:
                 if left_out:
                     msg["leftOut"] = left_out
                 req = ChatRequest(model=model.id, system=system, messages=history,
-                                  tools=[t.spec for t in tools] if model.tools else [], variant=model_ref.get("variant") or None, max_tokens=min(model.output, 32_000),
+                                  tools=[t.spec for t in tools] if model.tools else [], variant=model_ref.get("variant") or None, max_tokens=min(model.output, self.stalls.max_tokens),
                                   reasoning=model.reasoning)
                 try:
                     tool_calls = await self._stream_step(provider, req, msg, model, model_ref)
@@ -296,6 +303,12 @@ class Run:
                 if not tool_calls:
                     if self.queued:
                         continue  # a note arrived while answering: go around once more so the model reads it
+                    stalled = self.stalls.check(msg, worked=self.work_steps > 0)
+                    if stalled:
+                        self._notice("stalled", stalled.label, stalled.text)
+                        if stalled.text:
+                            continue
+                        break  # it keeps ending without an answer: say so, rather than just stop
                     nudge = await e.on_agent_stop(self)
                     if nudge and not self.abort.is_set():
                         note = {"id": new_id("msg"), "type": "synthetic", "text": nudge["text"], "time": {"created": now_ms()},
@@ -307,6 +320,7 @@ class Run:
                 self.step_files = []
                 if any(c.name not in ("todo", "goal") for c in tool_calls):
                     self.work_steps += 1
+                self.stalls.progress(msg, tool_calls)
                 await self._run_tools(tool_calls, msg, tools, gate, agent)
                 await self._diagnose(msg)
                 store.save_message(self.sid, msg)
@@ -445,7 +459,7 @@ class Run:
                     self.emit("session.step.ended", assistantMessageID=msg["id"], finish="switched", tokens=None, cost=None)
                     raise AccountSwitch() from err
                 network = err.ev.get("kind") == "network"
-                retryable = network or status in RETRYABLE
+                retryable = network or status in RETRYABLE or bool(err.ev.get("kind") == "stream" and TEMPORARY.search(err.ev.get("message") or ""))
                 # A dropped connection (Wi-Fi, DNS, a VPN reconnecting) usually comes back within a minute or two: keep
                 # trying for about 2.5 minutes instead of letting a long task die. Server errors get a shorter window.
                 limit = NETWORK_ATTEMPTS if network else HTTP_ATTEMPTS
@@ -469,6 +483,11 @@ class Run:
                 self._close(p, msg)
         for p in msg["content"]:
             p.pop("_closed", None)
+            if p.get("type") == "tool" and p["state"].get("status") == "streaming":  # the reply ended in the middle of the call
+                p["state"] = {"status": "error", "input": {}, "error": {"type": "ToolError", "message": CUT_CALL}, "content": []}
+                self.emit("session.tool.failed", assistantMessageID=msg["id"], id=p["id"], error=p["state"]["error"], content=[], metadata={}, executed=False)
+        if finish in ("length", "cut", "malformed", "refusal"):
+            msg["ending"] = finish
         msg["tokens"] = tokens
         msg["finish"] = "tool-calls" if tool_calls else finish
         msg["time"]["completed"] = now_ms()
@@ -531,7 +550,7 @@ class Run:
         if tool is None:
             result = ToolResult(text=f"Unknown tool '{call.name}'. Available tools: {', '.join(t.spec.name for t in tools)}", is_error=True)
         elif "_raw" in call.input:
-            result = ToolResult(text="The tool arguments were not valid JSON. Try again with well-formed arguments.", is_error=True)
+            result = ToolResult(text=CUT_CALL if msg.get("ending") in ("length", "cut") else "The tool arguments were not valid JSON. Try again with well-formed arguments.", is_error=True)
         else:
             blocked = None
             pre = hookmod.hooks_for(settings, "pre_tool", call.name)

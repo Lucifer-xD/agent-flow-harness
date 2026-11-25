@@ -2,6 +2,17 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.37.1 and phone app 2.0.2 (2026-11-25)
+
+**No more silent stops**
+
+- **Runs don't stop silently anymore:** a reply could end with nothing to show (the model thought and then said nothing, the connection closed early, the reply ran into the output limit, or a tool call came out broken or as plain text) and the run ended as if the task were done. AFH now sends the model back with what happened and the end of its own thinking, and if that doesn't help after a few tries it says so, with a Continue button.
+- **More room when needed:** a reply that runs into the output limit gets a larger one, up to what the model allows.
+- **The browser extension's link:** AFH checks it and repairs it by itself when a browser can't find AFH (the red ! on the extension).
+- **Busy servers:** errors a provider sends in the middle of a reply, such as overloaded, are retried.
+- **Failed steps:** show their message once, not twice.
+- **Phone app 2.0.2:** says why a run stopped.
+
 ## 1.37.0 and phone app 2.0.1 (2026-11-25)
 
 **A real glow, and your browser without the prompt**

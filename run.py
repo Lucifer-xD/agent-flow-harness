@@ -100,7 +100,7 @@ def resume_connections() -> None:
         # leaves the installed app's link alone unless asked (AFH_DEV_EXTENSION=1)
         from afh.engine.tools import extension
 
-        if getattr(sys, "frozen", False) or os.environ.get("AFH_DEV_EXTENSION") == "1":
+        if (getattr(sys, "frozen", False) and not extension.is_test_home()) or os.environ.get("AFH_DEV_EXTENSION") == "1":
             extension.register()
     except Exception as exc:
         logging.getLogger("afh").warning("browser extension link not set up: %s", exc)

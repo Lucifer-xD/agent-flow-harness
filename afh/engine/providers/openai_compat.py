@@ -59,6 +59,9 @@ class _Call:
     ended: bool = False
 
 
+_SAYS_WHEN_DONE: set[str] = set()  # providers seen to send a finish_reason; a few servers never do
+
+
 class OpenAICompatProvider:
     def __init__(self, config: ProviderConfig, transport: httpx.AsyncBaseTransport | None = None):
         self.config = config
@@ -187,6 +190,7 @@ class OpenAICompatProvider:
         by_id: dict[str, int] = {}
         finish: str | None = None
         usage: dict | None = None
+        said = False
 
         async for chunk in iter_json(resp):
             if chunk.get("error") and not chunk.get("choices"):
@@ -198,6 +202,7 @@ class OpenAICompatProvider:
                 if isinstance(text, list):  # a few servers send content parts even in deltas
                     text = "".join(p.get("text", "") for p in text if isinstance(p, dict))
                 if isinstance(text, str) and text:
+                    said = True
                     yield {"type": "text.delta", "text": text}
                 for f in dict.fromkeys(reasoning_fields):
                     r = delta.get(f)
@@ -250,8 +255,14 @@ class OpenAICompatProvider:
                 cache_read=cached,
             )
         started = any(c.started for c in calls.values())
+        if finish:
+            _SAYS_WHEN_DONE.add(self.config.id)
         if finish == "length":
             reason = "length"
+        elif finish == "content_filter" and not started:
+            reason = "refusal"
+        elif finish is None and not started and (not said or self.config.id in _SAYS_WHEN_DONE):
+            reason = "cut"  # the stream closed before the server said the reply was complete
         elif started or finish in ("tool_calls", "function_call"):
             reason = "tool_calls"  # some servers say "stop" even when they called tools
         else:

@@ -23,5 +23,6 @@ async function refresh() {
   };
 }
 
+chrome.runtime.sendMessage({ q: "retry" }).catch(() => {}); // opening this is also a way to try again now
 refresh();
 setInterval(refresh, 1500);

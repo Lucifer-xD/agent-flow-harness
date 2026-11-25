@@ -278,7 +278,9 @@ Write-Host "Built version : $Version"
 
 if ($Launch) {
     Step "Launching $AppName"
-    Start-Process -FilePath $installed.Exe -WorkingDirectory (Split-Path -Parent $installed.Exe)
+    # Through Explorer, as if clicked: started from here it would inherit this terminal's sandbox, if it has one
+    # (a packaged app's private registry and AppData).
+    Start-Process -FilePath "$env:WINDIR\explorer.exe" -ArgumentList ('"' + $installed.Exe + '"')
 }
 
 Write-Host "Done." -ForegroundColor Green
