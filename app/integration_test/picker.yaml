@@ -31,4 +31,8 @@ appId: com.agentflowharness.app
 - extendedWaitUntil:
     visible: "Remove"
     timeout: 60000
+- waitForAnimationToEnd
 - takeScreenshot: 7-ready
+- inputText: "What is this"
+- waitForAnimationToEnd
+- takeScreenshot: 8-typed

@@ -23,4 +23,4 @@ flutter build apk --release      # signed with ~/.afh-signing/keystore.propertie
 The iPhone build runs on GitHub Actions (`.github/workflows/ios.yml`) and produces an unsigned
 `.ipa` for AltStore or Sideloadly.
 
-The version comes from `pubspec.yaml` (`2.0.1+20010` is versionName 2.0.1, versionCode 20010).
+The version comes from `pubspec.yaml` (`2.0.1+20011` is versionName 2.0.1, versionCode 20011).

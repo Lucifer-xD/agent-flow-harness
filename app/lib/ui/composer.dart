@@ -1,5 +1,6 @@
 // The box you write in: text, photos, files, voice; "/" commands and "@" files where they mean something.
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -131,11 +132,14 @@ class _ComposerState extends State<Composer> {
   }
 
   Future<void> _add() async {
+    // iPhone: a keyboard that rises while Apple's picker is still closing is measured too small and covers the box,
+    // so it goes down first and comes back once the picker is gone
+    if (Platform.isIOS) _f.unfocus();
     final got = await addSheet(context, extra: widget.extra);
-    if (got.isNotEmpty && mounted) {
-      setState(() => _files.addAll(got));
-      _f.requestFocus();
-    }
+    if (got.isEmpty || !mounted) return;
+    setState(() => _files.addAll(got));
+    if (Platform.isIOS) await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (mounted) _f.requestFocus();
   }
 
   Future<void> _mic() async {
