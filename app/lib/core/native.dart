@@ -21,6 +21,12 @@ import 'store.dart';
 import 'tools.dart' show ToolError;
 
 const _channel = MethodChannel('afh/native');
+const _keys = MethodChannel('afh/keyboard');
+
+/// iPhone: make the system close the keyboard, even when nothing in the app seems to hold it open.
+void endEditing() {
+  if (Platform.isIOS) _keys.invokeMethod<void>('hide').catchError((_) {});
+}
 
 /// What another app shared: text and copies of its files.
 class Shared {

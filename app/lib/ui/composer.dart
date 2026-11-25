@@ -134,10 +134,12 @@ class _ComposerState extends State<Composer> {
   Future<void> _add() async {
     // iPhone: a keyboard that rises while Apple's picker is still closing is measured too small and covers the box,
     // so it goes down first and comes back once the picker is gone
+    final typing = _f.hasFocus;
     if (Platform.isIOS) _f.unfocus();
     final got = await addSheet(context, extra: widget.extra);
     if (got.isEmpty || !mounted) return;
     setState(() => _files.addAll(got));
+    if (!typing) return; // it wasn't up before, so it doesn't come up now
     if (Platform.isIOS) await Future<void>.delayed(const Duration(milliseconds: 900));
     if (mounted) _f.requestFocus();
   }
@@ -169,6 +171,7 @@ class _ComposerState extends State<Composer> {
     if (text.isEmpty && _files.isEmpty) return;
     if (_dictating) await Voice.i.stopListening();
     Tap.mid();
+    _f.unfocus(); // sent: make room for the answer
     final files = [..._files];
     final had = _c.text;
     setState(() {
@@ -193,7 +196,9 @@ class _ComposerState extends State<Composer> {
     final stop = !has && widget.running;
     final icon = voiceMode ? LucideIcons.audioLines : (stop ? LucideIcons.square : LucideIcons.arrowUp);
     final act = voiceMode ? widget.onVoice : (stop ? widget.onStop : (has && widget.canSend && !widget.busy ? _send : null));
-    return Column(
+    return TextFieldTapRegion(
+      // its buttons belong to the box: pressing them doesn't put the keyboard away
+      child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         AnimatedSize(
@@ -304,6 +309,7 @@ class _ComposerState extends State<Composer> {
           ),
         ),
       ],
+      ),
     );
   }
 }

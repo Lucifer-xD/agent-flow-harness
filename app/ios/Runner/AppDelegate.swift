@@ -26,5 +26,12 @@ import UIKit
         default: result(FlutterMethodNotImplemented)
         }
       }
+    FlutterMethodChannel(name: "afh/keyboard", binaryMessenger: engineBridge.applicationRegistrar.messenger())
+      .setMethodCallHandler { _, result in
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+          for window in scene.windows { window.endEditing(true) }
+        }
+        result(nil)
+      }
   }
 }

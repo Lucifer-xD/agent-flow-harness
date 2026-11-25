@@ -45,6 +45,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/shots" && cd "$RUNNER_TEMP/shots"
           trap 'cp -R "$HOME/.maestro/tests" "$RUNNER_TEMP/shots/" || true' EXIT
           "$HOME/.maestro/bin/maestro" --device "$UDID" test "$GITHUB_WORKSPACE/app/integration_test/picker.yaml" || { xcrun simctl io "$UDID" screenshot failed.png; exit 1; }
+          "$HOME/.maestro/bin/maestro" --device "$UDID" test "$GITHUB_WORKSPACE/app/integration_test/keyboard.yaml" || { xcrun simctl io "$UDID" screenshot failed.png; exit 1; }
 
       - uses: actions/upload-artifact@v4
         if: always()

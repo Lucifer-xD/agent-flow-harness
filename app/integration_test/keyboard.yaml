@@ -1,0 +1,43 @@
+# The keyboard goes away: a tap outside, a swipe down, the back button.
+appId: com.agentflowharness.app
+---
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+- tapOn: "Continue"
+- waitForAnimationToEnd
+- tapOn: "Continue"
+- waitForAnimationToEnd
+- tapOn: "Look around first"
+- waitForAnimationToEnd
+- tapOn: "Ask, or start some work"
+- waitForAnimationToEnd
+- inputText: "Hello"
+- waitForAnimationToEnd
+- takeScreenshot: k1-up
+- tapOn:
+    point: "50%,22%"
+- waitForAnimationToEnd
+- takeScreenshot: k2-tap-outside
+- tapOn: "Hello"
+- waitForAnimationToEnd
+- takeScreenshot: k3-up-again
+- swipe:
+    start: "50%,20%"
+    end: "50%,42%"
+- waitForAnimationToEnd
+- takeScreenshot: k4-swipe-down
+- tapOn: "Hello"
+- waitForAnimationToEnd
+- tapOn: "Add photos and files"
+- waitForAnimationToEnd
+- takeScreenshot: k5-add-sheet
+- swipe:
+    start: "50%,50%"
+    end: "50%,95%"
+- waitForAnimationToEnd
+- takeScreenshot: k6-sheet-closed
+- tapOn:
+    point: "50%,22%"
+- waitForAnimationToEnd
+- takeScreenshot: k7-closed

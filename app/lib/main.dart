@@ -14,6 +14,7 @@ import 'core/store.dart';
 import 'screens/shell.dart';
 import 'screens/welcome.dart';
 import 'ui/badge.dart';
+import 'ui/keys.dart';
 import 'ui/kit.dart';
 import 'ui/look.dart';
 import 'ui/mark.dart';
@@ -117,7 +118,7 @@ class _AfhAppState extends State<AfhApp> with WidgetsBindingObserver {
             pal: p,
             child: Stack(
               children: [
-                child!,
+                KeyboardAway(child: child!),
                 if (_locked) Positioned.fill(child: _Lock(onOpen: () => setState(() => _locked = false))),
               ],
             ),
