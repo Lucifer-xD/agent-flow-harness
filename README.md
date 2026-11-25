@@ -14,7 +14,7 @@
   <a href="https://github.com/Lucifer-xD/agent-flow-harness/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Lucifer-xD/agent-flow-harness?label=desktop&color=ff6a2a" /></a>
   <a href="https://agentflowharness.com/download"><img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" /></a>
   <a href="https://agentflowharness.com/download"><img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-555555" /></a>
-  <a href="https://agentflowharness.com/download"><img alt="Android and iPhone 2.0.0" src="https://img.shields.io/badge/Android%20%7C%20iPhone-2.0.0-ff3d71" /></a>
+  <a href="https://agentflowharness.com/download"><img alt="Android and iPhone 2.0.1" src="https://img.shields.io/badge/Android%20%7C%20iPhone-2.0.1-ff3d71" /></a>
   <a href="https://github.com/Lucifer-xD/agent-flow-harness/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/Lucifer-xD/agent-flow-harness/tests.yml?branch=main&label=tests" /></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Lucifer-xD/agent-flow-harness?color=2ea44f" /></a>
 </p>

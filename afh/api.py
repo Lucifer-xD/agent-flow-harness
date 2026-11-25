@@ -1094,34 +1094,35 @@ def chrome_setup():
 
 @app.post("/api/chrome/extension")
 def chrome_extension():
-    """Set up the AFH extension's link, then show the user where it is: the extension folder in Explorer and
-    the browser's extensions page (where they turn on Developer mode and choose Load unpacked)."""
+    """Set up the AFH extension's link, then help the user add it: a page with the steps opens in their browser
+    (browsers don't open their own extensions page for another program) and the extension's folder in Explorer."""
     import subprocess
     import sys
+    from pathlib import Path
 
     from .engine.tools import chrome, extension
 
     info = extension.register()
     if not info["folder"]:
         raise ValueError("The extension isn't part of this AFH build.")
+    folder = Path(info["folder"])
     opened = ""
     pick = next((c for c in chrome.candidates(engine.settings()) if c["installed"]), None)
-    if pick:
-        exe = chrome._exe(pick["id"], engine.settings())
-        if exe:
-            try:
-                subprocess.Popen([exe, f"{pick['scheme']}://extensions"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                opened = pick["name"]
-            except OSError:
-                pass
     try:
         if sys.platform == "win32":
-            os.startfile(info["folder"])  # noqa: S606 - the user's own folder
+            subprocess.Popen(f'explorer /select,"{folder}"')
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", info["folder"]])
+            subprocess.Popen(["open", "-R", str(folder)])
     except OSError:
         pass
-    return {"ok": True, "folder": info["folder"], "browser": opened, "page": f"{pick['scheme'] if pick else 'chrome'}://extensions"}
+    exe = chrome._exe(pick["id"], engine.settings()) if pick else ""
+    if exe:
+        try:
+            subprocess.Popen([exe, (folder / "setup.html").as_uri()], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            opened = pick["name"]
+        except OSError:
+            pass
+    return {"ok": True, "folder": str(folder), "browser": opened, "page": f"{pick['scheme'] if pick else 'chrome'}://extensions"}
 
 
 @app.post("/api/chrome/sites")

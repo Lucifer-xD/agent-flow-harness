@@ -1188,9 +1188,10 @@ export class ChatView {
       case "synthetic": {
         const n = m.metadata?.notice;
         if (!n) return null;
-        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert", resume: "refresh", chrome: "globe", account: "user", loop: "alert" };
+        const icons = { goal: "target", hook: "hook", todo: "checklist", limit: "alert", resume: "refresh", chrome: "globe", "chrome-setup": "globe", account: "user", loop: "alert" };
         const label = m.metadata?.label || (n === "goal" ? "Goal not achieved yet — continuing" : n === "hook" ? "A stop hook failed — continuing" : n === "todo" ? "To-do items still open — checking" : "Notice");
-        return el(`div.notice.${n}`, anim, ico(icons[n] || "info"), el("span", label), m.text ? el("details", el("summary", "what the agent was told"), el("pre", m.text)) : null);
+        return el(`div.notice.${n}`, anim, ico(icons[n] || "info"), el("span", label),
+          n === "chrome-setup" ? el("button.btn.sm", { type: "button", on: { click: () => document.dispatchEvent(new CustomEvent("afh:settings", { detail: "agent" })) } }, "Add the AFH extension") : null, m.text ? el("details", el("summary", "what the agent was told"), el("pre", m.text)) : null);
       }
       case "assistant":
         return this.renderAssistant(m, settings, anim);

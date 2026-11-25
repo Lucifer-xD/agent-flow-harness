@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add AFH to your browser</title>
+<link rel="icon" href="icons/icon48.png">
+<style>
+  :root { --bg: #fbf9f6; --card: #fff; --fg: #1f1b17; --muted: #6b6257; --line: #e8e2da; --accent: #ff6a2a; --key: #f3eee8; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #151210; --card: #1d1916; --fg: #f4efe9; --muted: #a89e93; --line: #312a25; --key: #2a2420; color-scheme: dark; } }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; padding: 56px 24px; }
+  main { max-width: 720px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+  header img { width: 44px; height: 44px; }
+  h1 { font-size: 30px; line-height: 1.2; letter-spacing: -.01em; text-wrap: balance; }
+  .lead { color: var(--muted); margin-bottom: 32px; max-width: 60ch; }
+  ol { list-style: none; padding: 0; display: grid; gap: 14px; counter-reset: n; }
+  li { counter-increment: n; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px 20px 66px; position: relative; }
+  li::before { content: counter(n); position: absolute; left: 20px; top: 20px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #fff; background: var(--accent); }
+  li b { font-size: 17px; display: block; }
+  li p { color: var(--muted); font-size: 15px; margin-top: 2px; }
+  .copy { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  code { font: 14px "Cascadia Mono", Consolas, monospace; background: var(--key); padding: 9px 13px; border-radius: 10px; overflow-wrap: anywhere; user-select: all; }
+  button { font: 600 14px "Segoe UI", system-ui, sans-serif; padding: 9px 16px; border-radius: 10px; border: 0; background: var(--fg); color: var(--bg); cursor: pointer; }
+  kbd { font: 600 12.5px "Segoe UI", sans-serif; background: var(--key); border-radius: 6px; padding: 2px 7px; }
+  .switch { display: inline-flex; align-items: center; gap: 10px; margin-top: 12px; padding: 9px 14px; border-radius: 10px; background: var(--key); font-size: 14px; }
+  .switch i { width: 34px; height: 20px; border-radius: 10px; background: var(--accent); position: relative; } .switch i::after { content: ""; position: absolute; right: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+  footer { margin-top: 26px; color: var(--muted); font-size: 14.5px; }
+</style>
+</head>
+<body>
+<main>
+  <header><img src="icons/icon128.png" alt=""><h1>Add AFH to your browser</h1></header>
+  <p class="lead">You do this once. After that AFH works in this browser by itself, in a tab group of its own, with nothing to allow each time.</p>
+  <ol>
+    <li><b>Open the extensions page</b><p>Browsers only open this page when you go there yourself. Click the address bar (<kbd>Ctrl</kbd> <kbd>L</kbd>), paste, and press <kbd>Enter</kbd>.</p>
+      <div class="copy"><code id="page">chrome://extensions</code><button data-copy="page">Copy</button></div></li>
+    <li><b>Turn on Developer mode</b><p>The switch is at the top right of that page (at the left in Edge).</p><span class="switch">Developer mode <i></i></span></li>
+    <li><b>Drag the AFH folder onto that page</b><p>AFH opened a window with the folder <b style="display:inline;font-size:inherit">browser-extension</b> selected: drag it onto the extensions page. Or click <b style="display:inline;font-size:inherit">Load unpacked</b> and choose this folder:</p>
+      <div class="copy"><code id="folder"></code><button data-copy="folder">Copy</button></div></li>
+  </ol>
+  <footer>That's all. Settings → Agent → Your Chrome turns green in AFH, and you can close this tab. The extension updates together with AFH.</footer>
+</main>
+<script src="setup.js"></script>
+</body>
+</html>

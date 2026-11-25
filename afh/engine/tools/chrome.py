@@ -2,21 +2,23 @@
 their sign-ins and their open tabs. The `browser` tool is the agent's own clean browser for checking
 its work; this one is for things only the user's browser can do.
 
-How it connects, best first:
-- The AFH browser extension (extension/): Chrome starts AFH's native messaging host, which relays to
-  /api/extension/host; the extension runs DevTools commands in tabs with chrome.debugger. Nothing to
-  switch on and no prompt per connection (ExtensionHost below; setup in afh/engine/tools/extension.py).
-- The remote-debugging switch. Chrome 144 and later have a switch at chrome://inspect/#remote-debugging ("Allow
-remote debugging for this browser instance"). With it on, Chrome listens on 127.0.0.1 and writes the
-port to `DevToolsActivePort` in its profile folder. AFH opens ONE DevTools websocket to that port for
-as long as the backend runs; Chrome shows its own "Allow remote debugging?" prompt for that
-connection and an "is being controlled" bar while it is open. AFH never turns the switch on itself
-and never answers that prompt: both are the user's.
+How it connects: through the AFH browser extension (extension/). Chrome starts AFH's native messaging
+host, which relays to /api/extension/host; the extension runs DevTools commands in tabs with
+chrome.debugger. Nothing to switch on and no prompt per connection (ExtensionHost below; setup in
+afh/engine/tools/extension.py). AFH's own tabs sit in a tab group named AFH, and the tab it is working
+in glows (glow.py).
+
+Only if the user turns it on (Settings → Agent → Your Chrome → "Connect without the extension") AFH falls
+back to Chrome's remote-debugging switch (chrome://inspect/#remote-debugging, Chrome 144 and later): Chrome
+listens on 127.0.0.1 and writes the port to `DevToolsActivePort` in its profile folder. Chrome then asks
+"Allow remote debugging?" for every connection, which is why it is never used on AFH's own accord. AFH
+never turns that switch on itself and never answers that prompt: both are the user's.
 
 What AFH adds on top, since the protocol itself has no guard rails:
 - Each site asks first ("Let AFH use github.com in your Chrome?": once, always, or no); always-allowed
   and blocked sites are kept in Settings → Agent → Your Chrome. Full access threads don't ask; the
   blocked list always holds.
+- The tab goes back to the user the moment the run ends (nothing stays attached); the next run picks it up again.
 - A thread works in a tab AFH opened for it, or in one of the user's tabs only after `switch_tab`.
 - Closing AFH or the thread's tab never closes Chrome, and never closes a tab the user opened.
 """
@@ -39,6 +41,7 @@ from urllib.parse import urlsplit
 from afh.engine.tools import extension
 from afh.engine.tools.browser import ACTIONS, BrowserTool, Tab, find_browsers
 from afh.engine.tools.files import ToolError, str_arg
+from afh.engine.tools.glow import Glow
 from afh.engine.types import PermissionDenied, ToolContext, ToolResult, ToolSpec
 
 log = logging.getLogger("afh.chrome")
@@ -46,6 +49,7 @@ CHROME_ACTIONS = ("tabs", "switch_tab", *ACTIONS)
 APPROVE_TIMEOUT = 120.0  # how long Chrome's own "Allow remote debugging?" prompt may stay unanswered
 MAX_EDGE = 1568  # screenshots are scaled so their long edge fits what vision models read without resizing
 SETUP_PAGE = "://inspect/#remote-debugging"
+RECONNECT = 6.0  # how long to wait for an extension that has connected before (AFH or the browser just started)
 
 
 # ---- finding the user's browser ---------------------------------------------------------------
@@ -114,11 +118,10 @@ def setup_help(found: list[dict]) -> str:
         return ("No Chrome, Edge or Brave profile was found on this computer, so there is no browser of the user's to connect to. "
                 "Use the `browser` tool instead.")
     b = have[0]
-    return (f"AFH isn't connected to the user's {b['name']}. The easy way: ask the user to add the AFH extension to {b['name']} "
-            "once (Settings → Agent → Your Chrome → “Add the AFH extension” walks them through it; after that it connects by itself, "
-            f"with nothing to allow each time). Or, without the extension: in {b['name']} open {b['scheme']}{SETUP_PAGE}, tick "
-            f"“Allow remote debugging for this browser instance” and click Allow when {b['name']} asks. Make sure {b['name']} is open, "
-            "then try again. Don't work around this with the `computer` tool.")
+    return (f"AFH isn't connected to the user's {b['name']}: the AFH extension isn't there, or {b['name']} isn't open. Ask the user to open "
+            f"{b['name']} and, if they haven't yet, to add the AFH extension once: Settings → Agent → Your Chrome → “Add the AFH extension” "
+            "opens the right page and folder. After that it connects by itself, with nothing to allow. Then try again. Don't work "
+            "around this with the `computer` tool or a DevTools MCP server.")
 
 
 def open_setup_page(settings: dict | None = None) -> str:
@@ -322,6 +325,7 @@ class ExtensionHost:
     def __init__(self):
         self.link: Link | None = None
         self.hello: dict = {}
+        self.reloaded: set[str] = set()
 
     @property
     def connected(self) -> bool:
@@ -348,6 +352,8 @@ class ExtensionHost:
             await link.send("Target.setDiscoverTargets", {"discover": True})
             link.version = str((await link.send("Browser.getVersion")).get("product") or "")
             log.info("the AFH extension connected from %s (%s)", name, link.version)
+            remember_extension(name)
+            asyncio.ensure_future(self._update(link, str(hello.get("extension") or "")))
             await asyncio.shield(link.reader)
         except (ToolError, asyncio.CancelledError):
             pass
@@ -356,6 +362,31 @@ class ExtensionHost:
                 self.link = None
             await link.close()
             log.info("the AFH extension disconnected")
+
+
+    async def _update(self, link: Link, version: str) -> None:
+        """An AFH update brings a newer extension into the folder it was loaded from: have it reload itself, once."""
+        newer = extension.version_of(extension.folder())
+        if not newer or newer == version or newer in self.reloaded:
+            return
+        self.reloaded.add(newer)
+        try:
+            await link.send("AFH.reload", timeout=5)
+        except ToolError:
+            pass  # 1.0.0 doesn't know the command; it updates when the browser restarts
+
+
+def remember_extension(name: str) -> None:
+    """The extension has been in this browser: next time, wait for it to connect instead of giving up at once."""
+    from afh import store
+
+    try:
+        cfg = dict(store.load_settings().get("chrome") or {})
+        if cfg.get("extensionIn") != name:
+            cfg["extensionIn"] = name
+            store.replace_setting("chrome", cfg)
+    except OSError:
+        pass
 
 
 EXTENSION = ExtensionHost()
@@ -374,6 +405,9 @@ class ChromeTab(Tab):
         self.scale = 1.0  # screenshot pixels per page pixel
         self.dialogs: list[str] = []  # JavaScript dialogs answered during the current action
         self.accept_dialogs = False
+        self.glow = Glow(self)
+        self.marked = False  # its tab group says AFH is working
+        self.on_stop = None  # called when the user clicks Stop in the page
 
     @property
     def url(self) -> str:
@@ -386,6 +420,12 @@ class ChromeTab(Tab):
     async def send(self, method: str, params: dict | None = None, timeout: float = 30) -> dict:
         if self.closed:
             raise ToolError("That tab was closed. The next action opens a new one.")
+        if method == "Page.captureScreenshot" and self.glow.lit:
+            await self.glow.hide()  # the model sees the page, not AFH's glow
+            try:
+                return await self.link.send(method, params, self.session_id, timeout)
+            finally:
+                await self.glow.show()
         return await self.link.send(method, params, self.session_id, timeout)
 
     def _event(self, method: str, params: dict) -> None:
@@ -396,6 +436,7 @@ class ChromeTab(Tab):
             accept = kind in ("alert", "beforeunload") or self.accept_dialogs
             self.dialogs.append(f"{kind} dialog “{str(params.get('message') or '')[:200]}” was {'accepted' if accept else 'dismissed'}")
             asyncio.ensure_future(self._answer(accept))
+        self.glow.on_event(method, params)
         super()._event(method, params)
 
     async def _answer(self, accept: bool) -> None:
@@ -491,6 +532,7 @@ class ChromeManager:
         self.link: Link | None = None
         self.tabs: dict[str, ChromeTab] = {}  # session id -> its tab
         self.listed: dict[str, list[str]] = {}  # session id -> target ids, in the order `tabs` last listed them
+        self.parked: dict[str, tuple[str, bool]] = {}  # session id -> (target id, AFH opened it): its tab between runs
         self.once: dict[str, set[str]] = {}  # session id -> sites allowed for this run of the app
         self.waiting = ""  # the browser whose "Allow remote debugging?" prompt is up
         self.lock = asyncio.Lock()
@@ -510,6 +552,14 @@ class ChromeManager:
             if self.connected:
                 return self.link
             await self._drop()
+            cfg = (settings or {}).get("chrome") or {}
+            if cfg.get("extensionIn"):  # it was there before: AFH or the browser may only just have started
+                await self._wake(str(cfg["extensionIn"]), settings)
+                if EXTENSION.connected:
+                    self.link = EXTENSION.link
+                    return self.link
+            if not cfg.get("remoteDebugging"):
+                raise ToolError(setup_help(await asyncio.to_thread(candidates, settings)))
             found = await asyncio.to_thread(candidates, settings)
             pick = next((c for c in found if c["ready"]), None)
             if not pick:
@@ -523,7 +573,25 @@ class ChromeManager:
                 self.waiting = ""
             return self.link
 
+    @staticmethod
+    async def _wake(name: str, settings: dict | None) -> None:
+        """Give the extension a moment to connect; open the browser if it isn't running."""
+        limit = RECONNECT
+        if not await asyncio.to_thread(_running, name.lower()):
+            exe = await asyncio.to_thread(_exe, name.lower(), settings) if name.lower() in ("chrome", "edge", "brave", "chromium") else ""
+            if exe:
+                try:
+                    subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    limit = RECONNECT * 4
+                except OSError:
+                    pass
+        for _ in range(int(limit / 0.2)):
+            if EXTENSION.connected and EXTENSION.link.version:
+                return
+            await asyncio.sleep(0.2)
+
     async def _drop(self) -> None:
+        self.parked.clear()
         if self.link is not None:
             if self.link.via == "extension":  # the extension stays connected: only let go of the tabs
                 for tab in list(self.tabs.values()):
@@ -539,6 +607,9 @@ class ChromeManager:
         tab = self.tabs.get(sid)
         if tab and not tab.closed and tab.link is link:
             return tab
+        target, owned = self.parked.pop(sid, ("", False))
+        if target and target in link.targets:  # the thread's tab from its last run
+            return await self._attach(sid, link, target, owned)
         background = bool(((settings or {}).get("chrome") or {}).get("background"))
         made = await link.send("Target.createTarget", {"url": "about:blank", "background": background})
         return await self._attach(sid, link, made["targetId"], owned=True)
@@ -559,8 +630,34 @@ class ChromeManager:
         return tab
 
     @staticmethod
+    async def mark(tab: ChromeTab, state: str) -> None:
+        """What the AFH tab group says: "working", "asking" (waiting for the user) or "done"."""
+        if tab.link.via != "extension" or not tab.owned or tab.link.closed:
+            return
+        try:
+            await tab.link.send("AFH.group", {"targetId": tab.target_id, "state": state}, timeout=3)
+        except ToolError:
+            pass  # an older extension
+
+    def run_ended(self, sid: str) -> None:
+        """The run is over: the glow goes out, the group says done, and AFH lets go of the tab (it stays open)."""
+        self.listed.pop(sid, None)
+        tab = self.tabs.pop(sid, None)
+        if tab is None or tab.closed or tab.link.closed:
+            return
+        self.parked[sid] = (tab.target_id, tab.owned)
+
+        async def rest() -> None:
+            await self.mark(tab, "done")
+            await tab.glow.off()
+            await self._release(tab)
+
+        asyncio.ensure_future(rest())
+
+    @staticmethod
     async def _release(tab: ChromeTab) -> None:
         """Stop working in a tab without closing it."""
+        await tab.glow.off()
         tab.link.sessions.pop(tab.session_id, None)
         if not tab.closed and not tab.link.closed:
             try:
@@ -599,7 +696,8 @@ class ChromeManager:
         mine = self.tabs.get(sid)
         if mine and not mine.closed and mine.target_id == target:
             return mine
-        owned = any(t.target_id == target and t.owned for t in self.tabs.values())
+        owned = any(t.target_id == target and t.owned for t in self.tabs.values()) or any(p == (target, True) for p in self.parked.values())
+        self.parked.pop(sid, None)
         await link.send("Target.activateTarget", {"targetId": target})
         return await self._attach(sid, link, target, owned=owned)
 
@@ -632,6 +730,10 @@ class ChromeManager:
     async def close_tab(self, sid: str) -> str:
         tab = self.tabs.pop(sid, None)
         self.listed.pop(sid, None)
+        target, owned = self.parked.pop(sid, ("", False))
+        if tab is None and owned and self.connected and target in self.link.targets:
+            await self.link.send("Target.closeTarget", {"targetId": target}, timeout=10)
+            return "Closed the tab AFH opened."
         if not tab or tab.closed or tab.link.closed:
             return "This thread has no tab open in the user's browser."
         if tab.owned:
@@ -667,7 +769,7 @@ class ChromeManager:
         if blocks(cfg.get("blocked") or [], site):
             raise ToolError(f"{site} is on the user's blocked list for AFH (Settings → Agent → Your Chrome), so AFH won't use it. Tell the user.")
         once = self.once.setdefault(ctx.session_id, set())
-        if allows(cfg.get("allowed") or [], site) or site in once or full_access(ctx):
+        if allows(cfg.get("allowed") or [], site) or site in once or cfg.get("askSites", True) is False or full_access(ctx):
             return
         meta = {"kind": "chrome", "title": f"Let AFH use {site} in your {browser}?", "site": site, "url": url[:300], "browser": browser,
                 "note": f"AFH will see {site} the way you do, signed in as you, and can click and type there."}
@@ -676,7 +778,12 @@ class ChromeManager:
             await ctx.permissions.require("chrome", [site], meta)
             once.add(site)
             return
+        tab = self.tabs.get(ctx.session_id)
+        if tab is not None:
+            await self.mark(tab, "asking")
         decision, message, _ = await ask("chrome", meta)
+        if tab is not None:
+            await self.mark(tab, "working")
         if decision == "always":
             once.add(site)
             allow_site(getattr(ctx, "engine", None), site)
@@ -716,6 +823,9 @@ def status(settings: dict | None) -> dict:
         "enabled": cfg.get("enabled", True) is not False,
         "browser": str(cfg.get("browser") or "auto"),
         "background": bool(cfg.get("background")),
+        "remoteDebugging": bool(cfg.get("remoteDebugging")),
+        "askSites": cfg.get("askSites", True) is not False,
+        "extensionIn": str(cfg.get("extensionIn") or ""),
         "browsers": [{k: c[k] for k in ("id", "name", "scheme", "installed", "ready")} for c in found],
         "connected": bool(link),
         "connectedTo": link.name if link else "",
@@ -734,8 +844,20 @@ def status(settings: dict | None) -> dict:
 # ---- the tool -----------------------------------------------------------------------------------
 
 
-async def _quiet(what: str, x=None, y=None) -> None:
-    pass
+def _running(browser_id: str) -> bool:
+    """Is that browser open? (Unknown counts as yes: never start a second one.)"""
+    stem = {"chrome": "chrome", "edge": "msedge", "brave": "brave", "chromium": "chromium"}.get(browser_id)
+    if not stem:
+        return True
+    try:
+        if sys.platform == "win32":
+            out = subprocess.run(["tasklist", "/FO", "CSV", "/NH", "/FI", f"IMAGENAME eq {stem}.exe"], capture_output=True, text=True,
+                                 timeout=8, creationflags=0x08000000).stdout
+            return f"{stem}.exe" in out.lower()
+        names = {"chrome": "Google Chrome", "msedge": "Microsoft Edge", "brave": "Brave Browser", "chromium": "Chromium"}
+        return subprocess.run(["pgrep", "-f", names[stem] if sys.platform == "darwin" else stem], capture_output=True, timeout=8).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return True
 
 
 class ChromeTool(BrowserTool):
@@ -745,8 +867,7 @@ class ChromeTool(BrowserTool):
             "The user's OWN browser (their running Chrome, Edge or Brave), with their sign-ins, cookies and open tabs. Use it only when "
             "the task needs that: something behind their login (their mail, dashboards, accounts), a tab they already have open, or when "
             "they ask for their browser. For checking your own work or public pages, use `browser` instead. It connects through the AFH "
-            "extension in their browser (or, without it, the browser's remote-debugging switch, which asks the user to click Allow); each "
-            "new site asks the user once; wait for them. "
+            "extension in their browser and works in tabs of its own, in a tab group named AFH; a new site may ask the user once: wait for them. "
             "Actions: `tabs` (list the user's open tabs), `switch_tab` (tab: its number from `tabs`, or part of its title/address — work in "
             "that tab instead of your own), `open` (url; in a tab AFH opened for this thread), `screenshot`, `text`, `elements` (numbers "
             "every button, link and field you can see: @1, @2… — then click/type with target \"@N\", the surest way to hit the right "
@@ -801,7 +922,12 @@ class ChromeTool(BrowserTool):
                                                "metadata": {"live": True}})
             ctx.emit("session.notice", {"kind": "chrome", "label": label})
 
-        link = await CHROME.connect(ctx.settings, waiting)
+        try:
+            link = await CHROME.connect(ctx.settings, waiting)
+        except ToolError:
+            if not ((ctx.settings or {}).get("chrome") or {}).get("remoteDebugging"):
+                ctx.emit("session.notice", {"kind": "chrome-setup", "label": "AFH isn't in your browser yet: add the AFH extension once and it connects by itself"})
+            raise
         if action == "tabs":
             return await self._tabs(sid, link)
         if action == "switch_tab":
@@ -814,11 +940,22 @@ class ChromeTool(BrowserTool):
             return await self._shot(page, f"Now working in the user's tab: {page.title or '(untitled)'} — {page.url}")
         page = await CHROME.tab(sid, ctx.settings, waiting)
         await CHROME.approve(ctx, url or page.url, link.name)
+        engine = getattr(ctx, "engine", None)
+        page.on_stop = (lambda: engine.interrupt(sid)) if hasattr(engine, "interrupt") else None
+        if not page.marked:
+            page.marked = True
+            await CHROME.mark(page, "working")
+        if CHROME._cfg(ctx).get("effects", True) is not False:
+            await page.glow.on()
+
+        async def show(what: str, x=None, y=None, kind: str = "", **more) -> None:
+            await page.glow.fx(what, x=x, y=y, kind=kind, **more)
+
         start, start_url = page, page.url
         page.dialogs.clear()
         page.accept_dialogs = bool(input.get("accept_dialogs"))
         try:
-            result = await self._act(page, action, self._to_page(input, page.scale), url, _quiet)
+            result = await self._act(page, action, self._to_page(input, page.scale), url, show)
         finally:
             page.accept_dialogs = False
         notes = [f"A {d}." for d in page.dialogs]

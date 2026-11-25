@@ -337,6 +337,9 @@ class Run:
             e.runs.pop(self.sid, None)
             if getattr(e, "_computer", None):
                 e._computer.clear(self.sid)  # hide the computer-use overlay the moment the run ends
+            from .tools.chrome import CHROME
+
+            CHROME.run_ended(self.sid)  # and the glow in the user's browser
             for req in [r for r in e.pending.values() if r.session_id == self.sid]:
                 req.reply("reject", "The run ended")
         if not failed:

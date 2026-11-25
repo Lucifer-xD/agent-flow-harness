@@ -191,7 +191,7 @@ def _fast_sleep(real):
 
 def ctx(gate=None, engine=None, sid="ses_1", emitted=None):
     return ToolContext(session_id=sid, message_id="msg", directory=".", permissions=gate or Gate(), snapshots=None,
-                       emit=lambda t, d: emitted.append((t, d)) if emitted is not None else None, settings={}, engine=engine or FakeEngine())
+                       emit=lambda t, d: emitted.append((t, d)) if emitted is not None else None, settings={"chrome": {"remoteDebugging": True}}, engine=engine or FakeEngine())
 
 
 def run(coro):
@@ -230,7 +230,7 @@ def test_a_bad_port_file_is_ignored(tmp_path):
 def test_the_setup_steps_name_the_users_browser():
     edge = [{"id": "edge", "name": "Edge", "scheme": "edge", "installed": True, "ready": False, "ws": ""}]
     text = ch.setup_help(edge)
-    assert "edge://inspect/#remote-debugging" in text and "Allow remote debugging for this browser instance" in text
+    assert "Edge" in text and "Add the AFH extension" in text and "remote-debugging" not in text
     assert "`browser` tool" in ch.setup_help([{"id": "chrome", "name": "Chrome", "scheme": "chrome", "installed": False, "ready": False, "ws": ""}])
 
 
@@ -240,7 +240,17 @@ def test_no_ready_browser_explains_the_one_time_setup(home, monkeypatch):
     monkeypatch.setattr(ch, "candidates", lambda settings=None: [
         {"id": "chrome", "name": "Chrome", "scheme": "chrome", "installed": True, "ready": False, "ws": ""}])
     res = run(ch.ChromeTool().run(ctx(), {"action": "tabs"}))
-    assert res.is_error and "chrome://inspect/#remote-debugging" in res.text
+    assert res.is_error and "Add the AFH extension" in res.text
+
+
+def test_remote_debugging_is_never_used_unless_the_user_turned_it_on(chrome):
+    """Chrome asks "Allow remote debugging?" for each such connection, so AFH must not start one by itself."""
+    emitted = []
+    c = ctx(emitted=emitted)
+    c.settings = {}
+    res = run(ch.ChromeTool().run(c, {"action": "tabs"}))
+    assert res.is_error and "Add the AFH extension" in res.text and not chrome.sent
+    assert any(t == "session.notice" and d["kind"] == "chrome-setup" for t, d in emitted)
 
 
 def test_a_refused_or_unanswered_prompt_is_explained(monkeypatch):
@@ -309,6 +319,36 @@ def test_always_allow_is_remembered_in_settings(chrome):
         assert appstore.load_settings()["chrome"]["allowed"] == []
 
     run(go())
+
+
+def test_not_asking_about_sites_is_a_setting_and_the_blocked_list_still_holds(chrome):
+    appstore.save_settings({"chrome": {"askSites": False, "blocked": ["mybank.com"]}})
+    gate = Gate("reject")
+
+    async def go():
+        ok = await ch.ChromeTool().run(ctx(gate), {"action": "open", "url": "https://docs.example.com/"})
+        no = await ch.ChromeTool().run(ctx(gate), {"action": "open", "url": "https://www.mybank.com/"})
+        return ok, no
+
+    ok, no = run(go())
+    assert not ok.is_error and not gate.asked
+    assert no.is_error and "blocked list" in no.text
+
+
+def test_the_tab_is_let_go_when_the_run_ends_and_picked_up_again(chrome):
+    async def go():
+        tool = ch.ChromeTool()
+        await tool.run(ctx(), {"action": "open", "url": "https://docs.example.com/"})
+        ch.CHROME.run_ended("ses_1")
+        for _ in range(30):
+            await asyncio.sleep(0)
+        made = len(chrome.calls("Target.createTarget"))
+        let_go = len(chrome.calls("Target.detachFromTarget"))
+        res = await tool.run(ctx(), {"action": "screenshot"})
+        return made, let_go, len(chrome.calls("Target.createTarget")), res
+
+    made, let_go, after, res = run(go())
+    assert (made, let_go, after) == (1, 1, 1) and "docs.example.com" in res.text
 
 
 def test_a_site_the_user_refuses_is_not_opened(chrome):

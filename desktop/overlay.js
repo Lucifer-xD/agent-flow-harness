@@ -1,8 +1,8 @@
-// The overlay page: a hairline frame (with a light travelling round it while busy) and the pill while the agent works, AFH's cursor gliding along a
-// gentle curve to each point, and an effect for every action — click ripples, drag trails, scroll
-// chevrons, typing and keycaps, screenshot corners, zoom boxes — plus app approval cards and lesson
-// tooltips. Effects play in order (a click waits for the glide before it). Only the pill, cards and
-// tooltips catch the mouse; the rest of the window is click-through.
+// The overlay page: a glow round the screen and a pill while the agent works, AFH's cursor gliding
+// to each point with a light following it, and an effect for every action (a burst of light for a
+// click, a beam for a drag, a light sliding for a scroll, typing, keycaps, zoom boxes), plus app
+// approval cards and lesson tooltips. Effects play in order (a click waits for the glide before it).
+// Only the pill, cards and tooltips catch the mouse; the rest of the window is click-through.
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -13,6 +13,7 @@ const ORIGIN = params.get("origin") || "";
 const TOKEN = params.get("token") || "";
 const cursor = $("cursor");
 const tag = $("tag");
+const trail = $("trail");
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const ICON = {
@@ -47,18 +48,19 @@ let state = { active: false };
 let statusText = "";
 
 function setState(d) {
+  const wasOn = !!state.active;
   state = d || { active: false };
   body.classList.toggle("on", !!state.active);
   body.classList.toggle("home", !!state.home);
   body.classList.toggle("busy", !!state.busy);
   body.classList.toggle("teaching", !!state.teaching);
   if (state.active) body.classList.remove("stopped");
+  if (state.active && !wasOn) flare(1300);
   $("who").textContent = state.teaching ? "AFH is showing you how" : "AFH is using your computer";
   $("stop-label").textContent = state.teaching ? "End lesson" : "Stop";
   setStatus(state.teaching ? "Follow the tooltip, then click Next" : state.status || (state.busy ? "Working…" : "Thinking…"));
   if (!state.active) {
-    cursor.classList.remove("on", "held", "press");
-    cur.x = null;
+    dropCursor();
     hideTag(0);
   }
 }
@@ -79,26 +81,58 @@ function setStatus(s) {
 
 // ---- AFH's cursor ------------------------------------------------------------------------------------
 
-const cur = { x: null, y: null, bend: 1 };
+const cur = { x: null, y: null, bend: 1, tx: 0, ty: 0, raf: 0 }; // tx, ty: where the following light is
 let idleTimer = 0;
 let tagTimer = 0;
 
-function place(x, y) {
+function place(x, y, tilt = 0) {
   cur.x = x;
   cur.y = y;
-  cursor.style.transform = `translate(${x}px, ${y}px)`;
+  cursor.style.transform = `translate(${x}px, ${y}px) rotate(${tilt}deg)`;
+  follow();
+}
+
+/** The light trails the cursor like something with weight, and asks for no more frames once it has caught up. */
+function follow() {
+  if (cur.raf) return;
+  const step = () => {
+    cur.raf = 0;
+    if (cur.x == null) return;
+    const gx = cur.x + 6 - cur.tx, gy = cur.y + 7 - cur.ty;
+    cur.tx += gx * 0.2;
+    cur.ty += gy * 0.2;
+    trail.style.transform = `translate(${cur.tx}px, ${cur.ty}px)`;
+    if (Math.abs(gx) + Math.abs(gy) > 0.4) cur.raf = requestAnimationFrame(step);
+  };
+  cur.raf = requestAnimationFrame(step);
 }
 
 function wake() {
   cursor.classList.add("on");
   cursor.classList.remove("idle");
+  body.classList.add("cursor");
+  body.classList.remove("idle");
   clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => cursor.classList.add("idle"), 7000);
+  idleTimer = setTimeout(() => {
+    cursor.classList.add("idle");
+    body.classList.add("idle");
+  }, 7000);
+}
+
+function dropCursor() {
+  cursor.classList.remove("on", "held", "press");
+  body.classList.remove("cursor", "press");
+  cur.x = null;
+}
+
+function press(on) {
+  cursor.classList.toggle("press", on);
+  body.classList.toggle("press", on);
 }
 
 function showTag(label, ms = 2600) {
   if (!label) return;
-  tag.textContent = label;
+  tag.firstChild.textContent = label;
   tag.classList.add("on");
   clearTimeout(tagTimer);
   tagTimer = setTimeout(() => tag.classList.remove("on"), ms);
@@ -108,15 +142,20 @@ function hideTag(ms) {
   tagTimer = setTimeout(() => tag.classList.remove("on"), ms);
 }
 
-const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+/** A soft start and a long, soft landing. */
+const landing = (t) => 1 - Math.pow(1 - t * t * (3 - 2 * t), 1.8);
 
-/** Glide along a slight arc, like a hand moving a mouse. */
+/** Glide along a slight arc, leaning into the direction of travel and settling upright. */
 function glide(x, y, ms) {
   wake();
   if (cur.x == null) {
+    cur.tx = x;
+    cur.ty = y;
     place(x, y);
-    cursor.animate([{ opacity: 0, scale: 1.6 }, { opacity: 1, scale: 1 }], { duration: 320, easing: "cubic-bezier(.34,1.56,.64,1)" });
-    return sleep(120);
+    const opts = { duration: 460, easing: "cubic-bezier(.16,1,.3,1)" };
+    cursor.animate([{ opacity: 0, scale: 1.9 }, { opacity: 1, scale: 1 }], opts);
+    trail.animate([{ opacity: 0, scale: 2.2 }, { opacity: 1, scale: 1 }], opts);
+    return sleep(160);
   }
   const sx = cur.x, sy = cur.y, dx = x - sx, dy = y - sy;
   const dist = Math.hypot(dx, dy);
@@ -124,32 +163,43 @@ function glide(x, y, ms) {
     place(x, y);
     return Promise.resolve();
   }
-  const dur = clamp((ms || 220) * (0.6 + Math.min(dist, 1600) / 1600), 140, 700);
+  const dur = clamp((ms || 220) * (0.62 + Math.min(dist, 1600) / 1500), 160, 720);
   cur.bend = -cur.bend; // alternate the side of the arc so paths look natural
-  const off = Math.min(70, dist * 0.1) * cur.bend;
+  const off = Math.min(64, dist * 0.1) * cur.bend;
   const cx = sx + dx / 2 + (-dy / dist) * off, cy = sy + dy / 2 + (dx / dist) * off;
+  const lean = clamp(dx / 60, -11, 11) * Math.min(1, dist / 220);
   const t0 = performance.now();
   return new Promise((done) => {
     const step = (now) => {
       const t = clamp((now - t0) / dur, 0, 1);
-      const e = easeInOut(t);
+      const e = landing(t);
       const u = 1 - e;
-      const px = u * u * sx + 2 * u * e * cx + e * e * x;
-      const py = u * u * sy + 2 * u * e * cy + e * e * y;
-      place(px, py);
-      if (t < 1) requestAnimationFrame(step);
-      else done();
+      place(u * u * sx + 2 * u * e * cx + e * e * x, u * u * sy + 2 * u * e * cy + e * e * y, lean * Math.sin(Math.PI * Math.sqrt(t)));
+      if (t < 1) return requestAnimationFrame(step);
+      place(x, y);
+      done();
     };
     requestAnimationFrame(step);
   });
 }
 
-function ripple(x, y, cls = "") {
-  const r = el("div", "ripple " + cls);
-  r.style.left = x + "px";
-  r.style.top = y + "px";
-  body.append(r);
-  setTimeout(() => r.remove(), 700);
+function at(cls, x, y) {
+  const n = el("div", cls);
+  n.style.left = x + "px";
+  n.style.top = y + "px";
+  body.append(n);
+  setTimeout(() => n.remove(), 700);
+}
+
+/** A click: light bursting from the point, a ring leaving it. */
+function burst(x, y, cls = "") {
+  at(`burst ${cls}`, x, y);
+  at(`ring ${cls}`, x, y);
+}
+
+/** The whole edge swells with light once. */
+function flare(ms = 700, strength = 1) {
+  $("flare").animate([{ opacity: 0 }, { opacity: strength, offset: 0.3 }, { opacity: 0 }], { duration: ms, easing: "ease-in-out" });
 }
 
 function chip(x, y, node, ms = 1600) {
@@ -186,8 +236,7 @@ function enqueue(fn) {
 async function play(d) {
   const k = d.kind;
   if (k === "leave") {
-    cursor.classList.remove("on");
-    cur.x = null;
+    dropCursor();
     return;
   }
   if (k === "stopped") return stopped(d.label);
@@ -198,26 +247,25 @@ async function play(d) {
       return glide(d.x, d.y, d.ms);
     case "click": {
       if (cur.x == null || Math.hypot(cur.x - d.x, cur.y - d.y) > 3) await glide(d.x, d.y, 200);
-      cursor.classList.add("press");
+      press(true);
       const alt = d.button === "right" ? "alt" : "";
       if (d.mods) chip(d.x, d.y, [text("span", "", "Holding"), ...keycaps(d.mods).children], 1200);
       if (d.button === "right") chip(d.x, d.y + 54, text("span", "", "Right-click"), 1000);
       for (let i = 0; i < (d.count || 1); i++) {
-        ripple(d.x, d.y, alt);
-        ripple(d.x, d.y, "dot");
-        if (i < d.count - 1) await sleep(110);
+        burst(d.x, d.y, alt);
+        if (i < (d.count || 1) - 1) await sleep(120);
       }
       await sleep(130);
-      cursor.classList.remove("press");
+      press(false);
       return;
     }
     case "press":
       cursor.classList.add("held");
-      ripple(d.x, d.y, "dot");
+      burst(d.x, d.y);
       return;
     case "release":
       cursor.classList.remove("held");
-      ripple(d.x, d.y);
+      burst(d.x, d.y);
       return;
     case "drag":
       return drag(d);
@@ -228,7 +276,7 @@ async function play(d) {
     case "key":
       return keys(d);
     case "shot":
-      return shot(d.rect);
+      return flare(640, 0.85); // a look at the screen: the edge swells with light
     case "zoom":
       return zoom(d.rect);
     case "focus":
@@ -247,42 +295,32 @@ async function play(d) {
 async function drag(d) {
   await glide(d.x, d.y, 200);
   cursor.classList.add("held");
-  ripple(d.x, d.y, "dot");
-  const svg = $("drag");
+  burst(d.x, d.y);
   const g = document.createElementNS(SVG_NS, "g");
-  const path = document.createElementNS(SVG_NS, "path");
-  path.setAttribute("d", `M${d.x},${d.y} L${d.x2},${d.y2}`);
-  const a = document.createElementNS(SVG_NS, "circle");
-  a.setAttribute("cx", d.x);
-  a.setAttribute("cy", d.y);
-  a.setAttribute("r", 4);
-  g.append(path, a);
-  svg.append(g);
-  const len = path.getTotalLength();
-  // draw the line as the cursor travels: a dash pattern revealed by a growing mask length
-  path.style.strokeDasharray = `0 ${len}`;
-  path.animate([{ strokeDasharray: `0 ${len}` }, { strokeDasharray: `${len} 0` }], { duration: d.ms || 450, easing: "ease-out", fill: "forwards" });
-  await glide(d.x2, d.y2, d.ms || 450);
-  const b = a.cloneNode();
-  b.setAttribute("cx", d.x2);
-  b.setAttribute("cy", d.y2);
-  g.append(b);
+  const ms = d.ms || 450;
+  for (const cls of ["w", "m", "h"]) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("class", cls);
+    path.setAttribute("d", `M${d.x},${d.y} L${d.x2},${d.y2}`);
+    path.setAttribute("pathLength", 1);
+    g.append(path);
+    path.animate([{ strokeDasharray: "0 1" }, { strokeDasharray: "1 0" }], { duration: ms, easing: "cubic-bezier(.2,.7,.2,1)", fill: "both" });
+  }
+  $("drag").append(g);
+  await glide(d.x2, d.y2, ms);
   cursor.classList.remove("held");
-  ripple(d.x2, d.y2);
-  setTimeout(() => g.classList.add("fade"), 500);
-  setTimeout(() => g.remove(), 1200);
+  burst(d.x2, d.y2);
+  setTimeout(() => g.classList.add("fade"), 350);
+  setTimeout(() => g.remove(), 900);
 }
 
 async function scroll(d) {
   if (cur.x == null || Math.hypot(cur.x - d.x, cur.y - d.y) > 3) await glide(d.x, d.y, 200);
   const s = el("div", "scroll");
-  s.append(el("i"), el("i"), el("i"));
-  const rot = { down: 0, up: 180, left: 90, right: -90 }[d.direction] ?? 0;
-  s.style.left = d.x + 34 + "px";
-  s.style.top = d.y - 24 + "px";
-  s.style.transform = `rotate(${rot}deg)`;
+  s.append(el("i"));
+  Object.assign(s.style, { left: d.x + "px", top: d.y + "px", rotate: ({ down: 0, up: 180, left: 90, right: -90 }[d.direction] ?? 0) + "deg" });
   body.append(s);
-  setTimeout(() => s.remove(), 1100);
+  later(s, 1200);
 }
 
 async function typing(d) {
@@ -308,7 +346,7 @@ async function keys(d) {
     set.querySelectorAll(".cap").forEach((c) => c.classList.add("down"));
     const bar = el("div", "bar");
     set.append(bar);
-    bar.animate([{ width: "0%" }, { width: "100%" }], { duration: d.hold * 1000, fill: "forwards" });
+    bar.animate([{ transform: "scaleX(0)" }, { transform: "none" }], { duration: d.hold * 1000, fill: "forwards" });
     setTimeout(() => set.querySelectorAll(".cap").forEach((c) => c.classList.remove("down")), d.hold * 1000);
     later(set, d.hold * 1000 + 700);
   } else {
@@ -316,17 +354,6 @@ async function keys(d) {
   }
   if (d.label) setStatus(d.label);
   await sleep(160);
-}
-
-function shot(r) {
-  const rect = r || { x: 0, y: 0, w: innerWidth, h: innerHeight };
-  const inset = rect.w >= innerWidth - 4 ? 14 : 0;
-  const f = el("div", "frame");
-  Object.assign(f.style, { left: rect.x + inset + "px", top: rect.y + inset + "px", width: rect.w - inset * 2 + "px", height: rect.h - inset * 2 + "px" });
-  f.append(el("i"), el("i"), el("i"), el("i"));
-  body.append(f, el("div", "flash"));
-  setTimeout(() => f.remove(), 700);
-  setTimeout(() => document.querySelectorAll(".flash").forEach((n) => n.remove()), 600);
 }
 
 function zoom(r) {
@@ -347,12 +374,12 @@ function waiting(secs) {
 
 function stopped(label) {
   body.classList.add("stopped");
+  flare(900);
   setStatus(label || "Stopped");
   $("who").textContent = "AFH stopped";
   $("stop-label").textContent = "Stop";
-  cursor.classList.remove("on", "held", "press");
-  cur.x = null;
-  document.querySelectorAll(".tip").forEach((t) => t.remove());
+  dropCursor();
+  document.querySelectorAll(".tip, .beacon").forEach((t) => t.remove());
   body.classList.remove("lesson", "nopoint");
 }
 
@@ -417,18 +444,17 @@ function dismissAsk(id) {
 function showTeach(t) {
   document.querySelectorAll(".tip, .beacon").forEach((n) => n.remove());
   const point = typeof t.x === "number" && typeof t.y === "number";
-  cursor.classList.remove("on"); // the user drives during a lesson
-  cur.x = null;
+  dropCursor(); // the user drives during a lesson
   body.classList.add("lesson");
   body.classList.toggle("nopoint", !point);
   const shade = $("shade");
   if (point) {
     shade.style.setProperty("--sx", t.x + "px");
     shade.style.setProperty("--sy", t.y + "px");
-    shade.animate([{ "--r": "1400px" }, { "--r": "86px" }], { duration: 650, easing: "cubic-bezier(.22,.61,.36,1)", fill: "forwards" });
-    shade.style.setProperty("--r", "86px");
+    shade.style.setProperty("--r", "92px");
+    shade.animate([{ "--r": "1400px" }, { "--r": "92px" }], { duration: 700, easing: "cubic-bezier(.16,1,.3,1)" });
     const b = el("div", "beacon");
-    b.append(el("i"), el("i"), el("i"), el("b"));
+    b.append(el("i"), el("i"), el("b"));
     b.style.left = t.x + "px";
     b.style.top = t.y + "px";
     body.append(b);
@@ -448,7 +474,7 @@ function showTeach(t) {
   tip.append(text("p", "", t.text || ""));
   const btns = el("div", "btns");
   const exit = text("button", "btn", "Exit");
-  const next = text("button", "btn primary", t.total && t.step >= t.total ? "Done" : "Next →");
+  const next = text("button", "btn primary", t.total && t.step >= t.total ? "Done" : "Next");
   const finish = (choice) => {
     btns.querySelectorAll("button").forEach((x) => (x.disabled = true));
     api.teach(t.id, choice);
@@ -460,7 +486,7 @@ function showTeach(t) {
   tip.append(btns);
   body.append(tip);
   // place the tooltip beside the point, on the side with the most room
-  const W = 340, H = tip.offsetHeight || 160, gap = 34;
+  const W = 344, H = tip.offsetHeight || 160, gap = 34;
   let x = innerWidth / 2 - W / 2, y = innerHeight / 2 - H / 2;
   if (point) {
     const right = innerWidth - t.x, below = innerHeight - t.y;
@@ -517,18 +543,6 @@ document.addEventListener("mousemove", (e) => {
 $("stop").addEventListener("click", () => api.stop(!!state.teaching));
 
 // ---- wiring ---------------------------------------------------------------------------------------
-
-/** The frame's rects follow the window: inset 6px, corners matching the viewfinder marks. */
-function sizeFrame() {
-  const w = innerWidth, h = innerHeight;
-  for (const r of document.querySelectorAll("#frame rect")) {
-    r.setAttribute("x", 6.5); r.setAttribute("y", 6.5);
-    r.setAttribute("width", Math.max(0, w - 13)); r.setAttribute("height", Math.max(0, h - 13));
-    r.setAttribute("rx", 14); r.setAttribute("ry", 14);
-  }
-}
-new ResizeObserver(sizeFrame).observe(document.documentElement);
-sizeFrame();
 
 api.onState((d) => setState(d));
 api.onFx((d) => enqueue(() => play(d)));

@@ -239,8 +239,11 @@ function newTab(url, { sid = null, focus = false } = {}) {
   wv.addEventListener("render-process-gone", () => toast("A browser tab crashed; reload it to try again", "err"));
   const glass = el("div.bw-glass", { title: "Click to take over from the agent", on: { pointerdown: (e) => { e.preventDefault(); takeOver(tab); } } });
   const bar = el("div.bw-agent");
-  const cursor = el("div.bw-cursor", { html: '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2l16 9.5-7 1.6-3.6 6.9z" fill="var(--accent)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>' });
-  tab.frame = el("div.bw-frame", wv, glass, cursor, bar);
+  const cursor = el("div.bw-cursor", { html: '<svg viewBox="0 0 30 32" width="30" height="32"><defs><linearGradient id="bwcg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffbe55"/><stop offset=".42" stop-color="#ff7a3d"/><stop offset="1" stop-color="#ff4668"/></linearGradient></defs><path d="M6.6 4.2 25.2 12.1c1.9.8 1.7 3.5-.2 4.1l-7.1 2.1c-.6.2-1.1.6-1.4 1.2l-3.1 6.6c-.9 1.8-3.6 1.5-4-.5L4.1 6.8C3.7 5 5.1 3.6 6.6 4.2Z" fill="url(#bwcg)" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/></svg>' });
+  const trail = el("div.bw-trail");
+  const glow = el("div.bw-glow", el("i.haze"), el("i.breath"), el("div.runs", el("i.t"), el("i.r"), el("i.u"), el("i.l")), el("i.rim"), el("i.flare"));
+  tab.frame = el("div.bw-frame", wv, glass, glow, trail, cursor, bar);
+  tab.trail = trail;
   tab.glass = glass;
   tab.bar = bar;
   tab.cursor = cursor;
@@ -314,7 +317,11 @@ function drawAgent(tab) {
   const driving = working && !tab.paused;
   tab.frame.classList.toggle("driving", driving);
   tab.glass.hidden = !driving;
-  if (!driving) tab.cursor.classList.remove("show");
+  if (!driving) {
+    tab.cursor.classList.remove("show");
+    tab.trail.classList.remove("show");
+    tab.frame.classList.remove("acting");
+  }
   if (!tab.sid || (!working && !tab.paused)) {
     tab.bar.hidden = true;
     return;
@@ -336,18 +343,30 @@ function showActivity(msg) {
   if (!tab) return;
   tab.what = msg.what || "";
   drawAgent(tab);
-  if (msg.x != null && msg.y != null) pointer(tab, msg.x, msg.y, false);
+  if (tab.paused) return;
+  // the light runs while something is happening and settles between steps
+  tab.frame.classList.add("acting");
+  clearTimeout(tab.calm);
+  tab.calm = setTimeout(() => tab.frame.classList.remove("acting"), 5000);
+  if (msg.kind === "look") tab.frame.querySelector(".flare")?.animate([{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0 }], { duration: 640, easing: "ease-in-out" });
+  if (msg.x != null && msg.y != null) {
+    pointer(tab, msg.x, msg.y, false);
+    if (msg.kind === "drag" && msg.x2 != null) setTimeout(() => pointer(tab, msg.x2, msg.y2, true), 380);
+  }
 }
 
 /** Moves the agent's pointer to x,y (page coordinates); a ripple when it clicks. */
 function pointer(tab, x, y, press) {
   if (x == null || y == null || tab.paused) return;
   tab.cursor.classList.add("show");
-  tab.cursor.style.transform = `translate(${x - 4}px, ${y - 2}px)`; // the arrow's tip on the point
+  tab.trail.classList.add("show");
+  tab.cursor.style.transform = `translate(${x - 5}px, ${y - 4}px)`; // the arrow's tip on the point
+  tab.trail.style.transform = `translate(${x + 6}px, ${y + 7}px)`;
   if (press) {
-    const ring = el("i.bw-ripple", { style: { left: `${x}px`, top: `${y}px` } });
-    tab.frame.append(ring);
-    setTimeout(() => ring.remove(), 700);
+    const burst = el("i.bw-burst", { style: { left: `${x}px`, top: `${y}px` } });
+    const ring = el("i.bw-ring", { style: { left: `${x}px`, top: `${y}px` } });
+    tab.frame.append(burst, ring);
+    setTimeout(() => { burst.remove(); ring.remove(); }, 700);
   }
 }
 

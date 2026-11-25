@@ -481,11 +481,11 @@ class PanelHost:
         self.tabs[sid] = tab
         return tab
 
-    async def activity(self, sid: str, what: str, x: float | None = None, y: float | None = None) -> None:
+    async def activity(self, sid: str, what: str, x: float | None = None, y: float | None = None, kind: str = "", **more) -> None:
         """Tells the page what the agent is doing, for the "AFH is using this tab" bar."""
         tab = self.tabs.get(sid)
         try:
-            await self._send({"op": "activity", "sid": sid, "tab": tab.tab if tab else None, "what": what, "x": x, "y": y})
+            await self._send({"op": "activity", "sid": sid, "tab": tab.tab if tab else None, "what": what, "x": x, "y": y, "kind": kind, **more})
         except Exception:
             pass
 
@@ -733,9 +733,9 @@ class BrowserTool(BaseTool):
             await ctx.permissions.require("web", ["javascript"], {"tool": "browser", "script": str(input.get("script", ""))[:500]})
         page = await (PANEL.tab(sid) if panel else MANAGER.tab(sid, ctx.settings))
 
-        async def show(what: str, x=None, y=None) -> None:
+        async def show(what: str, x=None, y=None, kind: str = "", **more) -> None:
             if panel:
-                await PANEL.activity(sid, what, x, y)
+                await PANEL.activity(sid, what, x, y, kind, **more)
 
         result = await self._act(page, action, input, url, show)
         try:  # remembered so a lost tab can be put back where it was
@@ -771,6 +771,7 @@ class BrowserTool(BaseTool):
             await self._settle(loaded)
             return await self._shot(page, f"Opened {await self._where(page)}")
         if action == "screenshot":
+            await show("Looking at the page", kind="look")
             return await self._shot(page, f"Screenshot of {await self._where(page)}")
         if action == "text":
             await show("Reading the page")
@@ -802,7 +803,7 @@ class BrowserTool(BaseTool):
                 return spot
             x, y, what = spot
             if action == "hover":
-                await show(f"Pointing at {what}", x, y)
+                await show(f"Pointing at {what}", x, y, "move")
                 await self._mouse(page, "mouseMoved", x, y)
                 await asyncio.sleep(0.4)
                 return await self._shot(page, f"Moved the pointer to {what}")
@@ -810,7 +811,7 @@ class BrowserTool(BaseTool):
                 if input.get("to_x") is None or input.get("to_y") is None:
                     raise ToolError("drag needs to_x and to_y.")
                 tx, ty = float(input["to_x"]), float(input["to_y"])
-                await show(f"Dragging from {what} to ({round(tx)}, {round(ty)})", x, y)
+                await show(f"Dragging from {what} to ({round(tx)}, {round(ty)})", x, y, "drag", x2=tx, y2=ty)
                 await self._mouse(page, "mouseMoved", x, y)
                 await self._mouse(page, "mousePressed", x, y, clicks=1)
                 for i in range(1, 9):  # a few steps in between, so pages that track the movement see it
@@ -820,7 +821,7 @@ class BrowserTool(BaseTool):
                 await asyncio.sleep(0.5)
                 return await self._shot(page, f"Dragged from {what} to ({round(tx)}, {round(ty)})")
             clicks = 2 if action == "double_click" else 1
-            await show(f"{'Double-clicking' if clicks == 2 else 'Clicking'} {what}", x, y)
+            await show(f"{'Double-clicking' if clicks == 2 else 'Clicking'} {what}", x, y, "click", count=clicks)
             await self._mouse(page, "mouseMoved", x, y)
             for n in range(1, clicks + 1):
                 await self._mouse(page, "mousePressed", x, y, clicks=n)
@@ -830,7 +831,7 @@ class BrowserTool(BaseTool):
                 return await self._shot(page, f"{'Double-clicked' if clicks == 2 else 'Clicked'} {what}")
             into = f" into {what}"
         if action == "type":
-            await show(f"Typing{into}")
+            await show(f"Typing{into}", kind="type")
             await page.send("Input.insertText", {"text": str(input.get("text", ""))})
             if input.get("submit"):
                 await self._key(page, "Enter")
@@ -838,7 +839,7 @@ class BrowserTool(BaseTool):
             return await self._shot(page, f"Typed{into or ' into the focused field'}" + (" and pressed Enter" if input.get("submit") else ""))
         if action == "press":
             key = str_arg(input, "key")
-            await show(f"Pressing {key}")
+            await show(f"Pressing {key}", kind="key")
             await self._key(page, key)
             await asyncio.sleep(0.4)
             return await self._shot(page, f"Pressed {key}")
@@ -852,7 +853,7 @@ class BrowserTool(BaseTool):
             else:
                 w, h = await self._size(page)
                 x, y = w / 2, h / 2
-            await show(f"Scrolling {direction}", x, y)
+            await show(f"Scrolling {direction}", x, y, "scroll", dir=direction)
             await page.send("Input.dispatchMouseEvent", {"type": "mouseWheel", "x": x, "y": y, "deltaX": dx, "deltaY": dy})
             await asyncio.sleep(0.5)
             return await self._shot(page, f"Scrolled {direction}")

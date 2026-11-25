@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 
 const TEXT = {
-  connected: ["Connected to AFH", "The agent can work in this browser when a task needs it. AFH asks you about each site first, and Chrome shows a bar while it works in a tab."],
+  connected: ["Connected to AFH", "The agent can work in this browser when a task needs it. Its tabs sit in a group named AFH and glow while it works; stop it from the page, from AFH, or with Pause below."],
   waiting: ["AFH isn't open", "Open the Agent Flow Harness app on this computer; this browser connects by itself."],
   starting: ["Connecting…", "Looking for the AFH app."],
   missing: ["AFH isn't set up here yet", "Open the Agent Flow Harness app once (update it if it's older than this extension). It sets up the link this extension uses, then this connects by itself."],

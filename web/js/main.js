@@ -211,6 +211,7 @@ async function boot() {
   if (last && S.sessions.some((s) => s.id === last)) await openThread(last);
   else showHome();
   $("input").focus();
+  document.addEventListener("afh:settings", (e) => openSettings(e.detail, ctx));
   if (!S.providersConfigured) setTimeout(() => openSettings("models", ctx, { onboarding: true }), 400);
 }
 

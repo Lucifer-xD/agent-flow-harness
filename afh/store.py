@@ -82,7 +82,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "browser": {"enabled": True, "visible": False, "path": ""},
     # The `chrome` tool: the user's own running Chrome/Edge/Brave (browser: auto | chrome | edge | brave | chromium).
     # allowed / blocked: sites the user always allows or never allows AFH to use there. background: open AFH's tabs behind the current one.
-    "chrome": {"enabled": True, "browser": "auto", "background": False, "allowed": [], "blocked": []},
+    "chrome": {"enabled": True, "browser": "auto", "background": False, "askSites": True, "remoteDebugging": False, "effects": True, "allowed": [], "blocked": []},
     # Several accounts per provider (engine/accounts.py): switch at this % of a plan window.
     "accounts": {"threshold": 90, "order": "fill", "whenAllUsed": "wait"},
     # The mic button: transcription provider ("" = Groq, then OpenAI), model and spoken language.

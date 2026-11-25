@@ -51,7 +51,7 @@ def copy_extension() -> Path | None:
     if src is None:
         return None
     dest = folder()
-    if version_of(dest) == version_of(src) and (dest / "background.js").read_bytes() == (src / "background.js").read_bytes():
+    if all((dest / f.relative_to(src)).is_file() and (dest / f.relative_to(src)).read_bytes() == f.read_bytes() for f in src.rglob("*") if f.is_file()):
         return dest
     tmp = dest.with_name(dest.name + ".new")
     shutil.rmtree(tmp, ignore_errors=True)

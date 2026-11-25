@@ -82,12 +82,15 @@ async function chromeCard(pane, ctx, save) {
     try { show(await api.post("/api/chrome/sites", { blocked: blocked.value.split(",").map((x) => x.trim()).filter(Boolean) })); toast("Saved", "ok", 1400); } catch (e) { toast(e.message, "err"); }
   });
   pane.append(card("Your Chrome",
-    "Lets the agent use your own browser (Chrome, Edge or Brave) with your sign-ins and your open tabs, for things only your browser can do. It connects through the AFH extension, and AFH asks you about each new site.",
+    "Lets the agent use your own browser (Chrome, Edge or Brave) with your sign-ins and your open tabs, for things only your browser can do. It connects through the AFH extension, with nothing to allow each time, and works in a tab group of its own.",
     null,
-    row("Let the agent use your browser", "Adds the chrome tool. Nothing connects until you add the AFH extension to your browser (or turn on its remote debugging)", toggle(c.enabled !== false, (v) => save({ chrome: { enabled: v } }))),
+    row("Let the agent use your browser", "Adds the chrome tool. Nothing connects until you add the AFH extension to your browser, once", toggle(c.enabled !== false, (v) => save({ chrome: { enabled: v } }))),
     row("Which browser", "The one AFH connects to", select([["auto", "The first one that is ready"], ["chrome", "Chrome"], ["edge", "Edge"], ["brave", "Brave"]], c.browser || "auto", (v) => save({ chrome: { browser: v } }, "Saved"), "260px")),
+    row("Ask before each new site", "Off: the agent uses any site you haven't blocked below, without asking. It still stops before it buys, sends or deletes anything", toggle(c.askSites !== false, (v) => save({ chrome: { askSites: v } }))),
+    row("Glow in the page", "Light round the tab AFH is working in, its cursor, and a Stop button. Screenshots the agent takes leave it out", toggle(c.effects !== false, (v) => save({ chrome: { effects: v } }))),
     row("Open its tabs in the background", "AFH's own tabs open behind the tab you are on, not in front of it", toggle(!!c.background, (v) => save({ chrome: { background: v } }))),
     state,
+    row("Connect without the extension", "Uses your browser's remote debugging instead. Your browser then asks you to click Allow every time AFH connects", toggle(!!c.remoteDebugging, (v) => save({ chrome: { remoteDebugging: v } }).then(() => refresh()))),
     el("div.comp-head", el("b", "Always-allowed sites"), el("span.comp-sub", "Sites the agent can use in your browser without asking again.")),
     sites,
     row("Blocked sites", "The agent never uses these in your browser, in any thread. Separate them with commas; their subdomains are included", blocked)));
@@ -112,17 +115,19 @@ async function chromeCard(pane, ctx, save) {
       e.currentTarget.disabled = true;
       try {
         const r = await api.post("/api/chrome/extension", {});
-        toast(r.browser ? `Opened ${r.browser}'s extensions page and the extension folder` : `Open ${r.page} in your browser`, "ok", 6000);
+        try { await navigator.clipboard.writeText(r.page); } catch { /* the steps page has a Copy button too */ }
+        toast(r.browser ? `The steps are open in ${r.browser}` : `Open ${r.page} in your browser`, "ok", 6000);
       } catch (err) { toast(err.message, "err", 8000); }
       e.currentTarget.disabled = false;
     } } }, "Add the AFH extension");
     return [el("div.chrome-steps",
-      el("b", `Add the AFH extension to ${name} (once — recommended)`),
+      el("b", `Add the AFH extension to ${name} (once)`),
       el("ol",
-        el("li", add, " opens your browser's extensions page and the folder the extension is in."),
-        el("li", "Turn on ", el("b", "Developer mode"), " (top right of that page)."),
-        el("li", "Click ", el("b", "Load unpacked"), " and choose this folder: ", el("code", x.folder || "~/.afh/browser-extension"), " ", copyText(x.folder || "")),
-        el("li", "That's all: it connects by itself whenever AFH is open, with nothing to allow each time. This card turns green.")),
+        el("li", add, " opens the steps in your browser, and the extension's folder."),
+        el("li", "Go to ", el("code", `${/edge/i.test(name) ? "edge" : /brave/i.test(name) ? "brave" : "chrome"}://extensions`), " in the address bar (it's on your clipboard)."),
+        el("li", "Turn on ", el("b", "Developer mode"), " there."),
+        el("li", "Drag the ", el("b", "browser-extension"), " folder onto that page, or click ", el("b", "Load unpacked"), " and choose it: ", el("code", x.folder || "~/.afh/browser-extension"), " ", copyText(x.folder || "")),
+        el("li", "That's all: it connects by itself whenever AFH is open, and updates with AFH. This card turns green.")),
       el("span.comp-sub", "Your browser shows a bar saying AFH is debugging it while the agent works in a tab; that is how it can click and read pages. Closing the bar stops it."))];
   }
 
@@ -136,8 +141,10 @@ async function chromeCard(pane, ctx, save) {
       rows = [];
     } else if (d.connected) {
       rows = [el("div.chrome-line.ok", ico("check"), el("span", `Connected to ${d.connectedTo}`), el("span.comp-tier", (d.version || "").replace("/", " ")), el("span.spacer"), act("Disconnect", "/api/chrome/disconnect"))];
+    } else if (!d.remoteDebugging && here.length) {
+      rows = [];
     } else if (ready) {
-      rows = [el("div.chrome-line", ico("globe"), el("span", `Or skip it: remote debugging is on in ${ready.name}. Connect, then click Allow there.`), el("span.spacer"),
+      rows = [el("div.chrome-line", ico("globe"), el("span", `Remote debugging is on in ${ready.name}. Connect, then click Allow there.`), el("span.spacer"),
         act("Connect", "/api/chrome/connect", `Switch to ${ready.name} and click Allow`))];
     } else if (here.length) {
       const copy = el("button.btn.ghost.sm", { on: { click: async () => { try { await navigator.clipboard.writeText(d.setupPage); toast("Copied", "ok", 1200); } catch { toast(d.setupPage, "ok", 6000); } } } }, "Copy the address");

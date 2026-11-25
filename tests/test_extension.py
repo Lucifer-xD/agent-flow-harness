@@ -88,7 +88,7 @@ def test_the_helper_relays_both_ways_and_says_when_afh_is_there():
 # ---- AFH's end ---------------------------------------------------------------------------------
 
 
-def test_the_extension_socket_needs_a_local_key(monkeypatch):
+def test_the_extension_socket_needs_a_local_key(home, monkeypatch):
     from afh import api as apimod
     from afh import devapi
 
@@ -114,6 +114,7 @@ class FakeExtension:
         self.tabs = {"5": {"title": "Mail", "url": "https://mail.example.test/"}}
         self.next = 6
         self.attached: set[str] = set()
+        self.groups: list[tuple[str, str]] = []
 
     async def accept(self):
         self.inbox.put_nowait(json.dumps({"hello": {"browser": "Brave", "version": "140", "extension": "1.0.0"}}))
@@ -150,6 +151,13 @@ class FakeExtension:
             self.tabs[tid] = {"title": "", "url": "about:blank"}
             self.inbox.put_nowait(json.dumps({"method": "Target.targetCreated", "params": {"targetInfo": {"targetId": tid, "type": "page", **self.tabs[tid]}}}))
             return {"targetId": tid}
+        if m == "AFH.group":
+            self.groups.append((p["targetId"], p["state"]))
+            return {}
+        if m == "Page.getFrameTree":
+            return {"frameTree": {"frame": {"id": "F1"}}}
+        if m == "Page.createIsolatedWorld":
+            return {"executionContextId": 77}
         if m == "Target.attachToTarget":
             self.attached.add(p["targetId"])
             return {"sessionId": "t" + p["targetId"]}
@@ -182,12 +190,21 @@ _JPEG = _jpeg()
 
 
 @pytest.fixture
-def fresh(monkeypatch):
+def home(tmp_path, monkeypatch):
+    """The extension's link remembers where it connected from: never in the settings of whoever runs the tests."""
+    monkeypatch.setattr(store, "AFH_DIR", tmp_path)
+    monkeypatch.setattr(store, "SETTINGS_PATH", tmp_path / "settings.json")
+    return tmp_path
+
+
+@pytest.fixture
+def fresh(home, monkeypatch):
     host = ExtensionHost()
     monkeypatch.setattr(chrome_mod, "EXTENSION", host)
     monkeypatch.setattr(chrome_mod, "candidates", lambda settings=None: [])  # no remote-debugging browser here
     CHROME.link = None
     CHROME.tabs.clear()
+    CHROME.parked.clear()
     CHROME.once.clear()
     yield host
     CHROME.link = None
@@ -216,6 +233,16 @@ def test_the_chrome_tool_works_through_the_extension_with_no_debugging_switch(fr
         assert any(m.get("method") == "Page.navigate" and m.get("sessionId") == "t6" for m in fake.sent)
         res = await tool.run(_ctx(), {"action": "evaluate", "script": "1+1"})
         assert res.text == "hello from the page"
+        # the glow is drawn in a world of its own, and is off the page for the screenshot
+        assert fake.groups == [("6", "working")]
+        order = [m["params"]["expression"][:15] if m["method"] == "Runtime.evaluate" and m["params"].get("contextId") == 77 else m["method"] for m in fake.sent]
+        shot = order.index("Page.captureScreenshot")
+        assert order[shot - 1] == "__afhGlow.hide(" and order[shot + 1] == "__afhGlow.show("
+        assert not any("__afhGlow" in (m["params"].get("expression") or "") and not m["params"].get("contextId") for m in fake.sent if m["method"] == "Runtime.evaluate")
+        CHROME.run_ended("ext-thread")
+        await asyncio.sleep(0.1)
+        assert fake.groups[-1] == ("6", "done") and any(m["method"] == "Target.detachFromTarget" for m in fake.sent)
+        assert store.load_settings()["chrome"]["extensionIn"] == "Brave"
         st = chrome_mod.status({})
         assert st["connected"] and st["via"] == "extension" and st["extension"]["connected"] and st["extension"]["browser"] == "Brave"
         # AFH's "disconnect" only lets go of the tabs: the extension stays connected
@@ -226,6 +253,24 @@ def test_the_chrome_tool_works_through_the_extension_with_no_debugging_switch(fr
         assert not fresh.connected
 
     asyncio.run(go())
+
+
+def test_an_older_extension_is_told_to_reload_once(fresh, home):
+    async def go():
+        (home / "browser-extension").mkdir()
+        (home / "browser-extension" / "manifest.json").write_text('{"version": "9.9.9"}')
+        for _ in range(2):
+            fake = FakeExtension()
+            serving = asyncio.create_task(fresh.serve(fake))
+            await asyncio.sleep(0.2)
+            yield_ = [m for m in fake.sent if m["method"] == "AFH.reload"]
+            await fake.close()
+            await asyncio.wait_for(serving, 5)
+            seen.append(len(yield_))
+
+    seen: list[int] = []
+    asyncio.run(go())
+    assert seen == [1, 0]
 
 
 def test_without_the_extension_the_tool_says_how_to_add_it(fresh, monkeypatch):
@@ -253,7 +298,7 @@ def test_the_extension_id_matches_its_key():
     manifest = json.loads((extension.source_folder() / "manifest.json").read_text(encoding="utf-8"))
     digest = hashlib.sha256(base64.b64decode(manifest["key"])).hexdigest()[:32]
     assert "".join(chr(ord("a") + int(c, 16)) for c in digest) == extension.EXTENSION_ID
-    assert {"debugger", "nativeMessaging", "tabs"} <= set(manifest["permissions"])
+    assert {"debugger", "nativeMessaging", "tabs", "tabGroups"} <= set(manifest["permissions"])
 
 
 def test_the_extension_is_copied_where_the_user_loads_it_from(tmp_path, monkeypatch):

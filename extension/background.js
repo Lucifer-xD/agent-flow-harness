@@ -5,6 +5,7 @@
 // extension: Chrome starts AFH's small "native messaging" helper (com.agentflowharness.bridge, set up
 // by the AFH app), the helper relays to the running app, and this worker runs each command in the tab
 // with chrome.debugger. Chrome shows its "is debugging this browser" bar while AFH works in a tab.
+// The tabs AFH opens sit together in a tab group named AFH, whose title says what it is doing.
 //
 // What it speaks: CDP messages {id, method, params, sessionId}. The browser-level Target.* commands
 // AFH needs are answered from chrome.tabs; everything else goes to the tab named by sessionId ("t" +
@@ -59,6 +60,38 @@ function setState(s, why = "") {
   chrome.action.setBadgeBackgroundColor({ color: s === "missing" ? "#c0392b" : "#6b6257" }).catch(() => {});
 }
 
+// ---- the AFH tab group ---------------------------------------------------------------------------
+
+const TITLES = { working: "\u23F3 AFH", asking: "\u270B AFH", done: "\u2705 AFH" };
+const OURS = /^(\S+ )?AFH$/; // a group we made, whatever its title says now
+
+/** The window new tabs go to: the one the user used last. Opens one when there is none. */
+async function homeWindow() {
+  try {
+    const w = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+    if (w && w.type === "normal" && !w.incognito) return w.id;
+  } catch (e) { /* no window is open */ }
+  const all = (await chrome.windows.getAll({ windowTypes: ["normal"] })).filter((w) => !w.incognito);
+  return all.length ? all[0].id : (await chrome.windows.create({ focused: true })).id;
+}
+
+/** Put a tab AFH opened in this window's AFH group, making the group when there is none. */
+async function group(tab, state = "working") {
+  try {
+    const [found] = (await chrome.tabGroups.query({ windowId: tab.windowId })).filter((g) => OURS.test(g.title || ""));
+    const id = await chrome.tabs.group(found ? { tabIds: [tab.id], groupId: found.id } : { tabIds: [tab.id], createProperties: { windowId: tab.windowId } });
+    await chrome.tabGroups.update(id, { title: TITLES[state], ...(found ? {} : { color: "orange", collapsed: false }) });
+  } catch (e) { /* tabs can't be grouped here (an app window, or the user is dragging a tab) */ }
+}
+
+/** Say in the group's title what AFH is doing. A tab the user took out of the group stays out. */
+async function groupState(tabId, state) {
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.groupId == null || tab.groupId < 0 || !TITLES[state]) return;
+  const g = await chrome.tabGroups.get(tab.groupId);
+  if (OURS.test(g.title || "") && g.title !== TITLES[state]) await chrome.tabGroups.update(g.id, { title: TITLES[state] });
+}
+
 async function detachAll() {
   for (const id of [...attached]) {
     attached.delete(id);
@@ -111,7 +144,8 @@ async function run({ method, params = {}, sessionId }) {
     case "Target.getTargets":
       return { targetInfos: (await chrome.tabs.query({})).map(info) };
     case "Target.createTarget": {
-      const tab = await chrome.tabs.create({ url: params.url || "about:blank", active: !params.background });
+      const tab = await chrome.tabs.create({ windowId: await homeWindow(), url: params.url || "about:blank", active: !params.background });
+      await group(tab);
       return { targetId: String(tab.id) };
     }
     case "Target.attachToTarget": {
@@ -134,6 +168,12 @@ async function run({ method, params = {}, sessionId }) {
       await chrome.windows.update(tab.windowId, { focused: true });
       return {};
     }
+    case "AFH.group":
+      await groupState(Number(params.targetId), params.state);
+      return {};
+    case "AFH.reload": // a newer version of this extension is in its folder
+      setTimeout(() => chrome.runtime.reload(), 200);
+      return {};
     case "Target.closeTarget":
       await chrome.tabs.remove(Number(params.targetId));
       return { success: true };
@@ -187,6 +227,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 });
 
 // Keep trying while AFH isn't set up yet; the helper itself waits for the app to open.
+chrome.runtime.onStartup.addListener(connect);
+chrome.runtime.onInstalled.addListener(connect);
 chrome.alarms.create("afh-connect", { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === "afh-connect") connect(); });
 

@@ -377,6 +377,8 @@ class Panes:
             note("Your own browser, with your sign-ins and tabs. It asks you to click Allow each time AFH connects."),
             self.toggle("chrome", "enabled", "Let the agent use your own browser", "AFH asks you about each new site"),
             R("choice", "Which browser", ch.get("browser") or "auto", "", self.saver("chrome", "browser"), [("The first one that is ready", "auto"), ("Chrome", "chrome"), ("Edge", "edge"), ("Brave", "brave")]),
+            self.toggle("chrome", "askSites", "Ask before each new site", "Off: it uses any site you haven't blocked"),
+            self.toggle("chrome", "remoteDebugging", "Connect without the extension", "Remote debugging: your browser asks you to allow it each time", default=False),
             self.toggle("chrome", "background", "Open its tabs in the background", default=False),
             R("button", "Connect to your browser", "", "Shows the steps if your browser isn't ready yet", self.chrome_connect) if ch.get("enabled", True) is not False else None,
             R("button", "Sites it may use", f"{len(ch.get('allowed') or [])} allowed", "", self.chrome_sites) if ch.get("enabled", True) is not False else None,
@@ -432,14 +434,18 @@ class Panes:
         ready = next((b for b in data.get("browsers") or [] if b.get("ready")), None)
         if data.get("connected"):
             self.ui.say(f"Already connected to {data.get('connectedTo')}", 4)
-        elif ready:
+        elif ready and data.get("remoteDebugging"):
             self.ui.say(f"Switch to {ready['name']} and click Allow", 8)
             await self.ui.api("POST", "/api/chrome/connect", {}, timeout=150)
             self.ui.say(f"Connected to {ready['name']}", 4)
         elif any(b.get("installed") for b in data.get("browsers") or []):
             name = next(b["name"] for b in data["browsers"] if b.get("installed"))
-            await self.ui.api("POST", "/api/chrome/setup", {})
-            self.ui.say(f"In {name}: tick “Allow remote debugging for this browser instance” on the page that opened ({data.get('setupPage')}), then connect again", 12)
+            if data.get("remoteDebugging"):
+                await self.ui.api("POST", "/api/chrome/setup", {})
+                self.ui.say(f"In {name}: tick “Allow remote debugging for this browser instance” on the page that opened ({data.get('setupPage')}), then connect again", 12)
+            else:
+                await self.ui.api("POST", "/api/chrome/extension", {})
+                self.ui.say(f"The steps are open in {name}. On its extensions page: Developer mode on, then Load unpacked and choose {(data.get('extension') or {}).get('folder')}", 14)
         else:
             self.ui.say("No Chrome, Edge or Brave was found on this computer", 5)
 

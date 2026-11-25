@@ -2,6 +2,18 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.37.0 and phone app 2.0.1 (2026-11-25)
+
+**A real glow, and your browser without the prompt**
+
+- **The glow, built again:** while AFH uses your computer, a real light surrounds the screen in the colors of its mark: it breathes, runs round the edge while AFH works, and settles while it thinks. A new cursor with a light that follows it, a burst for a click, a beam for a drag, keycaps that light up, and new cards for approvals and lessons. It costs almost nothing: only already painted layers move.
+- **The same glow in your browser:** the tab AFH works in glows, with its cursor, a light for each click and a Stop button in the page. The browser panel inside AFH glows the same way. Screenshots the agent takes leave it out.
+- **Your browser, with nothing to allow:** AFH works through its own extension, in a tab group named AFH whose title says whether it is working, waiting for you or done. It never uses remote debugging on its own anymore, so “Allow remote debugging?” is gone. If you want that way, it is a setting.
+- **Adding the extension:** done once. Add the AFH extension opens a page with the steps in your browser; before, it opened an empty tab, since browsers don't open their extensions page for another program. From now on the extension updates together with AFH.
+- **Back to you when it's done:** when a run ends AFH lets go of the tab, so nothing stays attached. The next run carries on in the same tab.
+- **Your choice about sites:** Ask before each new site can be turned off. Blocked sites stay blocked either way.
+- **Phone app 2.0.1:** photos in every chat and in older threads: HEIC and very large pictures are converted, and on iPhone you can paste a copied picture. The keyboard no longer covers the box after picking one. Sending photos also works from a phone's browser.
+
 ## 1.36.0 and phone app 2.0.0 (2026-11-23)
 
 **The phone app, built again**
