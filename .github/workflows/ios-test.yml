@@ -30,11 +30,14 @@ jobs:
           xcrun simctl bootstatus "$UDID"
 
       - name: A HEIC photo in an old chat
+        timeout-minutes: 15
         run: |
           flutter pub get
           flutter test integration_test/photos_test.dart -d "$UDID"
 
       - name: The photo picker
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
         env:
           MAESTRO_CLI_NO_ANALYTICS: "1"
         run: |
@@ -46,6 +49,16 @@ jobs:
           trap 'cp -R "$HOME/.maestro/tests" "$RUNNER_TEMP/shots/" || true' EXIT
           "$HOME/.maestro/bin/maestro" --device "$UDID" test "$GITHUB_WORKSPACE/app/integration_test/picker.yaml" || { xcrun simctl io "$UDID" screenshot failed.png; exit 1; }
           "$HOME/.maestro/bin/maestro" --device "$UDID" test "$GITHUB_WORKSPACE/app/integration_test/keyboard.yaml" || { xcrun simctl io "$UDID" screenshot failed.png; exit 1; }
+
+      - name: What the iPhone showed when something failed
+        if: failure()
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir -p shots/crashes
+          xcrun simctl io "$UDID" screenshot shots/last.png || true
+          cp ~/Library/Logs/DiagnosticReports/Runner* shots/crashes/ 2>/dev/null || true
+          xcrun simctl spawn "$UDID" log show --last 20m --style compact --predicate 'process == "Runner"' > shots/runner.log 2>/dev/null || true
+          tail -c 20000 shots/runner.log || true
 
       - uses: actions/upload-artifact@v4
         if: always()
