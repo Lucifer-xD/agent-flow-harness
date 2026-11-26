@@ -136,3 +136,6 @@
 .no3d .world.w-banner { background: radial-gradient(120% 90% at 70% 0%, #3a1626 0%, #161022 50%, #0b0810 100%); }
 .no3d .world.w-banner > #world { display: none; }
 @media (max-width: 700px) { .world.w-banner { min-height: 0; } .world.w-banner > section { padding-bottom: 36px; } }
+/* the 404 page: the whole screen is the place */
+.world.w-banner.w-full { min-height: 100vh; min-height: 100svh; justify-content: center; border-bottom: 0; }
+.world.w-banner.w-full > section.lost { min-height: 0; padding-bottom: 80px; }

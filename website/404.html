@@ -13,6 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/pages.css">
+  <link rel="stylesheet" href="/world.css">
   <script type="importmap">
     { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -20,13 +21,14 @@
     } }
   </script>
 </head>
-<body data-page="" data-scene="lost">
-  <canvas id="scene" aria-hidden="true"></canvas>
+<body data-page="">
   <header data-nav></header>
 
-  <main class="lost">
+  <!-- far out on the dunes: the mark is a small light on the horizon, and the way back is below -->
+  <main class="world w-banner w-full" data-view="lost">
+    <canvas id="world" aria-hidden="true"></canvas>
+    <section class="lost">
     <div>
-      <div class="lost-stage" data-stage aria-hidden="true"></div>
       <p class="kicker" data-reveal>404</p>
       <h1 class="display" data-reveal style="--d:.08s">Lost the<br><span class="grad-text">thread.</span></h1>
       <p class="lead" data-reveal style="--d:.16s">This page doesn't exist — or it moved. The mark is still at work; the rest of the site is one click away.</p>
@@ -35,10 +37,12 @@
         <a class="btn btn-ghost" href="/docs">Read the guide</a>
       </div>
     </div>
+    </section>
   </main>
 
   <footer data-footer></footer>
   <script src="/js/layout.js"></script>
   <script type="module" src="/js/page.js"></script>
+  <script type="module" src="/js/world.js"></script>
 </body>
 </html>

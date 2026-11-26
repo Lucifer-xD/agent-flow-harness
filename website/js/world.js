@@ -33,6 +33,7 @@ const scene = new THREE.Scene();
 scene.background = FOG;
 scene.fog = new THREE.FogExp2(FOG, 0.0044);
 const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 1200);
+const uniforms = { uTime: { value: 0 }, uWake: { value: 0 } };
 
 // ---- noise for the land ----
 const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -65,14 +66,34 @@ function land(x, z) {
         c = mix(c, low, warm * 0.85); c = mix(c, haze, smoothstep(0.07, -0.02, h)); gl_FragColor = vec4(c, 1.0); }`,
   }));
   scene.add(sky);
-  const n = mobile ? 420 : 900, pos = new Float32Array(n * 3);
+  const n = mobile ? 520 : 1300, pos = new Float32Array(n * 3), seed = new Float32Array(n * 2);
   for (let i = 0; i < n; i++) {
-    const a = Math.random() * Math.PI * 2, y = 0.1 + Math.pow(Math.random(), 1.4) * 0.9, r = Math.sqrt(1 - y * y);
+    const a = Math.random() * Math.PI * 2, y = 0.06 + Math.pow(Math.random(), 1.5) * 0.94, r = Math.sqrt(1 - y * y);
     pos.set([Math.cos(a) * r * 860, y * 860, Math.sin(a) * r * 860], i * 3);
+    seed.set([Math.random() * 6.283, Math.pow(Math.random(), 3)], i * 2); // when it twinkles; how bright it is (most are faint)
   }
-  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: "#cdd3ff", size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0.75, fog: false, depthWrite: false })));
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setAttribute("seed", new THREE.BufferAttribute(seed, 2));
+  // each star breathes at its own pace; the bright few are larger and a little warm or cold
+  scene.add(new THREE.Points(g, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: uniforms.uTime, uPx: { value: 1 } },
+    vertexShader: `attribute vec2 seed; uniform float uTime, uPx; varying float vA; varying float vW;
+      void main(){ vA = (0.28 + 0.72 * seed.y) * (0.62 + 0.38 * sin(uTime * (0.6 + seed.x * 0.35) + seed.x * 7.0));
+        vW = fract(seed.x * 3.7); gl_PointSize = (1.3 + seed.y * 2.6) * uPx; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `varying float vA; varying float vW;
+      void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.0, d) * vA;
+        vec3 c = mix(vec3(0.78, 0.83, 1.0), vec3(1.0, 0.86, 0.78), vW); gl_FragColor = vec4(c * a, a); }`,
+  })));
 }
+const starPx = () => scene.children.find((o) => o.isPoints && o.material.uniforms?.uPx)?.material.uniforms.uPx;
+// a falling star every so often, high in the sky: a short line, bright at its head, gone in under a second
+const meteor = (() => {
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+  g.setAttribute("color", new THREE.BufferAttribute(new Float32Array([1, 0.92, 0.86, 0, 0, 0]), 3));
+  const l = new THREE.Line(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  l.frustumCulled = false; l.visible = false; scene.add(l);
+  return { l, at: 4 + Math.random() * 5, life: 0, from: new THREE.Vector3(), dir: new THREE.Vector3() };
+})();
 
 // ---- the land ----
 {
@@ -90,6 +111,25 @@ function land(x, z) {
   scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })));
 }
 
+// ---- what the glass reflects: the same night, made once into an environment map ----
+// A dark dome with the dawn on one side, the moon's cold light on the other and a few soft panels in the
+// mark's colours, so the cables and dots catch real highlights as the camera moves around them.
+{
+  const env = new THREE.Scene();
+  env.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide,
+    vertexShader: "varying vec3 d; void main(){ d = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `varying vec3 d; void main(){ float h = d.y; vec3 c = mix(vec3(0.035, 0.03, 0.06), vec3(0.09, 0.07, 0.14), smoothstep(-0.2, 0.8, h));
+      c += vec3(0.9, 0.32, 0.2) * pow(max(0.0, 1.0 - abs(h - 0.04) * 4.0), 2.0) * smoothstep(-0.3, 0.8, d.x - d.z * 0.6) * 0.8;
+      gl_FragColor = vec4(c, 1.0); }` })));
+  const softbox = (hex, power, w, h, x, y, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(power), side: THREE.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 0, 0); env.add(m); };
+  softbox("#b9c6ff", 2.6, 30, 12, -22, 30, -26);   // the moon, high behind on the left
+  softbox("#ffffff", 1.3, 44, 4, 0, 16, 34);       // a long low strip in front: a line of light along each cable, but nothing that whitens the view from above
+  softbox("#ff8a3c", 2.2, 22, 10, 36, 6, -30);     // the dawn
+  softbox("#ff3d8a", 1.4, 16, 16, -30, 4, 30);     // the mark's own pink, thrown back from the sand
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(env, 0.035).texture; pm.dispose();
+}
+
 // ---- the mark ----
 const srgb = (hex) => new THREE.Color(hex);
 function bez(p0, p1, p2, p3, t) { const u = 1 - t; return [u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0], u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]]; }
@@ -104,7 +144,6 @@ function centreLine(strand, n = 140) {
   }
   return out;
 }
-const uniforms = { uTime: { value: 0 }, uWake: { value: 0 } };
 const glowTex = (() => {
   const c = document.createElement("canvas"); c.width = c.height = 128;
   const x = c.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -112,12 +151,12 @@ const glowTex = (() => {
   x.fillStyle = g; x.fillRect(0, 0, 128, 128);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 })();
-const halos = [];
+const halos = [], crowns = [], sparks = [];
 function halo(pos, color, size, strength = 1) {
   const m = new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, opacity: strength, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
   const s = new THREE.Sprite(m); s.position.copy(pos); s.scale.setScalar(size); s.userData.base = strength; scene.add(s); halos.push(s); return s;
 }
-const stone = new THREE.MeshStandardMaterial({ color: "#17131c", roughness: 0.78, metalness: 0.15 });
+const stone = new THREE.MeshStandardMaterial({ color: "#17131c", roughness: 0.62, metalness: 0.2, envMapIntensity: 0.5 });
 const dots = [];
 STRANDS.forEach((strand, k) => {
   const line = centreLine(strand), curve = new THREE.CatmullRomCurve3(line);
@@ -127,7 +166,7 @@ STRANDS.forEach((strand, k) => {
   g.setAttribute("color", new THREE.BufferAttribute(col, 3));
   // glass with light inside: a glossy clear coat over a body that glows in its own colour, and packets of
   // brighter light that travel from the left dot to the right one, the way the app's mark draws itself
-  const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.22, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08 });
+  const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.2, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.15 });
   m.defines.USE_UV = "";
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = uniforms.uTime; sh.uniforms.uWake = uniforms.uWake; sh.uniforms.uOff = { value: k / 3 };
@@ -146,11 +185,13 @@ STRANDS.forEach((strand, k) => {
     const base = land(p.x, p.z), h = p.y - base;
     const pylon = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.9, h, 20, 1), stone); pylon.position.set(p.x, base + h / 2, p.z); scene.add(pylon);
     const foot = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 3.6, 0.7, 28), stone); foot.position.set(p.x, base + 0.3, p.z); scene.add(foot);
-    const sm = new THREE.MeshPhysicalMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.75, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.06 });
+    const sm = new THREE.MeshPhysicalMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.75, roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 0.9 });
     const sphere = new THREE.Mesh(new THREE.SphereGeometry(DOT, 40, 28), sm); sphere.position.copy(p); scene.add(sphere);
     dots.push({ sphere, mat: sm, side, k, halo: halo(p, hex, 20, 0.5) });
   });
-  halo(curve.getPoint(0.5), c.copy(a).lerp(b, 0.5).clone(), 30, 0.28); // one soft glow at the crown of each cable; more would cost frames up close
+  crowns.push(halo(curve.getPoint(0.5), c.copy(a).lerp(b, 0.5).clone(), 30, 0.28)); // one soft glow at the crown of each cable; more would cost frames up close
+  const tint = c.copy(a).lerp(new THREE.Color("#ffffff"), 0.45).clone();
+  sparks.push({ curve, k, head: halo(new THREE.Vector3(), tint, 7.5, 0.9), tail: halo(new THREE.Vector3(), tint, 4.5, 0.4) });
 });
 
 // light the mark throws on the sand: the logo, blurred, laid on the ground under it
@@ -239,8 +280,8 @@ const caps = [...document.querySelectorAll(".w-cap")].map((el) => ({ el, a: +el.
 const rail = document.getElementById("rail"), count = document.getElementById("count"), hint = document.getElementById("hint");
 // The home has the journey (#world-sec); an inner page has a banner: one view of the place, drifting slowly.
 const sec = document.getElementById("world-sec") || document.querySelector(".world.w-banner"), banner = sec.classList.contains("w-banner");
-const VIEWS = { features: [-0.9, 46, 9, 11], docs: [0.7, 52, 14, 11], download: [0.02, 62, 22, 9], changelog: [-2.25, 58, 11, 10], models: [2.4, 52, 16, 10], cli: [-0.35, 42, 7.5, 10], api: [1.55, 50, 10, 11] };
-const view = VIEWS[sec.dataset.view] || [-0.75, 150, 30, 10]; // angle around the mark, distance, height, the height it looks at
+const VIEWS = { features: [-0.9, 46, 9, 11], docs: [0.7, 52, 14, 11], download: [0.02, 62, 22, 9], changelog: [-2.25, 58, 11, 10], models: [2.4, 52, 16, 10], cli: [-0.35, 42, 7.5, 10], api: [1.55, 50, 10, 11], lost: [-0.62, 185, 32, -39, -56] };
+const view = VIEWS[sec.dataset.view] || [-0.75, 150, 30, 10]; // angle around the mark, distance, height, the height it looks at (and on a tall screen, if given)
 let target = 0, prog = 0, px = 0, py = 0, tx = 0, ty = 0;
 // The journey is as long as its section: progress is how far the section has scrolled past the top of the screen.
 const readScroll = () => { if (banner) return; const max = sec.offsetHeight - innerHeight; target = max > 0 ? Math.min(1, Math.max(0, -sec.getBoundingClientRect().top / max)) : 0; };
@@ -254,7 +295,8 @@ addEventListener("resize", resize); resize();
 
 const up = new THREE.Vector3(), UP_Y = new THREE.Vector3(0, 1, 0), UP_TOP = new THREE.Vector3(0, 0, -1), look = new THREE.Vector3(), tmp = new THREE.Vector3();
 const clock = new THREE.Clock();
-let wake = reduced ? 1 : 0, shown = -1, frames = 0, fpsT = 0;
+let wake = reduced ? 1 : 0, arrive = reduced ? 1 : 0, shown = -1, frames = 0, fpsT = 0;
+const away = new THREE.Vector3();
 const fpsEl = new URLSearchParams(location.search).has("fps") ? document.body.appendChild(Object.assign(document.createElement("div"), { style: "position:fixed;right:12px;top:80px;z-index:20;font:12px ui-monospace,monospace;color:#9f9" })) : null;
 
 function frame() {
@@ -264,14 +306,21 @@ function frame() {
   prog += (target - prog) * (reduced ? 1 : 1 - Math.exp(-dt * 4.2));
   px += (tx - px) * 0.06; py += (ty - py) * 0.06;
   wake = Math.min(1, wake + dt * 0.42);                       // the mark lights up from its left dots when the page opens
+  arrive = reduced ? 1 : Math.min(1, t * 0.36);              // and the camera glides in to where the page starts (real time, even on a slow GPU)
   uniforms.uTime.value = t; uniforms.uWake.value = wake;
 
   if (banner) {
     const a = view[0] + Math.sin(t * 0.045) * 0.16, r = view[1] * (camera.aspect < 0.9 ? 1.45 : 1);
-    camera.position.set(Math.sin(a) * r, view[2], Math.cos(a) * r); look.set(0, view[3], 0);
+    // scrolling down the page lifts the camera a little and pulls it back, so the banner moves with the page
+    const s = Math.min(1, Math.max(0, -sec.getBoundingClientRect().top / Math.max(1, sec.offsetHeight)));
+    camera.position.set(Math.sin(a) * r * (1 + s * 0.18), view[2] + s * 10, Math.cos(a) * r * (1 + s * 0.18)); look.set(0, (camera.aspect < 0.9 && view[4] != null ? view[4] : view[3]) - s * 3, 0);
   } else {
     const u = param(prog);
     path.pos.getPoint(u, camera.position); path.look.getPoint(u, look);
+  }
+  if (arrive < 1) { // from higher and further back, easing out
+    const e = 1 - Math.pow(1 - arrive, 3); away.subVectors(camera.position, look).multiplyScalar(0.55 * (1 - e));
+    camera.position.add(away); camera.position.y += 26 * (1 - e);
   }
   const sway = banner ? 0.6 : 1 - smooth(Math.min(1, Math.max(0, (prog - 0.86) / 0.12)));
   camera.position.x += (Math.sin(t * 0.21) * 0.6 + px * 4) * sway; camera.position.y += (Math.sin(t * 0.17 + 1.3) * 0.35 - py * 2) * sway;
@@ -284,7 +333,31 @@ function frame() {
     const head = (t * 0.085 + d.k / 3) % 1, near = d.side ? 1 - head : head, pulse = Math.exp(-near * near * 90);
     d.mat.emissiveIntensity = (0.55 + pulse * 1.5) * wake; d.sphere.scale.setScalar(1 + pulse * 0.07); d.halo.material.opacity = (0.34 + pulse * 0.5) * wake;
   }
-  for (const h of halos) if (!dots.some((d) => d.halo === h)) h.material.opacity = h.userData.base * wake;
+  // seen from straight above the glows pile up into a white blur over the logo: soften them there
+  const over = banner ? 0 : smooth(Math.min(1, Math.max(0, (prog - 0.84) / 0.14)));
+  for (const h of crowns) h.material.opacity = h.userData.base * wake * (1 - over * 0.75);
+  for (const d of dots) d.halo.material.opacity *= 1 - over * 0.45;
+  for (const s of sparks) {
+    const head = (t * 0.085 + s.k / 3) % 1, edge = Math.min(1, head * 14, (1 - head) * 14);
+    s.curve.getPointAt(head, s.head.position); s.curve.getPointAt(Math.max(0, head - 0.035), s.tail.position);
+    s.head.material.opacity = 0.95 * wake * edge * (1 - over * 0.5); s.tail.material.opacity = 0.42 * wake * edge * (1 - over * 0.5);
+  }
+  if (!reduced) {
+    const m = meteor;
+    if (m.life <= 0 && t > m.at) { // somewhere high on the far side of the sky, falling at a slant
+      const a = Math.random() * Math.PI * 2, y = 0.42 + Math.random() * 0.4, r = Math.sqrt(1 - y * y);
+      m.from.set(Math.cos(a) * r * 800, y * 800, Math.sin(a) * r * 800);
+      m.dir.set(-Math.sin(a), -0.45 - Math.random() * 0.3, Math.cos(a)).normalize().multiplyScalar((Math.random() < 0.5 ? 1 : -1) * 260);
+      m.dir.y = -Math.abs(m.dir.y); m.life = 1; m.at = t + 7 + Math.random() * 9;
+    }
+    if (m.life > 0) {
+      m.life = Math.max(0, m.life - dt * 1.25); const k = 1 - m.life, p = m.l.geometry.attributes.position, c = m.l.geometry.attributes.color;
+      const hx = m.from.x + m.dir.x * k, hy = m.from.y + m.dir.y * k, hz = m.from.z + m.dir.z * k, len = 0.16 + 0.2 * Math.sin(Math.PI * k);
+      p.setXYZ(0, hx, hy, hz); p.setXYZ(1, hx - m.dir.x * len, hy - m.dir.y * len, hz - m.dir.z * len); p.needsUpdate = true;
+      const b = Math.sin(Math.PI * k) * 0.9; c.setXYZ(0, b, b * 0.92, b * 0.85); c.needsUpdate = true;
+    }
+    m.l.visible = m.life > 0;
+  }
   lamps.forEach((l, i) => { l.intensity = (i === 1 ? 900 : 650) * wake * (0.9 + 0.1 * Math.sin(t * 0.9 + i)); });
   const near = banner ? 1 : smooth(Math.min(1, Math.max(0, (prog - 0.4) / 0.12))) * (1 - smooth(Math.min(1, Math.max(0, (prog - 0.82) / 0.08))));
   slabs.forEach((f, i) => { f.material.opacity = Math.min(1, Math.max(0, near * 1.5 - i * 0.12)); });
@@ -322,13 +395,13 @@ function calibrate() {
   else { path.pos.getPoint(param(0.47), camera.position); path.look.getPoint(param(0.47), look); }
   camera.up.copy(UP_Y); camera.lookAt(look);
   for (const r of [top, 1.25, 1, 0.85, 0.7].filter((x, i, a) => x <= top && a.indexOf(x) === i)) {
-    renderer.setPixelRatio(r); renderer.setSize(canvas.clientWidth || innerWidth, canvas.clientHeight || innerHeight, false);
+    renderer.setPixelRatio(r); renderer.setSize(canvas.clientWidth || innerWidth, canvas.clientHeight || innerHeight, false); if (starPx()) starPx().value = r;
     renderer.render(scene, camera); gl.finish();
     const t0 = performance.now(); for (let i = 0; i < 5; i++) { renderer.render(scene, camera); gl.finish(); }
     if ((performance.now() - t0) / 5 <= 10) break;
   }
 }
-uniforms.uWake.value = 1; calibrate(); uniforms.uWake.value = 0;
+uniforms.uWake.value = 1; calibrate(); uniforms.uWake.value = 0; if (starPx()) starPx().value = renderer.getPixelRatio();
 requestAnimationFrame(() => { document.getElementById("veil")?.classList.add("w-gone"); frame(); });
 window.afhWorld = {
   seek: (p) => { scrollTo(0, scrollY + sec.getBoundingClientRect().top + p * (sec.offsetHeight - innerHeight)); target = prog = p; },

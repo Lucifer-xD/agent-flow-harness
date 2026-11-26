@@ -2,6 +2,14 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## Phone app 2.0.3 (2026-11-26)
+
+**The keyboard goes away**
+
+- **The keyboard goes away:** on iPhone nothing could close the keyboard once it was up, short of closing the app. Now a tap anywhere outside the message box closes it, so does swiping down, and so does sending. The buttons under the message box (add, voice) leave it up while you type. Android works the same way.
+- **Adding a photo:** no longer brings the keyboard back if it wasn't up before.
+- **The website:** the 3D place now has real reflections in its glass, light running along the cables, twinkling stars and a camera that glides in; cards light up at their edge under the pointer; the download page shows the newest releases and folds the rest; the missing-page screen is part of the same place.
+
 ## 1.37.1 and phone app 2.0.2 (2026-11-25)
 
 **No more silent stops**

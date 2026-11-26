@@ -209,7 +209,7 @@
 
   // cards light up under the pointer
   document.addEventListener("pointermove", (e) => {
-    const card = e.target.closest?.(".fcard, .tile");
+    const card = e.target.closest?.(".fcard, .tile, .glow-edge");
     if (!card) return;
     const r = card.getBoundingClientRect();
     card.style.setProperty("--mx", `${e.clientX - r.left}px`);

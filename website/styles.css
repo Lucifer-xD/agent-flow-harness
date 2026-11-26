@@ -334,3 +334,33 @@ html.has-3d .stage .afh-mark { display: none; }
 .duo .scr:first-child { transform: translate(14%, 42px) rotate(-3deg); }
 .duo .scr:last-child { position: relative; transform: translateX(-6%) rotate(2deg); }
 @media (max-width: 640px) { .scr { width: 200px; } .scr img { border-radius: 26px; } .screens { gap: 16px; padding-inline: 20px; } }
+
+/* ---- polish, 2026-11 ----------------------------------------------------------------------------- */
+/* cards: besides the soft light under the pointer, their edge lights up in the mark's colours near it */
+.fcard::after, .tile::before, .glow-edge::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: radial-gradient(340px circle at var(--mx, 50%) var(--my, -400px), rgba(255, 190, 60, 1), rgba(255, 74, 104, 0.9) 32%, rgba(224, 22, 154, 0.45) 58%, transparent 78%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0; transition: opacity 0.35s; }
+.glow-edge { position: relative; }
+.fcard:hover::after, .tile:hover::before, .glow-edge:hover::after { opacity: 1; }
+@media (hover: none) { .fcard::after, .tile::before, .glow-edge::after { display: none; } }
+
+/* the main button: a slow sheen passes over it on hover, and the arrow-less press feels physical */
+.btn-primary { position: relative; overflow: hidden; isolation: isolate; }
+.btn-primary::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.38) 50%, transparent 70%); transform: translateX(-120%); }
+.btn-primary:hover::after { transform: translateX(120%); transition: transform 0.9s var(--ease-out); }
+.btn:focus-visible, a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid #ff7a3d; outline-offset: 3px; border-radius: 10px; }
+
+/* a release list folds its older entries */
+details.older { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+details.older summary { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; font-weight: 600; color: var(--ink); }
+details.older summary::-webkit-details-marker { display: none; }
+details.older summary::after { content: ""; width: 8px; height: 8px; border: solid var(--ink-3); border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px); transition: transform 0.25s var(--ease-out); }
+details.older[open] summary::after { transform: rotate(225deg) translate(-2px, 0); }
+details.older summary span { font: 500 12px var(--mono); padding: 2px 8px; border-radius: 99px; background: var(--ghost); color: var(--ink-3); }
+details.older ul { margin-top: 14px; }
+
+/* headings that use the mark's gradient keep it crisp, and selections are in the brand colour */
+::selection { background: rgba(255, 106, 61, 0.32); }
+/* step cards keep their big number in ::after */
+.steps3 .fcard::after { inset: auto; padding: 0; z-index: auto; background: none; -webkit-mask: none; mask: none; opacity: 1; }
