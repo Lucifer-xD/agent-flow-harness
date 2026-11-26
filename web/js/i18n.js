@@ -234,7 +234,7 @@ const AR = {
   "Reads images": "يقرأ الصور", "Understands video": "يفهم الفيديو", "Understands audio": "يفهم الصوت", "Reads PDFs": "يقرأ ملفات PDF", "reasoning": "تفكير", "no tools": "بلا أدوات", "edited": "معدّل",
   "Correct this model's context, effort levels or inputs": "صحّح سياق هذا النموذج أو مستويات جهده أو مدخلاته", "Back to the catalog's facts": "عاد إلى بيانات الكتالوج",
   // about
-  "Version": "الإصدار", "Engine": "المحرك", "Models available": "النماذج المتاحة", "Reload engine": "أعد تحميل المحرك", "Where things live": "أين تُحفظ الأشياء", "Open source": "مفتوح المصدر",
+  "Version": "الإصدار", "Made by Mostafa Adel": "من صنع مصطفى عادل", "The creator and developer of AFH. Say hi, ask a question or report a problem.": "صانع AFH ومطوّره. سلّم عليه، اسأله، أو بلّغه عن مشكلة.", "Engine": "المحرك", "Models available": "النماذج المتاحة", "Reload engine": "أعد تحميل المحرك", "Where things live": "أين تُحفظ الأشياء", "Open source": "مفتوح المصدر",
   "Everything stays on this computer.": "كل شيء يبقى على هذا الجهاز.",
   // 1.7: schedules, developer, bug report, updates, browser, voice, images
   "Schedules": "الجدولة", "Developer": "المطوّر", "Report a bug": "الإبلاغ عن مشكلة", "Jobs": "المهام", "New job": "مهمة جديدة", "Repeat": "التكرار", "Every": "كل",

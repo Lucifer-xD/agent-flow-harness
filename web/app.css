@@ -2704,3 +2704,4 @@ body.electron .app.sb-hidden.sb-open .sidebar { top: 38px; }
 :root:not([data-ui="studio"]) .composer #pick-agent:hover, :root:not([data-ui="studio"]) .composer #pick-mode:hover { color: color-mix(in srgb, var(--pill-c) 82%, var(--text)); }
 :root:not([data-ui="studio"]) .composer :is(#pick-agent, #pick-mode) > :is(.ico, svg) { color: var(--pill-c); }
 :root:not([data-ui="studio"]) .composer :is(#pick-agent, #pick-mode) .chev { color: color-mix(in srgb, var(--pill-c) 60%, var(--text-3)); }
+.card-body.maker-links { display: flex; flex-wrap: wrap; gap: 8px; }

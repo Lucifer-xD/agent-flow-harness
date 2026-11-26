@@ -2,6 +2,14 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.37.2 and phone app 2.0.4 (2026-11-26)
+
+**Who makes AFH**
+
+- **Who makes AFH:** Settings → About now says who builds AFH, Mostafa Adel, with links to Facebook, Telegram and GitHub. The terminal app's About and the phone app's You page say it too.
+- **Phone app 2.0.4:** the same credits under About.
+- **The website:** a section on the home page and a line in every page's footer about the person behind AFH.
+
 ## Phone app 2.0.3 (2026-11-26)
 
 **The keyboard goes away**

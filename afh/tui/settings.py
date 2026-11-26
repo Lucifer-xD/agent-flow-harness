@@ -1167,7 +1167,10 @@ class Panes:
         async def open_home() -> None:
             webbrowser.open("https://agentflowharness.com")
 
-        return [R("item", "Agent Flow Harness", __version__, "Your agent, your models, on your computer"), R("item", "Models", str(len(ui.models))), R("button", "Check for updates", "", "", check), self.toggle("updates", "auto", "Download desktop updates by itself"),
+        async def open_maker() -> None:
+            webbrowser.open("https://www.facebook.com/Mostafaadel.xD/")
+
+        return [R("item", "Agent Flow Harness", __version__, "Your agent, your models, on your computer"), R("button", "Made by Mostafa Adel", "Facebook", "", open_maker), R("item", "Models", str(len(ui.models))), R("button", "Check for updates", "", "", check), self.toggle("updates", "auto", "Download desktop updates by itself"),
                 R("button", "Restart the backend", "", "", restart), R("button", "Website", "agentflowharness.com", "", open_home), head("Where things live"), note("Settings, threads, keys and logs are in .afh in your home folder. The desktop app and this terminal app share them.")]
 
 

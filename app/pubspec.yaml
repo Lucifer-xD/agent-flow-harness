@@ -1,7 +1,7 @@
 name: afh_app
 description: "AFH for your phone"
 publish_to: none
-version: 2.0.3+20013
+version: 2.0.4+20014
 
 environment:
   sdk: ^3.13.7

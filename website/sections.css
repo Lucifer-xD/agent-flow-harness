@@ -238,3 +238,14 @@
 .cta-title { font-size: clamp(52px, 9vw, 128px); }
 .cta .lead { margin-left: auto; margin-right: auto; }
 .cta .install { margin-left: auto; margin-right: auto; }
+
+/* who builds it */
+.maker-card { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 36px; align-items: center; padding: clamp(28px, 4vw, 48px); border-radius: 28px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--sh-1); overflow: hidden; }
+.maker-card::before { content: ""; position: absolute; inset: auto -10% -60% auto; width: 520px; height: 520px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 74, 104, 0.16), transparent); pointer-events: none; }
+.maker-avatar { position: relative; width: 148px; height: 148px; border-radius: 50%; padding: 4px; background: conic-gradient(from 200deg, #ffb11f, #ff7a3d, #ff4a68, #e0169a, #ffb11f); box-shadow: 0 20px 60px -20px rgba(255, 74, 104, 0.6); }
+.maker-avatar span { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; background: var(--surface); font: 700 48px var(--display); letter-spacing: -0.04em; color: var(--ink); }
+.maker-copy .h2 { margin: 6px 0 0; }
+.maker-copy .sub { max-width: 640px; }
+.maker-links { margin-top: 22px; }
+.maker-link svg { width: 17px; height: 17px; }
+@media (max-width: 700px) { .maker-card { grid-template-columns: 1fr; gap: 22px; text-align: left; } .maker-avatar { width: 96px; height: 96px; } .maker-avatar span { font-size: 32px; } }

@@ -569,6 +569,10 @@ const PANES = {
   async about(pane, ctx) {
     const info = await api.get("/api/bootstrap");
     pane.append(...header("About", "Agent Flow Harness is an open-source desktop coding agent with its own engine: no third-party harness, every prompt and tool is yours to see and change."),
+      card("Made by Mostafa Adel", "The creator and developer of AFH. Say hi, ask a question or report a problem.", null,
+        el("div.card-body.maker-links",
+          ...[["Facebook", "https://www.facebook.com/Mostafaadel.xD/"], ["Telegram", "https://t.me/LuciferxxD"], ["GitHub", "https://github.com/Lucifer-xD"]].map(([n, u]) =>
+            el("button.btn.ghost.sm", { type: "button", on: { click: () => native.openExternal(u) } }, ico("external"), n)))),
       card("Version", null, el("span.pill-tag.accent", `v${info.version}`),
         row("Engine", "AFH Engine (Python, in-process)", el("span.status-dot.active")),
         row("Models available", null, el("span", String(ctx.S.models.length))),

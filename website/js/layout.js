@@ -51,7 +51,7 @@
     menu.innerHTML = `<nav aria-label="Menu">${[["", "Home"], ...LINKS, ["download", "Download"]].map(([id, label], i) =>
       `<a href="/${id}" style="--i:${i}"${page === (id || "home") ? ' class="active"' : ""}>${label}</a>`).join("")}</nav>
       <div class="menu-auth" data-auth-menu><a class="btn btn-ghost" href="/account">Sign in</a><a class="btn btn-primary" href="/account?signup">Create account</a></div>
-      <p class="menu-foot">AFH <span data-version>1.37.1</span> · the desktop app for Windows</p>`;
+      <p class="menu-foot">AFH <span data-version>1.37.2</span> · the desktop app for Windows</p>`;
     nav.after(menu);
     nav.querySelector(".theme-btn").addEventListener("click", () => window.afhTheme.set(window.afhTheme.get() === "dark" ? "light" : "dark"));
     const burger = nav.querySelector(".burger");
@@ -95,7 +95,8 @@
         <div class="footer-brand">
           <a class="brand" href="/">${markSvg(40)}<span>Agent Flow Harness</span></a>
           <p>A coding agent that plans, delegates and writes code on your own computer, with the models you choose. A desktop app for Windows, also on Mac.</p>
-          <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.37.1</span> · <span data-date>Nov 25, 2026</span></a>
+          <a class="footer-release" href="/changelog"><span class="dot"></span>Version <span data-version>1.37.2</span> · <span data-date>Nov 25, 2026</span></a>
+          <div class="footer-maker"><span>Made by <a href="https://www.facebook.com/Mostafaadel.xD/" target="_blank" rel="noopener me">Mostafa Adel</a></span><span class="footer-social"><a href="https://www.facebook.com/Mostafaadel.xD/" target="_blank" rel="noopener me" aria-label="Facebook" title="Facebook"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 21.5v-8h2.7l.4-3.2h-3.1V8.3c0-.9.3-1.5 1.6-1.5h1.7V4c-.3 0-1.3-.1-2.5-.1-2.4 0-4.1 1.5-4.1 4.2v2.3H7.5v3.2h2.7v8h3.3Z"/></svg></a><a href="https://t.me/LuciferxxD" target="_blank" rel="noopener me" aria-label="Telegram" title="Telegram"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.9 4.3 18.6 19.8c-.2 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.2-8.3c.4-.4-.1-.6-.6-.2L6 13.4l-4.9-1.5c-1.1-.3-1.1-1.1.2-1.6L20.5 2.9c.9-.3 1.7.2 1.4 1.4Z"/></svg></a><a href="https://github.com/Lucifer-xD" target="_blank" rel="noopener me" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8Z"/></svg></a></span></div>
         </div>
         <nav class="footer-cols" aria-label="Footer">
           <div><h4>Product</h4><a href="/features">Features</a><a href="/features#modes">Modes</a><a href="/cli">Terminal</a><a href="/models">Models</a><a href="/download">Download</a><a href="/changelog">Changelog</a></div>
@@ -105,7 +106,7 @@
       </div>
       <div class="footer-word" aria-hidden="true">Agent Flow Harness</div>
       <div class="footer-bottom">
-        <p>© 2026 Agent Flow Harness</p>
+        <p>© 2026 Mostafa Adel · Agent Flow Harness</p>
         <p>Runs on your computer · no account needed · no tracking scripts</p>
       </div>`;
   }

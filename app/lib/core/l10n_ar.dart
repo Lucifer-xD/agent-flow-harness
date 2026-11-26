@@ -706,6 +706,7 @@ const Map<String, String> ar = {
   'Locked': 'مقفل',
   'Language': 'اللغة',
   'About': 'حول',
+  'Creator and developer of AFH': 'صانع AFH ومطوّره',
   'What\'s new': 'الجديد',
   'Source code': 'الكود المصدري',
   'Licences': 'التراخيص',

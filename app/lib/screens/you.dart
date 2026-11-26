@@ -26,7 +26,7 @@ import 'assistants.dart';
 import 'chat.dart' show phoneStepIcon;
 import 'providers.dart';
 
-const appVersion = '2.0.3';
+const appVersion = '2.0.4';
 
 void openWeb(String url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
 
@@ -135,6 +135,11 @@ class YouTab extends StatelessWidget {
             Group(
               title: t('About'),
               children: [
+                Tile('Mostafa Adel', sub: t('Creator and developer of AFH'), icon: LucideIcons.userRound, arrow: true, onTap: () => actions(context, title: 'Mostafa Adel', [
+                  Act('Facebook', LucideIcons.globe, () => openWeb('https://www.facebook.com/Mostafaadel.xD/')),
+                  Act('Telegram', LucideIcons.send, () => openWeb('https://t.me/LuciferxxD')),
+                  Act('GitHub', LucideIcons.code, () => openWeb('https://github.com/Lucifer-xD')),
+                ])),
                 Tile(t('Get AFH for your computer'), icon: LucideIcons.download, onTap: () => openWeb('$server/download')),
                 Tile(t('What\'s new'), icon: LucideIcons.gift, onTap: () => openWeb('$server/changelog')),
                 Tile(t('Source code'), icon: LucideIcons.code, onTap: () => openWeb('https://github.com/Lucifer-xD/agent-flow-harness')),
