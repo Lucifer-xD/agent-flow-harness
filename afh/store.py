@@ -280,7 +280,7 @@ def _merge_defaults(data: dict, defaults: dict) -> dict:
     return out
 
 
-RETIRED_INTERFACES = ("harness", "paper")  # removed in 1.25.0
+RETIRED_INTERFACES = ("harness", "paper", "focus", "compact", "canvas", "split", "flow")  # removed in 1.25.0 and 1.39.0
 _LOOK_KEYS = ("theme", "preset", "darkPreset", "lightPreset", "accent", "accentOverride", "bg", "text")
 
 

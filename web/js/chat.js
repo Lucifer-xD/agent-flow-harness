@@ -394,10 +394,11 @@ const MEMORY_VERBS = { add: ["Remembered", "Remembering"], remove: ["Forgot", "F
 const kindOf = (name) => (/^(write|edit|multiedit|patch|apply_patch)$/.test(name) ? "edit" : /^(shell|bash|execute)$/.test(name) ? "run" : /^(read|glob|grep|list|ls)$/.test(name) ? "read" : /web|fetch/.test(name) ? "web" : "other");
 
 
-/** Flow draws steps as blocks by family: commands are a terminal, file changes are file rows, looking around
+/** Onyx draws steps as blocks by family: commands are a terminal, file changes are file rows, looking around
  *  (reading, searching, the web) is a quiet line. Steps of one family that follow each other join into one block. */
-const isFlowUI = () => ["flow", "onyx"].includes(document.documentElement.dataset.ui);
+const isFlowUI = () => document.documentElement.dataset.ui === "onyx";
 const isOnyxUI = () => document.documentElement.dataset.ui === "onyx";
+const isPebbleUI = () => document.documentElement.dataset.ui === "pebble";
 /** The icon of the program a command runs (Python, npm, Git…), or null to use the plain terminal. */
 const cmdIcon = (command) => { const k = commandKind(command); return !k ? null : k.startsWith("app:") ? ico(k.slice(4)) : fileIcon(k, { kind: true }); };
 const stepFamily = (p) => {
@@ -482,7 +483,7 @@ function renderTodoTool(p, openSet, t0, thread) {
   const read = p.state?.metadata?.read;
   const live = status === "streaming" || status === "running";
   if (isFlowUI() && todos.length && !live && !read) return flowPlanStep(p, openSet, thread, todos, done, of, status);
-  const card = el(`div.tool.plan.${status}${openSet.has(p.id) || (!openSet.has("x" + p.id) && todos.length <= 8 && done === 0 && !read) ? ".open" : ""}`, { dataset: { tool: p.id } });
+  const card = el(`div.tool.plan.${status}${openSet.has(p.id) || (!openSet.has("x" + p.id) && todos.length <= 8 && done === 0 && !read && !isPebbleUI()) ? ".open" : ""}`, { dataset: { tool: p.id } });
   const head = el("button.tool-head", { type: "button", on: { click: () => { const o = card.classList.toggle("open"); openSet[o ? "add" : "delete"](p.id); openSet[o ? "delete" : "add"]("x" + p.id); } } },
     t0 && p.time?.created ? el("span.tool-time", { "aria-hidden": "true" }, stepClock(p.time.created - t0)) : null,
     el("span.tool-ico", live ? el("span.spinner") : status === "error" ? ico("alert") : todos.length ? progressRing(done, of, 18) : ico("checklist")),
@@ -496,7 +497,7 @@ function renderTodoTool(p, openSet, t0, thread) {
   return card;
 }
 
-/** Flow: a plan step says what changed. The first call (or a rewritten list) is the plan itself, shown as a
+/** Onyx: a plan step says what changed. The first call (or a rewritten list) is the plan itself, shown as a
  *  checklist; every later call is one line: the step that was just finished, or the one now in hand. The whole
  *  list is one click away on each of them. */
 function flowPlanStep(p, openSet, thread, todos, done, of, status) {
@@ -785,8 +786,8 @@ function renderTool(p, openSet, thread, t0) {
   const waits = live && awaitsYou(p, kind, thread);
   if (waits) stat = el("span.tool-stat.wait", "waiting for you");
   const target = name === "jobs" ? input0.id || "" : info.target || "";
-  // Flow: a command reads as what it runs; the wrapper it goes through (ssh, a shell) is a small tag at the end of the line
-  const cmdShort = kind === "run" && name !== "jobs" && isFlowUI() ? shortCommand(target) : null;
+  // Onyx: a command reads as what it runs; the wrapper it goes through (ssh, a shell) is a small tag at the end of the line
+  const cmdShort = kind === "run" && name !== "jobs" && (isFlowUI() || isPebbleUI()) ? shortCommand(target) : null;
   // Onyx: a command is called by what it is for ("Run the test suite"); the command itself follows, quieter
   const forWhat = cmdShort && isOnyxUI() ? String(meta.description || input0.description || "").trim() : "";
   const targetNode = kind === "edit" || kind === "read" ? pathNode(target)
@@ -870,6 +871,21 @@ function renderTool(p, openSet, thread, t0) {
   return card;
 }
 
+/** Pebble: the steps the model took between two things it said sit side by side in one row of pebbles that wraps.
+ *  A pebble opens in place into a sheet as wide as the row (pebble.css), so nothing has to move between rows. */
+function pebbleRows(work, kinds) {
+  const out = [];
+  let row = null;
+  work.forEach((node, i) => {
+    if (!node) return;
+    const step = (kinds[i] === "tool" || kinds[i] === "think") && !node.classList?.contains("deleg");
+    if (!step) { row = null; out.push(node); return; }
+    if (!row) { row = el("div.peb-row"); out.push(row); }
+    row.append(node);
+  });
+  return out;
+}
+
 // ---- view -----------------------------------------------------------------------
 
 const WINDOW = 150; // messages drawn at once; "Show earlier" adds more
@@ -933,11 +949,7 @@ export class ChatView {
     if (switching || !this.thread) this.window = WINDOW;
     const same = this.thread && this.thread.id === thread.id; // the same thread loaded again (a run ended): what you opened stays open
     this.thread = thread;
-    if (!same) {
-      this.actTurn = null;
-      this.actFilter = "";
-      this.openTools.clear();
-    }
+    if (!same) this.openTools.clear();
     this.stick = true;
     this.renderAll();
     requestAnimationFrame(() => this.scrollToEnd(true));
@@ -962,9 +974,6 @@ export class ChatView {
     }
     this.lastNode = null;
     this.nodes.clear();
-    this.workNodes = new Map();
-    this.actList = null;
-    this.actShown = null;
     this.root.replaceChildren();
     if (!t) return;
     // Very long threads (imports run to thousands of messages) draw only the newest part.
@@ -999,7 +1008,6 @@ export class ChatView {
       const n = this.nodes.get(held.id);
       if (n) this.scroller.scrollTop += n.getBoundingClientRect().top - this.scroller.getBoundingClientRect().top - held.off;
     }
-    if (this.opts.split?.()) { this.drawActivity(true); this.opts.onActivity?.(); }
   }
 
   /** The newest message carries a class. (A `:last-of-type` rule did this before, and with one of those the
@@ -1066,7 +1074,6 @@ export class ChatView {
         }
         for (const id of this.pending) this.rerender(id);
         for (const m of turns) { const T = this.turnOf(m); this.applyTurn(T.id, T.collapsed, T.live); }
-        if (turns.size && this.opts.split?.()) { this.drawActivity(false); this.opts.onActivity?.(); }
         this.pending.clear();
         this.streaming.clear();
       }
@@ -1102,9 +1109,8 @@ export class ChatView {
   /** Update the streaming parts of a message in place. False when a full re-render is needed. */
   patchLive(id) {
     const m = this.thread.byId.get(id);
-    const here = this.nodes.get(id), there = this.workNodes?.get(id);
-    if (!m || (!here && !there)) return false;
-    const node = { querySelector: (sel) => here?.querySelector(sel) || there?.querySelector(sel) || null };
+    const node = this.nodes.get(id);
+    if (!m || !node) return false;
     for (const p of m.content) {
       if (p.type === "tool") {
         if (p.state?.status === "running" && p.state.metadata?.live) {
@@ -1119,12 +1125,10 @@ export class ChatView {
         if (!pre) return false;
         pre.textContent = p.state.input;
       } else if (p.live) {
-        const targets = [here, there].map((r) => r?.querySelector(`[data-part="${p.type}:${p.ordinal}"]`)).filter(Boolean);
-        if (!targets.length) return false;
-        for (const target of targets) {
-          if (p.type === "reasoning") target.textContent = p.text || "…";
-          else patchBlocks(target, markdown(p.text));
-        }
+        const target = node.querySelector(`[data-part="${p.type}:${p.ordinal}"]`);
+        if (!target) return false;
+        if (p.type === "reasoning") target.textContent = p.text || "…";
+        else patchBlocks(target, markdown(p.text));
       }
     }
     return true;
@@ -1137,9 +1141,7 @@ export class ChatView {
   /** Once a second while busy: advance the visible timers without re-rendering anything else. */
   tick() {
     const now = Date.now();
-    for (const box of [this.root, this.opts.activityHost?.()]) {
-      for (const n of box?.querySelectorAll(".pending-row .timer, .live-dur") || []) n.textContent = fmtDur(now - Number(n.dataset.start || now));
-    }
+    for (const n of this.root.querySelectorAll(".pending-row .timer, .live-dur")) n.textContent = fmtDur(now - Number(n.dataset.start || now));
   }
 
   // Eased follow: closes the gap a little each frame, so growing content glides instead of jumping.
@@ -1253,7 +1255,7 @@ export class ChatView {
     const kinds = []; // what each part is: think, text, tool, note
     const add = (node, kind) => { parts.push(node); kinds.push(kind); };
     const lastText = [...m.content].reverse().find((p) => p.type === "text");
-    let joins = null; // Flow: worked out once per draw, when the first step needs it
+    let joins = null; // Onyx: worked out once per draw, when the first step needs it
     for (const p of m.content) {
       if (p.type === "reasoning") {
         if (!settings.ui.showReasoning || (!p.text && !p.live)) continue;
@@ -1274,7 +1276,7 @@ export class ChatView {
       } else if (p.type === "tool") {
         // (keyed by message too: some providers number their calls from 1 in every reply)
         const flow = rich && isFlowUI();
-        if (rich && (this.opts.split?.() || flow) && stepFailed(p) && !(this.sawFailed ||= new Set()).has(m.id + ":" + p.id)) {
+        if ((flow || isPebbleUI()) && stepFailed(p) && !(this.sawFailed ||= new Set()).has(m.id + ":" + p.id)) {
           this.sawFailed.add(m.id + ":" + p.id);
           if (m.live || this.thread.busy) this.openTools.add(p.id); // only as it happens, not for old replies
         }
@@ -1319,26 +1321,12 @@ export class ChatView {
       text ? el("button.icon-btn", { title: "Copy", html: icon("copy"), on: { click: async () => { await copyText(text); toast("Copied", "ok", 1400); } } }) : null,
       el("button.icon-btn", { title: "Fork thread from here", html: icon("branch"), on: { click: () => this.opts.onFork(m.id) } }));
     const avatar = el("div.avatar", this.opts.avatar ? this.opts.avatar(m.live) : null);
-    const split = rich && !!this.opts.split?.();
-    const files = rich && !split && last && !m.live ? this.turnFiles(list.slice(j, i + 1)) : null;
+    const files = rich && last && !m.live ? this.turnFiles(list.slice(j, i + 1)) : null;
     const T = rich ? this.turnOf(m) : null;
     const foot = rich && actions ? this.replyFoot(T, m, actions) : actions;
     // Studio: everything the model did on the way (its notes, thinking and steps) sits in one work column
     // under a "Worked for …" bar; the answer at the end of the reply stays outside it.
     let body = el("div.msg-body", parts);
-    if (split && T) {
-      // What is still being written at the end of the newest message reads as the answer; once a step follows it, it was a note.
-      let from = parts.length;
-      if (last) while (from > 0 && (kinds[from - 1] === "text" || kinds[from - 1] === "note")) from--;
-      const work = parts.slice(0, from), answer = parts.slice(from);
-      this.placeWork(m, T, work.length ? el("div.act-msg", { dataset: { mid: m.id } }, work) : null);
-      // While the reply is being worked on, the conversation shows it happening: what the model says as it goes
-      // and one line per step. When it is done they fold away under the work line, leaving the answer.
-      const feed = T.live ? this.feedOf(m, T, last) : [];
-      if (cont && !answer.length && !foot && !feed.length) return null;
-      body = el("div.msg-body", cont || !(T.tools.length || T.live) ? null : this.turnBar(T), feed.length ? el("div.feed", feed) : null, answer.length ? el("div.answer", answer) : null);
-      return el(`div.msg.assistant${m.live ? ".live" : ""}${cont ? ".cont" : ""}${last ? "" : ".more"}${feed.length ? ".has-feed" : ""}`, anim, avatar, cont ? null : meta, body, foot);
-    }
     let workOnly = false; // a later message of the reply that holds nothing but work: it takes no room while the reply is folded
     if (T && T.tools.length) {
       let from = parts.length;
@@ -1349,7 +1337,7 @@ export class ChatView {
       body = el("div.msg-body",
         cont ? null : this.turnBar(T),
         cont ? null : this.turnTrack(T),
-        work.length ? el(`div.work${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { dataset: { turn: T.id } }, el("div.work-in", isOnyxUI() ? this.groupSteps(m, work, kinds) : work)) : null,
+        work.length ? el(`div.work${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { dataset: { turn: T.id } }, el("div.work-in", isOnyxUI() ? this.groupSteps(m, work, kinds) : isPebbleUI() ? pebbleRows(work, kinds) : work)) : null,
         // With the work open, a line says where the steps end and the answer begins.
         answer.length && last && !m.live ? el(`div.answer-mark${T.collapsed ? ".shut" : ""}`, { dataset: { turn: T.id } }, "Answer") : null,
         answer.length ? el("div.answer", answer) : null);
@@ -1359,7 +1347,7 @@ export class ChatView {
   }
 
 
-  /** Flow: for every step of the reply `m` belongs to, its family and whether the step right before or after it
+  /** Onyx: for every step of the reply `m` belongs to, its family and whether the step right before or after it
    *  is of the same family with nothing said or thought in between (then the two are drawn as one block). */
   joinsOf(m, settings) {
     const T = this.turnOf(m);
@@ -1378,189 +1366,6 @@ export class ChatView {
       map.set(p, { fam, prev: joinable && !!a && stepFamily(a) === fam, next: joinable && !!b && stepFamily(b) === fam });
     });
     return map;
-  }
-
-  // ---- Split: a reply's steps live in the Activity panel, not in the conversation ----
-
-  /** Split, while a reply is live: what the model says as it goes (its notes), for the conversation. The steps
-   *  themselves (commands, files, searches) are the Activity panel's job and are not repeated here; the work
-   *  line above the notes says what it is doing right now. The text still being written at the end of the
-   *  newest message is left out: that is shown as the answer. */
-  feedOf(m, T, last) {
-    let upto = m.content.length;
-    if (last) while (upto > 0 && m.content[upto - 1].type !== "tool") upto--;
-    const out = [];
-    for (const p of m.content.slice(0, upto)) {
-      if (p.type === "text" && p.text) out.push(el("div.md.feed-note", { html: p.live ? markdown(p.text) : markdownDone(p.text), dataset: { part: `text:${p.ordinal}` } }));
-    }
-    return out;
-  }
-
-  /** Keep the work of message `m` (its notes, thoughts and steps) for the Activity panel, in place when it is on show. */
-  placeWork(m, T, fresh) {
-    const map = (this.workNodes ||= new Map());
-    const old = map.get(m.id);
-    if (fresh) map.set(m.id, fresh);
-    else map.delete(m.id);
-    if (!this.actList || this.actShown !== T.id) return; // another reply is on show, or the panel is closed
-    if (old?.isConnected) {
-      if (fresh) { stillAnimations(fresh, toolIds(old)); old.replaceWith(fresh); }
-      else old.remove();
-    } else if (fresh) {
-      fresh.classList.add("new");
-      const next = T.msgs.slice(T.msgs.indexOf(m) + 1).map((x) => map.get(x.id)).find((n) => n?.isConnected);
-      if (next) next.before(fresh);
-      else this.actList.append(fresh);
-    }
-  }
-
-  /** Show only one kind of step in the panel ("edit", "run", "failed"), or everything (""). */
-  filterActivity(kind) {
-    this.actFilter = this.actFilter === kind ? "" : kind;
-    this.drawActivity(false);
-  }
-
-  /** Scroll the panel to a step and mark it for a moment. */
-  showStep(id) {
-    const row = this.actList?.querySelector(`[data-tool="${id}"]`);
-    if (!row) return;
-    if (this.actFilter) { this.actFilter = ""; this.drawActivity(false); }
-    row.scrollIntoView({ block: "center", behavior: "smooth" });
-    row.classList.remove("flash");
-    void row.offsetWidth;
-    row.classList.add("flash");
-    setTimeout(() => row.classList.remove("flash"), 1300);
-  }
-
-  /** The reply on show as plain text, one line per step: for pasting somewhere else. */
-  activityText(T) {
-    const t0 = T.msgs[0]?.time?.created || 0;
-    return T.tools.map((p) => {
-      const name = (p.name || "").toLowerCase(), info = describeTool(p), meta = p.state?.metadata || {};
-      const ended = stepFailed(p) ? (meta.exit_code != null ? `exit ${meta.exit_code}` : "failed") : "";
-      return [p.time?.created && t0 ? stepClock(p.time.created - t0) : "", (VERBS[name] || [info.label])[0], info.target || "", ended].filter(Boolean).join("  ");
-    }).join("\n");
-  }
-
-  /** The first message of every reply in the thread, oldest first. */
-  turnStarts() {
-    const out = [];
-    let prev = null;
-    for (const m of this.thread?.messages || []) {
-      if (m.type === "assistant" && prev !== "assistant") out.push(m);
-      if (m.type === "assistant" || m.type === "user") prev = m.type;
-    }
-    return out;
-  }
-
-  /** How many steps the newest reply has (the Activity tab's badge). */
-  activityCount() {
-    const starts = this.turnStarts();
-    return starts.length ? this.turnOf(starts[starts.length - 1]).tools.length : 0;
-  }
-
-  /** Show one reply's steps in the Activity panel; the newest reply follows along unless another was picked. */
-  selectTurn(id) {
-    const starts = this.turnStarts();
-    this.actTurn = starts.length && starts[starts.length - 1].id === id ? null : id;
-    this.opts.onActivity?.("select");
-    this.drawActivity(true);
-  }
-
-  drawActivity(full) {
-    const host = this.opts.activityHost?.();
-    if (!host) { this.actList = null; this.actShown = null; return; }
-    const starts = this.turnStarts();
-    const first = (this.actTurn && starts.find((m) => m.id === this.actTurn)) || starts[starts.length - 1];
-    if (!first) {
-      this.actList = null;
-      this.actShown = null;
-      host.replaceChildren(el("div.drawer-empty", ico("activity"), el("div", this.thread ? "Every step of a reply shows here while the model works." : "Open a thread to see its activity.")));
-      return;
-    }
-    const T = this.turnOf(first);
-    if (this.actFor !== T.id) { this.actFor = T.id; host.classList.remove("away"); } // another reply: it starts at its newest step
-    const stuck = !host.classList.contains("away"); // kept by the panel's scroll listener: measuring here would lay the page out on every redraw
-    if (full || this.actShown !== T.id || !this.actList?.isConnected) {
-      this.actShown = null; // while filling in, nothing is placed twice
-      for (const m of T.msgs) if (!this.workNodes?.has(m.id)) this.renderMessage(m, true);
-      this.actShown = T.id;
-      this.actList = el("div.act-list", T.msgs.map((m) => this.workNodes?.get(m.id)).filter(Boolean));
-      host.replaceChildren(this.actList);
-      if (!host.dataset.actWatch) { // once per panel: leaving the bottom while it works offers a way back
-        host.dataset.actWatch = "1";
-        host.addEventListener("scroll", () => host.classList.toggle("away", host.scrollHeight - host.clientHeight - host.scrollTop > 140), { passive: true });
-      }
-      host.append(el("button.act-jump", { type: "button", on: { click: () => host.scrollTo({ top: host.scrollHeight, behavior: "smooth" }) } }, ico("arrow-down"), "Latest step"));
-      this.actSig = "";
-    }
-    // The head (numbers, strip) is rebuilt only when what it shows has changed, not on every redraw of the reply.
-    const sig = [T.id, T.live, starts.length, this.actFilter || "", T.tools.map((p) => (p.state?.status || "s")[0] + (stepFailed(p) ? "!" : "")).join(""),
-      T.tools.every((p) => this.openTools.has(p.id))].join("|");
-    if (sig !== this.actSig) {
-      this.actSig = sig;
-      const head = this.activityHead(T, starts);
-      if (host.firstElementChild?.classList.contains("act-head")) host.firstElementChild.replaceWith(head);
-      else host.prepend(head);
-    }
-    this.actList.classList.toggle("empty", !this.actList.childElementCount);
-    this.actList.dataset.filter = this.actFilter || "";
-    host.classList.toggle("live", T.live);
-    for (const n of this.root.querySelectorAll(".turn-bar")) n.classList.toggle("on", n.dataset.turn === T.id);
-    if (T.live && stuck && !this.actFilter) host.scrollTop = 1e7; // the bottom, without reading the height first
-  }
-
-  /** The top of the Activity panel: which request this is, and what the reply came to. */
-  activityHead(T, starts) {
-    const c = stepSummary(T.tools).counts;
-    const failed = T.tools.filter(stepFailed).length;
-    const ms = this.turnMs(T);
-    const k = starts.findIndex((m) => m.id === T.id);
-    const msgs = this.thread.messages;
-    let ask = "";
-    for (let i = msgs.indexOf(T.msgs[0]) - 1; i >= 0; i--) if (msgs[i].type === "user") { ask = msgs[i].text || ""; break; }
-    const go = (d) => { const m = starts[k + d]; if (m) this.selectTurn(m.id); };
-    // A number that changed since the last draw ticks; a cell is also the filter for its kind of step.
-    // The head is redrawn many times a second while a reply streams, so the tick carries on from where it was.
-    const was = this.actWas?.id === T.id ? this.actWas : { at: {} };
-    const now = { id: T.id, edits: c.edits, runs: c.runs, failed, at: { ...was.at } };
-    for (const key of ["edits", "runs", "failed"]) if (was[key] != null && was[key] !== now[key]) now.at[key] = Date.now();
-    this.actWas = now;
-    const f = this.actFilter || "";
-    const cell = (value, label, kind, cls = "", key = "") => {
-      const age = key && now.at[key] ? Date.now() - now.at[key] : 1e9;
-      return el(`button.act-cell${cls}${kind === f && kind ? ".on" : ""}${age < 500 ? ".tick" : ""}`,
-        { type: "button", style: age < 500 ? { "--age": `-${age}ms` } : null, title: kind ? (kind === f ? "Show every step again" : "Show only these steps") : "Show every step",
-          on: { click: () => this.filterActivity(kind) } }, el("b", value), el("span", label));
-    };
-    const start = T.msgs[0]?.time?.created || Date.now();
-    const open = T.tools.length && T.tools.every((p) => this.openTools.has(p.id));
-    const all = () => {
-      for (const p of T.tools) this.openTools[open ? "delete" : "add"](p.id);
-      for (const n of this.actList?.querySelectorAll(".tool") || []) { if (!open) n.fill?.(); n.classList.toggle("open", !open); }
-      this.drawActivity(false);
-    };
-    return el("div.act-head",
-      el("div.act-ask",
-        el("span.act-q", { title: ask }, ask.replace(/\s+/g, " ").slice(0, 160) || "This reply"),
-        el("span.act-tools",
-          T.tools.length ? el("button.icon-btn", { type: "button", title: open ? "Close every step" : "Open every step", html: icon(open ? "chev" : "chev-down"), on: { click: all } }) : null,
-          T.tools.length ? el("button.icon-btn", { type: "button", title: "Copy the steps as text", html: icon("copy"), on: { click: async () => { await copyText(this.activityText(T)); toast("Steps copied", "ok", 1400); } } }) : null),
-        starts.length > 1 ? el("span.act-nav",
-          el("button.icon-btn", { type: "button", title: "The reply before", disabled: k <= 0, html: icon("chev"), on: { click: () => go(-1) } }),
-          el("span", `${k + 1} / ${starts.length}`),
-          el("button.icon-btn", { type: "button", title: "The reply after", disabled: k >= starts.length - 1, html: icon("chev"), on: { click: () => go(1) } })) : null),
-      el("div.act-sum",
-        T.live ? cell(el("span.live-dur", { dataset: { start: String(start) } }, fmtDur(Date.now() - start)), "working", "", ".live") : cell(ms > 0 ? fmtDur(ms) : "0s", "worked", ""),
-        cell(String(c.edits), c.edits === 1 ? "file edited" : "files edited", "edit", "", "edits"),
-        cell(String(c.runs), c.runs === 1 ? "command" : "commands", "run", "", "runs"),
-        cell(String(failed), "failed", "failed", failed ? ".bad" : "", "failed")),
-      // every step as a small mark, in order: click one to go to it
-      T.tools.length ? el(`div.act-strip${T.tools.length > 60 ? ".dense" : ""}`, T.tools.slice(-400).map((p) => {
-        const name = (p.name || "").toLowerCase(), st = p.state?.status, info = describeTool(p);
-        return el(`i.${stepFailed(p) ? "bad" : /^(todo|todowrite|goal|question)$/.test(name) ? "plan" : kindOf(name)}${st === "running" || st === "streaming" ? ".now" : ""}`,
-          { title: `${(VERBS[name] || [info.label])[0]} ${info.target || ""}`.trim().slice(0, 120), on: { click: () => this.showStep(p.id) } });
-      })) : null);
   }
 
   /** How long a whole reply took: the live run's own clock, else first start to last finish, else its steps added up. */
@@ -1627,9 +1432,7 @@ export class ChatView {
     const failed = T.tools.filter(stepFailed).length;
     const busy = T.live ? [...T.tools].reverse().find((p) => p.state?.status === "running" || p.state?.status === "streaming") : null;
     const doing = busy ? `${(VERBS[(busy.name || "").toLowerCase()] || [0, describeTool(busy).label])[1]} ${describeTool(busy).target || ""}`.trim().slice(0, 90) : "";
-    const split = !!this.opts.split?.();
-    const bar = el(`button.turn-bar${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}${split && this.actShown === T.id ? ".on" : ""}`, { type: "button", dataset: { turn: T.id }, "aria-expanded": String(!T.collapsed), on: { click: () => {
-      if (split) return this.selectTurn(T.id);
+    const bar = el(`button.turn-bar${T.collapsed ? ".shut" : ""}${T.live ? ".live" : ""}`, { type: "button", dataset: { turn: T.id }, "aria-expanded": String(!T.collapsed), on: { click: () => {
       const shut = !bar.classList.contains("shut");
       this.openTools.delete(shut ? "t:" + T.id : "tc:" + T.id);
       this.openTools.add(shut ? "tc:" + T.id : "t:" + T.id);
@@ -1643,8 +1446,7 @@ export class ChatView {
         // what it is doing right now (so a folded reply still says it), then what it has done so far
         el("span.tb-stats", doing ? el("span.tb-stat.now", doing) : null, failed ? el("span.tb-stat.bad", ico("alert"), `${failed} failed`) : null,
           sum.stats.map(([i, text]) => el("span.tb-stat", ico(i), text)))),
-      split ? el("span.tb-go", el("span.tb-go-t", `${T.tools.length} ${T.tools.length === 1 ? "step" : "steps"}`), el("span.tb-go-i", { html: icon("chev") }))
-        : el("span.tb-side", el("span.steps-icons", sum.icons), el("span.steps-n", `${T.tools.length} ${T.tools.length === 1 ? "step" : "steps"}`)));
+      el("span.tb-side", el("span.steps-icons", sum.icons), el("span.steps-n", `${T.tools.length} ${T.tools.length === 1 ? "step" : "steps"}`)));
     return bar;
   }
 

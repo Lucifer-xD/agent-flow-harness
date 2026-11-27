@@ -168,47 +168,10 @@
   .modal.settings .card-head, .modal.settings .card-body, .modal.settings .list-item { padding-left: 16px; padding-right: 16px; }
 }
 
-/* ---- per interface ---- */
-:root[data-ui="focus"] .modal.settings .m-search { border-radius: 999px; }
-:root[data-ui="focus"] .modal.settings .m-nav .m-tab, :root[data-ui="focus"] .m-ind { border-radius: 999px; }
-:root[data-ui="focus"] .m-ind { background: var(--f-soft-2); box-shadow: none; }
-:root[data-ui="focus"] .m-ind::before { display: none; }
-:root[data-ui="focus"] .modal.settings .m-nav .m-tab.on .ico { color: var(--text); }
-:root[data-ui="focus"] .modal.settings .card { border: 0; box-shadow: none; background: var(--f-soft); border-radius: 18px; }
-:root[data-ui="focus"] .modal.settings .row:hover { background: transparent; }
-:root[data-ui="focus"] .seg.has-pill, :root[data-ui="focus"] .seg.has-pill > button { border-radius: 999px; }
-:root[data-ui="focus"] .seg.has-pill > .seg-pill { border-radius: 999px; background: var(--bg); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
-
-:root[data-ui="compact"] .modal.settings { grid-template-columns: 220px minmax(0, 1fr); }
-:root[data-ui="compact"] .modal.settings .m-nav .m-tab { height: 28px; font-size: 12.6px; border-radius: 5px; }
-:root[data-ui="compact"] .m-ind, :root[data-ui="compact"] .modal.settings .m-search { border-radius: 5px; }
-:root[data-ui="compact"] .m-ind { transition: transform var(--k-fast, 0.16s) var(--k-snap, ease-out), height 0.16s, width 0.16s, opacity 0.12s; }
-:root[data-ui="compact"] .modal.settings .card { border-radius: 8px; box-shadow: none; }
-:root[data-ui="compact"] .modal.settings .row { min-height: 46px; padding-top: 9px; padding-bottom: 9px; }
-:root[data-ui="compact"] .modal.settings .m-pane > * { animation-duration: 0.22s; }
-:root[data-ui="compact"] .seg.has-pill > .seg-pill { border-radius: 4px; background: var(--panel); box-shadow: 0 0 0 1px var(--line-2); transition: transform var(--k-fast, 0.16s) var(--k-snap, ease-out), width var(--k-fast, 0.16s) var(--k-snap, ease-out), opacity 0.12s; }
-
-:root[data-ui="compact"] .pv-tile, :root[data-ui="compact"] .cn-item, :root[data-ui="compact"] .mv-welcome { border-radius: 8px; }
-:root[data-ui="compact"] .pv-tile:hover { transform: none; }
-:root[data-ui="compact"] .pv-mono, :root[data-ui="compact"] .cn-ic, :root[data-ui="compact"] .dm-icon { border-radius: 6px; }
-:root[data-ui="compact"] .pop.mpk-pop { border-radius: 8px; }
-:root[data-ui="focus"] .pv-tile { border: 0; box-shadow: none; background: var(--f-soft); border-radius: 20px; }
-:root[data-ui="focus"] .pv-tile.pv-new { background: transparent; border: 1.5px dashed var(--line-3); }
-:root[data-ui="focus"] .pop.mpk-pop { border-radius: 20px; }
-:root[data-ui="focus"] .mpk-row, :root[data-ui="focus"] .mpk-chip { border-radius: 12px; }
-:root[data-ui="canvas"] .pv-tile { border: 0; border-radius: 16px; box-shadow: 0 0 0 1px var(--line), 0 12px 28px -24px rgba(0, 0, 0, 0.4); }
-:root[data-ui="canvas"] .modal.settings .m-search { border-radius: 11px; }
-:root[data-ui="canvas"] .m-ind { border-radius: 10px; background: var(--bg); box-shadow: 0 0 0 1px var(--line), 0 6px 14px -10px rgba(0, 0, 0, 0.45); }
-:root[data-ui="canvas"] .m-ind::before { display: none; }
-:root[data-ui="canvas"] .modal.settings .m-nav .m-tab { border-radius: 10px; }
-:root[data-ui="canvas"] .modal.settings .card { border: 0; border-radius: 16px; box-shadow: 0 0 0 1px var(--line), 0 12px 28px -24px rgba(0, 0, 0, 0.4); }
-:root[data-ui="canvas"] .seg.has-pill > .seg-pill { border-radius: 8px; background: var(--bg); box-shadow: 0 0 0 1px var(--line), 0 4px 10px -6px rgba(0, 0, 0, 0.4); transition: transform 0.4s var(--spring), width 0.4s var(--spring), opacity 0.18s; }
-
 @media (prefers-reduced-motion: reduce) {
   .modal.settings .m-pane > *, .m-hit, .m-flash { animation: none !important; }
   .m-ind, .seg-pill { transition: none !important; }
 }
-
 
 /* =====================================================================================
    Models & accounts (settings-models.js)

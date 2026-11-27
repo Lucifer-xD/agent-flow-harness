@@ -254,23 +254,12 @@ function thumbColors(id, ui) {
 function interfaceThumb(id, ui) {
   const i = (cls) => el(`i.${cls}`);
   const style = thumbColors(id, ui);
-  if (id === "flow" || id === "onyx") return el("span.ui-thumb.canvas", { "aria-hidden": "true", style },
+  if (id === "pebble") return el("span.ui-thumb.pebble", { "aria-hidden": "true", style },
+    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
+    el("span.t-main", el("span.t-col", i("t-you"), i("t-say"), el("span.t-pebs", i("t-peb"), i("t-peb.s"), i("t-peb")), i("t-say.s")), i("t-box")));
+  if (id === "onyx") return el("span.ui-thumb.canvas", { "aria-hidden": "true", style },
     el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
     el("span.t-body", el("span.t-sheet", i("t-you"), i("t-say"), i("t-tool"), i("t-tool"), i("t-say.s"), i("t-box"))));
-  if (id === "split") return el("span.ui-thumb.studio", { "aria-hidden": "true", style },
-    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
-    el("span.t-main", el("span.t-col", i("t-you"), i("t-tool"), i("t-say"), i("t-say.s")), el("span.t-box")),
-    el("span.t-side", { style: { borderInlineStart: "1px solid color-mix(in srgb, currentColor 14%, transparent)" } }, i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s"), i("t-line")));
-  if (id === "focus") return el("span.ui-thumb.focus", { "aria-hidden": "true", style },
-    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
-    el("span.t-main", el("span.t-col", i("t-you"), i("t-step"), i("t-say"), i("t-say"), i("t-say.s")), i("t-box")));
-  if (id === "compact") return el("span.ui-thumb.compact", { "aria-hidden": "true", style },
-    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
-    el("span.t-main", el("span.t-turn", i("t-av.you"), el("span.t-col", i("t-name"), i("t-say.s"))),
-      el("span.t-turn", i("t-av"), el("span.t-col", i("t-name"), i("t-say"), el("span.t-list", i("t-li"), i("t-li"), i("t-li")))), i("t-box")));
-  if (id === "canvas") return el("span.ui-thumb.canvas", { "aria-hidden": "true", style },
-    el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
-    el("span.t-body", el("span.t-sheet", i("t-h"), i("t-h.s"), el("span.t-chips", i("t-chip"), i("t-chip"), i("t-chip.s")), i("t-say"), i("t-say.s"), i("t-box"))));
   return el("span.ui-thumb.studio", { "aria-hidden": "true", style },
     el("span.t-side", i("t-line"), i("t-line.s"), i("t-line"), i("t-line.s")),
     el("span.t-main", el("span.t-col", i("t-you"), i("t-say"), i("t-tool"), i("t-tool"), i("t-say.s")), el("span.t-box")));

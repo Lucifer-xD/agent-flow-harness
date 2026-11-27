@@ -5,7 +5,7 @@
    22s") and the answer stands on its own. The panel on the right is a second sheet that opens only when asked.
    White first; Night is the same design in the dark. Ink for actions, the AFH glow only where something is
    alive. Speed rules: no :has() on messages, endless animations only on transform/opacity. */
-:root:is([data-ui="flow"], [data-ui="onyx"]) {
+:root[data-ui="onyx"] {
   --fl-line: var(--border);
   --fl-line-2: var(--border-2);
   --fl-sheet: var(--bg);
@@ -660,27 +660,27 @@
 
 /* a narrow conversation: the work summary gets its own line under the model's name */
 @container main (max-width: 540px) {
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .turn-bar { position: static; margin: -2px 0 6px -8px; }
+  :root[data-ui="onyx"] .turn-bar { position: static; margin: -2px 0 6px -8px; }
 }
 /* narrow windows: the panel floats over the sheet as its own card */
 @media (max-width: 1180px) {
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .workbench.open { top: 8px; bottom: 8px; right: 8px; margin: 0; border-radius: 16px; box-shadow: 0 0 0 1px var(--fl-line), var(--fl-sh-3); }
-  :root:is([data-ui="flow"], [data-ui="onyx"]) body.electron .workbench.open { top: 8px; }
-  :root:is([data-ui="flow"], [data-ui="onyx"])[dir="rtl"] .workbench.open { right: auto; left: 8px; }
+  :root[data-ui="onyx"] .workbench.open { top: 8px; bottom: 8px; right: 8px; margin: 0; border-radius: 16px; box-shadow: 0 0 0 1px var(--fl-line), var(--fl-sh-3); }
+  :root[data-ui="onyx"] body.electron .workbench.open { top: 8px; }
+  :root[data-ui="onyx"][dir="rtl"] .workbench.open { right: auto; left: 8px; }
 }
 @media (max-width: 900px) {
-  :root:is([data-ui="flow"], [data-ui="onyx"]) { --fl-gut: 34px; }
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .thread-inner { padding-inline: 16px; }
+  :root[data-ui="onyx"] { --fl-gut: 34px; }
+  :root[data-ui="onyx"] .thread-inner { padding-inline: 16px; }
 }
 @media (max-width: 640px) {
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .app { padding: 0; }
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .main { border-radius: 0; box-shadow: none; }
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .workbench.open { inset: 0; width: 100vw; border-radius: 0; }
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .wel-title { font-size: 25px; }
+  :root[data-ui="onyx"] .app { padding: 0; }
+  :root[data-ui="onyx"] .main { border-radius: 0; box-shadow: none; }
+  :root[data-ui="onyx"] .workbench.open { inset: 0; width: 100vw; border-radius: 0; }
+  :root[data-ui="onyx"] .wel-title { font-size: 25px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .tb-mark.live::after { animation: none; }
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .wb-pane, :root:is([data-ui="flow"], [data-ui="onyx"]) .work .tool, :root:is([data-ui="flow"], [data-ui="onyx"]) :is(.wb-pane-plan, .plan-pop) .plan > *, :root:is([data-ui="flow"], [data-ui="onyx"]) .wel-top, :root:is([data-ui="flow"], [data-ui="onyx"]) .wel-idea,
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .main.welcome .composer { animation: none; }
-  :root:is([data-ui="flow"], [data-ui="onyx"]) .work, :root:is([data-ui="flow"], [data-ui="onyx"]) .work .tool-body { transition: none; }
+  :root[data-ui="onyx"] .tb-mark.live::after { animation: none; }
+  :root[data-ui="onyx"] .wb-pane, :root[data-ui="onyx"] .work .tool, :root[data-ui="onyx"] :is(.wb-pane-plan, .plan-pop) .plan > *, :root[data-ui="onyx"] .wel-top, :root[data-ui="onyx"] .wel-idea,
+  :root[data-ui="onyx"] .main.welcome .composer { animation: none; }
+  :root[data-ui="onyx"] .work, :root[data-ui="onyx"] .work .tool-body { transition: none; }
 }

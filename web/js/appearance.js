@@ -63,29 +63,12 @@ export const PRESETS = {
   gruvboxlight: { name: "Gruvbox Light", accent: "#d65d0e", ...light("#fbf1c7", "#f2e5bc", "#fdf6d8", "#f2e5bc", "#ebdbb2", "#e5d5ad", "#d5c4a1", "#3c3836", "#665c54", "#928374", "#f2e5bc") },
   nordlight: { name: "Nord Light", accent: "#5e81ac", ...light("#eceff4", "#e5e9f0", "#f8f9fb", "#e9edf2", "#dfe4ec", "#d8dee9", "#c2cad8", "#2e3440", "#4c566a", "#7b869a", "#e5e9f0") },
   contrastlight: { name: "High Contrast Light", accent: "#0047ff", ...light("#ffffff", "#ffffff", "#ffffff", "#f2f2f2", "#e6e6e6", "#6b6b6b", "#3d3d3d", "#000000", "#1a1a1a", "#404040", "#f2f2f2") },
-  // Split's own themes: plain white or near-black, one blue accent, hairlines instead of shadows
-  flow: { name: "Day", accent: "#f0561d", accent0: "#ffa21f", accent2: "#ff3d71", ...light("#ffffff", "#f2f2f4", "#ffffff", "#f5f5f7", "#eaeaee", "#e7e7ec", "#d8d8df", "#111115", "#4d4f5a", "#8a8c97", "#fafafb") },
-  "flow-night": { name: "Night", accent: "#ff7a3d", accent0: "#ffb13d", accent2: "#ff4f86", ...dark("#161619", "#0d0d0f", "#161619", "#1e1e22", "#29292e", "#26262b", "#36363d", "#eeeef1", "#a7a8b2", "#6e707b", "#111113") },
+  // Pebble's own themes: soft graphite (or warm paper), round pills, the AFH orange
+  pebble: { name: "Pebble", accent: "#ff7a3d", accent0: "#ffb11f", accent2: "#ff3d8a", ...dark("#0b0b0d", "#0b0b0d", "#16161a", "#1c1c21", "#26262c", "#1f1f24", "#2a2a31", "#f4f3f6", "#b8b7c0", "#7a7984", "#060607") },
+  "pebble-day": { name: "Pebble Day", accent: "#f0561d", accent0: "#ff9d1f", accent2: "#e8366f", ...light("#f4f3f1", "#f4f3f1", "#ffffff", "#ebeae6", "#dedcd8", "#e4e3df", "#d6d5d0", "#18171c", "#55545c", "#8f8e96", "#ecebe7") },
   // Onyx's own themes: a near-black card on a slightly lighter shell (or white on off-white), one quiet blue, the rest monochrome
   onyx: { name: "Onyx", accent: "#2f71e3", accent0: "#2f71e3", accent2: "#2f71e3", ...dark("#070708", "#111114", "#131317", "#15151a", "#1f1f24", "#1b1b1c", "#272728", "#ffffff", "#bcbdc6", "#87888f", "#0d0d11") },
   "onyx-day": { name: "Onyx Day", accent: "#2b6fd9", accent0: "#2b6fd9", accent2: "#2b6fd9", ...light("#ffffff", "#f3f3f5", "#ffffff", "#f6f6f8", "#ececef", "#e9e9ec", "#dcdce1", "#0a0a0c", "#3a3a41", "#6b6b74", "#f6f6f8") },
-  split: { name: "Clear", accent: "#2f5bff", accent0: "#5a8bff", accent2: "#7a4dff", ...light("#ffffff", "#f6f7f9", "#ffffff", "#f3f4f7", "#eceef3", "#e6e8ee", "#d5d9e2", "#12141a", "#4b5160", "#878d9b", "#f7f8fa") },
-  "split-night": { name: "Night", accent: "#7c93ff", accent0: "#9fb4ff", accent2: "#b28cff", ...dark("#0e0f12", "#0a0b0d", "#15171b", "#1a1c21", "#23262d", "#23262d", "#33373f", "#eceef2", "#a9aebb", "#6f7583", "#0b0c0e") },
-  // Focus's own themes: quiet neutrals, the accent used sparingly
-  focus: { name: "Graphite", accent: "#8fb4ff", ...dark("#1a1a1c", "#141415", "#212124", "#29292d", "#333338", "#303035", "#42424a", "#ececee", "#b4b4bb", "#7e7e87", "#131314") },
-  "focus-umber": { name: "Umber", accent: "#e8a56a", ...dark("#1b1917", "#151311", "#23201d", "#2b2723", "#36312c", "#332e29", "#47403a", "#efebe6", "#b9b1a8", "#847c73", "#141210") },
-  "focus-chalk": { name: "Chalk", accent: "#2f6feb", ...light("#ffffff", "#f6f6f7", "#ffffff", "#f2f2f4", "#e8e8eb", "#e5e5e9", "#d2d2d8", "#18181b", "#55555e", "#8b8b95", "#f5f5f7") },
-  "focus-sage": { name: "Sage", accent: "#2f7d5b", ...light("#fbfbf8", "#f3f3ee", "#ffffff", "#f1f1ec", "#e6e6df", "#e2e2da", "#cfcfc5", "#1a1c18", "#555a50", "#8a8f84", "#f3f3ee") },
-  // Compact's own themes: deep, even surfaces for long working sessions
-  compact: { name: "Indigo", accent: "#7b8cff", ...dark("#0f1115", "#0b0d10", "#151820", "#1b1f29", "#242935", "#232834", "#333a4a", "#e6e9f0", "#a5acbb", "#6f7687", "#0a0c0f") },
-  "compact-carbon": { name: "Carbon", accent: "#f5a524", ...dark("#121212", "#0d0d0d", "#191919", "#202020", "#2a2a2a", "#292929", "#3b3b3b", "#ebebeb", "#adadad", "#787878", "#0b0b0b") },
-  "compact-tide": { name: "Tide", accent: "#2dd4bf", ...dark("#0d1213", "#0a0e0f", "#131a1b", "#192223", "#212d2e", "#202c2d", "#2f4042", "#e3eeee", "#a2b5b6", "#6c8082", "#080c0d") },
-  "compact-day": { name: "Daylight", accent: "#4f5bd5", ...light("#fafbfc", "#f0f2f5", "#ffffff", "#f3f5f8", "#e8ebf0", "#e3e6ec", "#cfd4dd", "#14171d", "#515866", "#878e9c", "#f1f3f6") },
-  // Canvas's own themes: the second color is the frame around the sheet
-  canvas: { name: "Porcelain", accent: "#5b5bd6", ...light("#ffffff", "#eceef3", "#ffffff", "#f4f5f9", "#e9ebf1", "#e4e6ed", "#cfd3de", "#171923", "#535869", "#8a8fa0", "#f3f4f8") },
-  "canvas-sand": { name: "Sandstone", accent: "#c2571a", ...light("#fffdfa", "#efeae2", "#fffdfa", "#f6f1ea", "#ece5db", "#e7dfd3", "#d4cabb", "#1e1a15", "#5a5348", "#90877a", "#f5f0e8") },
-  "canvas-night": { name: "Nightfall", accent: "#8b8cf8", ...dark("#16181d", "#0c0d10", "#1b1e24", "#22252d", "#2b2f39", "#2a2e37", "#3a3f4b", "#e9ebf1", "#a8adba", "#727786", "#101216") },
-  "canvas-pine": { name: "Pine", accent: "#4ade80", ...dark("#141a17", "#0b0f0d", "#19201c", "#1f2823", "#28332d", "#27322c", "#38463e", "#e6efe9", "#a6b5ab", "#6f8076", "#0e1310") },
 };
 
 /** The signature themes, listed first in Settings. */
@@ -151,25 +134,17 @@ let styleTag = null;
 /** Interfaces: the layout and treatment of the whole app. Each one has its own themes and starts in
  *  its own look (light or dark); the classic themes, custom colors, light and dark work with all of them. */
 export const INTERFACES = [
-  { id: "flow", name: "Flow", sub: "The main AFH interface: your threads on the side, the conversation on one clean sheet. The model talks as it works, its steps are tidy blocks between its words, and a panel opens on the right when you want the details." },
+  { id: "pebble", name: "Pebble", sub: "A calm chat: your message is a bubble, the model talks in full sentences, and what it did between two sentences is a row of pebbles. Tap one and it opens into a sheet. Soft and round, dark first." },
   { id: "onyx", name: "Onyx", sub: "Dense and monochrome: the conversation is a near-black card on a dark shell, set in Google Sans, with a glass message box, pill buttons and one quiet blue. Light is the same design on white." },
-  { id: "split", name: "Split", sub: "Side by side: the conversation stays short on the left (your message, one line for the work, the answer) and everything the model did sits in an Activity panel on the right." },
   { id: "studio", name: "Studio", sub: "The classic AFH layout: a sidebar of threads, a reading column and a floating composer." },
-  { id: "focus", name: "Focus", sub: "Just the conversation: a calm centered column, your messages as soft pills, steps as quiet single lines and a large rounded message box." },
-  { id: "compact", name: "Compact", sub: "Built for long working sessions: turns read like a thread with names and avatars, steps stack into one tidy list, and the message box is docked along the bottom." },
-  { id: "canvas", name: "Canvas", sub: "The thread sits on its own sheet inside a tinted frame: your request reads as a headline, steps flow as small chips, and the answer follows." },
 ];
 
 /** Each interface's look: the mode it starts in, its dark and light themes, and the themes made for it
  *  (shown first in Settings; other interfaces don't list them). */
 export const INTERFACE_LOOKS = {
-  flow: { mode: "light", dark: "flow-night", light: "flow", own: ["flow", "flow-night"] },
+  pebble: { mode: "dark", dark: "pebble", light: "pebble-day", own: ["pebble", "pebble-day"] },
   onyx: { mode: "dark", dark: "onyx", light: "onyx-day", own: ["onyx", "onyx-day"] },
-  split: { mode: "light", dark: "split-night", light: "split", own: ["split", "split-night"] },
   studio: { mode: "dark", dark: "sunset", light: "paper", own: [], show: ["sunset", "midnight", "forest", "paper"] },
-  focus: { mode: "dark", dark: "focus", light: "focus-chalk", own: ["focus", "focus-umber", "focus-chalk", "focus-sage"] },
-  compact: { mode: "dark", dark: "compact", light: "compact-day", own: ["compact", "compact-carbon", "compact-tide", "compact-day"] },
-  canvas: { mode: "light", dark: "canvas-night", light: "canvas", own: ["canvas", "canvas-sand", "canvas-night", "canvas-pine"] },
 };
 const OWN = new Set(Object.values(INTERFACE_LOOKS).flatMap((l) => l.own));
 /** The themes to offer in this interface: its own, then the classic ones. */
