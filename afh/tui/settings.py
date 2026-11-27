@@ -19,7 +19,7 @@ from .. import __version__
 from ..cli import CliError
 from . import state as S
 from . import themes
-from .actions import SIGN_INS, ThemePicker
+from .actions import SIGN_INS, ThemePicker, clipboard_text, system_copy
 from .dialogs import Confirm, Field, Form, Item, Picker, Prompt, Viewer
 from .look import keys
 from .widgets import bar, gradient
@@ -527,6 +527,7 @@ class Panes:
             R("button", "Add a provider", "", "Sign in with your plan, paste a key, or scan this computer", self.connect),
             R("choice", "Default model", self.default_ref(), "New threads start on this", self.set_default, [(f"{m.get('name')} · {ui.provider_name(m['providerID'])}", f"{m['providerID']}/{m['id']}") for m in ui.models]),
             R("button", "Refresh model lists", "", "", self.refresh), R("button", "Show or hide models", "", "Pick which ones the model picker lists", self.visibility),
+            R("button", "Paste a shared provider", "", "A code someone copied with Share in their AFH", self.paste_shared),
         ]
         migration = ui.boot.get("migration") or {}
         if migration.get("db") and not migration.get("done"):
@@ -618,6 +619,79 @@ class Panes:
                         await ui.api("DELETE", path)
             await ui.load_catalog()
 
+    async def share(self, p: dict) -> None:
+        """Copy one code that adds this provider, as it is here, to another AFH (engine/share.py)."""
+        ui = self.ui
+        n = len(p.get("accounts") or [])
+        fields = [Field("secrets", "Include keys and sign-ins", "switch", True)] if n else []
+        fields.append(Field("password", "Password (optional)", "password", "", help="They type it when they paste the code."))
+        out = await self.wait(Form(f"Share {p.get('name') or p['id']}", fields, save="Copy code",
+                                   sub="One code with the address, the models, the effort levels and every setting"
+                                   + (f", and its {n} account{'s' if n != 1 else ''}. Anyone with the code can use them as you do: send it only to people you trust." if n else ".")))
+        if out is None:
+            return
+        try:
+            got = await ui.api("POST", f"/api/providers/{p['id']}/share", {"secrets": bool(out.get("secrets", False)), "password": out.get("password") or ""})
+        except Exception as err:
+            ui.fail(err)
+            return
+        code = got.get("code") or ""
+        copied = await asyncio.to_thread(system_copy, code)
+        ui.copy_to_clipboard(code)
+        ui.say(("Share code copied" if copied else "Share code sent to the terminal's clipboard") + (", locked with your password" if got.get("locked") else ""), 4)
+
+    async def paste_shared(self) -> None:
+        """Add a provider from a share code: taken from the clipboard, or pasted here."""
+        ui = self.ui
+        code = await asyncio.to_thread(clipboard_text)
+        if "AFH-PROVIDER-1" not in code:
+            code = await self.wait(Prompt("Paste a shared provider", multiline=True, save="Read", sub="Paste the code someone copied with Share in their AFH. Ctrl+S reads it."))
+            if not code or not code.strip():
+                return
+        password = ""
+        while True:
+            try:
+                pre = await ui.api("POST", "/api/provider-share/read", {"code": code, "password": password})
+            except Exception as err:
+                ui.fail(err)
+                return
+            if not pre.get("needsPassword"):
+                break
+            password = await self.wait(Prompt("Wrong password, try again" if pre.get("wrongPassword") else "This code is locked", password=True, placeholder="Password", save="Open"))
+            if not password:
+                return
+        n = len(pre.get("accounts") or [])
+        facts = [f"{pre.get('shownCount')} models", f"{pre.get('effortModels')} with effort levels" if pre.get("effortModels") else "",
+                 f"{n} account{'s' if n != 1 else ''}: " + ", ".join(a["label"] for a in pre["accounts"]) if n else "no account: add your own key after"]
+        notes = [pre.get("base_url") or "", " · ".join(f for f in facts if f)]
+        if pre.get("local"):
+            notes.append(f"Its address ({pre['local']}) is on the sharer's own computer or network.")
+        if pre.get("signInNote"):
+            notes.append(pre["signInNote"])
+        name = pre.get("name") or pre.get("id")
+        if pre.get("exists"):
+            items = [Item("Replace mine", "replace", "its settings and accounts take the place of yours")]
+            if n:
+                items.append(Item("Add only its accounts", "accounts", "your settings stay; keys you already have aren't added twice"))
+            items.append(Item("Keep both", "copy", f'added as "{name} (shared)"'))
+        else:
+            items = [Item(f"Add {name}", "new")]
+        dm = pre.get("defaultModel") or {}
+        dm_name = next((m.get("name") for m in pre.get("models") or [] if m.get("id") == dm.get("id")), "")
+        if dm_name:
+            items += [Item(f"{it.label}, and make {dm_name} my default model", (it.value, True), "", "With its default model") for it in items if it.value != "accounts"]
+        picked = await self.wait(Picker(f"Add {name}?" if not pre.get("exists") else f"You already have {pre.get('existingName') or name}", items, search=False, sub="\n".join(x for x in notes if x)))
+        if not picked:
+            return
+        mode, make_default = picked if isinstance(picked, tuple) else (picked, False)
+        try:
+            res = await ui.api("POST", "/api/provider-share/apply", {"code": code, "password": password, "mode": "replace" if mode == "new" else mode, "makeDefault": make_default}, timeout=120)
+        except Exception as err:
+            ui.fail(err)
+            return
+        await ui.load_catalog()
+        ui.say(f"{res.get('added')} account(s) added to {res.get('name')}" if res.get("mode") == "accounts" else f"{res.get('name')} is ready", 4)
+
     async def copy_key(self, p: dict, a: dict | None = None) -> None:
         """Put the provider's API key (the one in use, or one account's) on the clipboard, never on screen."""
         ui = self.ui
@@ -671,7 +745,7 @@ class Panes:
             ui = self.ui
             on_ = p.get("enabled") is not False
             n = len(p.get("accounts") or [])
-            items = [Item(f"Accounts ({n})…" if n else "Accounts…", "accounts"), Item("Test the connection", "test"), Item("Turn off" if on_ else "Turn on", "enabled"), Item("Refresh its models", "refresh"), Item("Edit model limits…", "limits"), Item("Prices…", "prices")]
+            items = [Item(f"Accounts ({n})…" if n else "Accounts…", "accounts"), Item("Share…", "share", "one code with its settings and accounts"), Item("Test the connection", "test"), Item("Turn off" if on_ else "Turn on", "enabled"), Item("Refresh its models", "refresh"), Item("Edit model limits…", "limits"), Item("Prices…", "prices")]
             if p.get("hasKey"):
                 items.insert(1, Item("Copy API key", "copykey", "from your environment" if p.get("keyFromEnv") else "the one in use now"))
             if p.get("login") and p.get("signedIn"):
@@ -685,6 +759,8 @@ class Panes:
             pid = p["id"]
             if picked == "accounts":
                 await self.accounts(p, data)
+            elif picked == "share":
+                await self.share(p)
             elif picked == "copykey":
                 await self.copy_key(p)
             elif picked == "test":

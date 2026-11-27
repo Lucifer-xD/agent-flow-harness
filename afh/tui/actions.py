@@ -1271,6 +1271,42 @@ def picker_copy(picker: Picker) -> Picker:
     return fresh
 
 
+def _run_clip(cmd: list[str], data: str | None = None) -> str | None:
+    try:
+        out = subprocess.run(cmd, input=data, capture_output=True, text=True, timeout=10, encoding="utf-8",
+                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout if out.returncode == 0 else None
+
+
+def clipboard_text() -> str:
+    """The text on the system clipboard ("" when there is none or it can't be read)."""
+    if os.name == "nt":
+        cmds = [["powershell", "-NoProfile", "-STA", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Clipboard -Raw"]]
+    elif os.uname().sysname == "Darwin":
+        cmds = [["pbpaste"]]
+    else:
+        cmds = [["wl-paste", "--no-newline"], ["xclip", "-selection", "clipboard", "-o"], ["xsel", "--clipboard", "--output"]]
+    for cmd in cmds:
+        got = _run_clip(cmd)
+        if got:
+            return got
+    return ""
+
+
+def system_copy(text: str) -> bool:
+    """Put text on the system clipboard. Long text (a share code) can be too much for the
+    terminal's own copy (OSC 52), so this goes through the system as well."""
+    if os.name == "nt":
+        cmds = [["powershell", "-NoProfile", "-STA", "-Command", "$t=[Console]::In.ReadToEnd(); Set-Clipboard -Value $t"]]
+    elif os.uname().sysname == "Darwin":
+        cmds = [["pbcopy"]]
+    else:
+        cmds = [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]]
+    return any(_run_clip(cmd, text) is not None for cmd in cmds)
+
+
 def clipboard_image() -> bytes | None:
     """PNG bytes of the image on the clipboard, on Windows and Mac."""
     if os.name == "nt":

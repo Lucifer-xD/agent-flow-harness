@@ -1405,8 +1405,7 @@ def provider_copy_key(pid: str, request: Request, body: dict = Body(default={}))
     Only on this computer: never through remote control (the phone app or the website)."""
     from .engine.providers.catalog import env_key
 
-    server = request.scope.get("server") or ("", 0)
-    if remote.state["port"] and server[1] == remote.state["port"]:
+    if _through_remote(request):
         return JSONResponse({"error": "API keys can only be copied on the computer AFH runs on"}, status_code=403)
     p = provcfg.entry(pid)
     if not p:
@@ -1423,6 +1422,60 @@ def provider_copy_key(pid: str, request: Request, body: dict = Body(default={}))
         name = p.get("name") or pid
         raise ValueError(f"This {name} account is a sign-in, so it has no API key to copy" if (acc or p).get("auth") else f"{name} has no API key to copy")
     return JSONResponse({"key": key, "source": source, "label": provcfg.account_label(acc) if acc else ""}, headers={"Cache-Control": "no-store"})
+
+
+def _through_remote(request: Request) -> bool:
+    """True when the request came through remote control (the phone app or the website)."""
+    server = request.scope.get("server") or ("", 0)
+    return bool(remote.state["port"] and server[1] == remote.state["port"])
+
+
+@app.post("/api/providers/{pid}/share")
+def provider_share(pid: str, request: Request, body: dict = Body(default={})):
+    """A share code for the whole provider (engine/share.py): its settings, models, effort levels
+    and, with secrets, every account's key or sign-in. Only on this computer, like Copy key."""
+    from .engine import share
+
+    if _through_remote(request):
+        return JSONResponse({"error": "A provider can only be shared on the computer AFH runs on"}, status_code=403)
+    out = share.export(pid, include_secrets=bool(body.get("secrets", True)), password=str(body.get("password") or ""),
+                       default_model=engine.settings().get("defaultModel"))
+    return JSONResponse(out, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/provider-share/read")
+def provider_share_read(request: Request, body: dict = Body(...)):
+    """What a share code holds, without applying it (no key or token comes back)."""
+    from .engine import share
+
+    if _through_remote(request):
+        return JSONResponse({"error": "A shared provider can only be added on the computer AFH runs on"}, status_code=403)
+    return share.preview(str(body.get("code") or ""), str(body.get("password") or ""))
+
+
+@app.post("/api/provider-share/apply")
+async def provider_share_apply(request: Request, body: dict = Body(...)):
+    """Add the shared provider (mode: replace / accounts / copy when one of that id is here)."""
+    from .engine import share
+
+    if _through_remote(request):
+        return JSONResponse({"error": "A shared provider can only be added on the computer AFH runs on"}, status_code=403)
+    code, password = str(body.get("code") or ""), str(body.get("password") or "")
+    out = share.apply(code, password, str(body.get("mode") or "replace"))
+    pid = out["providerID"]
+    engine.reload_providers()
+    try:
+        await engine.refresh_models(pid)
+    except Exception as err:
+        log.info("refresh after a shared provider: %s", err)
+    if body.get("makeDefault") and out["mode"] != "accounts":
+        dm = share.decode(code, password).get("defaultModel") or {}
+        if dm.get("id"):
+            store.save_settings({"defaultModel": {"providerID": pid, **dm}})
+            out["defaultModel"] = dm
+    _accounts_changed(pid)
+    engine.publish({"type": "model.updated", "data": {}})
+    return out
 
 
 @app.post("/api/providers/{pid}/rotation")

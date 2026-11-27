@@ -2,6 +2,15 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.38.0 (2026-11-27)
+
+**Share a provider**
+
+- **Share a provider:** open a provider in Settings → Models & accounts and press Share. One code carries all of it: the address, the logo, every model (hidden ones too), the effort levels, your changes, your default model and, if you want, every account with its keys and sign-ins.
+- **Add a shared provider:** Paste next to Connect, or Share code in Connect, reads the code from the clipboard, shows what's in it (never the keys) and adds the provider in one click. If you already have it: replace yours, add only its accounts, or keep both.
+- **Safe to send:** lock a code with a password, or leave the keys out and share only the settings. A provider on your own computer or network says so before it's added. Sharing works only on the PC itself, never through remote control.
+- **The terminal app:** Share… in a provider's menu and Paste a shared provider under Models.
+
 ## 1.37.2 and phone app 2.0.4 (2026-11-26)
 
 **Who makes AFH**

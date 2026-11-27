@@ -233,6 +233,29 @@ def upsert(pid: str, patch: dict) -> dict:
         return copy.deepcopy(cur)
 
 
+def replace_entry(pid: str, p: dict) -> None:
+    """Put a whole provider entry in place (a shared provider being applied). Its account in use
+    must be one of its accounts; the provider's own copy of the credentials follows it."""
+    with _lock:
+        data = load()
+        p = copy.deepcopy(p)
+        p["id"] = pid
+        for k in ("models", "fetched", "hidden"):
+            p.setdefault(k, [])
+        p.setdefault("headers", {})
+        p.setdefault("extra", {})
+        if not isinstance(p.get("accounts"), list):
+            p.pop("accounts", None)
+            _migrate(p)
+        if p["accounts"] and not any(a.get("id") == p.get("active") for a in p["accounts"]):
+            p["active"] = next((a["id"] for a in p["accounts"] if a.get("enabled", True)), p["accounts"][0]["id"])
+        if not p["accounts"]:
+            p["active"] = ""
+        _mirror(p)
+        data["providers"][pid] = p
+        save(data)
+
+
 def remove(pid: str) -> None:
     with _lock:
         data = load()

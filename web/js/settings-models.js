@@ -261,7 +261,8 @@ export async function modelsPane(pane, ctx, opts = {}) {
       b.disabled = false; b.replaceChildren(ico("refresh"), "Refresh models");
     } } }, ico("refresh"), "Refresh models");
     page.append(el("div.mv-section", el("div.mv-section-text", el("h3", "Your providers"), el("p", `${plural(configured.length, "provider")} · open one to manage its accounts and models`)),
-      refreshAll, el("button.btn.primary.sm", { type: "button", on: { click: () => openConnect() } }, ico("plus"), "Connect")), grid);
+      refreshAll, el("button.btn.ghost.sm", { type: "button", title: "Add a provider someone shared with you", on: { click: () => openPaste() } }, ico("clipboard"), "Paste"),
+      el("button.btn.primary.sm", { type: "button", on: { click: () => openConnect() } }, ico("plus"), "Connect")), grid);
 
     page.append(rulesCard(configured));
     return page;
@@ -354,7 +355,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
     page.append(back,
       el("div.pv-hero", mono(p.name, p.id, "lg", p.base_url, familyLogo(shownModels(p))),
         el("div.pv-hero-text", el("h2", p.name), el("div.pv-hero-sub", el(`span.pv-state.${st}`, el("i"), stText), el("span", howConnected(p)), el("code", p.base_url || ""))),
-        el("div.pv-hero-actions", copyBtn, testBtn, more)),
+        el("div.pv-hero-actions", el("button.btn.sm", { type: "button", title: "Copy one code that adds this provider, with its settings and accounts, to another AFH", on: { click: () => shareProvider(p) } }, ico("share"), "Share"), copyBtn, testBtn, more)),
       tabs, body);
     drawTab();
     return page;
@@ -635,7 +636,7 @@ export async function modelsPane(pane, ctx, opts = {}) {
       .sort((a, b) => (FEATURED.indexOf(a.id) + 1 || 99) - (FEATURED.indexOf(b.id) + 1 || 99) || a.name.localeCompare(b.name));
     let cat = start;
     let query = "";
-    const CATS = [["signin", "Sign in", "user", "With a plan you pay for"], ["key", "API key", "key", `${keyed.length} providers`], ["local", "This computer", "monitor", "Free and private"], ["custom", "Custom endpoint", "code", "Any compatible server"]];
+    const CATS = [["signin", "Sign in", "user", "With a plan you pay for"], ["key", "API key", "key", `${keyed.length} providers`], ["local", "This computer", "monitor", "Free and private"], ["custom", "Custom endpoint", "code", "Any compatible server"], ["shared", "Share code", "clipboard", "From another AFH"]];
     const q = el("input.cn-q", { placeholder: "Search providers: OpenAI, Gemini, Kimi, Ollama…", spellcheck: false, autocomplete: "off" });
     const rail = el("div.cn-rail");
     const list = el("div.cn-list");
@@ -693,6 +694,10 @@ export async function modelsPane(pane, ctx, opts = {}) {
         const box = el("div.card.cn-form");
         parts.push(box);
         providerForm(box, { done: finish });
+      } else if (cat === "shared") {
+        const box = el("div.sh-inline");
+        parts.push(el("p.cn-lead", "Someone shared a provider with you from their AFH: its address, models, effort levels and, if they chose, its accounts. Paste their code."), box);
+        pasteView(box, { done: finish });
       }
       list.replaceChildren(...parts);
       list.scrollTop = 0;
@@ -707,6 +712,160 @@ export async function modelsPane(pane, ctx, opts = {}) {
       el("div.cn-cols", rail, stage));
     drawList();
     if (!inline) setTimeout(() => q.focus(), 40);
+  }
+
+  // ======================================================================================
+  // Share a provider, and add one someone shared (engine/share.py)
+  // ======================================================================================
+
+  function shareProvider(p) {
+    const n = p.accounts?.length || 0;
+    const shown = p.models.filter((m) => !m.hidden);
+    const efforts = shown.filter((m) => m.variants?.length).length;
+    const custom = p.models.filter((m) => m.overridden).length;
+    let secrets = n > 0;
+    const pw = el("input.inp", { type: "password", placeholder: "No password", autocomplete: "new-password" });
+    const accLine = el("span");
+    const drawAcc = () => accLine.replaceChildren(n ? (secrets ? `${plural(n, "account")}, keys and sign-ins included` : `${plural(n, "account")} left out: they add their own`) : "No account: they add their own key");
+    drawAcc();
+    const warn = el("div.sh-warn", { hidden: !secrets }, ico("alert"),
+      el("span", "Anyone with this code can use these accounts as you do, until you remove the key or sign out. Send it only to people you trust, and lock it with a password when it goes through a chat app."));
+    const what = el("div.sh-what",
+      el("div.sh-what-row", ico("globe"), el("b", "Connection"), el("span", p.base_url || "Built in")),
+      el("div.sh-what-row", ico("cpu"), el("b", "Models"), el("span", [`${shown.length} in the picker`, p.models.length > shown.length ? `${p.models.length - shown.length} hidden` : null,
+        efforts ? `${efforts} with effort levels` : null, custom ? `${custom} you changed` : null].filter(Boolean).join(" · "))),
+      el("div.sh-what-row", ico("key"), el("b", "Accounts"), accLine));
+    const result = el("div.sh-done", { hidden: true });
+    const copyBtn = el("button.btn.primary", { type: "button" }, ico("copy"), "Copy share code");
+    let last = "";
+    const reset = () => { if (last) { last = ""; result.hidden = true; copyBtn.replaceChildren(ico("copy"), "Copy share code"); } };
+    pw.addEventListener("input", reset);
+    copyBtn.addEventListener("click", async () => {
+      copyBtn.disabled = true;
+      const out = await guard(() => api.post(`/api/providers/${p.id}/share`, { secrets, password: pw.value }));
+      copyBtn.disabled = false;
+      if (!out?.code) return;
+      last = out.code;
+      await copyText(out.code);
+      result.hidden = false;
+      result.replaceChildren(ico("check"), el("div",
+        el("b", out.locked ? "Copied, locked with your password" : "Copied"),
+        el("span", `Send it to them${out.locked ? ", and the password separately" : ""}. In AFH they open Settings → Models & accounts → Paste, and ${p.name} is ready in one click.`)));
+      copyBtn.replaceChildren(ico("copy"), "Copy again");
+      toast(`${p.name} share code copied`, "ok", 1800);
+    });
+    const dlg = modal(el("div.m-body.dlg.sh-dlg",
+      el("div.sh-head", mono(p.name, p.id, "lg", p.base_url, familyLogo(shownModels(p))), el("div", el("h2", `Share ${p.name}`),
+        el("p.lead", "One code that adds this provider to another AFH exactly as you have it: the logo, the address, the models, the effort levels and every setting."))),
+      what,
+      n ? el("div.sh-opt", el("div", el("b", "Include keys and sign-ins"), el("span", "Off shares only the settings.")),
+        toggle(secrets, (v) => { secrets = v; warn.hidden = !v; drawAcc(); reset(); })) : null,
+      el("div.sh-opt", el("div", el("b", ico("lock"), "Password"), el("span", "Optional. They type it when they paste the code.")), pw),
+      warn, result,
+      el("div.actions", el("button.btn.ghost", { type: "button", on: { click: () => dlg.close() } }, "Close"), copyBtn)), { small: true });
+    dlg.box.classList.add("sh-box");
+  }
+
+  function openPaste() {
+    const host = el("div.m-body.dlg.sh-dlg");
+    const dlg = modal(host, { small: true });
+    dlg.box.classList.add("sh-box");
+    host.append(el("div.sh-head", el("span.sh-icon", ico("clipboard")), el("div", el("h2", "Add a shared provider"),
+      el("p.lead", "Paste the code someone copied with Share. AFH adds the provider with their settings, and their accounts if they included them."))));
+    const box = el("div");
+    host.append(box);
+    pasteView(box, { done: (out) => { dlg.close(); reload({ provider: out?.id || null, tab: "accounts" }); }, onCancel: () => dlg.close() });
+  }
+
+  function pasteView(host, { done, onCancel = null }) {
+    const ta = el("textarea.inp.sh-code", { rows: 3, spellcheck: false, autocomplete: "off", placeholder: "AFH-PROVIDER-1:…" });
+    const pw = el("input.inp", { type: "password", placeholder: "Password", autocomplete: "off" });
+    const pwMsg = el("div.help.sh-pw-msg");
+    const pwBox = el("div.sh-pw", { hidden: true }, el("label", ico("lock"), "This code is locked"), pw, pwMsg);
+    const out = el("div.sh-preview");
+    const go = el("button.btn.primary", { type: "button", disabled: true }, ico("plus"), "Add");
+    let pre = null, mode = "replace", makeDefault = false, seq = 0, timer = 0;
+
+    const read = async () => {
+      const code = ta.value.trim();
+      const mine = ++seq;
+      pre = null;
+      go.disabled = true;
+      if (!code) { out.replaceChildren(); pwBox.hidden = true; return; }
+      out.replaceChildren(el("div.sh-reading", el("span.spinner"), "Reading the code…"));
+      let r;
+      try { r = await api.post("/api/provider-share/read", { code, password: pw.value }); } catch (e) { if (mine === seq) out.replaceChildren(el("div.sh-bad", ico("alert"), el("span", e.message))); return; }
+      if (mine !== seq) return;
+      if (r.needsPassword) {
+        pwBox.hidden = false;
+        pwMsg.textContent = r.wrongPassword ? "That password doesn't open it." : "Ask the person who shared it for the password.";
+        pwBox.classList.toggle("bad", !!r.wrongPassword);
+        out.replaceChildren();
+        if (!r.wrongPassword) setTimeout(() => pw.focus(), 30);
+        return;
+      }
+      pwBox.hidden = !pw.value;
+      pwBox.classList.remove("bad");
+      pwMsg.textContent = pw.value ? "Unlocked." : "";
+      pre = r;
+      mode = r.exists ? "replace" : "new";
+      makeDefault = !!r.defaultModel && !S.settings.defaultModel;
+      draw();
+    };
+    const later = () => { clearTimeout(timer); timer = setTimeout(read, 250); };
+    ta.addEventListener("input", later);
+    pw.addEventListener("input", later);
+    pw.addEventListener("keydown", (e) => e.key === "Enter" && read());
+
+    const draw = () => {
+      const r = pre;
+      const n = r.accounts.length;
+      const label = { new: `Add ${r.name}`, replace: `Replace ${r.existingName || r.name}`, accounts: `Add ${plural(n, "account")}`, copy: "Add as a second provider" }[mode];
+      go.replaceChildren(ico(mode === "replace" ? "refresh" : "plus"), label);
+      go.disabled = mode === "accounts" && !n;
+      const defModel = r.defaultModel && r.models.find((m) => m.id === r.defaultModel.id);
+      out.replaceChildren(el("div.sh-card",
+        el("div.sh-card-top", mono(r.name, r.id, "lg", r.base_url, familyLogo(r.models)),
+          el("div.sh-card-text", el("b", r.name), el("code", r.base_url || "Built in"))),
+        el("div.sh-facts",
+          el("span", ico("cpu"), `${r.shownCount} models`),
+          r.effortModels ? el("span", ico("sliders"), `${r.effortModels} with effort levels`) : null,
+          el("span", ico("key"), n ? plural(n, "account") : "No account"),
+          r.secrets ? null : el("span.dim", "Settings only")),
+        n ? el("div.sh-accs", r.accounts.map((a) => el("span.sh-acc", el("span.sh-av", { style: { "--h": String(hue(a.label)) } }, initials(a.label)), el("i", a.label), el("small", a.kind === "signin" ? "sign-in" : "key")))) : null,
+        !n ? el("div.sh-note", ico("info"), el("span", "Add your own key or sign in after it's added.")) : null,
+        r.local ? el("div.sh-note.warn", ico("alert"), el("span", `Its address (${r.local}) is on the sharer's own computer or network. It works only where ${r.local} can be reached.`)) : null,
+        r.signInNote ? el("div.sh-note", ico("info"), el("span", r.signInNote)) : null,
+        r.exists ? el("div.sh-mode", el("b", `You already have ${r.existingName || r.name}`),
+          el("div.seg", [["replace", "Replace mine"], n ? ["accounts", "Add only its accounts"] : null, ["copy", "Keep both"]].filter(Boolean).map(([v, l]) =>
+            el(`button${mode === v ? ".on" : ""}`, { type: "button", on: { click: () => { mode = v; draw(); } } }, l))),
+          el("span.help", mode === "replace" ? "Your settings and accounts for it are replaced with the shared ones."
+            : mode === "accounts" ? "Your settings stay. Its accounts join yours; ones you already have aren't added twice."
+              : `The shared one is added next to yours as "${r.name} (shared)".`)) : null,
+        defModel && mode !== "accounts" ? el("label.sh-check", el("input", { type: "checkbox", checked: makeDefault, on: { change: (e) => { makeDefault = e.target.checked; } } }),
+          el("span", `Make ${defModel.name}${r.defaultModel.variant ? ` (${r.defaultModel.variant})` : ""} my default model`)) : null));
+    };
+
+    go.addEventListener("click", async () => {
+      if (!pre) return;
+      go.disabled = true;
+      const res = await guard(() => api.post("/api/provider-share/apply", { code: ta.value, password: pw.value, mode: pre.exists ? mode : "replace", makeDefault }));
+      go.disabled = false;
+      if (!res) return;
+      toast(res.mode === "accounts" ? `${plural(res.added, "account")} added to ${res.name}` : `${res.name} is ready`, "ok", 2200);
+      done?.({ id: res.providerID });
+    });
+
+    host.append(field("Share code", ta), pwBox, out,
+      el("div.actions", onCancel ? el("button.btn.ghost", { type: "button", on: { click: onCancel } }, "Cancel") : null, go));
+    // the code is usually already on the clipboard: take it from there
+    setTimeout(() => ta.focus(), 30);
+    (async () => {
+      try {
+        const clip = await navigator.clipboard.readText();
+        if (clip && clip.includes("AFH-PROVIDER-1") && !ta.value) { ta.value = clip.trim(); read(); }
+      } catch { /* no clipboard access: they paste it */ }
+    })();
   }
 
   function logoMark() { return el("span.mv-logo", ico("sparkle")); }
