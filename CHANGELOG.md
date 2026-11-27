@@ -2,6 +2,15 @@
 
 Every desktop and phone release. The same list is at [agentflowharness.com/changelog](https://agentflowharness.com/changelog).
 
+## 1.39.0 (2026-11-27)
+
+**Pebble, a new interface**
+
+- **Pebble:** a new interface, and a calm one. Your message is a bubble and the model talks in full sentences. What it did between two sentences is a row of pebbles: the file it read or changed with its +/− counts, or the command it ran. Tap a pebble and it opens in place into a sheet with the diff or the output. A step that fails turns red and opens by itself.
+- **Folds when it's done:** a finished reply keeps only one pill, “Worked for 1m 12s · 9 steps”, then the answer, the files it changed with Review, and the actions. The plan is a rounded bar above the message box that opens upward.
+- **Its own look:** soft graphite in the dark, warm paper in the light (Pebble Day), round shapes and the Manrope typeface, bundled so it works offline. Pick it in Settings → Appearance → Interface.
+- **Three interfaces:** Pebble, Onyx and Studio. Focus, Compact, Canvas, Split and Flow are gone; if you used one of them, AFH opens in Studio with the look you had saved for it. 59 themes in all.
+
 ## 1.38.0 (2026-11-27)
 
 **Share a provider**

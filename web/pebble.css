@@ -204,8 +204,8 @@
   & .turn-bar:not(.shut) .tb-chev { transform: rotate(-90deg); }
   & .tb-stats { display: none; }
   & .turn-bar:not(.shut) .steps-icons { display: none; }
-  & .steps-icons { display: inline-flex; padding-inline-start: 7px; }
-  & .steps-icons .si { display: grid; place-items: center; width: 24px; height: 24px; margin-inline-start: -7px; border-radius: 50%; background: var(--panel-2); color: var(--text-2); box-shadow: 0 0 0 2px var(--pb-peb); }
+  & .steps-icons { display: inline-flex; padding-inline-start: 4px; }
+  & .steps-icons .si { display: grid; place-items: center; width: 24px; height: 24px; margin-inline-start: -4px; border-radius: 50%; background: var(--panel-3); color: var(--text-2); box-shadow: 0 0 0 2px var(--pb-peb); }
   & .steps-icons .si :is(.fi, .ico, svg) { width: 13px; height: 13px; }
   & .steps-n { display: none; }
   & .turn-bar.shut .steps-n { display: inline; order: 3; font-weight: 500; color: var(--text-3); }
